@@ -1,0 +1,79 @@
+use std::{net::SocketAddr, sync::Arc};
+
+use http_body_util::Full;
+use hyper::{body::Bytes, server::conn::http1, service::service_fn};
+use hyper_util::rt::TokioIo;
+
+use crate::{app::AppContext, http_server::ProxyPassError};
+
+use super::HttpProxyPass;
+
+pub struct HttpServer {
+    pub addr: SocketAddr,
+}
+
+impl HttpServer {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+    pub fn start(&self, app: Arc<AppContext>) {
+        println!("Listening on http://{}", self.addr);
+        tokio::spawn(start_http_server(self.addr, app));
+    }
+}
+
+async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let mut http1 = http1::Builder::new();
+    http1.keep_alive(true);
+
+    loop {
+        let (stream, socket_addr) = listener.accept().await.unwrap();
+
+        let io = TokioIo::new(stream);
+
+        let http_proxy_pass = HttpProxyPass::new(socket_addr);
+
+        let http_proxy_pass = Arc::new(http_proxy_pass);
+
+        let app = app.clone();
+
+        let connection = http1
+            .serve_connection(
+                io,
+                service_fn(move |req| handle_requests(req, http_proxy_pass.clone(), app.clone())),
+            )
+            .with_upgrades();
+
+        tokio::task::spawn(async move {
+            if let Err(err) = connection.await {
+                println!("Error serving connection: {:?}", err);
+            }
+        });
+    }
+}
+
+pub async fn handle_requests(
+    req: hyper::Request<hyper::body::Incoming>,
+    http_proxy_pass: Arc<HttpProxyPass>,
+    app: Arc<AppContext>,
+) -> hyper::Result<hyper::Response<Full<Bytes>>> {
+    match http_proxy_pass.send_payload(&app, req).await {
+        Ok(response) => return response,
+        Err(err) => match err {
+            ProxyPassError::NoLocationFound => {
+                return Ok(hyper::Response::builder()
+                    .status(hyper::StatusCode::NOT_FOUND)
+                    .body(Full::from(Bytes::from("Not Found")))
+                    .unwrap());
+            }
+            _ => {
+                println!("Error: {:?}", err);
+                return Ok(hyper::Response::builder()
+                    .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Full::from(Bytes::from("Internal Server Error")))
+                    .unwrap());
+            }
+        },
+    }
+}
