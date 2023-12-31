@@ -3,6 +3,7 @@ use std::sync::Arc;
 use app::AppContext;
 
 mod app;
+mod flows;
 mod http_client;
 mod http_server;
 mod settings;

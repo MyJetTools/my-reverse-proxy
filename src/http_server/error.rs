@@ -4,6 +4,7 @@ use crate::http_client::HttpClientError;
 pub enum ProxyPassError {
     HttpClientError(HttpClientError),
     HyperError(hyper::Error),
+    NoHostHeaderFound,
     NoConfigurationFound,
     NoLocationFound,
 }
