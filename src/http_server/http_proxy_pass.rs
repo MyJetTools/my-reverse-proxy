@@ -9,20 +9,25 @@ use crate::app::AppContext;
 
 use super::{HttpProxyPassInner, ProxyPassError};
 
+const NEW_CONNECTION_NOT_READY_RETRY_DELAY: Duration = Duration::from_millis(50);
+
+const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
+
+#[derive(Debug)]
 pub enum RetryType {
     Retry(Option<Duration>),
     NoRetry,
 }
 
 pub struct HttpProxyPass {
-    pub inner: Mutex<Vec<HttpProxyPassInner>>,
+    pub inner: Mutex<Option<Vec<HttpProxyPassInner>>>,
     pub server_addr: SocketAddr,
 }
 
 impl HttpProxyPass {
     pub fn new(server_addr: SocketAddr) -> Self {
         Self {
-            inner: Mutex::new(Vec::new()),
+            inner: Mutex::new(Some(Vec::new())),
             server_addr,
         }
     }
@@ -38,6 +43,12 @@ impl HttpProxyPass {
             let (future, proxy_pass_id) = {
                 let mut inner = self.inner.lock().await;
 
+                if inner.is_none() {
+                    return Err(ProxyPassError::ConnectionIsDisposed);
+                }
+
+                let inner = inner.as_mut().unwrap();
+
                 if inner.len() == 0 {
                     let host = req.headers().get("host");
                     if host.is_none() {
@@ -47,13 +58,12 @@ impl HttpProxyPass {
                     crate::flows::populate_configurations(
                         app,
                         host.unwrap().to_str().unwrap(),
-                        &mut inner,
+                        inner,
                     )
                     .await?;
                 }
 
-                let proxy_pass =
-                    crate::flows::find_proxy_pass_by_uri(&mut inner, req.uri()).await?;
+                let proxy_pass = crate::flows::find_proxy_pass_by_uri(inner, req.uri()).await?;
                 let id = proxy_pass.id;
 
                 let result = proxy_pass
@@ -79,8 +89,13 @@ impl HttpProxyPass {
                     return Ok(Ok(response));
                 }
                 Err(err) => {
-                    println!("Error: {:?}", err);
                     let mut inner = self.inner.lock().await;
+
+                    if inner.is_none() {
+                        return Err(ProxyPassError::ConnectionIsDisposed);
+                    }
+
+                    let inner = inner.as_mut().unwrap();
 
                     let mut do_retry = RetryType::NoRetry;
 
@@ -102,12 +117,14 @@ impl HttpProxyPass {
                                 if now
                                     .duration_since(connection.connected)
                                     .as_positive_or_zero()
-                                    > Duration::from_secs(10)
+                                    > OLD_CONNECTION_DELAY
                                 {
                                     dispose_connection = true;
                                     do_retry = RetryType::Retry(None);
                                 } else {
-                                    do_retry = RetryType::Retry(Duration::from_millis(50).into());
+                                    do_retry = RetryType::Retry(
+                                        NEW_CONNECTION_NOT_READY_RETRY_DELAY.into(),
+                                    );
                                 }
                             }
 
@@ -116,6 +133,13 @@ impl HttpProxyPass {
                             }
                         }
                     }
+
+                    println!(
+                        "{}: Retry: {:?}, Error: {:?}",
+                        DateTimeAsMicroseconds::now().to_rfc3339(),
+                        do_retry,
+                        err
+                    );
 
                     match do_retry {
                         RetryType::Retry(delay) => {
@@ -130,6 +154,16 @@ impl HttpProxyPass {
                 }
             }
         }
+    }
+
+    pub async fn dispose(&self) {
+        let mut inner = self.inner.lock().await;
+
+        if inner.is_none() {
+            return;
+        }
+
+        *inner = None;
     }
 }
 

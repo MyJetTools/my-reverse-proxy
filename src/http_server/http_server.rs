@@ -3,6 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use http_body_util::Full;
 use hyper::{body::Bytes, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, http_server::ProxyPassError};
 
@@ -32,11 +33,25 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
 
         let io = TokioIo::new(stream);
 
+        app.http_connections
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        println!(
+            "{}. New http connection. Total: {}",
+            DateTimeAsMicroseconds::now().to_rfc3339(),
+            app.http_connections
+                .load(std::sync::atomic::Ordering::SeqCst)
+        );
+
         let http_proxy_pass = HttpProxyPass::new(socket_addr);
 
         let http_proxy_pass = Arc::new(http_proxy_pass);
 
+        let http_proxy_pass_to_dispose = http_proxy_pass.clone();
+
         let app = app.clone();
+
+        let app_disposed = app.clone();
 
         let connection = http1
             .serve_connection(
@@ -47,8 +62,26 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
 
         tokio::task::spawn(async move {
             if let Err(err) = connection.await {
-                println!("Error serving connection: {:?}", err);
+                println!(
+                    "{}. Error serving connection: {:?}",
+                    DateTimeAsMicroseconds::now().to_rfc3339(),
+                    err
+                );
             }
+
+            http_proxy_pass_to_dispose.dispose().await;
+
+            app_disposed
+                .http_connections
+                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+
+            println!(
+                "{}. Http connection dropped. Total: {}",
+                DateTimeAsMicroseconds::now().to_rfc3339(),
+                app_disposed
+                    .http_connections
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            );
         });
     }
 }

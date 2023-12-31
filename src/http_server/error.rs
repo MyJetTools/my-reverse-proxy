@@ -7,6 +7,7 @@ pub enum ProxyPassError {
     NoHostHeaderFound,
     NoConfigurationFound,
     NoLocationFound,
+    ConnectionIsDisposed,
 }
 
 impl From<HttpClientError> for ProxyPassError {
