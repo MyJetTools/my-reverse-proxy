@@ -15,8 +15,12 @@ async fn main() {
 
     let app = Arc::new(app);
 
+    let port = std::env::var("LISTEN_PORT").unwrap_or("80".to_owned());
+
+    let port = port.parse::<u16>().unwrap();
+
     let http_server =
-        http_server::HttpServer::new(std::net::SocketAddr::from(([0, 0, 0, 0], 9000)));
+        http_server::HttpServer::new(std::net::SocketAddr::from(([0, 0, 0, 0], port)));
 
     http_server.start(app);
 
