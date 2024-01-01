@@ -5,7 +5,7 @@ use hyper::body::Bytes;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
-use crate::app::AppContext;
+use crate::{app::AppContext, http_client::TIMEOUT};
 
 use super::{HttpProxyPassInner, ProxyPassError};
 
@@ -77,9 +77,13 @@ impl HttpProxyPass {
                 (result, id)
             };
 
-            let result = future.await;
+            let result = tokio::time::timeout(TIMEOUT, future).await;
 
-            match result {
+            if result.is_err() {
+                return Err(ProxyPassError::Timeout);
+            }
+
+            match result.unwrap() {
                 Ok(response) => {
                     let (parts, incoming) = response.into_parts();
 

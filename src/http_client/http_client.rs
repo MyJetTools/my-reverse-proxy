@@ -1,7 +1,11 @@
+use std::time::Duration;
+
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http1::SendRequest, Uri};
 
 use super::{HttpClientConnection, HttpClientError};
+
+pub const TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct HttpClient {
     pub connection: Option<HttpClientConnection>,
@@ -15,9 +19,25 @@ impl HttpClient {
     pub async fn connect(proxy_pass: &Uri) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
         let is_https = super::utils::is_https(proxy_pass);
         if is_https {
-            super::connect_to_tls_endpoint(proxy_pass).await
+            let future = super::connect_to_tls_endpoint(proxy_pass);
+
+            let result = tokio::time::timeout(TIMEOUT, future).await;
+
+            if result.is_err() {
+                return Err(HttpClientError::TimeOut);
+            }
+
+            result.unwrap()
         } else {
-            super::connect_to_http_endpoint(proxy_pass).await
+            let future = super::connect_to_http_endpoint(proxy_pass);
+
+            let result = tokio::time::timeout(TIMEOUT, future).await;
+
+            if result.is_err() {
+                return Err(HttpClientError::TimeOut);
+            }
+
+            result.unwrap()
         }
     }
 }

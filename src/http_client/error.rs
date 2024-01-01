@@ -4,6 +4,16 @@ pub enum HttpClientError {
     CanNotEstablishConnection(String),
     HyperError(hyper::Error),
     IoError(std::io::Error),
+    TimeOut,
+}
+
+impl HttpClientError {
+    pub fn is_timeout(&self) -> bool {
+        match self {
+            HttpClientError::TimeOut => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<hyper::Error> for HttpClientError {

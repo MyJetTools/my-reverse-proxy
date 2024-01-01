@@ -93,20 +93,30 @@ pub async fn handle_requests(
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
     match http_proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
-        Err(err) => match err {
-            ProxyPassError::NoLocationFound => {
-                return Ok(hyper::Response::builder()
-                    .status(hyper::StatusCode::NOT_FOUND)
-                    .body(Full::from(Bytes::from("Not Found")))
-                    .unwrap());
-            }
-            _ => {
-                println!("Error: {:?}", err);
+        Err(err) => {
+            if err.is_timeout() {
                 return Ok(hyper::Response::builder()
                     .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Full::from(Bytes::from("Internal Server Error")))
+                    .body(Full::from(Bytes::from("Timeout")))
                     .unwrap());
             }
-        },
+
+            match err {
+                ProxyPassError::NoLocationFound => {
+                    return Ok(hyper::Response::builder()
+                        .status(hyper::StatusCode::NOT_FOUND)
+                        .body(Full::from(Bytes::from("Not Found")))
+                        .unwrap());
+                }
+                _ => {
+                    println!("Error: {:?}", err);
+
+                    return Ok(hyper::Response::builder()
+                        .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Full::from(Bytes::from("Internal Server Error")))
+                        .unwrap());
+                }
+            }
+        }
     }
 }

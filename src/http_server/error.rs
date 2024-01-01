@@ -8,6 +8,17 @@ pub enum ProxyPassError {
     NoConfigurationFound,
     NoLocationFound,
     ConnectionIsDisposed,
+    Timeout,
+}
+
+impl ProxyPassError {
+    pub fn is_timeout(&self) -> bool {
+        match self {
+            ProxyPassError::HttpClientError(src) => src.is_timeout(),
+            ProxyPassError::Timeout => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<HttpClientError> for ProxyPassError {
