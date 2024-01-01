@@ -12,6 +12,12 @@ pub async fn find_proxy_pass_by_uri<'s>(
     let mut found_proxy_pass = None;
     for proxy_pass in inner.iter_mut() {
         if proxy_pass.is_my_uri(uri) {
+            println!(
+                "{} goes to {}",
+                uri.path(),
+                proxy_pass.proxy_pass_uri.to_string()
+            );
+
             found_proxy_pass = Some(proxy_pass);
             break;
         }
