@@ -36,13 +36,6 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
         app.http_connections
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        println!(
-            "{}. New http connection. Total: {}",
-            DateTimeAsMicroseconds::now().to_rfc3339(),
-            app.http_connections
-                .load(std::sync::atomic::Ordering::SeqCst)
-        );
-
         let http_proxy_pass = HttpProxyPass::new(socket_addr);
 
         let http_proxy_pass = Arc::new(http_proxy_pass);
@@ -74,14 +67,6 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
             app_disposed
                 .http_connections
                 .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-
-            println!(
-                "{}. Http connection dropped. Total: {}",
-                DateTimeAsMicroseconds::now().to_rfc3339(),
-                app_disposed
-                    .http_connections
-                    .load(std::sync::atomic::Ordering::SeqCst)
-            );
         });
     }
 }
