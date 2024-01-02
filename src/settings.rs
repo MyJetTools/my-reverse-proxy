@@ -8,17 +8,17 @@ pub struct SettingsModel {
 }
 
 impl SettingsReader {
-    pub async fn get_configurations(&self, host: &str) -> HashMap<String, Uri> {
-        let mut result = HashMap::new();
+    pub async fn get_configurations(&self, host: &str) -> Vec<(String, Uri)> {
+        let mut result = Vec::new();
         let read_access = self.settings.read().await;
 
         for (settings_host, locations) in &read_access.hosts {
             if rust_extensions::str_utils::compare_strings_case_insensitive(settings_host, host) {
                 for location in locations {
-                    result.insert(
+                    result.push((
                         location.location.to_string(),
                         Uri::from_str(&location.proxy_pass_to).unwrap(),
-                    );
+                    ));
                 }
                 break;
             }
