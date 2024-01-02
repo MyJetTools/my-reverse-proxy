@@ -24,12 +24,6 @@ impl HttpProxyPassInner {
             uri.path(),
             self.location.as_str(),
         );
-        println!(
-            "Comparing path {} with location {}. Result: {}",
-            uri.path(),
-            self.location.as_str(),
-            result
-        );
 
         result
     }
