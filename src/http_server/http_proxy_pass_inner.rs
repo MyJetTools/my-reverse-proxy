@@ -20,6 +20,17 @@ impl HttpProxyPassInner {
     }
 
     pub fn is_my_uri(&self, uri: &Uri) -> bool {
-        rust_extensions::str_utils::starts_with_case_insensitive(uri.path(), self.location.as_str())
+        let result = rust_extensions::str_utils::starts_with_case_insensitive(
+            uri.path(),
+            self.location.as_str(),
+        );
+        println!(
+            "Comparing path {} with location {}. Result: {}",
+            uri.path(),
+            self.location.as_str(),
+            result
+        );
+
+        result
     }
 }
