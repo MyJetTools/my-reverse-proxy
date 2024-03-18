@@ -7,7 +7,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, http_server::ProxyPassError};
 
-use super::HttpProxyPass;
+use super::ProxyPassClient;
 
 pub struct HttpServer {
     pub addr: SocketAddr,
@@ -36,9 +36,7 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
         app.http_connections
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let http_proxy_pass = HttpProxyPass::new(socket_addr);
-
-        let http_proxy_pass = Arc::new(http_proxy_pass);
+        let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();
 
@@ -73,10 +71,10 @@ async fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
 
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
-    http_proxy_pass: Arc<HttpProxyPass>,
+    proxy_pass: Arc<ProxyPassClient>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    match http_proxy_pass.send_payload(&app, req).await {
+    match proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
         Err(err) => {
             if err.is_timeout() {

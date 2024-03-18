@@ -10,3 +10,5 @@ mod cert_content;
 mod http_client_connection;
 mod utils;
 pub use http_client_connection::*;
+mod connect_to_http_over_ssh;
+pub use connect_to_http_over_ssh::*;

@@ -7,6 +7,7 @@ mod flows;
 mod http_client;
 mod http_server;
 mod settings;
+mod ssh_configuration;
 
 #[tokio::main]
 async fn main() {
@@ -15,7 +16,7 @@ async fn main() {
 
     let app = Arc::new(app);
 
-    let port = std::env::var("LISTEN_PORT").unwrap_or("80".to_owned());
+    let port = std::env::var("LISTEN_PORT").unwrap_or("8000".to_owned());
 
     let port = port.parse::<u16>().unwrap();
 

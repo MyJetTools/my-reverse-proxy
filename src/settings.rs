@@ -2,23 +2,42 @@ use std::{collections::HashMap, str::FromStr};
 
 use hyper::Uri;
 use serde::*;
+
+use crate::ssh_configuration::SshConfiguration;
+
+pub enum ProxyPassRemoteEndpoint {
+    Http(Uri),
+    Ssh(SshConfiguration),
+}
+
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, Vec<Location>>,
 }
 
 impl SettingsReader {
-    pub async fn get_configurations(&self, host: &str) -> Vec<(String, Uri)> {
+    pub async fn get_configurations(&self, host: &str) -> Vec<(String, ProxyPassRemoteEndpoint)> {
         let mut result = Vec::new();
         let read_access = self.settings.read().await;
 
         for (settings_host, locations) in &read_access.hosts {
             if rust_extensions::str_utils::compare_strings_case_insensitive(settings_host, host) {
                 for location in locations {
-                    result.push((
-                        location.location.to_string(),
-                        Uri::from_str(&location.proxy_pass_to).unwrap(),
-                    ));
+                    if location.proxy_pass_to.trim().starts_with("ssh") {
+                        result.push((
+                            location.location.to_string(),
+                            ProxyPassRemoteEndpoint::Ssh(SshConfiguration::parse(
+                                &location.proxy_pass_to,
+                            )),
+                        ));
+                    } else {
+                        result.push((
+                            location.location.to_string(),
+                            ProxyPassRemoteEndpoint::Http(
+                                Uri::from_str(&location.proxy_pass_to).unwrap(),
+                            ),
+                        ));
+                    }
                 }
                 break;
             }

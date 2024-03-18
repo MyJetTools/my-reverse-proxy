@@ -1,8 +1,10 @@
 mod http_server;
 pub use http_server::*;
-mod http_proxy_pass;
-pub use http_proxy_pass::*;
 mod error;
 pub use error::*;
-mod http_proxy_pass_inner;
-pub use http_proxy_pass_inner::*;
+mod proxy_pass_configuration;
+pub use proxy_pass_configuration::*;
+mod proxy_pass_client;
+pub use proxy_pass_client::*;
+mod proxy_pass_inner;
+pub use proxy_pass_inner::*;

@@ -4,6 +4,7 @@ use crate::http_client::HttpClientError;
 pub enum ProxyPassError {
     HttpClientError(HttpClientError),
     HyperError(hyper::Error),
+    SshSessionError(my_ssh::SshSessionError),
     NoHostHeaderFound,
     NoConfigurationFound,
     NoLocationFound,
@@ -30,5 +31,11 @@ impl From<HttpClientError> for ProxyPassError {
 impl From<hyper::Error> for ProxyPassError {
     fn from(src: hyper::Error) -> Self {
         Self::HyperError(src)
+    }
+}
+
+impl From<my_ssh::SshSessionError> for ProxyPassError {
+    fn from(src: my_ssh::SshSessionError) -> Self {
+        Self::SshSessionError(src)
     }
 }
