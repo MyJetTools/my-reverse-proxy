@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http1::SendRequest, Uri};
@@ -51,10 +51,14 @@ impl HttpClient {
         configuration: &SshConfiguration,
     ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
         let ssh_credentials = SshCredentials::SshAgent {
-            ssh_host_port: format!(
-                "{}:{}",
-                configuration.ssh_session_host, configuration.ssh_session_port
-            ),
+            ssh_host_port: std::net::SocketAddr::from_str(
+                format!(
+                    "{}:{}",
+                    configuration.ssh_session_host, configuration.ssh_session_port
+                )
+                .as_str(),
+            )
+            .unwrap(),
             ssh_user_name: configuration.ssh_user_name.to_string(),
         };
 

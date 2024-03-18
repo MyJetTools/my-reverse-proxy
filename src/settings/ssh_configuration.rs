@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use my_ssh::SshCredentials;
 
 #[derive(Debug)]
@@ -23,7 +25,10 @@ impl SshConfiguration {
 
     pub fn to_ssh_credentials(&self) -> SshCredentials {
         SshCredentials::SshAgent {
-            ssh_host_port: format!("{}:{}", self.ssh_session_host, self.ssh_session_port),
+            ssh_host_port: std::net::SocketAddr::from_str(
+                format!("{}:{}", self.ssh_session_host, self.ssh_session_port).as_str(),
+            )
+            .unwrap(),
             ssh_user_name: self.ssh_user_name.to_string(),
         }
     }

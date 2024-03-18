@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use my_ssh::SshAsyncChannel;
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
@@ -82,12 +83,12 @@ async fn connection_loop(
     listen_addr: std::net::SocketAddr,
     ssh_configuration: Arc<SshConfiguration>,
     server_stream: TcpStream,
-    remote_stream: my_ssh::ssh2::Channel,
+    remote_stream: SshAsyncChannel,
     buffer_size: usize,
 ) {
     let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
 
-    let (remote_ssh_read, remote_ssh_writer) = my_ssh::async_ssh_channel::split(remote_stream);
+    let (remote_ssh_read, remote_ssh_writer) = futures::AsyncReadExt::split(remote_stream);
 
     let tcp_server_writer = Arc::new(Mutex::new(tcp_server_writer));
 
@@ -95,20 +96,20 @@ async fn connection_loop(
 
     let incoming_traffic_moment = Arc::new(AtomicDateTimeAsMicroseconds::now());
 
-    tokio::spawn(super::forwards::copy_loop(
+    tokio::spawn(super::forwards::copy_to_ssh_loop(
         tcp_server_reader,
         remote_ssh_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
     ));
-    tokio::spawn(super::forwards::copy_loop(
+    tokio::spawn(super::forwards::copy_from_ssh_loop(
         remote_ssh_read,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
     ));
 
-    super::forwards::await_while_alive(
+    super::forwards::await_while_alive_with_ssh(
         tcp_server_writer,
         remote_ssh_writer,
         incoming_traffic_moment,
