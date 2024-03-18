@@ -1,5 +1,3 @@
-use rust_extensions::date_time::DateTimeAsMicroseconds;
-
 use crate::{
     app::AppContext,
     http_server::{ProxyPassConfiguration, ProxyPassError},
