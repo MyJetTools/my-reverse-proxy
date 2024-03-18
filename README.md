@@ -4,7 +4,7 @@ File should be at `~/.my-reverse-proxy` location with yaml format:
 
 ```yaml
 connection_settings:
-  buffer_size: 512Kb # Buffer, which is allocated per connection to pass traffic by
+  buffer_size: 512Kb # Buffer, which is allocated twice (read/write) per connection to pass traffic by
   connect_to_remote_timeout: 5s # Timeout to connect to remote host
   
 hosts:
