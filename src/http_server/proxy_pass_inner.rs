@@ -27,12 +27,13 @@ pub enum ProxyPassInner {
 impl ProxyPassInner {
     async fn get_configurations<'s>(
         &'s mut self,
+        app: &Arc<AppContext>,
         req: &hyper::Request<Full<Bytes>>,
     ) -> Result<&'s mut ProxyPassConfiguration, ProxyPassError> {
         match self {
             Self::Active(configurations) => {
                 let result =
-                    crate::flows::find_proxy_pass_by_uri(configurations, req.uri()).await?;
+                    crate::flows::find_proxy_pass_by_uri(app, configurations, req.uri()).await?;
 
                 Ok(result)
             }
@@ -50,7 +51,7 @@ impl ProxyPassInner {
             Self::Disposed => return Err(ProxyPassError::ConnectionIsDisposed),
             Self::Active(configurations) => {
                 let result =
-                    crate::flows::find_proxy_pass_by_uri(configurations, req.uri()).await?;
+                    crate::flows::find_proxy_pass_by_uri(app, configurations, req.uri()).await?;
 
                 return Ok(result);
             }
@@ -66,7 +67,7 @@ impl ProxyPassInner {
 
         *self = Self::Active(configs);
 
-        self.get_configurations(req).await
+        self.get_configurations(app, req).await
     }
 
     pub async fn handle_error(

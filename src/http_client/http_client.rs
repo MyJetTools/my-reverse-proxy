@@ -4,7 +4,7 @@ use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http1::SendRequest, Uri};
 use my_ssh::{SshCredentials, SshSession};
 
-use crate::{http_server::ProxyPassError, settings::SshConfiguration};
+use crate::{app::AppContext, http_server::ProxyPassError, settings::SshConfiguration};
 
 use super::{HttpClientConnection, HttpClientError};
 
@@ -47,6 +47,7 @@ impl HttpClient {
     }
 
     pub async fn connect_to_http_over_ssh(
+        app: &AppContext,
         configuration: &SshConfiguration,
     ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
         let ssh_credentials = SshCredentials::SshAgent {
@@ -60,6 +61,7 @@ impl HttpClient {
         let ssh_credentials = Arc::new(ssh_credentials);
 
         let result = super::connect_to_http_over_ssh(
+            app,
             ssh_credentials,
             &configuration.remote_host,
             configuration.remote_port,

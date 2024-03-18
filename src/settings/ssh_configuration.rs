@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use my_ssh::SshCredentials;
 
 #[derive(Debug)]

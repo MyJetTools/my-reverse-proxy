@@ -3,11 +3,10 @@ use std::{
     str::FromStr,
 };
 
-use super::SshConfiguration;
+use super::{ConnectionsSettings, ConnectionsSettingsModel, SshConfiguration};
 use hyper::Uri;
+use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
-
-pub const BUFFER_SIZE: usize = 1024 * 512;
 
 pub enum ProxyPassRemoteEndpoint {
     Http(Uri),
@@ -17,9 +16,30 @@ pub enum ProxyPassRemoteEndpoint {
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, Vec<Location>>,
+    pub connection_settings: Option<ConnectionsSettings>,
 }
 
 impl SettingsReader {
+    pub async fn get_connections_settings(&self) -> ConnectionsSettingsModel {
+        let read_access = self.settings.read().await;
+
+        let result = match &read_access.connection_settings {
+            Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
+            None => ConnectionsSettingsModel::default(),
+        };
+
+        println!(
+            "Each connection is going to use buffer: {}",
+            format_mem(result.buffer_size)
+        );
+
+        println!(
+            "Timeout to connect to remote endpoint is: {}",
+            result.remote_connect_timeout.format_to_string()
+        );
+
+        result
+    }
     pub async fn get_configurations(&self, host: &str) -> Vec<(String, ProxyPassRemoteEndpoint)> {
         let mut result = Vec::new();
         let read_access = self.settings.read().await;
@@ -222,10 +242,29 @@ mod tests {
             }],
         );
 
-        let model = SettingsModel { hosts };
+        let model = SettingsModel {
+            hosts,
+            connection_settings: None,
+        };
 
         let json = serde_yaml::to_string(&model).unwrap();
 
         println!("{}", json);
     }
+}
+
+fn format_mem(size: usize) -> String {
+    if size < 1024 {
+        return format!("{}B", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    if size < 1024.0 {
+        return format!("{:.2}KB", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    return format!("{:.2}Mb", size);
 }

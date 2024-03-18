@@ -35,7 +35,7 @@ impl ProxyPassClient {
                 let proxy_pass_configuration =
                     inner.get_proxy_pass_configuration(app, &req).await?;
 
-                proxy_pass_configuration.connect_if_require().await?;
+                proxy_pass_configuration.connect_if_require(app).await?;
 
                 let id = proxy_pass_configuration.id;
 

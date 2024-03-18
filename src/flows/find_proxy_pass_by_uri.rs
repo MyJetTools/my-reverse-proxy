@@ -1,8 +1,12 @@
 use hyper::Uri;
 
-use crate::http_server::{ProxyPassConfiguration, ProxyPassError};
+use crate::{
+    app::AppContext,
+    http_server::{ProxyPassConfiguration, ProxyPassError},
+};
 
 pub async fn find_proxy_pass_by_uri<'s>(
+    app: &AppContext,
     inner: &'s mut Vec<ProxyPassConfiguration>,
     uri: &Uri,
 ) -> Result<&'s mut ProxyPassConfiguration, ProxyPassError> {
@@ -20,7 +24,7 @@ pub async fn find_proxy_pass_by_uri<'s>(
 
     let found_proxy_pass = found_proxy_pass.unwrap();
 
-    found_proxy_pass.connect_if_require().await?;
+    found_proxy_pass.connect_if_require(app).await?;
 
     Ok(found_proxy_pass)
 }

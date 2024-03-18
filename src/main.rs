@@ -15,7 +15,10 @@ async fn main() {
     let settings_reader = settings::SettingsReader::new(".my-reverse-proxy").await;
 
     let listen_ports = settings_reader.get_listen_ports().await;
-    let app = AppContext::new(settings_reader);
+
+    let connections_settings = settings_reader.get_connections_settings().await;
+
+    let app = AppContext::new(settings_reader, connections_settings);
 
     let app = Arc::new(app);
 
@@ -29,10 +32,14 @@ async fn main() {
                 http_server.start(app.clone());
             }
             settings::EndpointType::Tcp(remote_addr) => {
-                crate::tcp_port_forward::start_tcp(listen_end_point, remote_addr);
+                crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);
             }
             settings::EndpointType::TcpOverSsh(ssh_configuration) => {
-                crate::tcp_port_forward::start_tcp_over_ssh(listen_end_point, ssh_configuration);
+                crate::tcp_port_forward::start_tcp_over_ssh(
+                    app.clone(),
+                    listen_end_point,
+                    ssh_configuration,
+                );
             }
         }
     }

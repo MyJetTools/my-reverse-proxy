@@ -13,7 +13,7 @@ my-settings-reader = { tag = "0.3.0", git = "https://github.com/MyJetTools/my-se
 ] }
 
 
-my-ssh = { path = "../my-jet-tools/my-ssh" }
+my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.0" }
 
 hyper = { version = "*", features = ["full"] }
 

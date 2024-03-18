@@ -6,9 +6,10 @@ use hyper::client::conn::http1::SendRequest;
 use hyper_util::rt::TokioIo;
 use my_ssh::{async_ssh_channel::SshAsyncChannel, SshCredentials, SshSession};
 
-use crate::http_server::ProxyPassError;
+use crate::{app::AppContext, http_server::ProxyPassError};
 
 pub async fn connect_to_http_over_ssh(
+    app: &AppContext,
     ssh_credentials: Arc<SshCredentials>,
     remote_host: &str,
     remote_port: u16,
@@ -21,10 +22,14 @@ pub async fn connect_to_http_over_ssh(
            .await;
     */
     let ssh_channel = ssh_session
-        .connect_to_remote_host(remote_host, remote_port)
+        .connect_to_remote_host(
+            remote_host,
+            remote_port,
+            app.connection_settings.remote_connect_timeout,
+        )
         .await?;
 
-    let ssh_channel = SshAsyncChannel::new(ssh_channel);
+    let ssh_channel = SshAsyncChannel::new(ssh_channel, app.connection_settings.buffer_size);
 
     let io = TokioIo::new(ssh_channel);
 

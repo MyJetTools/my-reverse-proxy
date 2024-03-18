@@ -10,6 +10,7 @@ use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
 use crate::{
+    app::AppContext,
     http_client::{HttpClient, HttpClientConnection},
     settings::ProxyPassRemoteEndpoint,
 };
@@ -37,7 +38,7 @@ impl ProxyPassConfiguration {
             ssh_session: None,
         }
     }
-    pub async fn connect_if_require(&mut self) -> Result<(), ProxyPassError> {
+    pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
         if self.http_client.connection.is_some() {
             return Ok(());
         }
@@ -60,7 +61,7 @@ impl ProxyPassConfiguration {
                     ssh_configuration.ssh_session_port
                 );
                 let (ssh_session, connection) =
-                    HttpClient::connect_to_http_over_ssh(ssh_configuration).await?;
+                    HttpClient::connect_to_http_over_ssh(app, ssh_configuration).await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
                 println!(
