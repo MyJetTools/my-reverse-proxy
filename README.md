@@ -1,8 +1,6 @@
-Configuration Example
+# Configuration Example
 
 File should be at `~/.my-reverse-proxy` location with yaml format:
-
-
 
 ```yaml
 hosts:
@@ -19,9 +17,9 @@ hosts:
 
 
 
-# On Development 
+## On Development 
 
-Ability to setup tcp proxy
+* Ability to setup tcp proxy
 
 ```yaml
 hosts:
@@ -30,7 +28,7 @@ hosts:
     proxy_pass_to: remote_host:5123
 ```
 
-Ability to setup Http2 proxy
+* Ability to setup Http2 proxy
 
 ```yaml
 hosts:
