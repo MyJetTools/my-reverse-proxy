@@ -4,7 +4,7 @@ use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http1::SendRequest, Uri};
 use my_ssh::{SshCredentials, SshSession};
 
-use crate::{http_server::ProxyPassError, ssh_configuration::SshConfiguration};
+use crate::{http_server::ProxyPassError, settings::SshConfiguration};
 
 use super::{HttpClientConnection, HttpClientError};
 

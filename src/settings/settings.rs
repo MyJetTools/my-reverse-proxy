@@ -6,7 +6,7 @@ use std::{
 use hyper::Uri;
 use serde::*;
 
-use crate::ssh_configuration::SshConfiguration;
+use super::SshConfiguration;
 
 pub const BUFFER_SIZE: usize = 1024 * 512;
 
