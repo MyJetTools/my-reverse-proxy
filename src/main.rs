@@ -29,7 +29,10 @@ async fn main() {
                 http_server.start(app.clone());
             }
             settings::EndpointType::Tcp(remote_addr) => {
-                crate::tcp_port_forward::start(listen_end_point, remote_addr);
+                crate::tcp_port_forward::start_tcp(listen_end_point, remote_addr);
+            }
+            settings::EndpointType::TcpOverSsh(ssh_configuration) => {
+                crate::tcp_port_forward::start_tcp_over_ssh(listen_end_point, ssh_configuration);
             }
         }
     }

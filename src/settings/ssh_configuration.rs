@@ -1,3 +1,8 @@
+use std::fmt::format;
+
+use my_ssh::SshCredentials;
+
+#[derive(Debug)]
 pub struct SshConfiguration {
     pub ssh_user_name: String,
     pub ssh_session_host: String,
@@ -7,6 +12,24 @@ pub struct SshConfiguration {
 }
 
 impl SshConfiguration {
+    pub fn to_string(&self) -> String {
+        format!(
+            "ssh:{}@{}:{}->{}:{}",
+            self.ssh_user_name,
+            self.ssh_session_host,
+            self.ssh_session_port,
+            self.remote_host,
+            self.remote_port
+        )
+    }
+
+    pub fn to_ssh_credentials(&self) -> SshCredentials {
+        SshCredentials::SshAgent {
+            ssh_host_port: format!("{}:{}", self.ssh_session_host, self.ssh_session_port),
+            ssh_user_name: self.ssh_user_name.to_string(),
+        }
+    }
+
     pub fn parse(src: &str) -> Self {
         let mut parts = src.split("->");
         let ssh_part = parts.next().unwrap();

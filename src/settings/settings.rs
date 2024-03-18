@@ -3,10 +3,9 @@ use std::{
     str::FromStr,
 };
 
+use super::SshConfiguration;
 use hyper::Uri;
 use serde::*;
-
-use super::SshConfiguration;
 
 pub const BUFFER_SIZE: usize = 1024 * 512;
 
@@ -98,6 +97,7 @@ impl SettingsReader {
 pub enum EndpointType {
     Http1,
     Tcp(std::net::SocketAddr),
+    TcpOverSsh(SshConfiguration),
 }
 
 impl EndpointType {
@@ -105,6 +105,7 @@ impl EndpointType {
         match self {
             EndpointType::Http1 => 0,
             EndpointType::Tcp(_) => 1,
+            EndpointType::TcpOverSsh(_) => 2,
         }
     }
 
@@ -122,20 +123,28 @@ pub struct Location {
 }
 
 impl Location {
+    pub fn is_ssh_proxy_pass(&self) -> bool {
+        self.proxy_pass_to.trim().starts_with("ssh")
+    }
+
     pub fn get_endpoint_type(&self, host: &str) -> EndpointType {
         match self.endpoint_type.as_str() {
             "http1" => EndpointType::Http1,
             "tcp" => {
-                let remote_addr = std::net::SocketAddr::from_str(self.proxy_pass_to.as_str());
+                if self.is_ssh_proxy_pass() {
+                    EndpointType::TcpOverSsh(SshConfiguration::parse(&self.proxy_pass_to))
+                } else {
+                    let remote_addr = std::net::SocketAddr::from_str(self.proxy_pass_to.as_str());
 
-                if remote_addr.is_err() {
-                    panic!(
-                        "Can not parse remote address: '{}' for tcp listen host {}",
-                        self.proxy_pass_to, host
-                    );
+                    if remote_addr.is_err() {
+                        panic!(
+                            "Can not parse remote address: '{}' for tcp listen host {}",
+                            self.proxy_pass_to, host
+                        );
+                    }
+
+                    EndpointType::Tcp(remote_addr.unwrap())
                 }
-
-                EndpointType::Tcp(remote_addr.unwrap())
             }
             _ => panic!("Unknown location type: '{}'", self.endpoint_type),
         }
@@ -145,6 +154,7 @@ impl Location {
 fn check_and_get_endpoint_type(host: &str, locations: &[Location]) -> EndpointType {
     let mut tcp_location = None;
     let mut http_count = 0;
+    let mut tcp_over_ssh = None;
 
     for location in locations {
         match location.get_endpoint_type(host) {
@@ -159,14 +169,31 @@ fn check_and_get_endpoint_type(host: &str, locations: &[Location]) -> EndpointTy
 
                 tcp_location = Some(proxy_pass);
             }
+            EndpointType::TcpOverSsh(ssh_configuration) => {
+                if tcp_over_ssh.is_some() {
+                    panic!(
+                        "Host '{}' has more than one tcp over SSH location. It must be only single location",
+                        host
+                    );
+                }
+
+                tcp_over_ssh = Some(ssh_configuration);
+            }
         }
     }
-    if tcp_location.is_some() && http_count > 0 {
-        panic!("Host '{}' has both http and tcp locations", host);
+    if tcp_location.is_some() && http_count > 0 && tcp_over_ssh.is_some() {
+        panic!(
+            "Host '{}' has {} http, '{:?}' tcp and {:?} tcp over ssh configurations",
+            host, http_count, tcp_location, tcp_over_ssh
+        );
     }
 
     if let Some(tcp_location) = tcp_location {
         return EndpointType::Tcp(tcp_location);
+    }
+
+    if let Some(tcp_over_ssh) = tcp_over_ssh {
+        return EndpointType::TcpOverSsh(tcp_over_ssh);
     }
 
     if http_count > 0 {

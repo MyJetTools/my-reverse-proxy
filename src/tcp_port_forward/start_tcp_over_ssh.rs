@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use my_ssh::async_ssh_channel::{SshChannelReadHalf, SshChannelWriteHalf};
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -10,37 +11,60 @@ use tokio::{
     sync::Mutex,
 };
 
-pub fn start(listen_addr: std::net::SocketAddr, remote_addr: std::net::SocketAddr) {
-    tokio::spawn(tcp_server_accept_loop(listen_addr, remote_addr));
+use crate::settings::SshConfiguration;
+
+pub fn start_tcp_over_ssh(listen_addr: std::net::SocketAddr, ssh_configuration: SshConfiguration) {
+    tokio::spawn(tcp_server_accept_loop(listen_addr, ssh_configuration));
 }
 
 async fn tcp_server_accept_loop(
     listen_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
+    ssh_configuration: SshConfiguration,
 ) {
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
 
     if let Err(err) = listener {
         println!(
             "Error binding to tcp port {} for forwarding to {} has Error: {:?}",
-            listen_addr, remote_addr, err
+            listen_addr,
+            ssh_configuration.to_string(),
+            err
         );
         return;
     }
 
     let listener = listener.unwrap();
 
-    println!("Enabled PortForward: {} -> {}", listen_addr, remote_addr);
+    println!(
+        "Enabled PortForward: {} -> {}",
+        listen_addr,
+        ssh_configuration.to_string()
+    );
+
+    let ssh_configuration = Arc::new(ssh_configuration);
+
+    let ssh_credentials = Arc::new(ssh_configuration.to_ssh_credentials());
 
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
 
-        let remote_tcp_connection_result = TcpStream::connect(remote_addr).await;
+        let ssh_session = my_ssh::SSH_SESSION_POOL
+            .get_or_create_ssh_session(&ssh_credentials)
+            .await;
 
-        if let Err(err) = remote_tcp_connection_result {
+        let ssh_channel = ssh_session
+            .connect_to_remote_host(
+                &ssh_configuration.remote_host,
+                ssh_configuration.remote_port,
+            )
+            .await;
+
+        if let Err(err) = ssh_channel {
             println!(
-                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
-                remote_addr, err, socket_addr
+                "Error connecting to remote tcp over ssh '{}' server. Closing incoming connection: {}. Err: {:?}",
+                ssh_configuration.to_string(),
+                socket_addr,
+                err
             );
             let _ = server_stream.shutdown().await;
             continue;
@@ -48,36 +72,36 @@ async fn tcp_server_accept_loop(
 
         tokio::spawn(connection_loop(
             listen_addr,
-            remote_addr,
+            ssh_configuration.clone(),
             server_stream,
-            remote_tcp_connection_result.unwrap(),
+            ssh_channel.unwrap(),
         ));
     }
 }
 
 async fn connection_loop(
     listen_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
+    ssh_configuration: Arc<SshConfiguration>,
     server_stream: TcpStream,
-    remote_stream: TcpStream,
+    remote_stream: my_ssh::ssh2::Channel,
 ) {
     let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
 
-    let (remote_tcp_read, remote_tcp_writer) = remote_stream.into_split();
+    let (remote_ssh_read, remote_ssh_writer) = my_ssh::async_ssh_channel::split(remote_stream);
 
     let tcp_server_writer = Arc::new(Mutex::new(tcp_server_writer));
 
-    let remote_tcp_writer = Arc::new(Mutex::new(remote_tcp_writer));
+    let remote_ssh_writer = Arc::new(Mutex::new(remote_ssh_writer));
 
     let incoming_traffic_moment = Arc::new(AtomicDateTimeAsMicroseconds::now());
 
     tokio::spawn(copy_to_remote_loop(
         tcp_server_reader,
-        remote_tcp_writer.clone(),
+        remote_ssh_writer.clone(),
         incoming_traffic_moment.clone(),
     ));
     tokio::spawn(copy_from_remote_loop(
-        remote_tcp_read,
+        remote_ssh_read,
         tcp_server_writer.clone(),
     ));
 
@@ -96,12 +120,13 @@ async fn connection_loop(
         {
             println!(
                 "Dead Tcp PortForward {}->{} connection detected. Closing",
-                listen_addr, remote_addr
+                listen_addr,
+                ssh_configuration.to_string()
             );
 
             {
-                let mut remote_tcp_writer = remote_tcp_writer.lock().await;
-                let _ = remote_tcp_writer.shutdown().await;
+                let remote_ssh_writer = remote_ssh_writer.lock().await;
+                remote_ssh_writer.shutdown();
             }
 
             {
@@ -116,7 +141,7 @@ async fn connection_loop(
 
 async fn copy_to_remote_loop(
     mut tcp_server_reader: OwnedReadHalf,
-    remote_tcp_writer: Arc<Mutex<OwnedWriteHalf>>,
+    remote_tcp_writer: Arc<Mutex<SshChannelWriteHalf>>,
     incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
 ) {
     let mut buf = Vec::with_capacity(crate::settings::BUFFER_SIZE);
@@ -130,7 +155,7 @@ async fn copy_to_remote_loop(
 
         let mut remote_tcp_writer_access = remote_tcp_writer.lock().await;
         if n == 0 {
-            let _ = remote_tcp_writer_access.shutdown().await;
+            remote_tcp_writer_access.shutdown();
             break;
         }
         incoming_traffic_moment.update(DateTimeAsMicroseconds::now());
@@ -138,13 +163,13 @@ async fn copy_to_remote_loop(
         let result = remote_tcp_writer_access.write_all(&buf[0..n]).await;
 
         if result.is_err() {
-            let _ = remote_tcp_writer_access.shutdown().await;
+            remote_tcp_writer_access.shutdown();
         }
     }
 }
 
 async fn copy_from_remote_loop(
-    mut remote_server_reader: OwnedReadHalf,
+    mut remote_server_reader: SshChannelReadHalf,
     tcp_server_writer: Arc<Mutex<OwnedWriteHalf>>,
 ) {
     let mut buf = Vec::with_capacity(crate::settings::BUFFER_SIZE);
@@ -154,9 +179,16 @@ async fn copy_from_remote_loop(
     }
 
     loop {
-        let n = remote_server_reader.read(&mut buf).await.unwrap();
-
+        let read_result = remote_server_reader.read(&mut buf).await;
         let mut tcp_server_writer_access = tcp_server_writer.lock().await;
+
+        if read_result.is_err() {
+            let _ = tcp_server_writer_access.shutdown().await;
+            break;
+        }
+
+        let n = read_result.unwrap();
+
         if n == 0 {
             let _ = tcp_server_writer_access.shutdown().await;
             break;
