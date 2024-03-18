@@ -17,18 +17,13 @@ hosts:
   localhost:8002:
   - type: tcp
     proxy_pass_to: 10.0.0.5:5123    
+
+  localhost:8003:
+  - type: tcp
+    proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
 ```
 
 ## On Development 
-
-* Ability to setup **tpc** proxy using SSH
-
-```yaml
-hosts:
-  localhost:8000:
-  - type: tcp
-    proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123
-```
 
 * Ability to setup **http2** proxy
 
