@@ -1,4 +1,7 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+};
 
 use hyper::Uri;
 use serde::*;
@@ -44,6 +47,27 @@ impl SettingsReader {
         }
 
         result
+    }
+
+    pub async fn get_listen_ports(&self) -> Vec<u16> {
+        let read_access = self.settings.read().await;
+
+        let mut result = BTreeMap::new();
+
+        for host in read_access.hosts.keys() {
+            let host_port = host.split(':');
+
+            match host_port.last().unwrap().parse::<u16>() {
+                Ok(port) => {
+                    result.insert(port, ());
+                }
+                Err(_) => {
+                    panic!("Can not read port from host: '{}'", host);
+                }
+            }
+        }
+
+        result.keys().cloned().collect()
     }
 }
 
