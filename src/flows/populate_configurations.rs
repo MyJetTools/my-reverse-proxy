@@ -1,12 +1,12 @@
 use crate::{
     app::AppContext,
-    http_server::{ProxyPassConfiguration, ProxyPassError},
+    http_server::{HostPort, ProxyPassConfiguration, ProxyPassError},
     settings::ProxyPassRemoteEndpoint,
 };
 
-pub async fn get_configurations(
+pub async fn get_configurations<'s, T>(
     app: &AppContext,
-    host: &str,
+    host: &HostPort<'s, T>,
 ) -> Result<Vec<ProxyPassConfiguration>, ProxyPassError> {
     let mut configurations = Vec::new();
 
@@ -26,11 +26,27 @@ pub async fn get_configurations(
                         .into(),
                 );
             }
-            crate::settings::ProxyPassRemoteEndpoint::Ssh(ssh_config) => {
+            crate::settings::ProxyPassRemoteEndpoint::Http2(uri) => {
+                configurations.push(
+                    ProxyPassConfiguration::new(location, ProxyPassRemoteEndpoint::Http2(uri), id)
+                        .into(),
+                );
+            }
+            crate::settings::ProxyPassRemoteEndpoint::Http1OverSsh(ssh_config) => {
                 configurations.push(
                     ProxyPassConfiguration::new(
                         location,
-                        ProxyPassRemoteEndpoint::Ssh(ssh_config),
+                        ProxyPassRemoteEndpoint::Http1OverSsh(ssh_config),
+                        id,
+                    )
+                    .into(),
+                );
+            }
+            crate::settings::ProxyPassRemoteEndpoint::Http2OverSsh(ssh_config) => {
+                configurations.push(
+                    ProxyPassConfiguration::new(
+                        location,
+                        ProxyPassRemoteEndpoint::Http2OverSsh(ssh_config),
                         id,
                     )
                     .into(),

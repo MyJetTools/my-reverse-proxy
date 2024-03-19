@@ -27,3 +27,4 @@ pem = "*"
 serde = { version = "*", features = ["derive"] }
 futures = "*"
 serde_yaml = "*"
+http2parse = "*"

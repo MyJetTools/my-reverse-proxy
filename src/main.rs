@@ -4,6 +4,7 @@ use app::AppContext;
 
 mod app;
 mod flows;
+mod http2_executor;
 mod http_client;
 mod http_server;
 mod settings;
@@ -27,9 +28,10 @@ async fn main() {
 
         match endpoint_type {
             settings::EndpointType::Http1 => {
-                let http_server = http_server::HttpServer::new(listen_end_point);
-
-                http_server.start(app.clone());
+                crate::http_server::start_http_server(listen_end_point, app.clone());
+            }
+            settings::EndpointType::Http2 => {
+                crate::http_server::start_http2_server(listen_end_point, app.clone());
             }
             settings::EndpointType::Tcp(remote_addr) => {
                 crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);

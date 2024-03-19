@@ -9,11 +9,7 @@ use hyper::{body::Incoming, Response, Uri};
 use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
-use crate::{
-    app::AppContext,
-    http_client::{HttpClient, HttpClientConnection},
-    settings::ProxyPassRemoteEndpoint,
-};
+use crate::{app::AppContext, http_client::HttpClient, settings::ProxyPassRemoteEndpoint};
 
 use super::ProxyPassError;
 
@@ -39,40 +35,71 @@ impl ProxyPassConfiguration {
         }
     }
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
-        if self.http_client.connection.is_some() {
+        if self.http_client.has_connection() {
             return Ok(());
         }
 
         match &self.remote_endpoint {
             ProxyPassRemoteEndpoint::Http(uri) => {
-                let connection = HttpClient::connect_to_http(uri).await?;
-                self.http_client.connection = Some(HttpClientConnection::new(connection));
+                self.http_client.connect_to_http1(uri).await?;
             }
 
-            ProxyPassRemoteEndpoint::Ssh(ssh_configuration) => {
+            ProxyPassRemoteEndpoint::Http2(uri) => {
+                self.http_client.connect_to_http2(uri).await?;
+            }
+
+            ProxyPassRemoteEndpoint::Http1OverSsh(ssh_configuration) => {
                 let mut sw = StopWatch::new();
 
                 sw.start();
                 println!(
-                    "[{}]. Connecting to remote endpoint: {}@{}:{}",
+                    "[{}]. Http1OverSsh. Connecting to remote endpoint: {}@{}:{}",
                     self.id,
                     ssh_configuration.ssh_user_name,
                     ssh_configuration.ssh_session_host,
                     ssh_configuration.ssh_session_port
                 );
-                let (ssh_session, connection) =
-                    HttpClient::connect_to_http_over_ssh(app, ssh_configuration).await?;
+                let ssh_session = self
+                    .http_client
+                    .connect_to_http1_over_ssh(app, ssh_configuration)
+                    .await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
                 println!(
-                    "[{}]. Connected to remote endpoint: {}@{}:{} in {}",
+                    "[{}]. Http1OverSsh. Connected to remote endpoint: {}@{}:{} in {}",
                     self.id,
                     ssh_configuration.ssh_user_name,
                     ssh_configuration.ssh_session_host,
                     ssh_configuration.ssh_session_port,
                     sw.duration_as_string()
                 );
-                self.http_client.connection = Some(HttpClientConnection::new(connection));
+            }
+
+            ProxyPassRemoteEndpoint::Http2OverSsh(ssh_configuration) => {
+                let mut sw = StopWatch::new();
+
+                sw.start();
+                println!(
+                    "[{}]. Http2OverSsh. Connecting to remote endpoint: {}@{}:{}",
+                    self.id,
+                    ssh_configuration.ssh_user_name,
+                    ssh_configuration.ssh_session_host,
+                    ssh_configuration.ssh_session_port
+                );
+                let ssh_session = self
+                    .http_client
+                    .connect_to_http2_over_ssh(app, ssh_configuration)
+                    .await?;
+                sw.pause();
+                self.ssh_session = Some(ssh_session);
+                println!(
+                    "[{}]. Http2OverSsh. Connected to remote endpoint: {}@{}:{} in {}",
+                    self.id,
+                    ssh_configuration.ssh_user_name,
+                    ssh_configuration.ssh_session_host,
+                    ssh_configuration.ssh_session_port,
+                    sw.duration_as_string()
+                );
             }
         }
 
@@ -88,24 +115,34 @@ impl ProxyPassConfiguration {
         result
     }
 
-    pub fn send_request(
+    pub fn send_http1_request(
         &mut self,
         req: hyper::Request<Full<Bytes>>,
     ) -> impl Future<Output = Result<Response<Incoming>, hyper::Error>> {
         self.http_client
-            .connection
-            .as_mut()
+            .unwrap_as_http1_mut()
+            .unwrap()
+            .send_request
+            .send_request(req.clone())
+    }
+
+    pub fn send_http2_request(
+        &mut self,
+        req: hyper::Request<Full<Bytes>>,
+    ) -> impl Future<Output = Result<Response<Incoming>, hyper::Error>> {
+        self.http_client
+            .unwrap_as_http2_mut()
             .unwrap()
             .send_request
             .send_request(req.clone())
     }
 
     pub fn get_connected_moment(&self) -> Option<DateTimeAsMicroseconds> {
-        Some(self.http_client.connection.as_ref()?.connected)
+        self.http_client.get_connected_moment()
     }
 
     pub fn dispose(&mut self) {
-        self.http_client.connection = None;
+        self.http_client.dispose();
     }
 }
 

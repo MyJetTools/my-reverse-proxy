@@ -57,13 +57,9 @@ impl ProxyPassInner {
             }
         };
 
-        let host = req.headers().get("host");
-        if host.is_none() {
-            return Err(ProxyPassError::NoHostHeaderFound);
-        }
+        let host_port = crate::http_server::HostPort::new(req);
 
-        let configs =
-            crate::flows::get_configurations(app, host.unwrap().to_str().unwrap()).await?;
+        let configs = crate::flows::get_configurations(app, &host_port).await?;
 
         *self = Self::Active(configs);
 

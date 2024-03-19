@@ -5,7 +5,6 @@ pub enum ProxyPassError {
     HttpClientError(HttpClientError),
     HyperError(hyper::Error),
     SshSessionError(my_ssh::SshSessionError),
-    NoHostHeaderFound,
     NoConfigurationFound,
     NoLocationFound,
     ConnectionIsDisposed,
