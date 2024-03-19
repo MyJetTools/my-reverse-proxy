@@ -2,9 +2,9 @@ use std::{net::SocketAddr, sync::Arc};
 
 use http_body_util::Full;
 use hyper::{body::Bytes, service::service_fn};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 
-use crate::{app::AppContext, http2_executor::TokioExecutor, http_server::ProxyPassError};
+use crate::{app::AppContext, http_server::ProxyPassError};
 
 use super::ProxyPassClient;
 
@@ -15,7 +15,9 @@ pub fn start_http2_server(addr: SocketAddr, app: Arc<AppContext>) {
 
 async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let builder = Arc::new(hyper::server::conn::http2::Builder::new(TokioExecutor));
+    let builder = Arc::new(hyper::server::conn::http2::Builder::new(
+        TokioExecutor::new(),
+    ));
     loop {
         let (stream, socket_addr) = listener.accept().await.unwrap();
 

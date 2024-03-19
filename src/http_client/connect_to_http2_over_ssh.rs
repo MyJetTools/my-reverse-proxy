@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::client::conn::http2::SendRequest;
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use my_ssh::{SshCredentials, SshSession};
 
 use crate::{app::AppContext, http_server::ProxyPassError};
@@ -32,7 +32,7 @@ pub async fn connect_to_http2_over_ssh(
     let io = TokioIo::new(buf_writer);
 
     let (mut sender, conn) =
-        hyper::client::conn::http2::handshake(crate::http2_executor::TokioExecutor, io).await?;
+        hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await?;
 
     let proxy_pass_uri = format!("{}:{}", remote_host, remote_port);
 

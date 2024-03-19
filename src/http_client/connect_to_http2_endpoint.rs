@@ -1,6 +1,6 @@
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http2::SendRequest, Uri};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::TcpStream;
 
 use super::HttpClientError;
@@ -16,8 +16,7 @@ pub async fn connect_to_http2_endpoint(
         Ok(tcp_stream) => {
             let io = TokioIo::new(tcp_stream);
             let handshake_result =
-                hyper::client::conn::http2::handshake(crate::http2_executor::TokioExecutor, io)
-                    .await;
+                hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await;
             match handshake_result {
                 Ok((mut sender, conn)) => {
                     tokio::task::spawn(async move {

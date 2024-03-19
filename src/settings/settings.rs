@@ -5,9 +5,9 @@ use std::{
 
 use crate::http_server::HostPort;
 
-use super::{ConnectionsSettings, ConnectionsSettingsModel, SshConfiguration};
+use super::{ConnectionsSettings, ConnectionsSettingsModel, ProxyPassTo, SshConfiguration};
 use hyper::Uri;
-use rust_extensions::{duration_utils::DurationExtensions, StrOrString};
+use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
 
 pub enum ProxyPassRemoteEndpoint {
@@ -62,7 +62,9 @@ impl SettingsReader {
                         );
                     }
 
-                    if location.proxy_pass_to.trim().starts_with("ssh") {
+                    let proxy_pass_to = location.get_proxy_pass(&read_access.variables);
+
+                    if proxy_pass_to.is_ssh() {
                         result.push((
                             location.location.as_ref().unwrap().to_string(),
                             if location
@@ -70,11 +72,11 @@ impl SettingsReader {
                                 .is_http_1()
                             {
                                 ProxyPassRemoteEndpoint::Http1OverSsh(SshConfiguration::parse(
-                                    &location.proxy_pass_to,
+                                    proxy_pass_to.as_str(),
                                 ))
                             } else {
                                 ProxyPassRemoteEndpoint::Http2OverSsh(SshConfiguration::parse(
-                                    &location.proxy_pass_to,
+                                    proxy_pass_to.as_str(),
                                 ))
                             },
                         ));
@@ -86,11 +88,11 @@ impl SettingsReader {
                                 .is_http_1()
                             {
                                 ProxyPassRemoteEndpoint::Http(
-                                    Uri::from_str(&location.proxy_pass_to).unwrap(),
+                                    Uri::from_str(proxy_pass_to.as_str()).unwrap(),
                                 )
                             } else {
                                 ProxyPassRemoteEndpoint::Http2(
-                                    Uri::from_str(&location.proxy_pass_to).unwrap(),
+                                    Uri::from_str(proxy_pass_to.as_str()).unwrap(),
                                 )
                             },
                         ));
@@ -181,15 +183,12 @@ impl Location {
     pub fn get_proxy_pass<'s>(
         &'s self,
         variables: &Option<HashMap<String, String>>,
-    ) -> StrOrString<'s> {
-        super::populate_variable(self.proxy_pass_to.as_str(), variables)
-    }
+    ) -> ProxyPassTo {
+        let result = super::populate_variable(self.proxy_pass_to.trim(), variables);
 
-    /*
-       pub fn is_ssh_proxy_pass(&self) -> bool {
-           self.get_proxy_pass(variables).trim().starts_with("ssh")
-       }
-    */
+        println!("Proxy pass to: '{}'", result.as_str());
+        ProxyPassTo::new(result.to_string())
+    }
 
     pub fn get_endpoint_type(
         &self,
@@ -198,23 +197,20 @@ impl Location {
     ) -> EndpointType {
         let proxy_pass_to = self.get_proxy_pass(variables);
 
-        let proxy_pass_to = proxy_pass_to.as_str().trim();
-
-        let is_ssh_proxy_pass = proxy_pass_to.starts_with("ssh");
-
         match self.endpoint_type.as_str() {
             "http1" => EndpointType::Http1,
             "http2" => EndpointType::Http2,
             "tcp" => {
-                if is_ssh_proxy_pass {
-                    EndpointType::TcpOverSsh(SshConfiguration::parse(proxy_pass_to))
+                if proxy_pass_to.is_ssh() {
+                    EndpointType::TcpOverSsh(SshConfiguration::parse(proxy_pass_to.as_str()))
                 } else {
                     let remote_addr = std::net::SocketAddr::from_str(self.proxy_pass_to.as_str());
 
                     if remote_addr.is_err() {
                         panic!(
                             "Can not parse remote address: '{}' for tcp listen host {}",
-                            proxy_pass_to, host
+                            proxy_pass_to.as_str(),
+                            host
                         );
                     }
 
