@@ -65,7 +65,6 @@ pub async fn handle_requests(
     proxy_pass: Arc<ProxyPassClient>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    //println!("Handling request with host: {:?}", req.uri().host());
     match proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
         Err(err) => {

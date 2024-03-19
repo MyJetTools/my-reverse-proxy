@@ -30,6 +30,9 @@ async fn main() {
             settings::EndpointType::Http1 => {
                 crate::http_server::start_http_server(listen_end_point, app.clone());
             }
+            settings::EndpointType::Https1 => {
+                crate::http_server::start_https_server(listen_end_point, app.clone());
+            }
             settings::EndpointType::Http2 => {
                 crate::http_server::start_http2_server(listen_end_point, app.clone());
             }

@@ -9,12 +9,12 @@ connection_settings:
   
 hosts:
   localhost:8000:
-  - type: http1
+  - type: http
     location: /    
     proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123
 
   localhost:8001:
-  - type: http1
+  - type: http
     location: /    
     proxy_pass_to: http://remote_host:5123
 

@@ -1,10 +1,14 @@
+use hyper::header::HeaderValue;
+
 pub struct HostPort<'s, T> {
     request: &'s hyper::Request<T>,
+    host: Option<&'s HeaderValue>,
 }
 
 impl<'s, T> HostPort<'s, T> {
     pub fn new(request: &'s hyper::Request<T>) -> Self {
-        Self { request }
+        let host = request.headers().get("host");
+        Self { request, host }
     }
 
     pub fn is_my_host_port(&self, host_port: &str) -> bool {
@@ -58,14 +62,25 @@ impl<'s, T> HostPort<'s, T> {
     }
 
     pub fn get_port(&self) -> u16 {
-        if let Some(port) = self.request.uri().port() {
-            port.as_u16()
-        } else {
-            if self.is_http() {
-                80
-            } else {
-                443
+        if let Some(port) = self.request.uri().port_u16() {
+            return port;
+        }
+
+        if let Some(host) = self.host {
+            if let Ok(host) = host.to_str() {
+                let port = host.split(':').last();
+                if let Some(port) = port {
+                    if let Ok(port) = port.parse::<u16>() {
+                        return port;
+                    }
+                }
             }
+        }
+
+        if self.is_http() {
+            80
+        } else {
+            443
         }
     }
 }

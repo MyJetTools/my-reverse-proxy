@@ -56,7 +56,6 @@ impl ProxyPassInner {
                 return Ok(result);
             }
         };
-
         let host_port = crate::http_server::HostPort::new(req);
 
         let configs = crate::flows::get_configurations(app, &host_port).await?;

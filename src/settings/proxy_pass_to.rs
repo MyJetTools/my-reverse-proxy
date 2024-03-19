@@ -1,3 +1,5 @@
+use super::SshConfiguration;
+
 pub struct ProxyPassTo(String);
 
 impl ProxyPassTo {
@@ -11,5 +13,9 @@ impl ProxyPassTo {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    pub fn to_ssh_configuration(&self) -> SshConfiguration {
+        SshConfiguration::parse(self.as_str())
     }
 }

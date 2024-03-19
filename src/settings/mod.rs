@@ -8,3 +8,5 @@ mod populate_variable;
 pub use populate_variable::*;
 mod proxy_pass_to;
 pub use proxy_pass_to::*;
+mod proxy_pass_remote_endpoint;
+pub use proxy_pass_remote_endpoint::*;

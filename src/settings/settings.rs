@@ -5,17 +5,13 @@ use std::{
 
 use crate::http_server::HostPort;
 
-use super::{ConnectionsSettings, ConnectionsSettingsModel, ProxyPassTo, SshConfiguration};
+use super::{
+    ConnectionsSettings, ConnectionsSettingsModel, ProxyPassRemoteEndpoint, ProxyPassTo,
+    SshConfiguration,
+};
 use hyper::Uri;
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
-
-pub enum ProxyPassRemoteEndpoint {
-    Http(Uri),
-    Http2(Uri),
-    Http1OverSsh(SshConfiguration),
-    Http2OverSsh(SshConfiguration),
-}
 
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
@@ -55,34 +51,33 @@ impl SettingsReader {
         for (settings_host, locations) in &read_access.hosts {
             if host_port.is_my_host_port(settings_host) {
                 for location in locations {
-                    if location.location.is_none() {
-                        panic!(
-                            "Location is not defined for host: {} with proxy pass to '{}'",
-                            settings_host, location.proxy_pass_to
-                        );
-                    }
+                    let proxy_pass_location = if let Some(location) = location.location.as_ref() {
+                        location.to_string()
+                    } else {
+                        "/".to_string()
+                    };
 
                     let proxy_pass_to = location.get_proxy_pass(&read_access.variables);
 
                     if proxy_pass_to.is_ssh() {
                         result.push((
-                            location.location.as_ref().unwrap().to_string(),
+                            proxy_pass_location,
                             if location
                                 .get_endpoint_type(settings_host, &read_access.variables)
                                 .is_http_1()
                             {
-                                ProxyPassRemoteEndpoint::Http1OverSsh(SshConfiguration::parse(
-                                    proxy_pass_to.as_str(),
-                                ))
+                                ProxyPassRemoteEndpoint::Http1OverSsh(
+                                    proxy_pass_to.to_ssh_configuration(),
+                                )
                             } else {
-                                ProxyPassRemoteEndpoint::Http2OverSsh(SshConfiguration::parse(
-                                    proxy_pass_to.as_str(),
-                                ))
+                                ProxyPassRemoteEndpoint::Http2OverSsh(
+                                    proxy_pass_to.to_ssh_configuration(),
+                                )
                             },
                         ));
                     } else {
                         result.push((
-                            location.location.as_ref().unwrap().to_string(),
+                            proxy_pass_location,
                             if location
                                 .get_endpoint_type(settings_host, &read_access.variables)
                                 .is_http_1()
@@ -145,6 +140,7 @@ impl SettingsReader {
 #[derive(Debug)]
 pub enum EndpointType {
     Http1,
+    Https1,
     Http2,
     Tcp(std::net::SocketAddr),
     TcpOverSsh(SshConfiguration),
@@ -160,9 +156,10 @@ impl EndpointType {
     pub fn as_u8(&self) -> u8 {
         match self {
             EndpointType::Http1 => 0,
-            EndpointType::Http2 => 1,
-            EndpointType::Tcp(_) => 2,
-            EndpointType::TcpOverSsh(_) => 3,
+            EndpointType::Https1 => 1,
+            EndpointType::Http2 => 2,
+            EndpointType::Tcp(_) => 3,
+            EndpointType::TcpOverSsh(_) => 4,
         }
     }
 
@@ -173,7 +170,7 @@ impl EndpointType {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Location {
-    pub location: Option<String>,
+    location: Option<String>,
     proxy_pass_to: String,
     #[serde(rename = "type")]
     pub endpoint_type: String,
@@ -198,11 +195,12 @@ impl Location {
         let proxy_pass_to = self.get_proxy_pass(variables);
 
         match self.endpoint_type.as_str() {
-            "http1" => EndpointType::Http1,
+            "http" => EndpointType::Http1,
+            "https" => EndpointType::Https1,
             "http2" => EndpointType::Http2,
             "tcp" => {
                 if proxy_pass_to.is_ssh() {
-                    EndpointType::TcpOverSsh(SshConfiguration::parse(proxy_pass_to.as_str()))
+                    EndpointType::TcpOverSsh(proxy_pass_to.to_ssh_configuration())
                 } else {
                     let remote_addr = std::net::SocketAddr::from_str(self.proxy_pass_to.as_str());
 
@@ -229,12 +227,15 @@ fn check_and_get_endpoint_type(
 ) -> EndpointType {
     let mut tcp_location = None;
     let mut http_count = 0;
+
+    let mut https_count = 0;
     let mut http2_count = 0;
     let mut tcp_over_ssh = None;
 
     for location in locations {
         match location.get_endpoint_type(host, variables) {
             EndpointType::Http1 => http_count += 1,
+            EndpointType::Https1 => https_count += 1,
             EndpointType::Http2 => http2_count += 1,
             EndpointType::Tcp(proxy_pass) => {
                 if tcp_location.is_some() {
@@ -260,8 +261,8 @@ fn check_and_get_endpoint_type(
     }
     if tcp_location.is_some() && http_count > 0 && http2_count > 0 && tcp_over_ssh.is_some() {
         panic!(
-            "Host '{}' has {} http, {} http2, '{:?}' tcp and {:?} tcp over ssh configurations",
-            host, http_count, http2_count, tcp_location, tcp_over_ssh
+            "Host '{}' has {} http, {} https, {} http2, '{:?}' tcp and {:?} tcp over ssh configurations",
+            host, http_count, https_count, http2_count, tcp_location, tcp_over_ssh
         );
     }
 
@@ -275,6 +276,10 @@ fn check_and_get_endpoint_type(
 
     if http_count > 0 {
         return EndpointType::Http1;
+    }
+
+    if https_count > 0 {
+        return EndpointType::Https1;
     }
 
     if http2_count > 0 {
