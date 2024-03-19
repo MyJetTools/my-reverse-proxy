@@ -25,20 +25,21 @@ hosts:
   localhost:8003:
   - type: tcp
     proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
+
+  localhost:8005:
+  - type: http2
+    location: /service1    
+    proxy_pass_to: ${my_ssh_config}->remote_host:5123
+
+  localhost:8006:
+  - type: http2
+    location: /service2
+    proxy_pass_to: http://remote_host:5123  
+    
+variables:
+  my_ssh_config: ssh:user@10.12.13.14:22
 ```
 
-## On Development 
-
-* Ability to setup **http2** proxy
-
 ```yaml
-hosts:
-  localhost:8000:
-  - type: http2
-    location: /    
-    proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123
-  localhost:8001:
-  - type: http2
-    location: /    
-    proxy_pass_to: http://remote_host:5123    
+ 
 ```
