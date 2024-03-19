@@ -32,15 +32,8 @@ impl ProxyPassClient {
             let (future, proxy_pass_id) = {
                 let mut inner = self.inner.lock().await;
 
-                let proxy_pass_configuration = inner.get_proxy_pass_configuration(app, &req).await;
-
-                if proxy_pass_configuration.is_err() {
-                    println!("No proxy pass found");
-                }
-
-                let proxy_pass_configuration = proxy_pass_configuration?;
-
-                println!("Found proxy_pass {}", proxy_pass_configuration.location);
+                let proxy_pass_configuration =
+                    inner.get_proxy_pass_configuration(app, &req).await?;
 
                 proxy_pass_configuration.connect_if_require(app).await?;
 
@@ -89,15 +82,8 @@ impl ProxyPassClient {
             let (future, proxy_pass_id) = {
                 let mut inner = self.inner.lock().await;
 
-                let proxy_pass_configuration = inner.get_proxy_pass_configuration(app, &req).await;
-
-                if proxy_pass_configuration.is_err() {
-                    println!("No proxy pass found");
-                }
-
-                let proxy_pass_configuration = proxy_pass_configuration?;
-
-                println!("Found proxy_pass {}", proxy_pass_configuration.location);
+                let proxy_pass_configuration =
+                    inner.get_proxy_pass_configuration(app, &req).await?;
 
                 proxy_pass_configuration.connect_if_require(app).await?;
 
