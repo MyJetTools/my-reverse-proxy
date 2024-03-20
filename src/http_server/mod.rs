@@ -14,3 +14,5 @@ mod host_port;
 pub use host_port::*;
 mod https_server;
 pub use https_server::*;
+mod proxy_pass_configurations;
+pub use proxy_pass_configurations::*;

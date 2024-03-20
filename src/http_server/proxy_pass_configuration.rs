@@ -9,7 +9,7 @@ use hyper::{body::Incoming, Response, Uri};
 use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
-use crate::{app::AppContext, http_client::HttpClient, settings::ProxyPassRemoteEndpoint};
+use crate::{app::AppContext, http_client::HttpClient, settings::HttpProxyPassRemoteEndpoint};
 
 use super::ProxyPassError;
 
@@ -18,13 +18,13 @@ static CONNECTIONS: AtomicI64 = AtomicI64::new(0);
 pub struct ProxyPassConfiguration {
     ssh_session: Option<Arc<SshSession>>,
     http_client: HttpClient,
-    pub remote_endpoint: ProxyPassRemoteEndpoint,
+    pub remote_endpoint: HttpProxyPassRemoteEndpoint,
     pub location: String,
     pub id: i64,
 }
 
 impl ProxyPassConfiguration {
-    pub fn new(location: String, remote_endpoint: ProxyPassRemoteEndpoint, id: i64) -> Self {
+    pub fn new(location: String, remote_endpoint: HttpProxyPassRemoteEndpoint, id: i64) -> Self {
         CONNECTIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
             location,
@@ -40,15 +40,15 @@ impl ProxyPassConfiguration {
         }
 
         match &self.remote_endpoint {
-            ProxyPassRemoteEndpoint::Http(uri) => {
+            HttpProxyPassRemoteEndpoint::Http(uri) => {
                 self.http_client.connect_to_http1(uri).await?;
             }
 
-            ProxyPassRemoteEndpoint::Http2(uri) => {
+            HttpProxyPassRemoteEndpoint::Http2(uri) => {
                 self.http_client.connect_to_http2(uri).await?;
             }
 
-            ProxyPassRemoteEndpoint::Http1OverSsh(ssh_configuration) => {
+            HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_configuration) => {
                 let mut sw = StopWatch::new();
 
                 sw.start();
@@ -75,7 +75,7 @@ impl ProxyPassConfiguration {
                 );
             }
 
-            ProxyPassRemoteEndpoint::Http2OverSsh(ssh_configuration) => {
+            HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_configuration) => {
                 let mut sw = StopWatch::new();
 
                 sw.start();

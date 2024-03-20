@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, http_client::HTTP_CLIENT_TIMEOUT};
 
-use super::{ProxyPassError, ProxyPassInner};
+use super::{HostPort, ProxyPassError, ProxyPassInner};
 
 pub struct ProxyPassClient {
     pub inner: Mutex<ProxyPassInner>,
@@ -17,7 +17,7 @@ impl ProxyPassClient {
     pub fn new(addr: SocketAddr) -> Self {
         Self {
             server_addr: addr,
-            inner: Mutex::new(ProxyPassInner::Unknown),
+            inner: Mutex::new(ProxyPassInner::new()),
         }
     }
 
@@ -29,28 +29,52 @@ impl ProxyPassClient {
         let req = into_client_request(req).await?;
 
         loop {
-            let (future, proxy_pass_id) = {
+            let (future1, future2, proxy_pass_id) = {
                 let mut inner = self.inner.lock().await;
 
-                let proxy_pass_configuration =
-                    inner.get_proxy_pass_configuration(app, &req).await?;
+                if !inner.configurations.has_configurations() {
+                    let configurations =
+                        crate::flows::get_configurations(app, &HostPort::new(&req)).await?;
+                    inner.configurations.init(configurations);
+                }
+
+                let proxy_pass_configuration = inner.configurations.find(req.uri())?;
 
                 proxy_pass_configuration.connect_if_require(app).await?;
 
                 let id = proxy_pass_configuration.id;
 
-                let result = proxy_pass_configuration.send_http1_request(req.clone());
+                let (future1, future2) = if proxy_pass_configuration.remote_endpoint.is_http1() {
+                    let future = proxy_pass_configuration.send_http1_request(req.clone());
+                    (Some(future), None)
+                } else {
+                    let future = proxy_pass_configuration.send_http2_request(req.clone());
+                    (None, Some(future))
+                };
 
-                (result, id)
+                (future1, future2, id)
             };
 
-            let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
+            let result = if let Some(future1) = future1 {
+                let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future1).await;
 
-            if result.is_err() {
-                return Err(ProxyPassError::Timeout);
-            }
+                if result.is_err() {
+                    return Err(ProxyPassError::Timeout);
+                }
 
-            match result.unwrap() {
+                result.unwrap()
+            } else if let Some(future2) = future2 {
+                let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future2).await;
+
+                if result.is_err() {
+                    return Err(ProxyPassError::Timeout);
+                }
+                result.unwrap()
+            } else {
+                panic!("Both futures are None")
+            };
+
+            match result {
                 Ok(response) => {
                     let (parts, incoming) = response.into_parts();
 
@@ -71,59 +95,110 @@ impl ProxyPassClient {
         }
     }
 
-    pub async fn send_payload_http2(
-        &self,
-        app: &Arc<AppContext>,
-        req: hyper::Request<hyper::body::Incoming>,
-    ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        let req = into_client_request(req).await?;
+    /*
+       pub async fn send_payload_http1(
+           &self,
+           app: &Arc<AppContext>,
+           req: hyper::Request<hyper::body::Incoming>,
+       ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
+           let req = into_client_request(req).await?;
 
-        loop {
-            let (future, proxy_pass_id) = {
-                let mut inner = self.inner.lock().await;
+           loop {
+               let (future, proxy_pass_id) = {
+                   let mut inner = self.inner.lock().await;
 
-                let proxy_pass_configuration =
-                    inner.get_proxy_pass_configuration(app, &req).await?;
+                   let proxy_pass_configuration =
+                       inner.get_proxy_pass_configuration(app, &req).await?;
 
-                proxy_pass_configuration.connect_if_require(app).await?;
+                   proxy_pass_configuration.connect_if_require(app).await?;
 
-                let id = proxy_pass_configuration.id;
+                   let id = proxy_pass_configuration.id;
 
-                let result = proxy_pass_configuration.send_http2_request(req.clone());
+                   let result = proxy_pass_configuration.send_http1_request(req.clone());
 
-                (result, id)
-            };
+                   (result, id)
+               };
 
-            let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
+               let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
 
-            if result.is_err() {
-                return Err(ProxyPassError::Timeout);
-            }
+               if result.is_err() {
+                   return Err(ProxyPassError::Timeout);
+               }
 
-            match result.unwrap() {
-                Ok(response) => {
-                    let (parts, incoming) = response.into_parts();
+               match result.unwrap() {
+                   Ok(response) => {
+                       let (parts, incoming) = response.into_parts();
 
-                    let body = read_bytes(incoming).await?;
+                       let body = read_bytes(incoming).await?;
 
-                    let response = hyper::Response::from_parts(parts, body);
+                       let response = hyper::Response::from_parts(parts, body);
 
-                    return Ok(Ok(response));
-                }
-                Err(err) => {
-                    println!("Error: {:?}", err);
-                    let mut inner = self.inner.lock().await;
-                    if inner.handle_error(&err, proxy_pass_id).await? {
-                        return Ok(Err(err.into()));
-                    }
-                }
-            }
-        }
-    }
+                       return Ok(Ok(response));
+                   }
+                   Err(err) => {
+                       println!("Error: {:?}", err);
+                       let mut inner = self.inner.lock().await;
+                       if inner.handle_error(&err, proxy_pass_id).await? {
+                           return Ok(Err(err.into()));
+                       }
+                   }
+               }
+           }
+       }
 
+       pub async fn send_payload_http2(
+           &self,
+           app: &Arc<AppContext>,
+           req: hyper::Request<hyper::body::Incoming>,
+       ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
+           let req = into_client_request(req).await?;
+
+           loop {
+               let (future, proxy_pass_id) = {
+                   let mut inner = self.inner.lock().await;
+
+                   let proxy_pass_configuration =
+                       inner.get_proxy_pass_configuration(app, &req).await?;
+
+                   proxy_pass_configuration.connect_if_require(app).await?;
+
+                   let id = proxy_pass_configuration.id;
+
+                   let result = proxy_pass_configuration.send_http2_request(req.clone());
+
+                   (result, id)
+               };
+
+               let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
+
+               if result.is_err() {
+                   return Err(ProxyPassError::Timeout);
+               }
+
+               match result.unwrap() {
+                   Ok(response) => {
+                       let (parts, incoming) = response.into_parts();
+
+                       let body = read_bytes(incoming).await?;
+
+                       let response = hyper::Response::from_parts(parts, body);
+
+                       return Ok(Ok(response));
+                   }
+                   Err(err) => {
+                       println!("Error: {:?}", err);
+                       let mut inner = self.inner.lock().await;
+                       if inner.handle_error(&err, proxy_pass_id).await? {
+                           return Ok(Err(err.into()));
+                       }
+                   }
+               }
+           }
+       }
+    */
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
-        *inner = ProxyPassInner::Disposed;
+        inner.disposed = true;
     }
 }
 

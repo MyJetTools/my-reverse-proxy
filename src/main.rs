@@ -17,9 +17,7 @@ async fn main() {
 
     let listen_ports = settings_reader.get_listen_ports().await;
 
-    let connections_settings = settings_reader.get_connections_settings().await;
-
-    let app = AppContext::new(settings_reader, connections_settings);
+    let app = AppContext::new(settings_reader).await;
 
     let app = Arc::new(app);
 
@@ -30,8 +28,24 @@ async fn main() {
             settings::EndpointType::Http1 => {
                 crate::http_server::start_http_server(listen_end_point, app.clone());
             }
-            settings::EndpointType::Https1 => {
-                crate::http_server::start_https_server(listen_end_point, app.clone());
+            settings::EndpointType::Https1(certificate_id) => {
+                if let Some(ssl_certificate) = app
+                    .settings_reader
+                    .get_ssl_certificate(&certificate_id)
+                    .await
+                {
+                    crate::http_server::start_https_server(
+                        listen_end_point,
+                        app.clone(),
+                        ssl_certificate,
+                    );
+                } else {
+                    panic!(
+                        "Certificate not found: {} for endpoint: {}",
+                        certificate_id.as_str(),
+                        listen_port
+                    );
+                }
             }
             settings::EndpointType::Http2 => {
                 crate::http_server::start_http2_server(listen_end_point, app.clone());

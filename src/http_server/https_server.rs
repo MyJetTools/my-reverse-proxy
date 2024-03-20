@@ -1,40 +1,35 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use http_body_util::Full;
-use hyper::{
-    body::Bytes,
-    server::conn::http1::{self, Builder},
-    service::service_fn,
-};
-use hyper_util::rt::TokioIo;
+use hyper::{body::Bytes, server::conn::http2, service::service_fn};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 
-use rustls::Certificate;
 use tokio_rustls::TlsAcceptor;
 
-use crate::{app::AppContext, http_server::ProxyPassError};
+use crate::{
+    app::{AppContext, SslCertificate},
+    http_server::ProxyPassError,
+};
 
 use super::ProxyPassClient;
 
-pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>) {
-    println!("Listening https1 on https://{}", addr);
-    tokio::spawn(start_https_server_loop(addr, app));
+pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>, certificate: SslCertificate) {
+    println!("Listening https on https://{}", addr);
+    tokio::spawn(start_https_server_loop(addr, app, certificate));
 }
 
-async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
+async fn start_https_server_loop(
+    addr: SocketAddr,
+    app: Arc<AppContext>,
+    certificate: SslCertificate,
+) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    let mut http1 = http1::Builder::new();
-    http1.keep_alive(true);
-
-    // Load public certificate.
-    let certs = load_certs().unwrap();
-    // Load private key.
-    let key = load_private_key().unwrap();
 
     // Build TLS configuration.
     let mut server_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
-        .with_single_cert(certs, key)
+        .with_single_cert(certificate.certificates, certificate.private_key)
         .unwrap();
 
     server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
@@ -57,7 +52,7 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
                     return;
                 }
             };
-            if let Err(err) = Builder::new()
+            if let Err(err) = http2::Builder::new(TokioExecutor::new())
                 .serve_connection(
                     TokioIo::new(tls_stream),
                     service_fn(move |req| {
@@ -69,44 +64,6 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
                 eprintln!("failed to serve connection: {err:#}");
             }
         });
-
-        /*
-        let io = TokioIo::new(stream);
-
-        app.http_connections
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-
-
-        let http_proxy_pass_to_dispose = http_proxy_pass.clone();
-
-        let app = app.clone();
-
-        let app_disposed = app.clone();
-
-        let connection = http1
-            .serve_connection(
-                io,
-                service_fn(move |req| handle_requests(req, http_proxy_pass.clone(), app.clone())),
-            )
-            .with_upgrades();
-
-        tokio::task::spawn(async move {
-            if let Err(err) = connection.await {
-                println!(
-                    "{}. Error serving connection: {:?}",
-                    DateTimeAsMicroseconds::now().to_rfc3339(),
-                    err
-                );
-            }
-
-            http_proxy_pass_to_dispose.dispose().await;
-
-            app_disposed
-                .http_connections
-                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
-        });
-         */
     }
 }
 
@@ -115,7 +72,7 @@ pub async fn handle_requests(
     proxy_pass: Arc<ProxyPassClient>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    //println!("Handling request with host: {:?}", req.uri().host());
+    //println!("Handling request with host: {:?}", req);
     match proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
         Err(err) => {
@@ -144,51 +101,4 @@ pub async fn handle_requests(
             }
         }
     }
-}
-
-fn load_certs() -> std::io::Result<Vec<Certificate>> {
-    let file_name = "/Users/amigin/certs/cert.cer";
-
-    // Open certificate file.
-    let certfile = std::fs::File::open(file_name)?;
-
-    let mut reader = std::io::BufReader::new(certfile);
-
-    let certs = rustls_pemfile::certs(&mut reader);
-
-    // Load and return certificate.
-    let mut result = Vec::new();
-
-    for cert in certs {
-        let cert: rustls_pki_types::CertificateDer<'_> = cert.unwrap();
-
-        let cert = cert.as_ref();
-        let cert = rustls::Certificate(cert.to_vec());
-        result.push(cert);
-    }
-
-    Ok(result)
-}
-
-// Load private key from file.
-fn load_private_key() -> std::io::Result<rustls::PrivateKey> {
-    let file_name = "/Users/amigin/certs/cert.key";
-
-    // Open keyfile.
-    let keyfile = std::fs::File::open(file_name)?;
-    let mut reader = std::io::BufReader::new(keyfile);
-
-    let private_key = rustls_pemfile::private_key(&mut reader).unwrap();
-
-    if private_key.is_none() {
-        panic!("No private key found in file {}", file_name);
-    }
-
-    let private_key: rustls_pki_types::PrivateKeyDer<'_> = private_key.unwrap();
-
-    let private_key = private_key.secret_der();
-
-    Ok(rustls::PrivateKey(private_key.to_vec()))
-
-    //  Ok(private_key.into())
 }

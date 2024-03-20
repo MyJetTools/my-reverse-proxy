@@ -9,7 +9,7 @@ use crate::{app::AppContext, http_server::ProxyPassError};
 use super::ProxyPassClient;
 
 pub fn start_http2_server(addr: SocketAddr, app: Arc<AppContext>) {
-    println!("Listening http2 on http://{}", addr);
+    println!("Listening http2 on https://{}", addr);
     tokio::spawn(start_http_server_loop(addr, app));
 }
 
@@ -49,7 +49,7 @@ pub async fn handle_requests(
     proxy_pass: Arc<ProxyPassClient>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    match proxy_pass.send_payload_http2(&app, req).await {
+    match proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
         Err(err) => {
             if err.is_timeout() {

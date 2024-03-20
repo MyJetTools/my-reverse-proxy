@@ -10,10 +10,8 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    pub fn new(
-        settings_reader: SettingsReader,
-        connection_settings: ConnectionsSettingsModel,
-    ) -> Self {
+    pub async fn new(settings_reader: SettingsReader) -> Self {
+        let connection_settings = settings_reader.get_connections_settings().await;
         Self {
             settings_reader,
             http_connections: AtomicIsize::new(0),

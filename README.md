@@ -9,32 +9,48 @@ connection_settings:
   
 hosts:
   localhost:8000:
-  - type: http
-    location: /    
-    proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert  
+    locations:
+    - type: http
+      proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123      
 
   localhost:8001:
-  - type: http
-    location: /    
-    proxy_pass_to: http://remote_host:5123
+    endpoint:
+      type: http
+    locations:      
+    - type: http
+      proxy_pass_to: http://remote_host:5123
 
   localhost:8002:
-  - type: tcp
-    proxy_pass_to: 10.0.0.5:5123    
+    endpoint:
+      type: tcp  
+    locations:        
+    - proxy_pass_to: 10.0.0.5:5123    
 
   localhost:8003:
-  - type: tcp
-    proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
+    endpoint:
+      type: tcp
+    locations:      
+    - proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
 
-  localhost:8005:
-  - type: http2
-    location: /service1    
-    proxy_pass_to: ${my_ssh_config}->remote_host:5123
+  8005:
+    endpoint:
+      type: http2  
 
-  localhost:8006:
-  - type: http2
-    location: /service2
-    proxy_pass_to: http://remote_host:5123  
+    locations:       
+    - type: http2
+      path: /service1    
+      proxy_pass_to: ${my_ssh_config}->remote_host:5123
+    - type: http2
+      path: /service2
+      proxy_pass_to: http://remote_host:5123  
+
+ssl_certificates:
+  - id: my_ssl_cert
+    certificate: ~/certs/cert.cer
+    private_key: ~/certs/cert.key    
     
 variables:
   my_ssh_config: ssh:user@10.12.13.14:22

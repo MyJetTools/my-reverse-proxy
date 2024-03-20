@@ -3,11 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use crate::http_server::HostPort;
+use crate::{app::SslCertificate, http_server::HostPort};
 
 use super::{
-    ConnectionsSettings, ConnectionsSettingsModel, ProxyPassRemoteEndpoint, ProxyPassTo,
-    SshConfiguration,
+    ConnectionsSettings, ConnectionsSettingsModel, EndpointType, FileName,
+    HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId, SslCertificatesSettingsModel,
 };
 use hyper::Uri;
 use rust_extensions::duration_utils::DurationExtensions;
@@ -15,9 +15,10 @@ use serde::*;
 
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
-    pub hosts: HashMap<String, Vec<Location>>,
+    pub hosts: HashMap<String, ProxyPassSettings>,
     pub connection_settings: Option<ConnectionsSettings>,
     pub variables: Option<HashMap<String, String>>,
+    pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
 }
 
 impl SettingsReader {
@@ -41,17 +42,45 @@ impl SettingsReader {
 
         result
     }
+
+    pub async fn get_ssl_certificate(&self, id: &SslCertificateId) -> Option<SslCertificate> {
+        let read_access = self.settings.read().await;
+
+        if let Some(certs) = &read_access.ssl_certificates {
+            for cert in certs {
+                if cert.id != id.as_str() {
+                    continue;
+                }
+
+                let cert_file = FileName::new(cert.certificate.as_str());
+                let certificates = super::certificates::load_certs(&cert_file);
+
+                let pk_file = FileName::new(cert.private_key.as_str());
+                let private_key = super::certificates::load_private_key(&pk_file);
+
+                let result = SslCertificate {
+                    certificates,
+                    private_key,
+                };
+
+                return Some(result);
+            }
+        }
+
+        None
+    }
+
     pub async fn get_configurations<'s, T>(
         &self,
         host_port: &HostPort<'s, T>,
-    ) -> Vec<(String, ProxyPassRemoteEndpoint)> {
+    ) -> Vec<(String, HttpProxyPassRemoteEndpoint)> {
         let mut result = Vec::new();
         let read_access = self.settings.read().await;
 
-        for (settings_host, locations) in &read_access.hosts {
+        for (settings_host, proxy_pass_settings) in &read_access.hosts {
             if host_port.is_my_host_port(settings_host) {
-                for location in locations {
-                    let proxy_pass_location = if let Some(location) = location.location.as_ref() {
+                for location in &proxy_pass_settings.locations {
+                    let proxy_pass_path = if let Some(location) = &location.path {
                         location.to_string()
                     } else {
                         "/".to_string()
@@ -61,32 +90,26 @@ impl SettingsReader {
 
                     if proxy_pass_to.is_ssh() {
                         result.push((
-                            proxy_pass_location,
-                            if location
-                                .get_endpoint_type(settings_host, &read_access.variables)
-                                .is_http_1()
-                            {
-                                ProxyPassRemoteEndpoint::Http1OverSsh(
+                            proxy_pass_path,
+                            if location.is_http1() {
+                                HttpProxyPassRemoteEndpoint::Http1OverSsh(
                                     proxy_pass_to.to_ssh_configuration(),
                                 )
                             } else {
-                                ProxyPassRemoteEndpoint::Http2OverSsh(
+                                HttpProxyPassRemoteEndpoint::Http2OverSsh(
                                     proxy_pass_to.to_ssh_configuration(),
                                 )
                             },
                         ));
                     } else {
                         result.push((
-                            proxy_pass_location,
-                            if location
-                                .get_endpoint_type(settings_host, &read_access.variables)
-                                .is_http_1()
-                            {
-                                ProxyPassRemoteEndpoint::Http(
+                            proxy_pass_path,
+                            if location.is_http1() {
+                                HttpProxyPassRemoteEndpoint::Http(
                                     Uri::from_str(proxy_pass_to.as_str()).unwrap(),
                                 )
                             } else {
-                                ProxyPassRemoteEndpoint::Http2(
+                                HttpProxyPassRemoteEndpoint::Http2(
                                     Uri::from_str(proxy_pass_to.as_str()).unwrap(),
                                 )
                             },
@@ -105,27 +128,19 @@ impl SettingsReader {
 
         let mut result: BTreeMap<u16, EndpointType> = BTreeMap::new();
 
-        for (host, locations) in &read_access.hosts {
+        for (host, proxy_pass) in &read_access.hosts {
             let host_port = host.split(':');
-
-            let endpoint_type =
-                check_and_get_endpoint_type(host, locations, &read_access.variables);
 
             match host_port.last().unwrap().parse::<u16>() {
                 Ok(port) => {
-                    if let Some(current_endpoint_type) = result.get(&port) {
-                        if !current_endpoint_type.type_is_the_same(&endpoint_type) {
-                            panic!(
-                                "Host '{}' has different endpoint types {:?} and {:?} for the same port {}",
-                                host,
-                                endpoint_type,
-                                current_endpoint_type,
-                                port
-                            );
-                        }
-                    }
-
-                    result.insert(port, endpoint_type);
+                    result.insert(
+                        port,
+                        proxy_pass.endpoint.get_type(
+                            host,
+                            proxy_pass.locations.as_slice(),
+                            &read_access.variables,
+                        ),
+                    );
                 }
                 Err(_) => {
                     panic!("Can not read port from host: '{}'", host);
@@ -137,89 +152,23 @@ impl SettingsReader {
     }
 }
 
-#[derive(Debug)]
-pub enum EndpointType {
-    Http1,
-    Https1,
-    Http2,
-    Tcp(std::net::SocketAddr),
-    TcpOverSsh(SshConfiguration),
+fn format_mem(size: usize) -> String {
+    if size < 1024 {
+        return format!("{}B", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    if size < 1024.0 {
+        return format!("{:.2}KB", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    return format!("{:.2}Mb", size);
 }
 
-impl EndpointType {
-    pub fn is_http_1(&self) -> bool {
-        match self {
-            EndpointType::Http1 => true,
-            _ => false,
-        }
-    }
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            EndpointType::Http1 => 0,
-            EndpointType::Https1 => 1,
-            EndpointType::Http2 => 2,
-            EndpointType::Tcp(_) => 3,
-            EndpointType::TcpOverSsh(_) => 4,
-        }
-    }
-
-    pub fn type_is_the_same(&self, other: &EndpointType) -> bool {
-        self.as_u8() == other.as_u8()
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Location {
-    location: Option<String>,
-    proxy_pass_to: String,
-    #[serde(rename = "type")]
-    pub endpoint_type: String,
-}
-
-impl Location {
-    pub fn get_proxy_pass<'s>(
-        &'s self,
-        variables: &Option<HashMap<String, String>>,
-    ) -> ProxyPassTo {
-        let result = super::populate_variable(self.proxy_pass_to.trim(), variables);
-
-        println!("Proxy pass to: '{}'", result.as_str());
-        ProxyPassTo::new(result.to_string())
-    }
-
-    pub fn get_endpoint_type(
-        &self,
-        host: &str,
-        variables: &Option<HashMap<String, String>>,
-    ) -> EndpointType {
-        let proxy_pass_to = self.get_proxy_pass(variables);
-
-        match self.endpoint_type.as_str() {
-            "http" => EndpointType::Http1,
-            "https" => EndpointType::Https1,
-            "http2" => EndpointType::Http2,
-            "tcp" => {
-                if proxy_pass_to.is_ssh() {
-                    EndpointType::TcpOverSsh(proxy_pass_to.to_ssh_configuration())
-                } else {
-                    let remote_addr = std::net::SocketAddr::from_str(self.proxy_pass_to.as_str());
-
-                    if remote_addr.is_err() {
-                        panic!(
-                            "Can not parse remote address: '{}' for tcp listen host {}",
-                            proxy_pass_to.as_str(),
-                            host
-                        );
-                    }
-
-                    EndpointType::Tcp(remote_addr.unwrap())
-                }
-            }
-            _ => panic!("Unknown location type: '{}'", self.endpoint_type),
-        }
-    }
-}
-
+/*
 fn check_and_get_endpoint_type(
     host: &str,
     locations: &[Location],
@@ -228,14 +177,23 @@ fn check_and_get_endpoint_type(
     let mut tcp_location = None;
     let mut http_count = 0;
 
-    let mut https_count = 0;
+    let mut https_location = None;
     let mut http2_count = 0;
     let mut tcp_over_ssh = None;
 
     for location in locations {
         match location.get_endpoint_type(host, variables) {
             EndpointType::Http1 => http_count += 1,
-            EndpointType::Https1 => https_count += 1,
+            EndpointType::Https1(ssl_certificate_id) => {
+                if https_location.is_some() {
+                    panic!(
+                        "Host '{}' has more than one tcp location. It must be only single location",
+                        host
+                    );
+                }
+
+                https_location = Some(ssl_certificate_id);
+            }
             EndpointType::Http2 => http2_count += 1,
             EndpointType::Tcp(proxy_pass) => {
                 if tcp_location.is_some() {
@@ -261,8 +219,8 @@ fn check_and_get_endpoint_type(
     }
     if tcp_location.is_some() && http_count > 0 && http2_count > 0 && tcp_over_ssh.is_some() {
         panic!(
-            "Host '{}' has {} http, {} https, {} http2, '{:?}' tcp and {:?} tcp over ssh configurations",
-            host, http_count, https_count, http2_count, tcp_location, tcp_over_ssh
+            "Host '{}' has {} http, {:?} https, {} http2, '{:?}' tcp and {:?} tcp over ssh configurations",
+            host, http_count, https_location, http2_count, tcp_location, tcp_over_ssh
         );
     }
 
@@ -278,8 +236,8 @@ fn check_and_get_endpoint_type(
         return EndpointType::Http1;
     }
 
-    if https_count > 0 {
-        return EndpointType::Https1;
+    if let Some(https) = https_location {
+        return EndpointType::Https1(https);
     }
 
     if http2_count > 0 {
@@ -288,10 +246,13 @@ fn check_and_get_endpoint_type(
 
     panic!("Host '{}' has no locations", host);
 }
+ */
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+
+    use crate::settings::{EndpointSettings, LocationSettings, ProxyPassSettings};
 
     use super::SettingsModel;
 
@@ -301,37 +262,28 @@ mod tests {
 
         hosts.insert(
             "localhost:9000".to_string(),
-            vec![super::Location {
-                location: Some("/".to_owned()),
-                proxy_pass_to: "https://www.google.com".to_owned(),
-                endpoint_type: "http1".to_owned(),
-            }],
+            ProxyPassSettings {
+                endpoint: EndpointSettings {
+                    endpoint_type: "http1".to_owned(),
+                    ssl_certificate: None,
+                },
+                locations: vec![LocationSettings {
+                    path: Some("/".to_owned()),
+                    proxy_pass_to: "https://www.google.com".to_owned(),
+                    location_type: Some("http".to_owned()),
+                }],
+            },
         );
 
         let model = SettingsModel {
             hosts,
             connection_settings: None,
             variables: None,
+            ssl_certificates: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();
 
         println!("{}", json);
     }
-}
-
-fn format_mem(size: usize) -> String {
-    if size < 1024 {
-        return format!("{}B", size);
-    }
-
-    let size = size as f64 / 1024.0;
-
-    if size < 1024.0 {
-        return format!("{:.2}KB", size);
-    }
-
-    let size = size as f64 / 1024.0;
-
-    return format!("{:.2}Mb", size);
 }
