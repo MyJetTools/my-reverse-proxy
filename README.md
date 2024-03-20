@@ -62,7 +62,7 @@ variables:
   my_ssh_config: ssh:user@10.12.13.14:22
 ```
 
-## Variables which can be used to populate headers
+## Variables which can be used to populate headers or content
 
 * ${ENDPOINT_IP} - ip of server listen endpoint;
 * ${ENDPOINT_SCHEMA} - http or https schema of listen endpoint;
