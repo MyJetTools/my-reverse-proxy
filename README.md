@@ -12,6 +12,8 @@ hosts:
     endpoint:
       type: https
       ssl_certificate: my_ssl_cert  
+      client_certificate_ca: ca_id
+
     locations:
     - type: http
       proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123      
@@ -50,7 +52,11 @@ hosts:
 ssl_certificates:
   - id: my_ssl_cert
     certificate: ~/certs/cert.cer
-    private_key: ~/certs/cert.key    
+    private_key: ~/certs/cert.key  
+
+client_certificate_ca:
+  - id: ca_id
+    ca: ~/certs/ca.cer  
     
 variables:
   my_ssh_config: ssh:user@10.12.13.14:22
