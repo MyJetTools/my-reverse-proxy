@@ -1,10 +1,10 @@
-use std::time::Duration;
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::app::AppContext;
 
-use super::{ProxyPassConfigurations, ProxyPassError};
+use super::{HostPort, ProxyPassConfigurations, ProxyPassError, SourceHttpConfiguration};
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
 
@@ -19,14 +19,26 @@ pub enum RetryType {
 pub struct ProxyPassInner {
     pub configurations: ProxyPassConfigurations,
     pub disposed: bool,
+    pub src: SourceHttpConfiguration,
+    pub populate_request_headers: Option<HashMap<String, String>>,
 }
 
 impl ProxyPassInner {
-    pub fn new() -> Self {
+    pub fn new(socket_addr: SocketAddr) -> Self {
         Self {
             configurations: ProxyPassConfigurations::new(),
             disposed: false,
+            src: SourceHttpConfiguration::new(socket_addr),
+            populate_request_headers: None,
         }
+    }
+
+    pub fn update_src_info<'s>(&mut self, host: &HostPort<'s>) {
+        if let Some(host) = host.get_host() {
+            self.src.host = Some(host.to_string());
+        }
+
+        self.src.is_https = host.is_https();
     }
 
     pub async fn handle_error(

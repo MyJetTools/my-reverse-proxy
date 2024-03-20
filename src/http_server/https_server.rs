@@ -91,16 +91,14 @@ async fn start_https_server_loop(
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
 
-            let tls_stream = match tls_acceptor.accept(tcp_stream).await {
+            let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
                 Ok(tls_stream) => {
-                    if has_client_cert_ca {
-                        let common_name = app.saved_client_certs.get(server_id);
-                        println!(
-                            "Accepted TLS connection from: {:#?} with common name: {:#?}",
-                            socket_addr, common_name
-                        );
-                    }
-                    tls_stream
+                    let cert_common_name = if has_client_cert_ca {
+                        app.saved_client_certs.get(server_id)
+                    } else {
+                        None
+                    };
+                    (tls_stream, cert_common_name)
                 }
                 Err(err) => {
                     if has_client_cert_ca {
@@ -110,6 +108,12 @@ async fn start_https_server_loop(
                     return;
                 }
             };
+
+            if let Some(client_cert_cn) = client_cert_cn {
+                http_proxy_pass
+                    .update_client_cert_cn_name(client_cert_cn)
+                    .await;
+            }
 
             if let Err(err) = http2::Builder::new(TokioExecutor::new())
                 .serve_connection(

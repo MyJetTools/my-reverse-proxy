@@ -23,12 +23,11 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
 
         let io = TokioIo::new(stream);
 
-        let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
-
         let app = app.clone();
 
         let builder = builder.clone();
         tokio::spawn(async move {
+            let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder
                 .serve_connection(

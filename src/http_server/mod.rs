@@ -20,3 +20,7 @@ mod client_certificate_ca;
 pub use client_certificate_ca::*;
 mod client_cert_verifier;
 pub use client_cert_verifier::*;
+mod source_http_configuration;
+pub use source_http_configuration::*;
+mod http_content_builder;
+pub use http_content_builder::*;

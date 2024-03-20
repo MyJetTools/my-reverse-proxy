@@ -62,6 +62,12 @@ variables:
   my_ssh_config: ssh:user@10.12.13.14:22
 ```
 
-```yaml
- 
-```
+## Variables which can be used to populate headers
+
+* ${ENDPOINT_IP} - ip of server listen endpoint;
+* ${ENDPOINT_SCHEMA} - http or https schema of listen endpoint;
+* ${CLIENT_CERT_CN} - Common name of client certificate if endpoint is protected by client certificate;
+* {PATH_AND_QUERY} - path and query of request;
+
+
+

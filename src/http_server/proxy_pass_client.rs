@@ -6,19 +6,22 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, http_client::HTTP_CLIENT_TIMEOUT};
 
-use super::{HostPort, ProxyPassError, ProxyPassInner, RetryType};
+use super::{into_full_bytes, HttpContentBuilder, ProxyPassError, ProxyPassInner, RetryType};
 
 pub struct ProxyPassClient {
     pub inner: Mutex<ProxyPassInner>,
-    pub server_addr: SocketAddr,
 }
 
 impl ProxyPassClient {
-    pub fn new(addr: SocketAddr) -> Self {
+    pub fn new(socket_addr: SocketAddr) -> Self {
         Self {
-            server_addr: addr,
-            inner: Mutex::new(ProxyPassInner::new()),
+            inner: Mutex::new(ProxyPassInner::new(socket_addr)),
         }
+    }
+
+    pub async fn update_client_cert_cn_name(&self, client_cert_cn: String) {
+        let mut inner = self.inner.lock().await;
+        inner.src.client_cert_cn = Some(client_cert_cn);
     }
 
     pub async fn send_payload(
@@ -26,17 +29,19 @@ impl ProxyPassClient {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        let req = into_client_request(req).await?;
-
+        let mut req = HttpContentBuilder::new(req);
         loop {
             let (future1, future2, proxy_pass_id) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.configurations.has_configurations() {
-                    let configurations =
-                        crate::flows::get_configurations(app, &HostPort::new(&req)).await?;
+                    let host_port = req.get_host_port();
+                    let configurations = crate::flows::get_configurations(app, &host_port).await?;
                     inner.configurations.init(configurations);
+                    inner.update_src_info(&host_port);
                 }
+
+                req.populate_and_build(&inner).await?;
 
                 let proxy_pass_configuration = inner.configurations.find(req.uri())?;
 
@@ -45,11 +50,11 @@ impl ProxyPassClient {
                 let id = proxy_pass_configuration.id;
 
                 let (future1, future2) = if proxy_pass_configuration.remote_endpoint.is_http1() {
-                    let result = proxy_pass_configuration.send_http1_request(req.clone());
+                    let result = proxy_pass_configuration.send_http1_request(req.get());
 
                     (Some(result), None)
                 } else {
-                    let future = proxy_pass_configuration.send_http2_request(req.clone());
+                    let future = proxy_pass_configuration.send_http2_request(req.get());
                     (None, Some(future))
                 };
 
@@ -95,11 +100,8 @@ impl ProxyPassClient {
             match result {
                 Ok(response) => {
                     let (parts, incoming) = response.into_parts();
-
-                    let body = read_bytes(incoming).await?;
-
+                    let body = into_full_bytes(incoming).await?;
                     let response = hyper::Response::from_parts(parts, body);
-
                     return Ok(Ok(response));
                 }
                 Err(err) => {
@@ -126,26 +128,4 @@ impl ProxyPassClient {
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
     }
-}
-
-async fn into_client_request(
-    req: hyper::Request<hyper::body::Incoming>,
-) -> Result<hyper::Request<Full<Bytes>>, ProxyPassError> {
-    let (parts, incoming) = req.into_parts();
-
-    let body = read_bytes(incoming).await?;
-
-    Ok(hyper::Request::from_parts(parts, body))
-}
-
-async fn read_bytes(
-    incoming: impl hyper::body::Body<Data = hyper::body::Bytes, Error = hyper::Error>,
-) -> Result<Full<Bytes>, ProxyPassError> {
-    use http_body_util::BodyExt;
-
-    let collected = incoming.collect().await?;
-    let bytes = collected.to_bytes();
-
-    let body = http_body_util::Full::new(bytes);
-    Ok(body)
 }

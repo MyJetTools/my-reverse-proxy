@@ -1,14 +1,14 @@
-use hyper::header::HeaderValue;
+use hyper::{header::HeaderValue, HeaderMap, Uri};
 
-pub struct HostPort<'s, T> {
-    request: &'s hyper::Request<T>,
+pub struct HostPort<'s> {
+    uri: &'s Uri,
     host: Option<&'s HeaderValue>,
 }
 
-impl<'s, T> HostPort<'s, T> {
-    pub fn new(request: &'s hyper::Request<T>) -> Self {
-        let host = request.headers().get("host");
-        Self { request, host }
+impl<'s> HostPort<'s> {
+    pub fn new(uri: &'s Uri, headers: &'s HeaderMap<HeaderValue>) -> Self {
+        let host = headers.get("host");
+        Self { uri, host }
     }
 
     pub fn is_my_host_port(&self, host_port: &str) -> bool {
@@ -39,30 +39,25 @@ impl<'s, T> HostPort<'s, T> {
     }
 
     pub fn get_host(&self) -> Option<&'s str> {
-        if let Some(host_value) = self.request.headers().get("host") {
+        if let Some(host_value) = self.host {
             if let Ok(value) = host_value.to_str() {
                 return Some(value.into());
             }
         }
 
-        if let Some(host) = self.request.uri().host() {
+        if let Some(host) = self.uri.host() {
             return Some(host);
         }
 
         None
     }
 
-    pub fn is_http(&self) -> bool {
-        self.request
-            .uri()
-            .scheme_str()
-            .unwrap_or_default()
-            .to_lowercase()
-            == "http"
+    pub fn is_https(&self) -> bool {
+        self.uri.scheme_str().unwrap_or_default().to_lowercase() == "https"
     }
 
     pub fn get_port(&self) -> u16 {
-        if let Some(port) = self.request.uri().port_u16() {
+        if let Some(port) = self.uri.port_u16() {
             return port;
         }
 
@@ -77,10 +72,10 @@ impl<'s, T> HostPort<'s, T> {
             }
         }
 
-        if self.is_http() {
-            80
-        } else {
+        if self.is_https() {
             443
+        } else {
+            80
         }
     }
 }

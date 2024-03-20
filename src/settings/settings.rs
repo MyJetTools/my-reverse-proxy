@@ -93,9 +93,9 @@ impl SettingsReader {
         None
     }
 
-    pub async fn get_configurations<'s, T>(
+    pub async fn get_configurations<'s>(
         &self,
-        host_port: &HostPort<'s, T>,
+        host_port: &HostPort<'s>,
     ) -> Vec<(String, HttpProxyPassRemoteEndpoint)> {
         let mut result = Vec::new();
         let read_access = self.settings.read().await;
@@ -295,6 +295,7 @@ mod tests {
                     path: Some("/".to_owned()),
                     proxy_pass_to: "https://www.google.com".to_owned(),
                     location_type: Some("http".to_owned()),
+                    add_request_headers: None,
                 }],
             },
         );

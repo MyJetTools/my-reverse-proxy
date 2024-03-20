@@ -4,9 +4,9 @@ use crate::{
     settings::HttpProxyPassRemoteEndpoint,
 };
 
-pub async fn get_configurations<'s, T>(
+pub async fn get_configurations<'s>(
     app: &AppContext,
-    host: &HostPort<'s, T>,
+    host: &HostPort<'s>,
 ) -> Result<Vec<ProxyPassConfiguration>, ProxyPassError> {
     let mut configurations: Vec<ProxyPassConfiguration> = Vec::new();
 

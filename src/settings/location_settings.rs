@@ -10,6 +10,7 @@ pub struct LocationSettings {
     pub proxy_pass_to: String,
     #[serde(rename = "type")]
     pub location_type: Option<String>,
+    pub add_request_headers: Option<HashMap<String, String>>,
 }
 
 impl LocationSettings {
