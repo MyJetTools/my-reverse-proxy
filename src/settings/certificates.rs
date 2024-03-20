@@ -1,8 +1,8 @@
-use rustls::Certificate;
+use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 use super::FileName;
 
-pub fn load_certs(file_name: &FileName) -> Vec<Certificate> {
+pub fn load_certs(file_name: &FileName) -> Vec<CertificateDer<'static>> {
     // Open certificate file.
 
     let file_name = file_name.get_value();
@@ -23,9 +23,6 @@ pub fn load_certs(file_name: &FileName) -> Vec<Certificate> {
 
     for cert in certs {
         let cert: rustls_pki_types::CertificateDer<'_> = cert.unwrap();
-
-        let cert = cert.as_ref();
-        let cert = rustls::Certificate(cert.to_vec());
         result.push(cert);
     }
 
@@ -33,7 +30,7 @@ pub fn load_certs(file_name: &FileName) -> Vec<Certificate> {
 }
 
 // Load private key from file.
-pub fn load_private_key(file_name: &FileName) -> rustls::PrivateKey {
+pub fn load_private_key(file_name: &FileName) -> PrivateKeyDer<'static> {
     let file_name = file_name.get_value();
 
     let key_file = std::fs::File::open(file_name.as_str());
@@ -52,11 +49,7 @@ pub fn load_private_key(file_name: &FileName) -> rustls::PrivateKey {
         panic!("No private key found in file {}", file_name.as_str());
     }
 
-    let private_key: rustls_pki_types::PrivateKeyDer<'_> = private_key.unwrap();
-
-    let private_key = private_key.secret_der();
-
-    rustls::PrivateKey(private_key.to_vec())
+    private_key.unwrap()
 
     //  Ok(private_key.into())
 }

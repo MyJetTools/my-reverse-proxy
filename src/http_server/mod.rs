@@ -16,3 +16,7 @@ mod https_server;
 pub use https_server::*;
 mod proxy_pass_configurations;
 pub use proxy_pass_configurations::*;
+mod client_certificate_ca;
+pub use client_certificate_ca::*;
+mod client_cert_verifier;
+pub use client_cert_verifier::*;

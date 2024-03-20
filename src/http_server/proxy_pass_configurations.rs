@@ -35,8 +35,14 @@ impl ProxyPassConfigurations {
         Ok(found_proxy_pass.unwrap())
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<ProxyPassConfiguration> {
-        self.data.as_mut().unwrap().iter_mut()
+    pub fn find_by_id(&mut self, proxy_pass_id: i64) -> Option<&mut ProxyPassConfiguration> {
+        for proxy_pass in self.data.as_mut()?.iter_mut() {
+            if proxy_pass.id == proxy_pass_id {
+                return Some(proxy_pass);
+            }
+        }
+
+        None
     }
 
     pub fn has_configurations(&self) -> bool {

@@ -19,6 +19,12 @@ impl ProxyPassError {
             _ => false,
         }
     }
+    pub fn is_disposed(&self) -> bool {
+        match self {
+            ProxyPassError::ConnectionIsDisposed => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<HttpClientError> for ProxyPassError {

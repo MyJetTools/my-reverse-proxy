@@ -6,7 +6,6 @@ mod error;
 pub use error::*;
 mod connect_to_tls_endpoint;
 pub use connect_to_tls_endpoint::*;
-mod cert_content;
 //mod http1_client_connection;
 mod utils;
 //pub use http1_client_connection::*;

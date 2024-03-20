@@ -23,25 +23,38 @@ impl HttpClient {
     pub fn has_connection(&self) -> bool {
         match self {
             HttpClient::NotConnected => false,
+            HttpClient::Disposed(_) => false,
             _ => true,
         }
     }
 
-    pub fn unwrap_as_http1_mut(&mut self) -> Result<&mut Http1Client, ProxyPassError> {
+    pub fn unwrap_as_http1_mut(&mut self, id: i64) -> Result<&mut Http1Client, ProxyPassError> {
         match self {
             Self::Http(client) => Ok(client),
             Self::Http2(_) => panic!("Unwrapping as HTTP1 when it is HTTP2"),
             Self::NotConnected => panic!("Not Connected"),
-            Self::Disposed(_) => Err(ProxyPassError::ConnectionIsDisposed),
+            Self::Disposed(_) => {
+                println!(
+                    "HttpClient::unwrap_as_http1_mut. Connection is disposed. id: {}",
+                    id
+                );
+                Err(ProxyPassError::ConnectionIsDisposed)
+            }
         }
     }
 
-    pub fn unwrap_as_http2_mut(&mut self) -> Result<&mut Http2Client, ProxyPassError> {
+    pub fn unwrap_as_http2_mut(&mut self, id: i64) -> Result<&mut Http2Client, ProxyPassError> {
         match self {
             Self::Http(_) => panic!("Unwrapping as HTTP2 when it is HTTP1"),
             Self::Http2(client) => Ok(client),
             Self::NotConnected => panic!("Not Connected"),
-            Self::Disposed(_) => Err(ProxyPassError::ConnectionIsDisposed),
+            Self::Disposed(_) => {
+                println!(
+                    "HttpClient::unwrap_as_http2_mut. Connection is disposed. id: {}",
+                    id
+                );
+                Err(ProxyPassError::ConnectionIsDisposed)
+            }
         }
     }
 

@@ -21,6 +21,8 @@ async fn main() {
 
     let app = Arc::new(app);
 
+    let mut ssh_server_id = 0;
+
     for (listen_port, endpoint_type) in listen_ports {
         let listen_end_point = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
@@ -28,21 +30,48 @@ async fn main() {
             settings::EndpointType::Http1 => {
                 crate::http_server::start_http_server(listen_end_point, app.clone());
             }
-            settings::EndpointType::Https1(certificate_id) => {
-                if let Some(ssl_certificate) = app
-                    .settings_reader
-                    .get_ssl_certificate(&certificate_id)
-                    .await
+            settings::EndpointType::Https {
+                ssl_id,
+                client_ca_id,
+            } => {
+                if let Some(ssl_certificate) =
+                    app.settings_reader.get_ssl_certificate(&ssl_id).await
                 {
-                    crate::http_server::start_https_server(
-                        listen_end_point,
-                        app.clone(),
-                        ssl_certificate,
-                    );
+                    ssh_server_id += 1;
+
+                    if let Some(client_ca_id) = client_ca_id {
+                        if let Some(client_cert) = app
+                            .settings_reader
+                            .get_client_certificate_ca(client_ca_id.as_str())
+                            .await
+                        {
+                            crate::http_server::start_https_server(
+                                listen_end_point,
+                                app.clone(),
+                                ssl_certificate,
+                                Some(client_cert),
+                                ssh_server_id,
+                            );
+                        } else {
+                            panic!(
+                                "Client certificate ca not found: {} for endpoint: {}",
+                                client_ca_id.as_str(),
+                                listen_port
+                            );
+                        }
+                    } else {
+                        crate::http_server::start_https_server(
+                            listen_end_point,
+                            app.clone(),
+                            ssl_certificate,
+                            None,
+                            ssh_server_id,
+                        );
+                    }
                 } else {
                     panic!(
                         "Certificate not found: {} for endpoint: {}",
-                        certificate_id.as_str(),
+                        ssl_id.as_str(),
                         listen_port
                     );
                 }

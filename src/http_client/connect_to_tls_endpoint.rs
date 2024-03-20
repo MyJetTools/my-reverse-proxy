@@ -4,30 +4,29 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{client::conn::http1::SendRequest, Uri};
 use hyper_util::rt::TokioIo;
+use my_tls::ROOT_CERT_STORE;
 use tokio::net::TcpStream;
 
-use tokio_rustls::{rustls, TlsConnector};
-
-use super::{cert_content::ROOT_CERT_STORE, HttpClientError};
+use super::HttpClientError;
 
 pub async fn connect_to_tls_endpoint(
     uri: &Uri,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
+    use tokio_rustls::rustls::pki_types::ServerName;
     let host_port = super::utils::get_host_port(uri);
-    let domain = uri.host().unwrap();
+    let domain = uri.host().unwrap().to_string();
 
     let connect_result = TcpStream::connect(host_port.as_str()).await;
 
     match connect_result {
         Ok(tcp_stream) => {
-            let config = rustls::ClientConfig::builder()
-                .with_safe_defaults()
+            let config = tokio_rustls::rustls::ClientConfig::builder()
                 .with_root_certificates(ROOT_CERT_STORE.clone())
                 .with_no_client_auth();
 
-            let connector = TlsConnector::from(Arc::new(config));
+            let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
 
-            let domain = rustls::ServerName::try_from(domain).unwrap();
+            let domain = ServerName::try_from(domain).unwrap();
 
             let tls_stream = connector.connect(domain, tcp_stream).await?;
 

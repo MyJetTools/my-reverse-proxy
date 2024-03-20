@@ -118,23 +118,29 @@ impl ProxyPassConfiguration {
     pub fn send_http1_request(
         &mut self,
         req: hyper::Request<Full<Bytes>>,
-    ) -> impl Future<Output = Result<Response<Incoming>, hyper::Error>> {
-        self.http_client
-            .unwrap_as_http1_mut()
-            .unwrap()
+    ) -> Result<impl Future<Output = Result<Response<Incoming>, hyper::Error>>, ProxyPassError>
+    {
+        let result = self
+            .http_client
+            .unwrap_as_http1_mut(self.id)?
             .send_request
-            .send_request(req.clone())
+            .send_request(req.clone());
+
+        Ok(result)
     }
 
     pub fn send_http2_request(
         &mut self,
         req: hyper::Request<Full<Bytes>>,
-    ) -> impl Future<Output = Result<Response<Incoming>, hyper::Error>> {
-        self.http_client
-            .unwrap_as_http2_mut()
-            .unwrap()
+    ) -> Result<impl Future<Output = Result<Response<Incoming>, hyper::Error>>, ProxyPassError>
+    {
+        let result = self
+            .http_client
+            .unwrap_as_http2_mut(self.id)?
             .send_request
-            .send_request(req.clone())
+            .send_request(req.clone());
+
+        Ok(result)
     }
 
     pub fn get_connected_moment(&self) -> Option<DateTimeAsMicroseconds> {
@@ -142,6 +148,7 @@ impl ProxyPassConfiguration {
     }
 
     pub fn dispose(&mut self) {
+        println!("Disposing ProxyPassConfiguration: {}", self.id);
         self.http_client.dispose();
     }
 }

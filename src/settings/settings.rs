@@ -1,13 +1,18 @@
 use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
+    sync::Arc,
 };
 
-use crate::{app::SslCertificate, http_server::HostPort};
+use crate::{
+    app::SslCertificate,
+    http_server::{ClientCertificateCa, HostPort},
+};
 
 use super::{
-    ConnectionsSettings, ConnectionsSettingsModel, EndpointType, FileName,
-    HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId, SslCertificatesSettingsModel,
+    ClientCertificateCaSettings, ConnectionsSettings, ConnectionsSettingsModel, EndpointType,
+    FileName, HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId,
+    SslCertificatesSettingsModel,
 };
 use hyper::Uri;
 use rust_extensions::duration_utils::DurationExtensions;
@@ -19,6 +24,7 @@ pub struct SettingsModel {
     pub connection_settings: Option<ConnectionsSettings>,
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
+    pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
 }
 
 impl SettingsReader {
@@ -43,6 +49,23 @@ impl SettingsReader {
         result
     }
 
+    pub async fn get_client_certificate_ca(&self, id: &str) -> Option<ClientCertificateCa> {
+        let read_access = self.settings.read().await;
+
+        if let Some(certs) = &read_access.client_certificate_ca {
+            for ca in certs {
+                if ca.id != id {
+                    continue;
+                }
+
+                let ca_file = FileName::new(ca.ca.as_str());
+                return Some(ClientCertificateCa::new(&ca_file));
+            }
+        }
+
+        None
+    }
+
     pub async fn get_ssl_certificate(&self, id: &SslCertificateId) -> Option<SslCertificate> {
         let read_access = self.settings.read().await;
 
@@ -60,7 +83,7 @@ impl SettingsReader {
 
                 let result = SslCertificate {
                     certificates,
-                    private_key,
+                    private_key: Arc::new(private_key),
                 };
 
                 return Some(result);
@@ -266,6 +289,7 @@ mod tests {
                 endpoint: EndpointSettings {
                     endpoint_type: "http1".to_owned(),
                     ssl_certificate: None,
+                    client_certificate_ca: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -280,6 +304,7 @@ mod tests {
             connection_settings: None,
             variables: None,
             ssl_certificates: None,
+            client_certificate_ca: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

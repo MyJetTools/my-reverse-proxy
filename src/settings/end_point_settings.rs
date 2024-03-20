@@ -11,6 +11,7 @@ pub struct EndpointSettings {
     #[serde(rename = "type")]
     pub endpoint_type: String,
     pub ssl_certificate: Option<String>,
+    pub client_certificate_ca: Option<String>,
 }
 
 impl EndpointSettings {
@@ -24,7 +25,13 @@ impl EndpointSettings {
             HTTP1_ENDPOINT_TYPE => EndpointType::Http1,
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
-                    EndpointType::Https1(SslCertificateId::new(ssl_certificate.to_string()))
+                    EndpointType::Https {
+                        ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
+                        client_ca_id: self
+                            .client_certificate_ca
+                            .as_ref()
+                            .map(|x| SslCertificateId::new(x.to_string())),
+                    }
                 } else {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
