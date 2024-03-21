@@ -18,7 +18,8 @@ impl LocationSettings {
         &'s self,
         variables: &Option<HashMap<String, String>>,
     ) -> ProxyPassTo {
-        let result = super::populate_variable(self.proxy_pass_to.trim(), variables);
+        let result =
+            crate::populate_variable::populate_variable(self.proxy_pass_to.trim(), variables);
 
         ProxyPassTo::new(result.to_string())
     }

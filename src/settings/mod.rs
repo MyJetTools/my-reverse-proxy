@@ -4,8 +4,6 @@ mod ssh_configuration;
 pub use ssh_configuration::*;
 mod connections_settings;
 pub use connections_settings::*;
-mod populate_variable;
-pub use populate_variable::*;
 mod proxy_pass_to;
 pub use proxy_pass_to::*;
 mod http_proxy_pass_remote_endpoint;

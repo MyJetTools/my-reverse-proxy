@@ -2,6 +2,8 @@ use std::net::SocketAddr;
 
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
+use crate::populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN};
+
 pub struct SourceHttpConfiguration {
     pub is_https: bool,
     pub host: Option<String>,
@@ -20,13 +22,15 @@ impl SourceHttpConfiguration {
     }
 
     pub fn populate_value<'s>(&self, value: &'s str) -> StrOrString<'s> {
-        if !value.contains("${") {
+        if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
             return value.into();
         }
 
         let mut result = String::new();
 
-        for token in PlaceholdersIterator::new(value) {
+        for token in
+            PlaceholdersIterator::new(value, PLACEHOLDER_OPEN_TOKEN, PLACEHOLDER_CLOSE_TOKEN)
+        {
             match token {
                 rust_extensions::placeholders::ContentToken::Text(text) => result.push_str(text),
                 rust_extensions::placeholders::ContentToken::Placeholder(placeholder) => {

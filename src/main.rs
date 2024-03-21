@@ -8,8 +8,8 @@ mod flows;
 mod http_client;
 mod http_proxy_pass;
 mod http_server;
+mod populate_variable;
 mod settings;
-
 mod tcp_port_forward;
 
 #[tokio::main]
