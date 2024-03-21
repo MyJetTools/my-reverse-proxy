@@ -1,36 +1,58 @@
+use std::sync::Arc;
+
 use hyper::Uri;
 
 use crate::http_proxy_pass::ProxyPassError;
 
+use super::RequestExecutor;
+
 pub struct FileContentSrc {
     file_path: String,
+    default_file: Option<String>,
 }
 
 impl FileContentSrc {
-    pub fn new(mut file_path: String) -> Self {
+    pub fn new(mut file_path: String, default_file: Option<String>) -> Self {
         let last_char = *file_path.as_bytes().last().unwrap() as char;
         if last_char == std::path::MAIN_SEPARATOR {
             file_path.pop();
         }
 
-        Self { file_path }
+        Self {
+            file_path,
+            default_file,
+        }
     }
 
-    pub fn get_request_executor(&self, uri: &Uri) -> Result<RequestExecutor, ProxyPassError> {
-        let result = RequestExecutor {
-            file_path: format!("{}{}", self.file_path, uri.path()),
+    pub fn get_request_executor(
+        &self,
+        uri: &Uri,
+    ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
+        let file_path = if uri.path() == "/" {
+            if let Some(default_file) = self.default_file.as_ref() {
+                format!("{}/{}", self.file_path, default_file)
+            } else {
+                format!("{}{}", self.file_path, uri.path())
+            }
+        } else {
+            format!("{}{}", self.file_path, uri.path())
         };
-        Ok(result)
+
+        let result = FileRequestExecutor { file_path };
+        Ok(Arc::new(result))
     }
 }
 
-pub struct RequestExecutor {
+pub struct FileRequestExecutor {
     file_path: String,
 }
 
-impl RequestExecutor {
-    pub async fn execute_request(&self) -> Result<Vec<u8>, ProxyPassError> {
-        let result = tokio::fs::read(&self.file_path).await?;
-        Ok(result)
+#[async_trait::async_trait]
+impl RequestExecutor for FileRequestExecutor {
+    async fn execute_request(&self) -> Result<Option<Vec<u8>>, ProxyPassError> {
+        match tokio::fs::read(&self.file_path).await {
+            Ok(content) => Ok(Some(content)),
+            Err(_) => Ok(None),
+        }
     }
 }

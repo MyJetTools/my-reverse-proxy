@@ -1,11 +1,11 @@
-use std::{str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http2::SendRequest, Uri};
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::{SshCredentials, SshRemoteHost, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::SshConfiguration};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 use super::{HttpClientError, HTTP_CLIENT_TIMEOUT};
 
@@ -56,10 +56,11 @@ impl Http2Client {
 
     pub async fn connect_over_ssh(
         app: &AppContext,
-        configuration: &SshConfiguration,
+        ssh_credentials: &Arc<SshCredentials>,
+        remote_host: &SshRemoteHost,
     ) -> Result<(Self, Arc<SshSession>), ProxyPassError> {
         let (ssh_session, send_request) =
-            Self::connect_to_http_over_ssh(app, configuration).await?;
+            Self::connect_to_http_over_ssh(app, ssh_credentials, remote_host).await?;
 
         let result = Self {
             send_request,
@@ -71,29 +72,11 @@ impl Http2Client {
 
     async fn connect_to_http_over_ssh(
         app: &AppContext,
-        configuration: &SshConfiguration,
+        ssh_credentials: &Arc<SshCredentials>,
+        remote_host: &SshRemoteHost,
     ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
-        let ssh_credentials = SshCredentials::SshAgent {
-            ssh_host_port: std::net::SocketAddr::from_str(
-                format!(
-                    "{}:{}",
-                    configuration.ssh_session_host, configuration.ssh_session_port
-                )
-                .as_str(),
-            )
-            .unwrap(),
-            ssh_user_name: configuration.ssh_user_name.to_string(),
-        };
-
-        let ssh_credentials = Arc::new(ssh_credentials);
-
-        let (ssh_session, send_request) = super::connect_to_http2_over_ssh(
-            app,
-            ssh_credentials,
-            &configuration.remote_host,
-            configuration.remote_port,
-        )
-        .await?;
+        let (ssh_session, send_request) =
+            super::connect_to_http2_over_ssh(app, ssh_credentials, remote_host).await?;
 
         Ok((ssh_session, send_request))
     }

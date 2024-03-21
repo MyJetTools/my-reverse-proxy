@@ -16,8 +16,8 @@ impl ProxyPassLocations {
         Self { data: None }
     }
 
-    pub fn init(&mut self, configurations: Vec<ProxyPassLocation>) {
-        self.data = Some(configurations);
+    pub fn init(&mut self, locations: Vec<ProxyPassLocation>) {
+        self.data = Some(locations);
     }
 
     pub fn find_location_index(&self, uri: &Uri) -> Result<LocationIndex, ProxyPassError> {

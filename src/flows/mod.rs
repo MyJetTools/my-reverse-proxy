@@ -1,2 +1,2 @@
-mod get_configurations;
-pub use get_configurations::*;
+mod get_locations;
+pub use get_locations::*;

@@ -1,6 +1,6 @@
 use crate::{app::AppContext, http_proxy_pass::*};
 
-pub async fn get_configurations<'s>(
+pub async fn get_locations<'s>(
     app: &AppContext,
     host: &HostPort<'s>,
 ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {

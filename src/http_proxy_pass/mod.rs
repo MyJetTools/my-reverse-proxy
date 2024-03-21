@@ -15,3 +15,5 @@ pub use host_port::*;
 mod http_response_builder;
 mod proxy_pass_location;
 pub use proxy_pass_location::*;
+mod proxy_pass_content_source;
+pub use proxy_pass_content_source::*;

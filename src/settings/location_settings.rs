@@ -11,17 +11,21 @@ pub struct LocationSettings {
     #[serde(rename = "type")]
     pub location_type: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
+    pub default_file: Option<String>,
 }
 
 impl LocationSettings {
     pub fn get_proxy_pass_to<'s>(
         &'s self,
         variables: &Option<HashMap<String, String>>,
-    ) -> ProxyPassTo {
+    ) -> (ProxyPassTo, Option<String>) {
         let result =
             crate::populate_variable::populate_variable(self.proxy_pass_to.trim(), variables);
 
-        ProxyPassTo::new(result.to_string())
+        (
+            ProxyPassTo::new(result.to_string()),
+            self.default_file.clone(),
+        )
     }
 
     pub fn is_http1(&self) -> bool {

@@ -48,8 +48,8 @@ impl HttpProxyPassInner {
         app: &AppContext,
         host_port: &HostPort<'s>,
     ) -> Result<(), ProxyPassError> {
-        let configurations = crate::flows::get_configurations(app, &host_port).await?;
-        self.locations.init(configurations);
+        let locations = crate::flows::get_locations(app, &host_port).await?;
+        self.locations.init(locations);
         if let Some(host) = host_port.get_host() {
             self.src.host = Some(host.to_string());
         }
@@ -106,6 +106,7 @@ impl HttpProxyPassInner {
                         }
                     }
                     ProxyPassContentSource::File(_) => {}
+                    ProxyPassContentSource::FileOverSsh(_) => {}
                 }
             }
         }

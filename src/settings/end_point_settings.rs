@@ -50,10 +50,18 @@ impl EndpointSettings {
 
                 let location_settings = locations.get(0).unwrap();
 
-                let proxy_pass_to = location_settings.get_proxy_pass_to(variables);
+                let (proxy_pass_to, _) = location_settings.get_proxy_pass_to(variables);
 
                 if let Some(ssh_config) = proxy_pass_to.to_ssh_configuration() {
-                    EndpointType::TcpOverSsh(ssh_config)
+                    match ssh_config.remote_content {
+                        super::SshContent::Socket(remote_host) => EndpointType::TcpOverSsh {
+                            ssh_credentials: ssh_config.credentials,
+                            remote_host: remote_host,
+                        },
+                        super::SshContent::FilePath(_) => {
+                            panic!("Not possible to server file over tcp for host: {}", host)
+                        }
+                    }
                 } else {
                     let remote_addr = std::net::SocketAddr::from_str(proxy_pass_to.as_str());
 

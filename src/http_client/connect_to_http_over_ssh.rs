@@ -4,15 +4,14 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::client::conn::http1::SendRequest;
 use hyper_util::rt::TokioIo;
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::{SshCredentials, SshRemoteHost, SshSession};
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 pub async fn connect_to_http_over_ssh(
     app: &AppContext,
-    ssh_credentials: Arc<SshCredentials>,
-    remote_host: &str,
-    remote_port: u16,
+    ssh_credentials: &Arc<SshCredentials>,
+    remote_host: &SshRemoteHost,
 ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
     let ssh_session = Arc::new(SshSession::new(ssh_credentials.clone()));
 
@@ -22,11 +21,7 @@ pub async fn connect_to_http_over_ssh(
            .await;
     */
     let ssh_channel = ssh_session
-        .connect_to_remote_host(
-            remote_host,
-            remote_port,
-            app.connection_settings.remote_connect_timeout,
-        )
+        .connect_to_remote_host(remote_host, app.connection_settings.remote_connect_timeout)
         .await?;
 
     let buf_writer = tokio::io::BufWriter::with_capacity(
@@ -38,7 +33,7 @@ pub async fn connect_to_http_over_ssh(
 
     let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await?;
 
-    let proxy_pass_uri = format!("{}:{}", remote_host, remote_port);
+    let proxy_pass_uri = remote_host.to_string();
 
     tokio::task::spawn(async move {
         if let Err(err) = conn.await {

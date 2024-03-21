@@ -1,4 +1,8 @@
-use super::{SshConfiguration, SslCertificateId};
+use std::sync::Arc;
+
+use my_ssh::{SshCredentials, SshRemoteHost};
+
+use super::SslCertificateId;
 
 #[derive(Debug)]
 pub enum EndpointType {
@@ -10,5 +14,8 @@ pub enum EndpointType {
     },
     Http2(String),
     Tcp(std::net::SocketAddr),
-    TcpOverSsh(SshConfiguration),
+    TcpOverSsh {
+        ssh_credentials: Arc<SshCredentials>,
+        remote_host: SshRemoteHost,
+    },
 }

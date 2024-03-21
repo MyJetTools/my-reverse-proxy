@@ -28,7 +28,6 @@ impl HttpProxyPass {
     }
 
     pub async fn update_client_cert_cn_name(&self, client_cert_cn: String) {
-        println!("update_client_cert_cn_name{}", client_cert_cn);
         let mut inner = self.inner.lock().await;
         inner.src.client_cert_cn = Some(client_cert_cn);
     }
@@ -71,6 +70,12 @@ impl HttpProxyPass {
 
                             (None, None, Some(executor))
                         }
+
+                        super::ProxyPassContentSource::FileOverSsh(ssh) => {
+                            let executor = ssh.get_request_executor(req.uri())?;
+
+                            (None, None, Some(executor))
+                        }
                     }
                 };
 
@@ -110,16 +115,24 @@ impl HttpProxyPass {
                     Err(err) => Err(err),
                 }
             } else if let Some(request_executor) = request_executor {
-                let content = request_executor.execute_request().await?;
-                let inner = self.inner.lock().await;
-                return Ok(Ok(
-                    super::http_response_builder::build_response_from_content(
+                if let Some(content) = request_executor.execute_request().await? {
+                    let inner = self.inner.lock().await;
+
+                    let result = super::http_response_builder::build_response_from_content(
                         req.uri(),
                         &inner,
                         &location_index,
                         content,
-                    ),
-                ));
+                    );
+                    return Ok(Ok(result));
+                } else {
+                    let result = hyper::Response::builder()
+                        .status(404)
+                        .body(http_body_util::Full::new(hyper::body::Bytes::new()))
+                        .unwrap();
+
+                    return Ok(Ok(result));
+                }
             } else {
                 panic!("Both futures are None")
             };

@@ -1,31 +1,40 @@
 use std::sync::Arc;
 
-use my_ssh::SshAsyncChannel;
+use my_ssh::{SshAsyncChannel, SshCredentials, SshRemoteHost};
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::{app::AppContext, settings::SshConfiguration};
+use crate::app::AppContext;
 
 pub fn start_tcp_over_ssh(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    ssh_configuration: SshConfiguration,
+    credentials: Arc<SshCredentials>,
+    remote_host: SshRemoteHost,
 ) {
-    tokio::spawn(tcp_server_accept_loop(app, listen_addr, ssh_configuration));
+    tokio::spawn(tcp_server_accept_loop(
+        app,
+        listen_addr,
+        credentials,
+        remote_host,
+    ));
 }
 
 async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    ssh_configuration: SshConfiguration,
+    ssh_credentials: Arc<SshCredentials>,
+    remote_host: SshRemoteHost,
 ) {
+    let remote_host = Arc::new(remote_host);
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
 
     if let Err(err) = listener {
         println!(
-            "Error binding to tcp port {} for forwarding to {} has Error: {:?}",
+            "Error binding to tcp port {} for forwarding to {}->{} has Error: {:?}",
             listen_addr,
-            ssh_configuration.to_string(),
+            ssh_credentials.to_string(),
+            remote_host.to_string(),
             err
         );
         return;
@@ -34,14 +43,11 @@ async fn tcp_server_accept_loop(
     let listener = listener.unwrap();
 
     println!(
-        "Enabled PortForward: {} -> {}",
+        "Enabled PortForward: {}->{}->{}",
         listen_addr,
-        ssh_configuration.to_string()
+        ssh_credentials.to_string(),
+        remote_host.to_string()
     );
-
-    let ssh_configuration = Arc::new(ssh_configuration);
-
-    let ssh_credentials = Arc::new(ssh_configuration.to_ssh_credentials());
 
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
@@ -51,17 +57,15 @@ async fn tcp_server_accept_loop(
             .await;
 
         let ssh_channel = ssh_session
-            .connect_to_remote_host(
-                &ssh_configuration.remote_host,
-                ssh_configuration.remote_port,
-                app.connection_settings.remote_connect_timeout,
-            )
+            .connect_to_remote_host(&remote_host, app.connection_settings.remote_connect_timeout)
             .await;
 
         if let Err(err) = ssh_channel {
             println!(
-                "Error connecting to remote tcp over ssh '{}' server. Closing incoming connection: {}. Err: {:?}",
-                ssh_configuration.to_string(),
+                "Error connecting to remote tcp {} over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
+                listen_addr.to_string(),
+                ssh_credentials.to_string(),
+                remote_host.to_string(),
                 socket_addr,
                 err
             );
@@ -71,7 +75,8 @@ async fn tcp_server_accept_loop(
 
         tokio::spawn(connection_loop(
             listen_addr,
-            ssh_configuration.clone(),
+            ssh_credentials.clone(),
+            remote_host.clone(),
             server_stream,
             ssh_channel.unwrap(),
             app.connection_settings.buffer_size,
@@ -81,7 +86,8 @@ async fn tcp_server_accept_loop(
 
 async fn connection_loop(
     listen_addr: std::net::SocketAddr,
-    ssh_configuration: Arc<SshConfiguration>,
+    ssh_credentials: Arc<SshCredentials>,
+    remote_host: Arc<SshRemoteHost>,
     server_stream: TcpStream,
     remote_stream: SshAsyncChannel,
     buffer_size: usize,
@@ -115,9 +121,10 @@ async fn connection_loop(
         incoming_traffic_moment,
         || {
             println!(
-                "Dead Tcp PortForward {}->{} connection detected. Closing",
+                "Dead Tcp PortForward {}->{}->{} connection detected. Closing",
                 listen_addr,
-                ssh_configuration.to_string()
+                ssh_credentials.to_string(),
+                remote_host.to_string()
             );
         },
     )

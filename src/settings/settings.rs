@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     app::{AppContext, SslCertificate},
-    http_content_source::{FileContentSrc, RemoteHttpContentSource},
+    http_content_source::{FileContentSrc, RemoteHttpContentSource, SshFileContentSource},
     http_proxy_pass::*,
     http_server::ClientCertificateCa,
 };
@@ -146,10 +146,11 @@ impl SettingsReader {
                     "/".to_string()
                 };
 
-                let proxy_pass_to = location_settings.get_proxy_pass_to(&read_access.variables);
+                let (proxy_pass_to, default_file) =
+                    location_settings.get_proxy_pass_to(&read_access.variables);
 
                 let content_source = match proxy_pass_to
-                    .to_content_source(location_settings.is_http1())
+                    .to_content_source(location_settings.is_http1(), default_file)
                 {
                     super::ContentSourceSettings::Http(http_remote_endpoint) => {
                         ProxyPassContentSource::Http(RemoteHttpContentSource::new(
@@ -157,9 +158,22 @@ impl SettingsReader {
                             http_remote_endpoint,
                         ))
                     }
-                    super::ContentSourceSettings::File(file_name) => ProxyPassContentSource::File(
-                        FileContentSrc::new(file_name.get_value().to_string()),
-                    ),
+                    super::ContentSourceSettings::File {
+                        file_name,
+                        default_file,
+                    } => ProxyPassContentSource::File(FileContentSrc::new(
+                        file_name.get_value().to_string(),
+                        default_file,
+                    )),
+                    super::ContentSourceSettings::FileOverSsh {
+                        file_path,
+                        ssh_credentials,
+                        default_file,
+                    } => ProxyPassContentSource::FileOverSsh(SshFileContentSource::new(
+                        ssh_credentials,
+                        file_path,
+                        default_file,
+                    )),
                 };
 
                 result.push(ProxyPassLocation::new(
@@ -327,6 +341,7 @@ mod tests {
                     proxy_pass_to: "https://www.google.com".to_owned(),
                     location_type: Some("http".to_owned()),
                     modify_http_headers: None,
+                    default_file: None,
                 }],
             },
         );

@@ -47,56 +47,57 @@ impl RemoteHttpContentSource {
                 self.http_client.connect_to_http2(uri).await?;
             }
 
-            HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_configuration) => {
+            HttpProxyPassRemoteEndpoint::Http1OverSsh {
+                ssh_credentials,
+                remote_host,
+            } => {
                 let mut sw = StopWatch::new();
 
                 sw.start();
                 println!(
-                    "[{}]. Http1OverSsh. Connecting to remote endpoint: {}@{}:{}",
+                    "[{}]. Http1OverSsh. Connecting to remote endpoint: {}",
                     self.id,
-                    ssh_configuration.ssh_user_name,
-                    ssh_configuration.ssh_session_host,
-                    ssh_configuration.ssh_session_port
+                    ssh_credentials.to_string(),
                 );
                 let ssh_session = self
                     .http_client
-                    .connect_to_http1_over_ssh(app, ssh_configuration)
+                    .connect_to_http1_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
                 println!(
-                    "[{}]. Http1OverSsh. Connected to remote endpoint: {}@{}:{} in {}",
+                    "[{}]. Http1OverSsh. Connected to remote endpoint: {}@{} in {}",
                     self.id,
-                    ssh_configuration.ssh_user_name,
-                    ssh_configuration.ssh_session_host,
-                    ssh_configuration.ssh_session_port,
+                    ssh_credentials.to_string(),
+                    remote_host.to_string(),
                     sw.duration_as_string()
                 );
             }
 
-            HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_configuration) => {
+            HttpProxyPassRemoteEndpoint::Http2OverSsh {
+                ssh_credentials,
+                remote_host,
+            } => {
                 let mut sw = StopWatch::new();
 
                 sw.start();
                 println!(
-                    "[{}]. Http2OverSsh. Connecting to remote endpoint: {}@{}:{}",
+                    "[{}]. Http2OverSsh. Connecting to remote endpoint: {}@{}",
                     self.id,
-                    ssh_configuration.ssh_user_name,
-                    ssh_configuration.ssh_session_host,
-                    ssh_configuration.ssh_session_port
+                    ssh_credentials.to_string(),
+                    remote_host.to_string()
                 );
                 let ssh_session = self
                     .http_client
-                    .connect_to_http2_over_ssh(app, ssh_configuration)
+                    .connect_to_http2_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
                 println!(
-                    "[{}]. Http2OverSsh. Connected to remote endpoint: {}@{}:{} in {}",
+                    "[{}]. Http2OverSsh. Connected to remote endpoint: {}@{} in {}",
                     self.id,
-                    ssh_configuration.ssh_user_name,
-                    ssh_configuration.ssh_session_host,
-                    ssh_configuration.ssh_session_port,
+                    ssh_credentials.to_string(),
+                    remote_host.to_string(),
                     sw.duration_as_string()
                 );
             }

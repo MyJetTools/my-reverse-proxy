@@ -1,17 +1,8 @@
 use hyper::Uri;
 
-use crate::{
-    app::AppContext,
-    http_content_source::{FileContentSrc, RemoteHttpContentSource},
-    settings::ModifyHttpHeadersSettings,
-};
+use crate::{app::AppContext, settings::ModifyHttpHeadersSettings};
 
-use super::ProxyPassError;
-
-pub enum ProxyPassContentSource {
-    Http(RemoteHttpContentSource),
-    File(FileContentSrc),
-}
+use super::{ProxyPassContentSource, ProxyPassError};
 
 pub struct ProxyPassLocation {
     pub path: String,
@@ -49,6 +40,9 @@ impl ProxyPassLocation {
                 return remote_http_location.connect_if_require(app).await;
             }
             ProxyPassContentSource::File(_) => return Ok(()),
+            ProxyPassContentSource::FileOverSsh(file_over_ssh) => {
+                return file_over_ssh.connect_if_require(app).await;
+            }
         }
     }
 }

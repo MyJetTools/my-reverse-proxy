@@ -34,3 +34,4 @@ rustls-pki-types = "*"
 rustls-pemfile = "*"
 x509-parser = { version = "*", features = ["verify"] }
 my-tls = { tag = "0.1.0", git = "https://github.com/MyJetTools/my-tls.git" }
+async-trait = "*"

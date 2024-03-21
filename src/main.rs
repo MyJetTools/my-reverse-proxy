@@ -87,11 +87,15 @@ async fn main() {
             settings::EndpointType::Tcp(remote_addr) => {
                 crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);
             }
-            settings::EndpointType::TcpOverSsh(ssh_configuration) => {
+            settings::EndpointType::TcpOverSsh {
+                ssh_credentials,
+                remote_host,
+            } => {
                 crate::tcp_port_forward::start_tcp_over_ssh(
                     app.clone(),
                     listen_end_point,
-                    ssh_configuration,
+                    ssh_credentials,
+                    remote_host,
                 );
             }
         }

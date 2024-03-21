@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use hyper::Uri;
-use my_ssh::SshSession;
+use my_ssh::{SshCredentials, SshRemoteHost, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::SshConfiguration};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 use super::{Http1Client, Http2Client, HttpClientError};
 
@@ -67,9 +67,11 @@ impl HttpClient {
     pub async fn connect_to_http1_over_ssh(
         &mut self,
         app: &AppContext,
-        configuration: &SshConfiguration,
+        ssh_credentials: &Arc<SshCredentials>,
+        remote_host: &SshRemoteHost,
     ) -> Result<Arc<SshSession>, ProxyPassError> {
-        let (client, session) = Http1Client::connect_over_ssh(app, configuration).await?;
+        let (client, session) =
+            Http1Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
         *self = Self::Http(client);
         Ok(session)
     }
@@ -83,9 +85,11 @@ impl HttpClient {
     pub async fn connect_to_http2_over_ssh(
         &mut self,
         app: &AppContext,
-        configuration: &SshConfiguration,
+        ssh_credentials: &Arc<SshCredentials>,
+        remote_host: &SshRemoteHost,
     ) -> Result<Arc<SshSession>, ProxyPassError> {
-        let (client, session) = Http2Client::connect_over_ssh(app, configuration).await?;
+        let (client, session) =
+            Http2Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
         *self = Self::Http2(client);
         Ok(session)
     }
