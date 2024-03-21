@@ -3,9 +3,10 @@
 File should be at `~/.my-reverse-proxy` location with yaml format:
 
 ```yaml
-connection_settings:
-  buffer_size: 512Kb # Buffer, which is allocated twice (read/write) per connection to pass traffic by
-  connect_to_remote_timeout: 5s # Timeout to connect to remote host
+global_settings:
+  connection_settings:
+    buffer_size: 512Kb # Buffer, which is allocated twice (read/write) per connection to pass traffic by
+    connect_to_remote_timeout: 5s # Timeout to connect to remote host
   
 hosts:
   localhost:8000:
@@ -62,7 +63,39 @@ variables:
   my_ssh_config: ssh:user@10.12.13.14:22
 ```
 
-## Variables which can be used to populate headers or content
+## Http request endpoints
+By default all the headers of each request are passed to headers of each response accordingly both ways (ServierRequest->RemoteRequest and RemoteResponse->ServerResponse);
+
+It is possible to add custom headers to request by adding yaml section:
+
+Globally - add or remove headers to each request on each endpoint
+```yaml
+global_settings:
+  http_endpoints:
+    add_http_headers:
+      request:
+      - x-real-ip: '${ENDPOINT_IP}'
+      response:
+      - header-name1: value1
+      - header-name2: value2
+
+```
+
+On endpoint level - add header to each endpoint
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      add_http_headers:
+        request:
+        - x-real-ip: '${ENDPOINT_IP}'
+        response:
+        - header-name1: value1
+        - header-name2: value2:
+```
+
+
+### Variables which can be used to populate headers or content
 
 * ${ENDPOINT_IP} - ip of server listen endpoint;
 * ${ENDPOINT_SCHEMA} - http or https schema of listen endpoint;
