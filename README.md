@@ -147,3 +147,9 @@ On location level - add header to each endpoint
 ### Variable tips.
 * All the system variables are upper case, and all the custom variables are lower case.
 
+
+Example of custom variable:
+```yaml
+variables:
+  my_ssh_config: ssh:user@10.12.13.14:22
+```
