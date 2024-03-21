@@ -104,7 +104,7 @@ impl RequestExecutor for FileOverSshRequestExecutor {
 
         match result {
             Ok(content) => Ok(Some(content)),
-            Err(_) => Ok(None),
+            Err(err) => Ok(None),
         }
     }
 }
