@@ -64,20 +64,27 @@ variables:
 ```
 
 ## Http request endpoints
-By default all the headers of each request are passed to headers of each response accordingly both ways (ServierRequest->RemoteRequest and RemoteResponse->ServerResponse);
+By default all the headers of each request are passed to headers of each response accordingly both ways (ServerRequest->RemoteRequest and RemoteResponse->ServerResponse);
 
 It is possible to add custom headers to request by adding yaml section:
 
 Globally - add or remove headers to each request on each endpoint
 ```yaml
 global_settings:
-  http_endpoints:
+  all_http_endpoints:
     add_http_headers:
       request:
       - x-real-ip: '${ENDPOINT_IP}'
       response:
       - header-name1: value1
       - header-name2: value2
+    remove_http_headers:
+      request:
+      - header-name1
+      - header-name2
+      response:
+      - header-name3
+      - header-name4
 
 ```
 
@@ -86,12 +93,44 @@ On endpoint level - add header to each endpoint
 hosts:
   localhost:8000:
     endpoint:
+      type: http  
       add_http_headers:
         request:
         - x-real-ip: '${ENDPOINT_IP}'
         response:
         - header-name1: value1
         - header-name2: value2:
+      remove_http_headers:
+        request:
+        - header-name1
+        - header-name2
+        response:
+        - header-name3
+        - header-name4        
+```
+
+On location level - add header to each endpoint
+
+```yaml
+  localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: http
+      proxy_pass_to: http://remote_host:5123
+      add_http_headers:
+        request:
+        - x-real-ip: '${ENDPOINT_IP}'
+        response:
+        - header-name1: value1
+        - header-name2: value2:
+      remove_http_headers:
+        request:
+        - header-name1
+        - header-name2
+        response:
+        - header-name3
+        - header-name4 
 ```
 
 
