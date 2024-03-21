@@ -28,12 +28,13 @@ async fn main() {
         let listen_end_point = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
         match endpoint_type {
-            settings::EndpointType::Http1 => {
-                crate::http_server::start_http_server(listen_end_point, app.clone());
+            settings::EndpointType::Http1(host_str) => {
+                crate::http_server::start_http_server(listen_end_point, app.clone(), host_str);
             }
             settings::EndpointType::Https {
                 ssl_id,
                 client_ca_id,
+                host_str,
             } => {
                 if let Some(ssl_certificate) =
                     app.settings_reader.get_ssl_certificate(&ssl_id).await
@@ -52,6 +53,7 @@ async fn main() {
                                 ssl_certificate,
                                 Some(client_cert),
                                 ssh_server_id,
+                                host_str,
                             );
                         } else {
                             panic!(
@@ -67,6 +69,7 @@ async fn main() {
                             ssl_certificate,
                             None,
                             ssh_server_id,
+                            host_str,
                         );
                     }
                 } else {
@@ -77,8 +80,8 @@ async fn main() {
                     );
                 }
             }
-            settings::EndpointType::Http2 => {
-                crate::http_server::start_http2_server(listen_end_point, app.clone());
+            settings::EndpointType::Http2(host_str) => {
+                crate::http_server::start_http2_server(listen_end_point, app.clone(), host_str);
             }
             settings::EndpointType::Tcp(remote_addr) => {
                 crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);

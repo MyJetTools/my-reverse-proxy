@@ -1,65 +1,62 @@
-use crate::{app::AppContext, http_proxy_pass::*, settings::HttpProxyPassRemoteEndpoint};
+use crate::{app::AppContext, http_proxy_pass::*};
 
 pub async fn get_configurations<'s>(
     app: &AppContext,
     host: &HostPort<'s>,
-) -> Result<Vec<ProxyPassConfiguration>, ProxyPassError> {
-    let mut configurations: Vec<ProxyPassConfiguration> = Vec::new();
+) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
+    let result = app
+        .settings_reader
+        .get_hosts_configurations(app, host)
+        .await?;
 
-    let locations = app.settings_reader.get_configurations(host).await;
-
-    if locations.len() == 0 {
+    if result.len() == 0 {
         return Err(ProxyPassError::NoConfigurationFound);
     }
 
-    let mut id = app.get_id();
-    println!("[{}] -------- Connected", id);
-    for (location, proxy_pass_settings) in locations {
-        match proxy_pass_settings {
-            crate::settings::HttpProxyPassRemoteEndpoint::Http(uri) => {
-                configurations.push(
-                    ProxyPassConfiguration::new(
-                        location,
-                        HttpProxyPassRemoteEndpoint::Http(uri),
-                        id,
-                    )
-                    .into(),
-                );
-            }
-            crate::settings::HttpProxyPassRemoteEndpoint::Http2(uri) => {
-                configurations.push(
-                    ProxyPassConfiguration::new(
-                        location,
-                        HttpProxyPassRemoteEndpoint::Http2(uri),
-                        id,
-                    )
-                    .into(),
-                );
-            }
-            crate::settings::HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_config) => {
-                configurations.push(
-                    ProxyPassConfiguration::new(
-                        location,
-                        HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_config),
-                        id,
-                    )
-                    .into(),
-                );
-            }
-            crate::settings::HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_config) => {
-                configurations.push(
-                    ProxyPassConfiguration::new(
-                        location,
-                        HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_config),
-                        id,
-                    )
-                    .into(),
-                );
-            }
+    Ok(result)
+    /*
+    match proxy_pass_settings {
+        crate::settings::HttpProxyPassRemoteEndpoint::Http(uri) => {
+            configurations.push(
+                ProxyPassConfiguration::new(
+                    location,
+                    HttpProxyPassRemoteEndpoint::Http(uri),
+                    proxy_pass_settings.id,
+                )
+                .into(),
+            );
         }
-
-        id += 1;
+        crate::settings::HttpProxyPassRemoteEndpoint::Http2(uri) => {
+            configurations.push(
+                ProxyPassConfiguration::new(
+                    location,
+                    HttpProxyPassRemoteEndpoint::Http2(uri),
+                    id,
+                )
+                .into(),
+            );
+        }
+        crate::settings::HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_config) => {
+            configurations.push(
+                ProxyPassConfiguration::new(
+                    location,
+                    HttpProxyPassRemoteEndpoint::Http1OverSsh(ssh_config),
+                    id,
+                )
+                .into(),
+            );
+        }
+        crate::settings::HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_config) => {
+            configurations.push(
+                ProxyPassConfiguration::new(
+                    location,
+                    HttpProxyPassRemoteEndpoint::Http2OverSsh(ssh_config),
+                    id,
+                )
+                .into(),
+            );
+        }
     }
 
-    Ok(configurations)
+     */
 }

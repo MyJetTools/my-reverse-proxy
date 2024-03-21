@@ -23,10 +23,11 @@ impl EndpointSettings {
         variables: &Option<HashMap<String, String>>,
     ) -> EndpointType {
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => EndpointType::Http1,
+            HTTP1_ENDPOINT_TYPE => EndpointType::Http1(host.to_string()),
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
                     EndpointType::Https {
+                        host_str: host.to_string(),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
                             .client_certificate_ca
@@ -37,7 +38,7 @@ impl EndpointSettings {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
             }
-            "http2" => EndpointType::Http2,
+            "http2" => EndpointType::Http2(host.to_string()),
             "tcp" => {
                 if locations.len() != 1 {
                     panic!(
@@ -47,10 +48,12 @@ impl EndpointSettings {
                     );
                 }
 
-                let proxy_pass_to = locations.get(0).unwrap().get_proxy_pass(variables);
+                let location_settings = locations.get(0).unwrap();
 
-                if proxy_pass_to.is_ssh() {
-                    EndpointType::TcpOverSsh(proxy_pass_to.to_ssh_configuration())
+                let proxy_pass_to = location_settings.get_proxy_pass_to(variables);
+
+                if let Some(ssh_config) = proxy_pass_to.to_ssh_configuration() {
+                    EndpointType::TcpOverSsh(ssh_config)
                 } else {
                     let remote_addr = std::net::SocketAddr::from_str(proxy_pass_to.as_str());
 

@@ -9,29 +9,40 @@ use hyper::{body::Incoming, Response, Uri};
 use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
-use crate::{app::AppContext, http_client::HttpClient, settings::HttpProxyPassRemoteEndpoint};
+use crate::{
+    app::AppContext,
+    http_client::HttpClient,
+    settings::{HttpProxyPassRemoteEndpoint, ModifyHttpHeadersSettings},
+};
 
 use super::ProxyPassError;
 
 static CONNECTIONS: AtomicI64 = AtomicI64::new(0);
 
-pub struct ProxyPassConfiguration {
+pub struct ProxyPassLocation {
     ssh_session: Option<Arc<SshSession>>,
     http_client: HttpClient,
     pub remote_endpoint: HttpProxyPassRemoteEndpoint,
-    pub location: String,
+    pub path: String,
     pub id: i64,
+    pub modify_headers: Option<ModifyHttpHeadersSettings>,
 }
 
-impl ProxyPassConfiguration {
-    pub fn new(location: String, remote_endpoint: HttpProxyPassRemoteEndpoint, id: i64) -> Self {
+impl ProxyPassLocation {
+    pub fn new(
+        path: String,
+        remote_endpoint: HttpProxyPassRemoteEndpoint,
+        modify_headers: Option<ModifyHttpHeadersSettings>,
+        id: i64,
+    ) -> Self {
         CONNECTIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
-            location,
+            path,
             http_client: HttpClient::new(),
             remote_endpoint,
             id,
             ssh_session: None,
+            modify_headers,
         }
     }
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
@@ -109,7 +120,7 @@ impl ProxyPassConfiguration {
     pub fn is_my_uri(&self, uri: &Uri) -> bool {
         let result = rust_extensions::str_utils::starts_with_case_insensitive(
             uri.path(),
-            self.location.as_str(),
+            self.path.as_str(),
         );
 
         result
@@ -153,7 +164,7 @@ impl ProxyPassConfiguration {
     }
 }
 
-impl Drop for ProxyPassConfiguration {
+impl Drop for ProxyPassLocation {
     fn drop(&mut self) {
         CONNECTIONS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 

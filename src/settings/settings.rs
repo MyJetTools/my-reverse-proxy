@@ -1,16 +1,19 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    str::FromStr,
     sync::Arc,
 };
 
-use crate::{app::SslCertificate, http_proxy_pass::*, http_server::ClientCertificateCa};
+use crate::{
+    app::{AppContext, SslCertificate},
+    http_proxy_pass::*,
+    http_server::ClientCertificateCa,
+};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileName, GlobalSettings,
-    HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId, SslCertificatesSettingsModel,
+    HttpEndpointModifyHeadersSettings, ProxyPassSettings, SslCertificateId,
+    SslCertificatesSettingsModel,
 };
-use hyper::Uri;
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
 
@@ -46,6 +49,34 @@ impl SettingsReader {
             "Timeout to connect to remote endpoint is: {}",
             result.remote_connect_timeout.format_to_string()
         );
+
+        result
+    }
+
+    pub async fn get_http_endpoint_modify_headers_settings(
+        &self,
+        host_str: &str,
+    ) -> HttpEndpointModifyHeadersSettings {
+        let mut result = HttpEndpointModifyHeadersSettings::default();
+        let read_access = self.settings.read().await;
+
+        if let Some(global_settings) = read_access.global_settings.as_ref() {
+            if let Some(all_http_endpoints) = global_settings.all_http_endpoints.as_ref() {
+                if let Some(modify_headers) = all_http_endpoints.modify_http_headers.as_ref() {
+                    result.global_modify_headers_settings = Some(modify_headers.clone());
+                }
+            }
+        }
+
+        for (host, proxy_pass) in &read_access.hosts {
+            if host != host_str {
+                continue;
+            }
+
+            if let Some(modify_headers) = proxy_pass.endpoint.modify_http_headers.as_ref() {
+                result.endpoint_modify_headers_settings = Some(modify_headers.clone());
+            }
+        }
 
         result
     }
@@ -94,57 +125,40 @@ impl SettingsReader {
         None
     }
 
-    pub async fn get_configurations<'s>(
+    pub async fn get_hosts_configurations<'s>(
         &self,
+        app: &AppContext,
         host_port: &HostPort<'s>,
-    ) -> Vec<(String, HttpProxyPassRemoteEndpoint)> {
-        let mut result = Vec::new();
+    ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
         let read_access = self.settings.read().await;
 
         for (settings_host, proxy_pass_settings) in &read_access.hosts {
-            if host_port.is_my_host_port(settings_host) {
-                for location in &proxy_pass_settings.locations {
-                    let proxy_pass_path = if let Some(location) = &location.path {
-                        location.to_string()
-                    } else {
-                        "/".to_string()
-                    };
-
-                    let proxy_pass_to = location.get_proxy_pass(&read_access.variables);
-
-                    if proxy_pass_to.is_ssh() {
-                        result.push((
-                            proxy_pass_path,
-                            if location.is_http1() {
-                                HttpProxyPassRemoteEndpoint::Http1OverSsh(
-                                    proxy_pass_to.to_ssh_configuration(),
-                                )
-                            } else {
-                                HttpProxyPassRemoteEndpoint::Http2OverSsh(
-                                    proxy_pass_to.to_ssh_configuration(),
-                                )
-                            },
-                        ));
-                    } else {
-                        result.push((
-                            proxy_pass_path,
-                            if location.is_http1() {
-                                HttpProxyPassRemoteEndpoint::Http(
-                                    Uri::from_str(proxy_pass_to.as_str()).unwrap(),
-                                )
-                            } else {
-                                HttpProxyPassRemoteEndpoint::Http2(
-                                    Uri::from_str(proxy_pass_to.as_str()).unwrap(),
-                                )
-                            },
-                        ));
-                    }
-                }
-                break;
+            if !host_port.is_my_host_port(settings_host) {
+                continue;
             }
+            let location_id = app.get_id();
+            let mut result = Vec::new();
+            for location_settings in &proxy_pass_settings.locations {
+                let location_path = if let Some(location) = &location_settings.path {
+                    location.to_string()
+                } else {
+                    "/".to_string()
+                };
+
+                let proxy_pass_to = location_settings.get_proxy_pass_to(&read_access.variables);
+
+                result.push(ProxyPassLocation::new(
+                    location_path,
+                    proxy_pass_to.to_http_remote_endpoint(location_settings.is_http1()),
+                    location_settings.modify_http_headers.clone(),
+                    location_id,
+                ));
+            }
+
+            return Ok(result);
         }
 
-        result
+        return Ok(vec![]);
     }
 
     pub async fn get_listen_ports(&self) -> BTreeMap<u16, EndpointType> {

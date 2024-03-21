@@ -76,10 +76,13 @@ global_settings:
     modify_http_headers:
       add:
         request:
-        - x-real-ip: '${ENDPOINT_IP}'
+        - name: x-real-ip
+          value: '${ENDPOINT_IP}'
         response:
-        - header-name1: value1
-        - header-name2: value2
+        - name: header-name1: 
+          value: value1
+        - name: header-name2: 
+          value: value2
       remove:
         request:
         - header-name1
@@ -99,10 +102,13 @@ hosts:
       modify_http_headers:      
         add:
           request:
-          - x-real-ip: '${ENDPOINT_IP}'
+          - name: x-real-ip
+            value: '${ENDPOINT_IP}'
           response:
-          - header-name1: value1
-          - header-name2: value2:
+          - name: header-name1
+            value: value1
+          - name: header-name2
+            value: value2
         remove:
           request:
           - header-name1
@@ -124,10 +130,13 @@ On location level - add header to each endpoint
       modify_http_headers:         
         add:
           request:
-          - x-real-ip: '${ENDPOINT_IP}'
+          - name: x-real-ip
+            value: '${ENDPOINT_IP}'
           response:
-          - header-name1: value1
-          - header-name2: value2:
+          - name: header-name1
+            value: value1
+          - name: header-name2
+            value: value2:
         remove:
           request:
           - header-name1

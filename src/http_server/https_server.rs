@@ -11,7 +11,7 @@ use crate::http_proxy_pass::*;
 
 use super::{ClientCertificateCa, MyClientCertVerifier};
 
-use crate::http_proxy_pass::ProxyPassClient;
+use crate::http_proxy_pass::HttpProxyPass;
 
 pub fn start_https_server(
     addr: SocketAddr,
@@ -19,6 +19,7 @@ pub fn start_https_server(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
+    host_str: String,
 ) {
     println!("Listening https on https://{}", addr);
     tokio::spawn(start_https_server_loop(
@@ -27,6 +28,7 @@ pub fn start_https_server(
         certificate,
         client_cert_ca,
         server_id,
+        host_str,
     ));
 }
 
@@ -36,6 +38,7 @@ async fn start_https_server_loop(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
+    host_str: String,
 ) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
@@ -89,8 +92,14 @@ async fn start_https_server_loop(
 
         let app = app.clone();
 
+        let modify_headers_settings = app
+            .settings_reader
+            .get_http_endpoint_modify_headers_settings(host_str.as_str())
+            .await;
+
         tokio::spawn(async move {
-            let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
+            let http_proxy_pass =
+                Arc::new(HttpProxyPass::new(socket_addr, modify_headers_settings));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
                 Ok(tls_stream) => {
@@ -133,7 +142,7 @@ async fn start_https_server_loop(
 
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
-    proxy_pass: Arc<ProxyPassClient>,
+    proxy_pass: Arc<HttpProxyPass>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
     //println!("Handling request with host: {:#?}", req);

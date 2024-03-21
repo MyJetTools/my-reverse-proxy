@@ -9,12 +9,12 @@ use crate::app::AppContext;
 
 use crate::http_proxy_pass::*;
 
-pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
+pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
     println!("Listening http1 on http://{}", addr);
-    tokio::spawn(start_http_server_loop(addr, app));
+    tokio::spawn(start_http_server_loop(addr, app, host_str));
 }
 
-async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
+async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
@@ -27,7 +27,12 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
         app.http_connections
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
-        let http_proxy_pass = Arc::new(ProxyPassClient::new(socket_addr));
+        let modify_headers_settings = app
+            .settings_reader
+            .get_http_endpoint_modify_headers_settings(host_str.as_str())
+            .await;
+
+        let http_proxy_pass = Arc::new(HttpProxyPass::new(socket_addr, modify_headers_settings));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();
 
@@ -62,7 +67,7 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
 
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
-    proxy_pass: Arc<ProxyPassClient>,
+    proxy_pass: Arc<HttpProxyPass>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
     match proxy_pass.send_payload(&app, req).await {

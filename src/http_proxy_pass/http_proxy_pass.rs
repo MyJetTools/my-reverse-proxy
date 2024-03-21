@@ -4,18 +4,26 @@ use bytes::Bytes;
 use http_body_util::Full;
 use tokio::sync::Mutex;
 
-use crate::{app::AppContext, http_client::HTTP_CLIENT_TIMEOUT};
+use crate::{
+    app::AppContext, http_client::HTTP_CLIENT_TIMEOUT, settings::HttpEndpointModifyHeadersSettings,
+};
 
-use super::{into_full_bytes, HttpContentBuilder, ProxyPassError, ProxyPassInner, RetryType};
+use super::{HttpProxyPassInner, HttpRequestBuilder, ProxyPassError, RetryType};
 
-pub struct ProxyPassClient {
-    pub inner: Mutex<ProxyPassInner>,
+pub struct HttpProxyPass {
+    pub inner: Mutex<HttpProxyPassInner>,
 }
 
-impl ProxyPassClient {
-    pub fn new(socket_addr: SocketAddr) -> Self {
+impl HttpProxyPass {
+    pub fn new(
+        socket_addr: SocketAddr,
+        modify_headers_settings: HttpEndpointModifyHeadersSettings,
+    ) -> Self {
         Self {
-            inner: Mutex::new(ProxyPassInner::new(socket_addr)),
+            inner: Mutex::new(HttpProxyPassInner::new(
+                socket_addr,
+                modify_headers_settings,
+            )),
         }
     }
 
@@ -29,25 +37,21 @@ impl ProxyPassClient {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        let mut req = HttpContentBuilder::new(req);
+        let mut req = HttpRequestBuilder::new(req);
         loop {
-            let (future1, future2, proxy_pass_id) = {
+            let (future1, future2, location_index) = {
                 let mut inner = self.inner.lock().await;
 
-                if !inner.configurations.has_configurations() {
+                if !inner.initialized() {
                     let host_port = req.get_host_port();
-                    let configurations = crate::flows::get_configurations(app, &host_port).await?;
-                    inner.configurations.init(configurations);
-                    inner.update_src_info(&host_port);
+                    inner.init(app, &host_port).await?;
                 }
 
-                req.populate_and_build(&inner).await?;
+                let location_index = req.populate_and_build(&inner).await?;
 
-                let proxy_pass_configuration = inner.configurations.find(req.uri())?;
+                let proxy_pass_configuration = inner.locations.find_mut(&location_index);
 
                 proxy_pass_configuration.connect_if_require(app).await?;
-
-                let id = proxy_pass_configuration.id;
 
                 let (future1, future2) = if proxy_pass_configuration.remote_endpoint.is_http1() {
                     let result = proxy_pass_configuration.send_http1_request(req.get());
@@ -58,7 +62,7 @@ impl ProxyPassClient {
                     (None, Some(future))
                 };
 
-                (future1, future2, id)
+                (future1, future2, location_index)
             };
 
             let result = if let Some(future1) = future1 {
@@ -99,15 +103,19 @@ impl ProxyPassClient {
 
             match result {
                 Ok(response) => {
-                    let (parts, incoming) = response.into_parts();
-                    let body = into_full_bytes(incoming).await?;
-                    let response = hyper::Response::from_parts(parts, body);
+                    let inner = self.inner.lock().await;
+                    let response = super::http_response_builder::build_http_response(
+                        response,
+                        &inner,
+                        &location_index,
+                    )
+                    .await?;
                     return Ok(Ok(response));
                 }
                 Err(err) => {
                     let retry = {
                         let mut inner = self.inner.lock().await;
-                        inner.handle_error(app, &err, proxy_pass_id).await?
+                        inner.handle_error(app, &err, &location_index).await?
                     };
 
                     match retry {

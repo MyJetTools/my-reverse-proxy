@@ -31,3 +31,5 @@ mod global_settings;
 pub use global_settings::*;
 mod modify_http_headers_settings;
 pub use modify_http_headers_settings::*;
+mod http_endpoint_modify_headers_settings;
+pub use http_endpoint_modify_headers_settings::*;
