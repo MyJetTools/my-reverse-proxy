@@ -4,7 +4,7 @@ use hyper::Uri;
 
 use crate::http_proxy_pass::ProxyPassError;
 
-use super::RequestExecutor;
+use super::{RequestExecutor, WebContentType};
 
 pub struct FileContentSrc {
     file_path: String,
@@ -49,9 +49,12 @@ pub struct FileRequestExecutor {
 
 #[async_trait::async_trait]
 impl RequestExecutor for FileRequestExecutor {
-    async fn execute_request(&self) -> Result<Option<Vec<u8>>, ProxyPassError> {
+    async fn execute_request(
+        &self,
+    ) -> Result<Option<(Vec<u8>, Option<WebContentType>)>, ProxyPassError> {
+        let content_type = WebContentType::detect_by_extension(&self.file_path);
         match tokio::fs::read(&self.file_path).await {
-            Ok(content) => Ok(Some(content)),
+            Ok(content) => Ok(Some((content, content_type))),
             Err(_) => Ok(None),
         }
     }

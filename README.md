@@ -121,6 +121,7 @@ hosts:
 On location level - add header to each endpoint
 
 ```yaml
+hosts:
   localhost:8001:
     endpoint:
       type: http
@@ -144,6 +145,34 @@ On location level - add header to each endpoint
           response:
           - header-name3
           - header-name4 
+```
+
+## Serving the folder with files
+
+### Serving from the local folder
+```yaml
+hosts:
+  localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: http
+      proxy_pass_to: http://remote_host:5123
+      default_file: index.html
+```
+default_file - serves with '/' (root) path
+
+### Serving from remote ssh folder
+
+```yaml
+hosts:
+  localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: http
+      proxy_pass_to: ssh:user@10.0.0.5:22->http://remote_host:5123
+      default_file: index.html
 ```
 
 

@@ -115,13 +115,14 @@ impl HttpProxyPass {
                     Err(err) => Err(err),
                 }
             } else if let Some(request_executor) = request_executor {
-                if let Some(content) = request_executor.execute_request().await? {
+                if let Some((content, content_type)) = request_executor.execute_request().await? {
                     let inner = self.inner.lock().await;
 
                     let result = super::http_response_builder::build_response_from_content(
                         req.uri(),
                         &inner,
                         &location_index,
+                        content_type,
                         content,
                     );
                     return Ok(Ok(result));

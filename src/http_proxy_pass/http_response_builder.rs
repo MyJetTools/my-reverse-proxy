@@ -6,7 +6,7 @@ use hyper::{
     HeaderMap,
 };
 
-use crate::settings::ModifyHttpHeadersSettings;
+use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
 
 use super::{into_full_bytes, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData};
 
@@ -28,9 +28,14 @@ pub fn build_response_from_content(
     req_uri: &hyper::Uri,
     inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
+    content_type: Option<WebContentType>,
     content: Vec<u8>,
 ) -> hyper::Response<Full<Bytes>> {
     let mut builder = hyper::Response::builder();
+
+    if let Some(content_type) = content_type {
+        builder = builder.header("Content-Type", content_type.as_str());
+    }
 
     if let Some(headers) = builder.headers_mut() {
         modify_req_headers(req_uri, inner, headers, location_index);

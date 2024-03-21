@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
-use super::RequestExecutor;
+use super::{RequestExecutor, WebContentType};
 
 pub struct SshFileContentSource {
     ssh_session: Option<Arc<SshSession>>,
@@ -85,7 +85,9 @@ pub struct FileOverSshRequestExecutor {
 
 #[async_trait::async_trait]
 impl RequestExecutor for FileOverSshRequestExecutor {
-    async fn execute_request(&self) -> Result<Option<Vec<u8>>, ProxyPassError> {
+    async fn execute_request(
+        &self,
+    ) -> Result<Option<(Vec<u8>, Option<WebContentType>)>, ProxyPassError> {
         let file_path = if self.file_path.contains("~") {
             let mut home_value = self.home_value.lock().await;
 
@@ -102,9 +104,11 @@ impl RequestExecutor for FileOverSshRequestExecutor {
 
         let result = self.session.download_remote_file(&file_path).await;
 
+        let content_type = WebContentType::detect_by_extension(&file_path);
+
         match result {
-            Ok(content) => Ok(Some(content)),
-            Err(err) => Ok(None),
+            Ok(content) => Ok(Some((content, content_type))),
+            Err(_) => Ok(None),
         }
     }
 }
