@@ -5,12 +5,13 @@ use hyper::{body::Bytes, server::conn::http2, service::service_fn};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio_rustls::TlsAcceptor;
 
-use crate::{
-    app::{AppContext, SslCertificate},
-    http_server::ProxyPassError,
-};
+use crate::app::{AppContext, SslCertificate};
 
-use super::{ClientCertificateCa, MyClientCertVerifier, ProxyPassClient};
+use crate::http_proxy_pass::*;
+
+use super::{ClientCertificateCa, MyClientCertVerifier};
+
+use crate::http_proxy_pass::ProxyPassClient;
 
 pub fn start_https_server(
     addr: SocketAddr,

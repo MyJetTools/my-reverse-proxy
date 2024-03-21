@@ -1,8 +1,4 @@
-use crate::{
-    app::AppContext,
-    http_server::{HostPort, ProxyPassConfiguration, ProxyPassError},
-    settings::HttpProxyPassRemoteEndpoint,
-};
+use crate::{app::AppContext, http_proxy_pass::*, settings::HttpProxyPassRemoteEndpoint};
 
 pub async fn get_configurations<'s>(
     app: &AppContext,

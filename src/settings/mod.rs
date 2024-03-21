@@ -27,3 +27,7 @@ mod end_point_type;
 pub use end_point_type::*;
 mod client_certificate_ca_settings;
 pub use client_certificate_ca_settings::*;
+mod global_settings;
+pub use global_settings::*;
+mod modify_http_headers_settings;
+pub use modify_http_headers_settings::*;

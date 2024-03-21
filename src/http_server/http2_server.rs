@@ -4,9 +4,9 @@ use http_body_util::Full;
 use hyper::{body::Bytes, service::service_fn};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 
-use crate::{app::AppContext, http_server::ProxyPassError};
+use crate::app::AppContext;
 
-use super::ProxyPassClient;
+use crate::http_proxy_pass::*;
 
 pub fn start_http2_server(addr: SocketAddr, app: Arc<AppContext>) {
     println!("Listening http2 on https://{}", addr);

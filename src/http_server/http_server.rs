@@ -5,9 +5,9 @@ use hyper::{body::Bytes, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_server::ProxyPassError};
+use crate::app::AppContext;
 
-use super::ProxyPassClient;
+use crate::http_proxy_pass::*;
 
 pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
     println!("Listening http1 on http://{}", addr);

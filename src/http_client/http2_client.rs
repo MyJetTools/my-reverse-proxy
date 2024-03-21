@@ -5,7 +5,7 @@ use hyper::{body::Bytes, client::conn::http2::SendRequest, Uri};
 use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_server::ProxyPassError, settings::SshConfiguration};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::SshConfiguration};
 
 use super::{HttpClientError, HTTP_CLIENT_TIMEOUT};
 

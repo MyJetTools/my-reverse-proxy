@@ -4,15 +4,11 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    app::SslCertificate,
-    http_server::{ClientCertificateCa, HostPort},
-};
+use crate::{app::SslCertificate, http_proxy_pass::*, http_server::ClientCertificateCa};
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettings, ConnectionsSettingsModel, EndpointType,
-    FileName, HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId,
-    SslCertificatesSettingsModel,
+    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileName, GlobalSettings,
+    HttpProxyPassRemoteEndpoint, ProxyPassSettings, SslCertificateId, SslCertificatesSettingsModel,
 };
 use hyper::Uri;
 use rust_extensions::duration_utils::DurationExtensions;
@@ -21,19 +17,24 @@ use serde::*;
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, ProxyPassSettings>,
-    pub connection_settings: Option<ConnectionsSettings>,
+
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
+    pub global_settings: Option<GlobalSettings>,
 }
 
 impl SettingsReader {
     pub async fn get_connections_settings(&self) -> ConnectionsSettingsModel {
         let read_access = self.settings.read().await;
 
-        let result = match &read_access.connection_settings {
-            Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
-            None => ConnectionsSettingsModel::default(),
+        let result = if let Some(global_settings) = read_access.global_settings.as_ref() {
+            match global_settings.connection_settings.as_ref() {
+                Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
+                None => ConnectionsSettingsModel::default(),
+            }
+        } else {
+            ConnectionsSettingsModel::default()
         };
 
         println!(
@@ -290,19 +291,20 @@ mod tests {
                     endpoint_type: "http1".to_owned(),
                     ssl_certificate: None,
                     client_certificate_ca: None,
+                    modify_http_headers: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
                     proxy_pass_to: "https://www.google.com".to_owned(),
                     location_type: Some("http".to_owned()),
-                    add_request_headers: None,
+                    modify_http_headers: None,
                 }],
             },
         );
 
         let model = SettingsModel {
             hosts,
-            connection_settings: None,
+            global_settings: None,
             variables: None,
             ssl_certificates: None,
             client_certificate_ca: None,

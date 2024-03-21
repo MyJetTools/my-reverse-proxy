@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use serde::*;
 
-use super::{EndpointType, LocationSettings, SslCertificateId};
+use super::{EndpointType, LocationSettings, ModifyHttpHeadersSettings, SslCertificateId};
 
 const HTTP1_ENDPOINT_TYPE: &str = "http";
 
@@ -12,6 +12,7 @@ pub struct EndpointSettings {
     pub endpoint_type: String,
     pub ssl_certificate: Option<String>,
     pub client_certificate_ca: Option<String>,
+    pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
 }
 
 impl EndpointSettings {

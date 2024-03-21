@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::*;
 
-use super::ProxyPassTo;
+use super::{ModifyHttpHeadersSettings, ProxyPassTo};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocationSettings {
@@ -10,7 +10,7 @@ pub struct LocationSettings {
     pub proxy_pass_to: String,
     #[serde(rename = "type")]
     pub location_type: Option<String>,
-    pub add_request_headers: Option<HashMap<String, String>>,
+    pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
 }
 
 impl LocationSettings {

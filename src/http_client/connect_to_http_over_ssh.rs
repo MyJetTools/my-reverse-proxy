@@ -6,7 +6,7 @@ use hyper::client::conn::http1::SendRequest;
 use hyper_util::rt::TokioIo;
 use my_ssh::{SshCredentials, SshSession};
 
-use crate::{app::AppContext, http_server::ProxyPassError};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 pub async fn connect_to_http_over_ssh(
     app: &AppContext,

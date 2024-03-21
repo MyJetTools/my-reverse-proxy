@@ -4,7 +4,7 @@ use hyper::Uri;
 use my_ssh::SshSession;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_server::ProxyPassError, settings::SshConfiguration};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::SshConfiguration};
 
 use super::{Http1Client, Http2Client, HttpClientError};
 
