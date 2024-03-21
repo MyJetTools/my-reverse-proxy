@@ -43,11 +43,11 @@ hosts:
       type: http2  
 
     locations:       
-    - type: http2
-      path: /service1    
+    - path: /service1
+      type: http2          
       proxy_pass_to: ${my_ssh_config}->remote_host:5123
-    - type: http2
-      path: /service2
+    - path: /service2
+      type: http2     
       proxy_pass_to: http://remote_host:5123  
 
 ssl_certificates:
