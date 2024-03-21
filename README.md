@@ -156,8 +156,7 @@ hosts:
     endpoint:
       type: http
     locations:      
-    - type: http
-      proxy_pass_to: http://remote_host:5123
+    - proxy_pass_to: ~/web_content
       default_file: index.html
 ```
 default_file - serves with '/' (root) path
@@ -170,8 +169,7 @@ hosts:
     endpoint:
       type: http
     locations:      
-    - type: http
-      proxy_pass_to: ssh:user@10.0.0.5:22->http://remote_host:5123
+    - proxy_pass_to: ssh:user@10.0.0.5:22->~/web_content
       default_file: index.html
 ```
 
