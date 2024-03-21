@@ -73,19 +73,20 @@ Globally - add or remove headers to each request on each endpoint
 ```yaml
 global_settings:
   all_http_endpoints:
-    add_http_headers:
-      request:
-      - x-real-ip: '${ENDPOINT_IP}'
-      response:
-      - header-name1: value1
-      - header-name2: value2
-    remove_http_headers:
-      request:
-      - header-name1
-      - header-name2
-      response:
-      - header-name3
-      - header-name4
+    modify_http_headers:
+      add:
+        request:
+        - x-real-ip: '${ENDPOINT_IP}'
+        response:
+        - header-name1: value1
+        - header-name2: value2
+      remove:
+        request:
+        - header-name1
+        - header-name2
+        response:
+        - header-name3
+        - header-name4
 
 ```
 
@@ -95,19 +96,20 @@ hosts:
   localhost:8000:
     endpoint:
       type: http  
-      add_http_headers:
-        request:
-        - x-real-ip: '${ENDPOINT_IP}'
-        response:
-        - header-name1: value1
-        - header-name2: value2:
-      remove_http_headers:
-        request:
-        - header-name1
-        - header-name2
-        response:
-        - header-name3
-        - header-name4        
+      modify_http_headers:      
+        add:
+          request:
+          - x-real-ip: '${ENDPOINT_IP}'
+          response:
+          - header-name1: value1
+          - header-name2: value2:
+        remove:
+          request:
+          - header-name1
+          - header-name2
+          response:
+          - header-name3
+          - header-name4        
 ```
 
 On location level - add header to each endpoint
@@ -119,19 +121,20 @@ On location level - add header to each endpoint
     locations:      
     - type: http
       proxy_pass_to: http://remote_host:5123
-      add_http_headers:
-        request:
-        - x-real-ip: '${ENDPOINT_IP}'
-        response:
-        - header-name1: value1
-        - header-name2: value2:
-      remove_http_headers:
-        request:
-        - header-name1
-        - header-name2
-        response:
-        - header-name3
-        - header-name4 
+      modify_http_headers:         
+        add:
+          request:
+          - x-real-ip: '${ENDPOINT_IP}'
+          response:
+          - header-name1: value1
+          - header-name2: value2:
+        remove:
+          request:
+          - header-name1
+          - header-name2
+          response:
+          - header-name3
+          - header-name4 
 ```
 
 
