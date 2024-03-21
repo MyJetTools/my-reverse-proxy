@@ -64,6 +64,7 @@ variables:
 ```
 
 ## Http request endpoints
+### Headers
 By default all the headers of each request are passed to headers of each response accordingly both ways (ServerRequest->RemoteRequest and RemoteResponse->ServerResponse);
 
 It is possible to add custom headers to request by adding yaml section:
