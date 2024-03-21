@@ -139,7 +139,11 @@ On location level - add header to each endpoint
 * ${ENDPOINT_IP} - ip of server listen endpoint;
 * ${ENDPOINT_SCHEMA} - http or https schema of listen endpoint;
 * ${CLIENT_CERT_CN} - Common name of client certificate if endpoint is protected by client certificate;
-* {PATH_AND_QUERY} - path and query of request;
+* ${PATH_AND_QUERY} - path and query of request;
 
 
+
+
+### Variable tips.
+* All the system variables are upper case, and all the custom variables are lower case.
 
