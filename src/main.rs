@@ -6,6 +6,7 @@ mod app;
 mod flows;
 //mod http2_executor;
 mod http_client;
+mod http_content_source;
 mod http_proxy_pass;
 mod http_server;
 mod populate_variable;

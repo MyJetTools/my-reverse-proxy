@@ -28,6 +28,7 @@ impl HttpProxyPass {
     }
 
     pub async fn update_client_cert_cn_name(&self, client_cert_cn: String) {
+        println!("update_client_cert_cn_name{}", client_cert_cn);
         let mut inner = self.inner.lock().await;
         inner.src.client_cert_cn = Some(client_cert_cn);
     }
@@ -39,7 +40,7 @@ impl HttpProxyPass {
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
         let mut req = HttpRequestBuilder::new(req);
         loop {
-            let (future1, future2, location_index) = {
+            let (future1, future2, location_index, request_executor) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.initialized() {
@@ -49,20 +50,31 @@ impl HttpProxyPass {
 
                 let location_index = req.populate_and_build(&inner).await?;
 
-                let proxy_pass_configuration = inner.locations.find_mut(&location_index);
+                let proxy_pass_location = inner.locations.find_mut(&location_index);
 
-                proxy_pass_configuration.connect_if_require(app).await?;
+                proxy_pass_location.connect_if_require(app).await?;
 
-                let (future1, future2) = if proxy_pass_configuration.remote_endpoint.is_http1() {
-                    let result = proxy_pass_configuration.send_http1_request(req.get());
+                let (future1, future2, request_executor) = {
+                    match &mut proxy_pass_location.content_source {
+                        super::ProxyPassContentSource::Http(http_content_source) => {
+                            if http_content_source.remote_endpoint.is_http1() {
+                                let result = http_content_source.send_http1_request(req.get());
 
-                    (Some(result), None)
-                } else {
-                    let future = proxy_pass_configuration.send_http2_request(req.get());
-                    (None, Some(future))
+                                (Some(result), None, None)
+                            } else {
+                                let future = http_content_source.send_http2_request(req.get());
+                                (None, Some(future), None)
+                            }
+                        }
+                        super::ProxyPassContentSource::File(file) => {
+                            let executor = file.get_request_executor(req.uri())?;
+
+                            (None, None, Some(executor))
+                        }
+                    }
                 };
 
-                (future1, future2, location_index)
+                (future1, future2, location_index, request_executor)
             };
 
             let result = if let Some(future1) = future1 {
@@ -97,6 +109,17 @@ impl HttpProxyPass {
                     }
                     Err(err) => Err(err),
                 }
+            } else if let Some(request_executor) = request_executor {
+                let content = request_executor.execute_request().await?;
+                let inner = self.inner.lock().await;
+                return Ok(Ok(
+                    super::http_response_builder::build_response_from_content(
+                        req.uri(),
+                        &inner,
+                        &location_index,
+                        content,
+                    ),
+                ));
             } else {
                 panic!("Both futures are None")
             };
@@ -105,6 +128,7 @@ impl HttpProxyPass {
                 Ok(response) => {
                     let inner = self.inner.lock().await;
                     let response = super::http_response_builder::build_http_response(
+                        req.uri(),
                         response,
                         &inner,
                         &location_index,

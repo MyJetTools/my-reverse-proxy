@@ -1,17 +1,18 @@
 use std::net::SocketAddr;
 
+use hyper::Uri;
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
 use crate::populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN};
 
-pub struct SourceHttpConfiguration {
+pub struct SourceHttpData {
     pub is_https: bool,
     pub host: Option<String>,
     pub socket_addr: SocketAddr,
     pub client_cert_cn: Option<String>,
 }
 
-impl SourceHttpConfiguration {
+impl SourceHttpData {
     pub fn new(socket_addr: SocketAddr) -> Self {
         Self {
             is_https: false,
@@ -21,7 +22,7 @@ impl SourceHttpConfiguration {
         }
     }
 
-    pub fn populate_value<'s>(&self, value: &'s str) -> StrOrString<'s> {
+    pub fn populate_value<'s>(&self, value: &'s str, req_uri: &Uri) -> StrOrString<'s> {
         if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
             return value.into();
         }
@@ -42,6 +43,18 @@ impl SourceHttpConfiguration {
                         }
                         "ENDPOINT_IP" => {
                             result.push_str(format!("{}", self.socket_addr.ip()).as_str());
+                        }
+
+                        "PATH_AND_QUERY" => {
+                            if let Some(value) = req_uri.path_and_query() {
+                                result.push_str(value.as_str());
+                            }
+                        }
+
+                        "CLIENT_CERT_CN" => {
+                            if let Some(value) = self.client_cert_cn.as_ref() {
+                                result.push_str(value.as_str());
+                            }
                         }
 
                         "ENDPOINT_SCHEMA" => {

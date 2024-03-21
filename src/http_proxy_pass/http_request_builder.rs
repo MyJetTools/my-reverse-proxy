@@ -7,7 +7,7 @@ use hyper::{
 
 use crate::settings::ModifyHttpHeadersSettings;
 
-use super::{HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpConfiguration};
+use super::{HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData};
 
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
@@ -38,7 +38,12 @@ impl HttpRequestBuilder {
             .global_modify_headers_settings
             .as_ref()
         {
-            modify_headers(&mut parts.headers, modify_headers_settings, &inner.src);
+            modify_headers(
+                &parts.uri,
+                &mut parts.headers,
+                modify_headers_settings,
+                &inner.src,
+            );
         }
 
         if let Some(modify_headers_settings) = inner
@@ -46,13 +51,23 @@ impl HttpRequestBuilder {
             .endpoint_modify_headers_settings
             .as_ref()
         {
-            modify_headers(&mut parts.headers, modify_headers_settings, &inner.src);
+            modify_headers(
+                &parts.uri,
+                &mut parts.headers,
+                modify_headers_settings,
+                &inner.src,
+            );
         }
 
         let proxy_pass_location = inner.locations.find(&location_index);
 
         if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
-            modify_headers(&mut parts.headers, modify_headers_settings, &inner.src);
+            modify_headers(
+                &parts.uri,
+                &mut parts.headers,
+                modify_headers_settings,
+                &inner.src,
+            );
         }
 
         let body = into_full_bytes(incoming).await?;
@@ -97,9 +112,10 @@ pub async fn into_full_bytes(
 }
 
 fn modify_headers(
+    uri: &Uri,
     headers: &mut HeaderMap<HeaderValue>,
     headers_settings: &ModifyHttpHeadersSettings,
-    src: &SourceHttpConfiguration,
+    src: &SourceHttpData,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.request.as_ref() {
@@ -112,13 +128,16 @@ fn modify_headers(
     if let Some(add_headers) = headers_settings.add.as_ref() {
         if let Some(add_headers) = add_headers.request.as_ref() {
             for add_header in add_headers {
-                headers.insert(
-                    HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                    src.populate_value(&add_header.value)
-                        .as_str()
-                        .parse()
-                        .unwrap(),
-                );
+                let value = src.populate_value(&add_header.value, uri);
+                if !value.as_str().is_empty() {
+                    headers.insert(
+                        HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
+                        src.populate_value(&add_header.value, uri)
+                            .as_str()
+                            .parse()
+                            .unwrap(),
+                    );
+                }
             }
         }
     }

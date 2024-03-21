@@ -4,7 +4,10 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, settings::HttpEndpointModifyHeadersSettings};
 
-use super::{HostPort, LocationIndex, ProxyPassError, ProxyPassLocations, SourceHttpConfiguration};
+use super::{
+    HostPort, LocationIndex, ProxyPassContentSource, ProxyPassError, ProxyPassLocations,
+    SourceHttpData,
+};
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
 
@@ -19,7 +22,7 @@ pub enum RetryType {
 pub struct HttpProxyPassInner {
     pub locations: ProxyPassLocations,
     pub disposed: bool,
-    pub src: SourceHttpConfiguration,
+    pub src: SourceHttpData,
     pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
 }
 
@@ -31,7 +34,7 @@ impl HttpProxyPassInner {
         Self {
             locations: ProxyPassLocations::new(),
             disposed: false,
-            src: SourceHttpConfiguration::new(socket_addr),
+            src: SourceHttpData::new(socket_addr),
             modify_headers_settings,
         }
     }
@@ -77,24 +80,32 @@ impl HttpProxyPassInner {
             if err.is_canceled() {
                 let location = self.locations.find_mut(location_index);
 
-                let mut dispose_connection = false;
+                match &mut location.content_source {
+                    ProxyPassContentSource::Http(remote_http_content_source) => {
+                        let mut dispose_connection = false;
 
-                if let Some(connected_moment) = location.get_connected_moment() {
-                    let now = DateTimeAsMicroseconds::now();
+                        if let Some(connected_moment) =
+                            remote_http_content_source.get_connected_moment()
+                        {
+                            let now = DateTimeAsMicroseconds::now();
 
-                    if now.duration_since(connected_moment).as_positive_or_zero()
-                        > OLD_CONNECTION_DELAY
-                    {
-                        dispose_connection = true;
-                        do_retry = RetryType::Retry(None);
-                    } else {
-                        do_retry = RetryType::Retry(NEW_CONNECTION_NOT_READY_RETRY_DELAY.into());
+                            if now.duration_since(connected_moment).as_positive_or_zero()
+                                > OLD_CONNECTION_DELAY
+                            {
+                                dispose_connection = true;
+                                do_retry = RetryType::Retry(None);
+                            } else {
+                                do_retry =
+                                    RetryType::Retry(NEW_CONNECTION_NOT_READY_RETRY_DELAY.into());
+                            }
+                        }
+
+                        if dispose_connection {
+                            remote_http_content_source.dispose();
+                            remote_http_content_source.connect_if_require(app).await?;
+                        }
                     }
-                }
-
-                if dispose_connection {
-                    location.dispose();
-                    location.connect_if_require(app).await?;
+                    ProxyPassContentSource::File(_) => {}
                 }
             }
         }

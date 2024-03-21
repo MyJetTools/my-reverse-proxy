@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     app::{AppContext, SslCertificate},
+    http_content_source::{FileContentSrc, RemoteHttpContentSource},
     http_proxy_pass::*,
     http_server::ClientCertificateCa,
 };
@@ -147,11 +148,25 @@ impl SettingsReader {
 
                 let proxy_pass_to = location_settings.get_proxy_pass_to(&read_access.variables);
 
+                let content_source = match proxy_pass_to
+                    .to_content_source(location_settings.is_http1())
+                {
+                    super::ContentSourceSettings::Http(http_remote_endpoint) => {
+                        ProxyPassContentSource::Http(RemoteHttpContentSource::new(
+                            location_id,
+                            http_remote_endpoint,
+                        ))
+                    }
+                    super::ContentSourceSettings::File(file_name) => ProxyPassContentSource::File(
+                        FileContentSrc::new(file_name.get_value().to_string()),
+                    ),
+                };
+
                 result.push(ProxyPassLocation::new(
-                    location_path,
-                    proxy_pass_to.to_http_remote_endpoint(location_settings.is_http1()),
-                    location_settings.modify_http_headers.clone(),
                     location_id,
+                    location_path,
+                    location_settings.modify_http_headers.clone(),
+                    content_source,
                 ));
             }
 

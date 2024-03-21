@@ -1,6 +1,11 @@
 use hyper::Uri;
 
-use super::SshConfiguration;
+use super::{FileName, SshConfiguration};
+
+pub enum ContentSourceSettings<'s> {
+    Http(HttpProxyPassRemoteEndpoint),
+    File(FileName<'s>),
+}
 
 pub enum HttpProxyPassRemoteEndpoint {
     Http(Uri),
