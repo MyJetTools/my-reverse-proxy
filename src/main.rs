@@ -17,7 +17,7 @@ mod tcp_port_forward;
 async fn main() {
     let settings_reader = settings::SettingsReader::new(".my-reverse-proxy").await;
 
-    let listen_ports = settings_reader.get_listen_ports().await;
+    let listen_ports = settings_reader.get_listen_ports().await.unwrap();
 
     let app = AppContext::new(settings_reader).await;
 

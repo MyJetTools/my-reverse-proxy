@@ -4,10 +4,7 @@ pub async fn get_locations<'s>(
     app: &AppContext,
     host: &HostPort<'s>,
 ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
-    let result = app
-        .settings_reader
-        .get_hosts_configurations(app, host)
-        .await?;
+    let result = app.settings_reader.get_locations(app, host).await?;
 
     if result.len() == 0 {
         return Err(ProxyPassError::NoConfigurationFound);

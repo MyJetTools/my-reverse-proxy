@@ -3,13 +3,13 @@ use std::time::Duration;
 use my_settings_reader::flurl::FlUrl;
 use my_ssh::SshSession;
 
-use crate::settings::{FileName, FileSource};
+use crate::settings::{FileSource, LocalFilePath};
 
 pub async fn get_file(src: &FileSource) -> Vec<u8> {
     match src {
         FileSource::File(file_name) => {
             println!("Loading file {}", file_name);
-            let file_name = FileName::new(&file_name);
+            let file_name = LocalFilePath::new(file_name.to_string());
 
             let result = tokio::fs::read(file_name.get_value().as_str())
                 .await
@@ -23,7 +23,7 @@ pub async fn get_file(src: &FileSource) -> Vec<u8> {
             result
         }
         FileSource::Ssh(ssh_credentials) => match &ssh_credentials.remote_content {
-            crate::settings::SshContent::Socket(_) => {
+            crate::settings::SshContent::RemoteHost(_) => {
                 panic!("Reading file is not supported from socket yet");
             }
             crate::settings::SshContent::FilePath(path) => {

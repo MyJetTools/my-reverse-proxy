@@ -2,17 +2,19 @@ use std::sync::Arc;
 
 use hyper::Uri;
 
-use crate::http_proxy_pass::ProxyPassError;
+use crate::{http_proxy_pass::ProxyPassError, settings::LocalFilePath};
 
 use super::{RequestExecutor, WebContentType};
 
-pub struct FileContentSrc {
+pub struct LocalPathContentSrc {
     file_path: String,
     default_file: Option<String>,
 }
 
-impl FileContentSrc {
-    pub fn new(mut file_path: String, default_file: Option<String>) -> Self {
+impl LocalPathContentSrc {
+    pub fn new(file_path: LocalFilePath, default_file: Option<String>) -> Self {
+        let mut file_path = file_path.get_value().to_string();
+
         let last_char = *file_path.as_bytes().last().unwrap() as char;
         if last_char == std::path::MAIN_SEPARATOR {
             file_path.pop();

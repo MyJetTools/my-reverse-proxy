@@ -6,6 +6,7 @@ pub enum ProxyPassError {
     HyperError(hyper::Error),
     IoError(tokio::io::Error),
     SshSessionError(my_ssh::SshSessionError),
+    CanNotReadSettingsConfiguration(String),
     NoConfigurationFound,
     NoLocationFound,
     ConnectionIsDisposed,

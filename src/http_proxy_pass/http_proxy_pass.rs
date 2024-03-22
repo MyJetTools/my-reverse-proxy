@@ -55,7 +55,7 @@ impl HttpProxyPass {
 
                 let (future1, future2, request_executor) = {
                     match &mut proxy_pass_location.content_source {
-                        super::ProxyPassContentSource::Http(http_content_source) => {
+                        super::HttpProxyPassContentSource::Http(http_content_source) => {
                             if http_content_source.remote_endpoint.is_http1() {
                                 let result = http_content_source.send_http1_request(req.get());
 
@@ -65,13 +65,13 @@ impl HttpProxyPass {
                                 (None, Some(future), None)
                             }
                         }
-                        super::ProxyPassContentSource::File(file) => {
+                        super::HttpProxyPassContentSource::LocalPath(file) => {
                             let executor = file.get_request_executor(req.uri())?;
 
                             (None, None, Some(executor))
                         }
 
-                        super::ProxyPassContentSource::FileOverSsh(ssh) => {
+                        super::HttpProxyPassContentSource::PathOverSsh(ssh) => {
                             let executor = ssh.get_request_executor(req.uri())?;
 
                             (None, None, Some(executor))
@@ -170,7 +170,6 @@ impl HttpProxyPass {
     }
 
     pub async fn dispose(&self) {
-        print!("ProxyPassClient is disposed");
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
     }

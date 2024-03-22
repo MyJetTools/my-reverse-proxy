@@ -2,21 +2,21 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::{client::conn::http1::SendRequest, Uri};
+use hyper::client::conn::http1::SendRequest;
 use hyper_util::rt::TokioIo;
 use my_tls::ROOT_CERT_STORE;
 use tokio::net::TcpStream;
 
+use crate::settings::RemoteHost;
+
 use super::HttpClientError;
 
 pub async fn connect_to_tls_endpoint(
-    uri: &Uri,
+    remote_host: &RemoteHost,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
     use tokio_rustls::rustls::pki_types::ServerName;
-    let host_port = super::utils::get_host_port(uri);
-    let domain = uri.host().unwrap().to_string();
 
-    let connect_result = TcpStream::connect(host_port.as_str()).await;
+    let connect_result = TcpStream::connect(remote_host.get_host_port()).await;
 
     match connect_result {
         Ok(tcp_stream) => {
@@ -26,7 +26,7 @@ pub async fn connect_to_tls_endpoint(
 
             let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
 
-            let domain = ServerName::try_from(domain).unwrap();
+            let domain = ServerName::try_from(remote_host.get_host().to_string()).unwrap();
 
             let tls_stream = connector.connect(domain, tcp_stream).await?;
 
@@ -36,7 +36,7 @@ pub async fn connect_to_tls_endpoint(
 
             match handshake_result {
                 Ok((mut sender, conn)) => {
-                    let host_port = host_port.to_owned();
+                    let host_port = remote_host.to_string();
                     tokio::task::spawn(async move {
                         if let Err(err) = conn.await {
                             println!(

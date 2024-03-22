@@ -1,10 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{
-    app::AppContext,
-    http_content_source::{FileContentSrc, RemoteHttpContentSource, SshFileContentSource},
-    http_proxy_pass::*,
-};
+use crate::{app::AppContext, http_proxy_pass::*};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
@@ -106,19 +102,6 @@ impl SettingsReader {
                     continue;
                 }
 
-                /*
-                let cert_file = FileName::new(cert.certificate.as_str());
-                let certificates = super::certificates::load_certs(&cert_file);
-
-                let pk_file = FileName::new(cert.private_key.as_str());
-                let private_key = super::certificates::load_private_key(&pk_file);
-
-                let result = SslCertificate {
-                    certificates,
-                    private_key: Arc::new(private_key),
-                };
-                 */
-
                 return Some((
                     cert.get_certificate(&read_access.variables),
                     cert.get_private_key(&read_access.variables),
@@ -129,7 +112,7 @@ impl SettingsReader {
         None
     }
 
-    pub async fn get_hosts_configurations<'s>(
+    pub async fn get_locations<'s>(
         &self,
         app: &AppContext,
         host_port: &HostPort<'s>,
@@ -141,6 +124,7 @@ impl SettingsReader {
                 continue;
             }
             let location_id = app.get_id();
+
             let mut result = Vec::new();
             for location_settings in &proxy_pass_settings.locations {
                 let location_path = if let Some(location) = &location_settings.path {
@@ -149,18 +133,35 @@ impl SettingsReader {
                     "/".to_string()
                 };
 
-                let (proxy_pass_to, default_file) =
-                    location_settings.get_proxy_pass_to(&read_access.variables);
+                let proxy_pass_content_source = location_settings.get_http_content_source(
+                    app,
+                    location_id,
+                    &read_access.variables,
+                );
 
+                if let Err(err) = proxy_pass_content_source {
+                    return Err(ProxyPassError::CanNotReadSettingsConfiguration(err));
+                }
+
+                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
+
+                if proxy_pass_content_source.is_none() {
+                    continue;
+                }
+
+                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
+
+                result.push(ProxyPassLocation::new(
+                    location_id,
+                    location_path,
+                    location_settings.modify_http_headers.clone(),
+                    proxy_pass_content_source,
+                ));
+
+                /*
                 let content_source = match proxy_pass_to
                     .to_content_source(location_settings.is_http1(), default_file)
                 {
-                    super::ContentSourceSettings::Http(http_remote_endpoint) => {
-                        ProxyPassContentSource::Http(RemoteHttpContentSource::new(
-                            location_id,
-                            http_remote_endpoint,
-                        ))
-                    }
                     super::ContentSourceSettings::File {
                         file_name,
                         default_file,
@@ -186,6 +187,7 @@ impl SettingsReader {
                     location_settings.modify_http_headers.clone(),
                     content_source,
                 ));
+                 */
             }
 
             return Ok(result);
@@ -194,7 +196,7 @@ impl SettingsReader {
         return Ok(vec![]);
     }
 
-    pub async fn get_listen_ports(&self) -> BTreeMap<u16, EndpointType> {
+    pub async fn get_listen_ports(&self) -> Result<BTreeMap<u16, EndpointType>, ProxyPassError> {
         let read_access = self.settings.read().await;
 
         let mut result: BTreeMap<u16, EndpointType> = BTreeMap::new();
@@ -210,7 +212,7 @@ impl SettingsReader {
                             host,
                             proxy_pass.locations.as_slice(),
                             &read_access.variables,
-                        ),
+                        )?,
                     );
                 }
                 Err(_) => {
@@ -219,7 +221,7 @@ impl SettingsReader {
             }
         }
 
-        result
+        Ok(result)
     }
 }
 

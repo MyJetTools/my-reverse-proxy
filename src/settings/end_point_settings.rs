@@ -1,6 +1,8 @@
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 use serde::*;
+
+use crate::http_proxy_pass::ProxyPassError;
 
 use super::{EndpointType, LocationSettings, ModifyHttpHeadersSettings, SslCertificateId};
 
@@ -21,24 +23,24 @@ impl EndpointSettings {
         host: &str,
         locations: &[LocationSettings],
         variables: &Option<HashMap<String, String>>,
-    ) -> EndpointType {
+    ) -> Result<EndpointType, ProxyPassError> {
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => EndpointType::Http1(host.to_string()),
+            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(host.to_string())),
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
-                    EndpointType::Https {
+                    return Ok(EndpointType::Https {
                         host_str: host.to_string(),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
                             .client_certificate_ca
                             .as_ref()
                             .map(|x| SslCertificateId::new(x.to_string())),
-                    }
+                    });
                 } else {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
             }
-            "http2" => EndpointType::Http2(host.to_string()),
+            "http2" => return Ok(EndpointType::Http2(host.to_string())),
             "tcp" => {
                 if locations.len() != 1 {
                     panic!(
@@ -50,31 +52,47 @@ impl EndpointSettings {
 
                 let location_settings = locations.get(0).unwrap();
 
-                let (proxy_pass_to, _) = location_settings.get_proxy_pass_to(variables);
-
-                if let Some(ssh_config) = proxy_pass_to.to_ssh_configuration() {
-                    match ssh_config.remote_content {
-                        super::SshContent::Socket(remote_host) => EndpointType::TcpOverSsh {
-                            ssh_credentials: ssh_config.credentials,
-                            remote_host: remote_host,
-                        },
-                        super::SshContent::FilePath(_) => {
-                            panic!("Not possible to server file over tcp for host: {}", host)
+                match location_settings.get_proxy_pass(variables) {
+                    super::ProxyPassTo::Http(_) => {
+                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                            "It is not possible to serve remote http content over tcp endpoint"
+                                .to_string(),
+                        ));
+                    }
+                    super::ProxyPassTo::LocalPath(_) => {
+                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                            "It is not possible to serve local path content over tcp endpoint"
+                                .to_string(),
+                        ));
+                    }
+                    super::ProxyPassTo::Ssh(ssh_config) => match ssh_config.remote_content {
+                        super::SshContent::RemoteHost(remote_host) => {
+                            return Ok(EndpointType::TcpOverSsh {
+                                ssh_credentials: ssh_config.credentials,
+                                remote_host,
+                            });
                         }
+                        super::SshContent::FilePath(_) => {
+                            return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                                "It is not possible to serve remote ssh path content over tcp endpoint"
+                                    .to_string(),
+                            ));
+                        }
+                    },
+                    super::ProxyPassTo::Tcp(socket_addr) => {
+                        return Ok(EndpointType::Tcp(socket_addr));
                     }
-                } else {
-                    let remote_addr = std::net::SocketAddr::from_str(proxy_pass_to.as_str());
-
-                    if remote_addr.is_err() {
-                        panic!(
-                            "Can not parse remote address: '{}' for tcp listen host {}",
-                            proxy_pass_to.as_str(),
-                            host
-                        );
-                    }
-
-                    EndpointType::Tcp(remote_addr.unwrap())
                 }
+
+                /*
+                 Ok(result) => return Ok(result),
+                   Err(err) => {
+                       return Err(ProxyPassError::CanNotReadSettingsConfiguration(format!(
+                           "Invalid proxy_pass_to {} for tcp endpoint {}. {}",
+                           location_settings.proxy_pass_to, host, err
+                       )));
+                   }
+                */
             }
             _ => panic!("Unknown location type: '{}'", self.endpoint_type),
         }

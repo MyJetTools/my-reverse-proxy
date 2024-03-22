@@ -1,42 +1,40 @@
 use std::sync::Arc;
 
-use my_ssh::{SshCredentials, SshRemoteHost};
+use my_ssh::SshCredentials;
+use rust_extensions::StrOrString;
+
+use super::RemoteHost;
 
 #[derive(Debug)]
 pub enum SshContent {
-    Socket(SshRemoteHost),
+    RemoteHost(RemoteHost),
     FilePath(String),
 }
 
 impl SshContent {
     #[cfg(test)]
-    pub fn unwrap_as_socket_addr(&self) -> &SshRemoteHost {
+    pub fn unwrap_as_remote_host(&self) -> &RemoteHost {
         match self {
-            SshContent::Socket(remote_content) => remote_content,
+            SshContent::RemoteHost(remote_host) => remote_host,
             SshContent::FilePath(file) => {
-                panic!("Unwrapping as http but has file: {}", file);
+                panic!("Ssh remote content must be not a local file {}", file);
             }
         }
     }
     #[cfg(test)]
     pub fn unwrap_as_file_path(&self) -> &str {
         match self {
-            SshContent::Socket(remote_host) => {
-                panic!(
-                    "Unwrapping as file but has http: {}:{}",
-                    remote_host.host, remote_host.port
-                );
+            SshContent::RemoteHost(remote_host) => {
+                panic!("Unwrapping as file but has http: {}", remote_host.as_str());
             }
             SshContent::FilePath(file) => file.as_str(),
         }
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn as_str(&self) -> &str {
         match self {
-            SshContent::Socket(remote_host) => {
-                format!("{}:{}", remote_host.host, remote_host.port)
-            }
-            SshContent::FilePath(file) => file.to_string(),
+            SshContent::RemoteHost(remote_host) => remote_host.as_str(),
+            SshContent::FilePath(file) => file.as_str(),
         }
     }
 }
@@ -48,8 +46,8 @@ pub struct SshConfiguration {
 }
 
 impl SshConfiguration {
-    pub fn parse(src: &str) -> Self {
-        let mut parts = src.split("->");
+    pub fn parse(src: StrOrString) -> Self {
+        let mut parts = src.as_str().split("->");
         let ssh_part = parts.next().unwrap();
         let remote_part = parts.next().unwrap();
 
@@ -71,21 +69,13 @@ impl SshConfiguration {
         {
             SshContent::FilePath(remote_part.to_string())
         } else {
-            let mut remote_parts = remote_part.split(":");
-            let remote_host = remote_parts.next().unwrap();
-            let remote_port = remote_parts.last().unwrap();
-            SshContent::Socket(SshRemoteHost {
-                host: remote_host.to_string(),
-                port: remote_port.parse().unwrap(),
-            })
+            SshContent::RemoteHost(remote_part.to_string().into())
         };
 
         Self {
             credentials: SshCredentials::SshAgent {
-                ssh_host_port: SshRemoteHost {
-                    host: ssh_session_host.to_string(),
-                    port: ssh_session_port.parse().unwrap(),
-                },
+                ssh_remote_host: ssh_session_host.to_string(),
+                ssh_remote_port: ssh_session_port.parse().unwrap(),
                 ssh_user_name: ssh_user_name.to_string(),
             }
             .into(),
@@ -93,6 +83,19 @@ impl SshConfiguration {
             remote_content: remote_content.into(),
         }
     }
+
+    /*
+    pub fn to_string(&self) -> String {
+        let (h, p) = self.credentials.get_host_port();
+        format!(
+            "ssh:{}@{}:{}->{}",
+            self.credentials.get_user_name(),
+            h,
+            p,
+            self.remote_content.as_str()
+        )
+    }
+     */
 }
 
 #[cfg(test)]
@@ -102,31 +105,29 @@ mod test {
     fn test_parse_ssh_configuration() {
         let config = "ssh:root@12.12.13.13:22->10.0.0.1:5123";
 
-        let result = super::SshConfiguration::parse(config);
+        let result = super::SshConfiguration::parse(config.into());
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(
-            result.credentials.get_host_port().to_string(),
+            result.credentials.get_host_port_as_string(),
             "12.12.13.13:22"
         );
 
         assert_eq!(
-            result.remote_content.unwrap_as_socket_addr().host,
-            "10.0.0.1"
+            result.remote_content.unwrap_as_remote_host().as_str(),
+            "10.0.0.1:5123"
         );
-
-        assert_eq!(result.remote_content.unwrap_as_socket_addr().port, 5123);
     }
 
     #[test]
     fn test_parse_ssh_configuration_as_file() {
         let config = "ssh:root@12.12.13.13:22->/home/user/file.txt";
 
-        let result = super::SshConfiguration::parse(config);
+        let result = super::SshConfiguration::parse(config.into());
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(
-            result.credentials.get_host_port().to_string(),
+            result.credentials.get_host_port_as_string(),
             "12.12.13.13:22"
         );
 

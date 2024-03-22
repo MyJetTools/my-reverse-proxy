@@ -49,11 +49,13 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str
 
         tokio::task::spawn(async move {
             if let Err(err) = connection.await {
+                /*
                 println!(
                     "{}. Error serving connection: {:?}",
                     DateTimeAsMicroseconds::now().to_rfc3339(),
                     err
                 );
+                 */
             }
 
             http_proxy_pass_to_dispose.dispose().await;

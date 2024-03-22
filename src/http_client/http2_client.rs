@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use http_body_util::Full;
-use hyper::{body::Bytes, client::conn::http2::SendRequest, Uri};
-use my_ssh::{SshCredentials, SshRemoteHost, SshSession};
+use hyper::{body::Bytes, client::conn::http2::SendRequest};
+use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::RemoteHost};
 
 use super::{HttpClientError, HTTP_CLIENT_TIMEOUT};
 
@@ -16,9 +16,9 @@ pub struct Http2Client {
 
 impl Http2Client {
     pub async fn connect_to_http2_int(
-        proxy_pass: &Uri,
+        remote_host: &RemoteHost,
     ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
-        let is_https = super::utils::is_https(proxy_pass);
+        let is_https = remote_host.is_https();
         if is_https {
             panic!("TLS not supported yet");
             /*
@@ -34,7 +34,7 @@ impl Http2Client {
 
              */
         } else {
-            let future = super::connect_to_http2_endpoint(proxy_pass);
+            let future = super::connect_to_http2_endpoint(remote_host);
             let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
             if result.is_err() {
                 return Err(HttpClientError::TimeOut);
@@ -43,7 +43,7 @@ impl Http2Client {
         }
     }
 
-    pub async fn connect(proxy_pass: &Uri) -> Result<Self, HttpClientError> {
+    pub async fn connect(proxy_pass: &RemoteHost) -> Result<Self, HttpClientError> {
         let send_request = Self::connect_to_http2_int(proxy_pass).await?;
 
         let result = Self {
@@ -57,7 +57,7 @@ impl Http2Client {
     pub async fn connect_over_ssh(
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &SshRemoteHost,
+        remote_host: &RemoteHost,
     ) -> Result<(Self, Arc<SshSession>), ProxyPassError> {
         let (ssh_session, send_request) =
             Self::connect_to_http_over_ssh(app, ssh_credentials, remote_host).await?;
@@ -73,7 +73,7 @@ impl Http2Client {
     async fn connect_to_http_over_ssh(
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &SshRemoteHost,
+        remote_host: &RemoteHost,
     ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
         let (ssh_session, send_request) =
             super::connect_to_http2_over_ssh(app, ssh_credentials, remote_host).await?;

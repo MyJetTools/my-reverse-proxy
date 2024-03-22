@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use my_ssh::{SshAsyncChannel, SshCredentials, SshRemoteHost, SshSession};
+use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::app::AppContext;
+use crate::{app::AppContext, settings::RemoteHost};
 
 pub fn start_tcp_over_ssh(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     credentials: Arc<SshCredentials>,
-    remote_host: SshRemoteHost,
+    remote_host: RemoteHost,
 ) {
     tokio::spawn(tcp_server_accept_loop(
         app,
@@ -24,7 +24,7 @@ async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     ssh_credentials: Arc<SshCredentials>,
-    remote_host: SshRemoteHost,
+    remote_host: RemoteHost,
 ) {
     let remote_host = Arc::new(remote_host);
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
@@ -34,7 +34,7 @@ async fn tcp_server_accept_loop(
             "Error binding to tcp port {} for forwarding to {}->{} has Error: {:?}",
             listen_addr,
             ssh_credentials.to_string(),
-            remote_host.to_string(),
+            remote_host.as_str(),
             err
         );
         return;
@@ -46,7 +46,7 @@ async fn tcp_server_accept_loop(
         "Enabled PortForward: {}->{}->{}",
         listen_addr,
         ssh_credentials.to_string(),
-        remote_host.to_string()
+        remote_host.as_str()
     );
 
     loop {
@@ -55,7 +55,11 @@ async fn tcp_server_accept_loop(
         let ssh_session = SshSession::new(ssh_credentials.clone());
 
         let ssh_channel = ssh_session
-            .connect_to_remote_host(&remote_host, app.connection_settings.remote_connect_timeout)
+            .connect_to_remote_host(
+                remote_host.get_host(),
+                remote_host.get_port(),
+                app.connection_settings.remote_connect_timeout,
+            )
             .await;
 
         if let Err(err) = ssh_channel {
@@ -63,7 +67,7 @@ async fn tcp_server_accept_loop(
                 "Error connecting to remote tcp {} over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
                 listen_addr.to_string(),
                 ssh_credentials.to_string(),
-                remote_host.to_string(),
+                remote_host.as_str(),
                 socket_addr,
                 err
             );
@@ -85,7 +89,7 @@ async fn tcp_server_accept_loop(
 async fn connection_loop(
     listen_addr: std::net::SocketAddr,
     ssh_credentials: Arc<SshCredentials>,
-    remote_host: Arc<SshRemoteHost>,
+    remote_host: Arc<RemoteHost>,
     server_stream: TcpStream,
     remote_stream: SshAsyncChannel,
     buffer_size: usize,
@@ -122,7 +126,7 @@ async fn connection_loop(
                 "Dead Tcp PortForward {}->{}->{} connection detected. Closing",
                 listen_addr,
                 ssh_credentials.to_string(),
-                remote_host.to_string()
+                remote_host.as_str()
             );
         },
     )

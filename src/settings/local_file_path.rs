@@ -1,15 +1,15 @@
 use rust_extensions::StrOrString;
 
-pub struct FileName<'s>(&'s str);
+pub struct LocalFilePath(String);
 
-impl<'s> FileName<'s> {
-    pub fn new(location: &'s str) -> Self {
+impl LocalFilePath {
+    pub fn new(location: String) -> Self {
         Self(location)
     }
 
-    pub fn get_value(&'s self) -> StrOrString<'s> {
+    pub fn get_value<'s>(&'s self) -> StrOrString<'s> {
         if !self.0.starts_with("~") {
-            return self.0.into();
+            return self.0.as_str().into();
         }
 
         let home_value = std::env::var("HOME").unwrap();

@@ -1,16 +1,16 @@
 use http_body_util::Full;
-use hyper::{body::Bytes, client::conn::http2::SendRequest, Uri};
+use hyper::{body::Bytes, client::conn::http2::SendRequest};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::TcpStream;
+
+use crate::settings::RemoteHost;
 
 use super::HttpClientError;
 
 pub async fn connect_to_http2_endpoint(
-    uri: &Uri,
+    remote_host: &RemoteHost,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
-    let host_port = super::utils::get_host_port(uri);
-
-    let connect_result = TcpStream::connect(host_port.as_str()).await;
+    let connect_result = TcpStream::connect(remote_host.get_host_port()).await;
 
     match connect_result {
         Ok(tcp_stream) => {
@@ -19,6 +19,7 @@ pub async fn connect_to_http2_endpoint(
                 hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await;
             match handshake_result {
                 Ok((mut sender, conn)) => {
+                    let host_port = remote_host.to_string();
                     tokio::task::spawn(async move {
                         if let Err(err) = conn.await {
                             println!(

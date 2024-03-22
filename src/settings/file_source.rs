@@ -15,7 +15,7 @@ impl FileSource {
         }
 
         if src.as_str().starts_with("ssh") {
-            return FileSource::Ssh(SshConfiguration::parse(src.as_str()));
+            return FileSource::Ssh(SshConfiguration::parse(src));
         }
 
         Self::File(src.to_string())
@@ -28,7 +28,7 @@ impl FileSource {
             FileSource::Ssh(s) => format!(
                 "{}->{}",
                 s.credentials.to_string(),
-                s.remote_content.to_string()
+                s.remote_content.as_str()
             )
             .into(),
         }

@@ -1,33 +1,19 @@
 use std::sync::Arc;
 
-use hyper::Uri;
-use my_ssh::{SshCredentials, SshRemoteHost};
+use my_ssh::SshCredentials;
 
-use super::FileName;
-
-pub enum ContentSourceSettings<'s> {
-    Http(HttpProxyPassRemoteEndpoint),
-    File {
-        file_name: FileName<'s>,
-        default_file: Option<String>,
-    },
-    FileOverSsh {
-        ssh_credentials: Arc<SshCredentials>,
-        file_path: String,
-        default_file: Option<String>,
-    },
-}
+use super::RemoteHost;
 
 pub enum HttpProxyPassRemoteEndpoint {
-    Http(Uri),
-    Http2(Uri),
+    Http(RemoteHost),
+    Http2(RemoteHost),
     Http1OverSsh {
         ssh_credentials: Arc<SshCredentials>,
-        remote_host: SshRemoteHost,
+        remote_host: RemoteHost,
     },
     Http2OverSsh {
         ssh_credentials: Arc<SshCredentials>,
-        remote_host: SshRemoteHost,
+        remote_host: RemoteHost,
     },
 }
 

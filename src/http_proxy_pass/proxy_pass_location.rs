@@ -2,13 +2,13 @@ use hyper::Uri;
 
 use crate::{app::AppContext, settings::ModifyHttpHeadersSettings};
 
-use super::{ProxyPassContentSource, ProxyPassError};
+use super::{HttpProxyPassContentSource, ProxyPassError};
 
 pub struct ProxyPassLocation {
     pub path: String,
     pub id: i64,
     pub modify_headers: Option<ModifyHttpHeadersSettings>,
-    pub content_source: ProxyPassContentSource,
+    pub content_source: HttpProxyPassContentSource,
 }
 
 impl ProxyPassLocation {
@@ -16,7 +16,7 @@ impl ProxyPassLocation {
         id: i64,
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
-        content_source: ProxyPassContentSource,
+        content_source: HttpProxyPassContentSource,
     ) -> Self {
         Self {
             path,
@@ -36,11 +36,12 @@ impl ProxyPassLocation {
 
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
         match &mut self.content_source {
-            ProxyPassContentSource::Http(remote_http_location) => {
+            HttpProxyPassContentSource::Http(remote_http_location) => {
                 return remote_http_location.connect_if_require(app).await;
             }
-            ProxyPassContentSource::File(_) => return Ok(()),
-            ProxyPassContentSource::FileOverSsh(file_over_ssh) => {
+
+            HttpProxyPassContentSource::LocalPath(_) => return Ok(()),
+            HttpProxyPassContentSource::PathOverSsh(file_over_ssh) => {
                 return file_over_ssh.connect_if_require(app).await;
             }
         }

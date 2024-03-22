@@ -8,7 +8,7 @@ use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 use super::{RequestExecutor, WebContentType};
 
-pub struct SshFileContentSource {
+pub struct PathOverSshContentSource {
     ssh_session: Option<Arc<SshSession>>,
     ssh_credentials: Arc<SshCredentials>,
     home_value: Arc<Mutex<Option<String>>>,
@@ -17,7 +17,7 @@ pub struct SshFileContentSource {
     execute_timeout: Duration,
 }
 
-impl SshFileContentSource {
+impl PathOverSshContentSource {
     pub fn new(
         ssh_credentials: Arc<SshCredentials>,
         file_path: String,
@@ -40,11 +40,9 @@ impl SshFileContentSource {
 
         let ssh_session = Arc::new(SshSession::new(self.ssh_credentials.clone()));
 
+        let (host, port) = self.ssh_credentials.get_host_port();
         ssh_session
-            .connect_to_remote_host(
-                self.ssh_credentials.get_host_port(),
-                app.connection_settings.remote_connect_timeout,
-            )
+            .connect_to_remote_host(host, port, app.connection_settings.remote_connect_timeout)
             .await?;
 
         self.ssh_session = Some(ssh_session);

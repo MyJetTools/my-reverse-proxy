@@ -1,16 +1,16 @@
 use http_body_util::Full;
-use hyper::{body::Bytes, client::conn::http1::SendRequest, Uri};
+use hyper::{body::Bytes, client::conn::http1::SendRequest};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
+
+use crate::settings::RemoteHost;
 
 use super::HttpClientError;
 
 pub async fn connect_to_http_endpoint(
-    uri: &Uri,
+    remote_host: &RemoteHost,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
-    let host_port = super::utils::get_host_port(uri);
-
-    let connect_result = TcpStream::connect(host_port.as_str()).await;
+    let connect_result = TcpStream::connect(remote_host.get_host_port()).await;
 
     match connect_result {
         Ok(tcp_stream) => {
@@ -18,12 +18,10 @@ pub async fn connect_to_http_endpoint(
             let handshake_result = hyper::client::conn::http1::handshake(io).await;
             match handshake_result {
                 Ok((mut sender, conn)) => {
+                    let remote_host = remote_host.to_string();
                     tokio::task::spawn(async move {
                         if let Err(err) = conn.await {
-                            println!(
-                                "Http Connection to http://{} is failed: {:?}",
-                                host_port, err
-                            );
+                            println!("Http Connection to {} is failed: {:?}", remote_host, err);
                         }
 
                         //Here

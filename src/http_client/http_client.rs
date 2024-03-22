@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use hyper::Uri;
-use my_ssh::{SshCredentials, SshRemoteHost, SshSession};
+use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::RemoteHost};
 
 use super::{Http1Client, Http2Client, HttpClientError};
 
@@ -58,8 +57,11 @@ impl HttpClient {
         }
     }
 
-    pub async fn connect_to_http1(&mut self, uri: &Uri) -> Result<(), HttpClientError> {
-        let client = Http1Client::connect(uri).await?;
+    pub async fn connect_to_http1(
+        &mut self,
+        remote_host: &RemoteHost,
+    ) -> Result<(), HttpClientError> {
+        let client = Http1Client::connect(remote_host).await?;
         *self = Self::Http(client);
         Ok(())
     }
@@ -68,7 +70,7 @@ impl HttpClient {
         &mut self,
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &SshRemoteHost,
+        remote_host: &RemoteHost,
     ) -> Result<Arc<SshSession>, ProxyPassError> {
         let (client, session) =
             Http1Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
@@ -76,7 +78,7 @@ impl HttpClient {
         Ok(session)
     }
 
-    pub async fn connect_to_http2(&mut self, uri: &Uri) -> Result<(), HttpClientError> {
+    pub async fn connect_to_http2(&mut self, uri: &RemoteHost) -> Result<(), HttpClientError> {
         let client = Http2Client::connect(uri).await?;
         *self = Self::Http2(client);
         Ok(())
@@ -86,7 +88,7 @@ impl HttpClient {
         &mut self,
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &SshRemoteHost,
+        remote_host: &RemoteHost,
     ) -> Result<Arc<SshSession>, ProxyPassError> {
         let (client, session) =
             Http2Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;

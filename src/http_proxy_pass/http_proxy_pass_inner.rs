@@ -5,7 +5,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 use crate::{app::AppContext, settings::HttpEndpointModifyHeadersSettings};
 
 use super::{
-    HostPort, LocationIndex, ProxyPassContentSource, ProxyPassError, ProxyPassLocations,
+    HostPort, HttpProxyPassContentSource, LocationIndex, ProxyPassError, ProxyPassLocations,
     SourceHttpData,
 };
 
@@ -81,7 +81,7 @@ impl HttpProxyPassInner {
                 let location = self.locations.find_mut(location_index);
 
                 match &mut location.content_source {
-                    ProxyPassContentSource::Http(remote_http_content_source) => {
+                    HttpProxyPassContentSource::Http(remote_http_content_source) => {
                         let mut dispose_connection = false;
 
                         if let Some(connected_moment) =
@@ -105,8 +105,8 @@ impl HttpProxyPassInner {
                             remote_http_content_source.connect_if_require(app).await?;
                         }
                     }
-                    ProxyPassContentSource::File(_) => {}
-                    ProxyPassContentSource::FileOverSsh(_) => {}
+                    HttpProxyPassContentSource::LocalPath(_) => {}
+                    HttpProxyPassContentSource::PathOverSsh(_) => {}
                 }
             }
         }
