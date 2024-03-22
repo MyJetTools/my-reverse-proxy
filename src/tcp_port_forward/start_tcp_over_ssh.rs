@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use my_ssh::{SshAsyncChannel, SshCredentials, SshRemoteHost};
+use my_ssh::{SshAsyncChannel, SshCredentials, SshRemoteHost, SshSession};
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
@@ -52,9 +52,7 @@ async fn tcp_server_accept_loop(
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
 
-        let ssh_session = my_ssh::SSH_SESSION_POOL
-            .get_or_create_ssh_session(&ssh_credentials)
-            .await;
+        let ssh_session = SshSession::new(ssh_credentials.clone());
 
         let ssh_channel = ssh_session
             .connect_to_remote_host(&remote_host, app.connection_settings.remote_connect_timeout)

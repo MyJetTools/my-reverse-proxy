@@ -173,6 +173,7 @@ impl SettingsReader {
                         ssh_credentials,
                         file_path,
                         default_file,
+                        app.connection_settings.remote_connect_timeout,
                     )),
                 };
 

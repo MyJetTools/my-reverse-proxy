@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
 use my_ssh::{SshCredentials, SshSession};
@@ -14,6 +14,7 @@ pub struct SshFileContentSource {
     home_value: Arc<Mutex<Option<String>>>,
     default_file: Option<String>,
     pub file_path: String,
+    execute_timeout: Duration,
 }
 
 impl SshFileContentSource {
@@ -21,6 +22,7 @@ impl SshFileContentSource {
         ssh_credentials: Arc<SshCredentials>,
         file_path: String,
         default_file: Option<String>,
+        execute_timeout: Duration,
     ) -> Self {
         Self {
             ssh_session: None,
@@ -28,6 +30,7 @@ impl SshFileContentSource {
             ssh_credentials,
             home_value: Arc::new(Mutex::new(None)),
             default_file,
+            execute_timeout,
         }
     }
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
@@ -35,9 +38,7 @@ impl SshFileContentSource {
             return Ok(());
         }
 
-        let ssh_session = my_ssh::SSH_SESSION_POOL
-            .get_or_create_ssh_session(&self.ssh_credentials)
-            .await;
+        let ssh_session = Arc::new(SshSession::new(self.ssh_credentials.clone()));
 
         ssh_session
             .connect_to_remote_host(
@@ -72,6 +73,7 @@ impl SshFileContentSource {
             file_path,
             session: self.ssh_session.as_ref().unwrap().clone(),
             home_value: self.home_value.clone(),
+            execute_timeout: self.execute_timeout,
         };
         Ok(Arc::new(result))
     }
@@ -81,6 +83,7 @@ pub struct FileOverSshRequestExecutor {
     session: Arc<SshSession>,
     file_path: String,
     home_value: Arc<Mutex<Option<String>>>,
+    execute_timeout: Duration,
 }
 
 #[async_trait::async_trait]
@@ -92,7 +95,10 @@ impl RequestExecutor for FileOverSshRequestExecutor {
             let mut home_value = self.home_value.lock().await;
 
             if home_value.is_none() {
-                let home = self.session.execute_command("echo $HOME").await?;
+                let home = self
+                    .session
+                    .execute_command("echo $HOME", self.execute_timeout)
+                    .await?;
                 home_value.replace(home.trim().to_string());
             }
 
@@ -102,13 +108,32 @@ impl RequestExecutor for FileOverSshRequestExecutor {
             self.file_path.clone()
         };
 
-        let result = self.session.download_remote_file(&file_path).await;
+        let result = self
+            .session
+            .download_remote_file(&file_path, self.execute_timeout)
+            .await;
 
         let content_type = WebContentType::detect_by_extension(&file_path);
 
         match result {
             Ok(content) => Ok(Some((content, content_type))),
-            Err(_) => Ok(None),
+            Err(err) => {
+                println!("{} -> Error: {:?}", file_path, err);
+                match &err {
+                    my_ssh::SshSessionError::SshError(ssh_err) => {
+                        if let Some(ssh2_error) = ssh_err.as_ssh2() {
+                            if let my_ssh::ssh2::ErrorCode::Session(value) = ssh2_error.code() {
+                                if value == -28 {
+                                    return Ok(None);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
+                Err(ProxyPassError::SshSessionError(err))
+            }
         }
     }
 }
