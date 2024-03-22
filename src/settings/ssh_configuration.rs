@@ -30,6 +30,15 @@ impl SshContent {
             SshContent::FilePath(file) => file.as_str(),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            SshContent::Socket(remote_host) => {
+                format!("{}:{}", remote_host.host, remote_host.port)
+            }
+            SshContent::FilePath(file) => file.to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -1,17 +1,13 @@
 use rustls_pki_types::CertificateDer;
 use x509_parser::{certificate::X509Certificate, der_parser::asn1_rs::FromDer};
 
-use crate::settings::FileName;
-
 pub struct ClientCertificateCa {
     ca_content: CertificateDer<'static>,
     names: Vec<tokio_rustls::rustls::DistinguishedName>,
 }
 
 impl ClientCertificateCa {
-    pub fn new(file_name: &FileName) -> Self {
-        let mut certs = crate::settings::certificates::load_certs(file_name);
-
+    pub fn new(mut certs: Vec<CertificateDer<'static>>) -> Self {
         let mut names = Vec::new();
 
         for ca in &certs {
@@ -89,5 +85,23 @@ impl ClientCertificateCa {
 
     pub fn get_names(&self) -> &[tokio_rustls::rustls::DistinguishedName] {
         &self.names
+    }
+}
+
+impl From<Vec<u8>> for ClientCertificateCa {
+    fn from(value: Vec<u8>) -> Self {
+        let mut reader = std::io::BufReader::new(value.as_slice());
+
+        let certs = rustls_pemfile::certs(&mut reader);
+
+        // Load and return certificate.
+        let mut result = Vec::new();
+
+        for cert in certs {
+            let cert: rustls_pki_types::CertificateDer<'_> = cert.unwrap();
+            result.push(cert);
+        }
+
+        Self::new(result)
     }
 }

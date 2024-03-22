@@ -1,18 +1,14 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
-    app::{AppContext, SslCertificate},
+    app::AppContext,
     http_content_source::{FileContentSrc, RemoteHttpContentSource, SshFileContentSource},
     http_proxy_pass::*,
-    http_server::ClientCertificateCa,
 };
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileName, GlobalSettings,
-    HttpEndpointModifyHeadersSettings, ProxyPassSettings, SslCertificateId,
+    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
+    GlobalSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings, SslCertificateId,
     SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
@@ -82,7 +78,7 @@ impl SettingsReader {
         result
     }
 
-    pub async fn get_client_certificate_ca(&self, id: &str) -> Option<ClientCertificateCa> {
+    pub async fn get_client_certificate_ca(&self, id: &str) -> Option<FileSource> {
         let read_access = self.settings.read().await;
 
         if let Some(certs) = &read_access.client_certificate_ca {
@@ -91,15 +87,17 @@ impl SettingsReader {
                     continue;
                 }
 
-                let ca_file = FileName::new(ca.ca.as_str());
-                return Some(ClientCertificateCa::new(&ca_file));
+                return Some(ca.get_ca(&read_access.variables));
             }
         }
 
         None
     }
 
-    pub async fn get_ssl_certificate(&self, id: &SslCertificateId) -> Option<SslCertificate> {
+    pub async fn get_ssl_certificate(
+        &self,
+        id: &SslCertificateId,
+    ) -> Option<(FileSource, FileSource)> {
         let read_access = self.settings.read().await;
 
         if let Some(certs) = &read_access.ssl_certificates {
@@ -108,6 +106,7 @@ impl SettingsReader {
                     continue;
                 }
 
+                /*
                 let cert_file = FileName::new(cert.certificate.as_str());
                 let certificates = super::certificates::load_certs(&cert_file);
 
@@ -118,8 +117,12 @@ impl SettingsReader {
                     certificates,
                     private_key: Arc::new(private_key),
                 };
+                 */
 
-                return Some(result);
+                return Some((
+                    cert.get_certificate(&read_access.variables),
+                    cert.get_private_key(&read_access.variables),
+                ));
             }
         }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use app::AppContext;
+use app::{AppContext, SslCertificate};
 
 mod app;
 mod flows;
@@ -37,10 +37,16 @@ async fn main() {
                 client_ca_id,
                 host_str,
             } => {
-                if let Some(ssl_certificate) =
+                if let Some((cert, private_key)) =
                     app.settings_reader.get_ssl_certificate(&ssl_id).await
                 {
                     ssh_server_id += 1;
+
+                    let ssl_certificate = SslCertificate::new(
+                        crate::flows::get_file(&cert).await,
+                        crate::flows::get_file(&private_key).await,
+                        private_key.as_str().as_str(),
+                    );
 
                     if let Some(client_ca_id) = client_ca_id {
                         if let Some(client_cert) = app
@@ -48,11 +54,12 @@ async fn main() {
                             .get_client_certificate_ca(client_ca_id.as_str())
                             .await
                         {
+                            let client_ca = crate::flows::get_file(&client_cert).await;
                             crate::http_server::start_https_server(
                                 listen_end_point,
                                 app.clone(),
                                 ssl_certificate,
-                                Some(client_cert),
+                                Some(client_ca.into()),
                                 ssh_server_id,
                                 host_str,
                             );
