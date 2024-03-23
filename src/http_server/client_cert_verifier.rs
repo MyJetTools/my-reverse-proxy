@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use tokio_rustls::rustls::server::danger::ClientCertVerifier;
+use tokio_rustls::rustls::{server::danger::ClientCertVerifier, SignatureScheme};
 
 use crate::app::AppContext;
 
@@ -57,9 +57,9 @@ impl ClientCertVerifier for MyClientCertVerifier {
         Ok(tokio_rustls::rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
-    fn supported_verify_schemes(&self) -> Vec<tokio_rustls::rustls::SignatureScheme> {
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
         println!("supported_verify_schemes");
-        vec![]
+        vec![SignatureScheme::RSA_PSS_SHA256]
     }
 
     fn verify_client_cert(

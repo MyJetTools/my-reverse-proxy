@@ -8,12 +8,12 @@ use crate::app::AppContext;
 
 use crate::http_proxy_pass::*;
 
-pub fn start_http2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
-    println!("Listening http2 on http://{}", addr);
-    tokio::spawn(start_http_server_loop(addr, app, host_str));
+pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
+    println!("Listening h2 on http://{}", addr);
+    tokio::spawn(start_https2_server_loop(addr, app, host_str));
 }
 
-async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
+async fn start_https2_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),

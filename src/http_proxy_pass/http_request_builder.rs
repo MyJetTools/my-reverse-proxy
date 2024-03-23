@@ -34,7 +34,7 @@ impl BuildResult {
 
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
-    result: Option<hyper::Request<Full<Bytes>>>,
+    prepared_request: Option<hyper::Request<Full<Bytes>>>,
     src_http1: bool,
     last_result: Option<BuildResult>,
 }
@@ -43,7 +43,7 @@ impl HttpRequestBuilder {
     pub fn new(src_http1: bool, src: hyper::Request<hyper::body::Incoming>) -> Self {
         Self {
             src: Some(src),
-            result: None,
+            prepared_request: None,
             src_http1,
             last_result: None,
         }
@@ -71,14 +71,19 @@ impl HttpRequestBuilder {
                 let body = into_full_bytes(incoming).await?;
 
                 if websocket_update {
-                    println!("Detected Upgrade");
+                    println!("Detected Upgrade http1->http1");
                     let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
                     let (response, web_socket) = hyper_tungstenite::upgrade(upgrade_req, None)?;
                     //tokio::spawn(super::web_socket_loop(web_socket));
 
-                    let req = hyper::Request::from_parts(parts, body);
-                    self.result = Some(req);
+                    let request = hyper::Request::from_parts(parts, body);
+
+                    println!("Upgrade request: {:?}", request);
+
+                    self.prepared_request = Some(request);
+
                     self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+
                     return Ok(BuildResult::WebSocketUpgrade {
                         location_index,
                         upgrade_response: response,
@@ -87,7 +92,7 @@ impl HttpRequestBuilder {
                 }
 
                 let result = hyper::Request::from_parts(parts, body);
-                self.result = Some(result);
+                self.prepared_request = Some(result);
                 self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
                 return Ok(BuildResult::HttpRequest(location_index));
             } else {
@@ -96,9 +101,11 @@ impl HttpRequestBuilder {
                 handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
                 let body = into_full_bytes(incoming).await?;
 
-                let result = hyper::Request::from_parts(parts, body);
+                let request = hyper::Request::from_parts(parts, body);
 
-                self.result = Some(result);
+                println!("Upgrade request: {:?}", request);
+
+                self.prepared_request = Some(request);
 
                 self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
                 Ok(BuildResult::HttpRequest(location_index))
@@ -112,7 +119,7 @@ impl HttpRequestBuilder {
                 handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
                 let body = into_full_bytes(incoming).await?;
 
-                self.result = Some(hyper::Request::from_parts(parts, body));
+                self.prepared_request = Some(hyper::Request::from_parts(parts, body));
 
                 self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
                 Ok(BuildResult::HttpRequest(location_index))
@@ -156,8 +163,9 @@ impl HttpRequestBuilder {
             let req = hyper::Request::from_parts(parts, body.clone());
             let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
             //tokio::spawn(super::web_socket_loop(web_socket));
-            let result = builder.body(body).unwrap();
-            self.result = Some(result);
+            let request = builder.body(body).unwrap();
+
+            self.prepared_request = Some(request);
 
             self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
 
@@ -169,41 +177,17 @@ impl HttpRequestBuilder {
         }
         let result = builder.body(body).unwrap();
 
-        self.result = Some(result);
+        self.prepared_request = Some(result);
         self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
         return Ok(BuildResult::HttpRequest(location_index));
     }
 
-    /*
-       pub fn try_upgrade_to_web_socket(
-           &mut self,
-       ) -> Result<Option<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-           let mut result = false;
-
-           if let Some(req) = self.src.as_ref() {
-               if req.headers().get("sec-websocket-key").is_some() {
-                   result = true;
-               }
-           }
-
-           if result {
-               if let Some(req) = self.src.take() {
-                   let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
-
-                   tokio::spawn(super::web_socket_loop(web_socket));
-                   return Ok(Some(response));
-               }
-           }
-
-           Ok(None)
-       }
-    */
     pub fn uri(&self) -> &Uri {
         if let Some(src) = self.src.as_ref() {
             return src.uri();
         }
 
-        self.result.as_ref().unwrap().uri()
+        self.prepared_request.as_ref().unwrap().uri()
     }
 
     pub fn get_host_port<'s>(&'s self) -> HostPort<'s> {
@@ -211,12 +195,12 @@ impl HttpRequestBuilder {
             return HostPort::new(src.uri(), src.headers());
         }
 
-        let result = self.result.as_ref().unwrap();
+        let result = self.prepared_request.as_ref().unwrap();
         return HostPort::new(result.uri(), result.headers());
     }
 
     pub fn get(&self) -> hyper::Request<Full<Bytes>> {
-        self.result.as_ref().unwrap().clone()
+        self.prepared_request.as_ref().unwrap().clone()
     }
 }
 

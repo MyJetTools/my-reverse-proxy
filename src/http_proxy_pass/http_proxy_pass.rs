@@ -40,11 +40,10 @@ impl HttpProxyPass {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        println!("Executing send_payload: {}", req.uri());
         let mut req = HttpRequestBuilder::new(self.http_1, req);
 
         loop {
-            let (future1, future2, build_result, request_executor) = {
+            let (future1, future2, build_result, request_executor, dest_http1) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.initialized() {
@@ -85,7 +84,13 @@ impl HttpProxyPass {
                     }
                 };
 
-                (future1, future2, build_result, request_executor)
+                (
+                    future1,
+                    future2,
+                    build_result,
+                    request_executor,
+                    proxy_pass_location.is_http1(),
+                )
             };
 
             let result = if let Some(future1) = future1 {
@@ -153,6 +158,8 @@ impl HttpProxyPass {
                             response,
                             &inner,
                             &location_index,
+                            self.http_1,
+                            dest_http1,
                         )
                         .await?;
                         return Ok(Ok(response));

@@ -2,7 +2,7 @@ use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{
     body::Incoming,
-    header::{HeaderName, HeaderValue},
+    header::{self, HeaderName, HeaderValue},
     HeaderMap,
 };
 
@@ -15,8 +15,19 @@ pub async fn build_http_response(
     response: hyper::Response<Incoming>,
     inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
+    src_http1: bool,
+    dest_http1: bool,
 ) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
+
+    if dest_http1 && !src_http1 {
+        parts.headers.remove(header::TRANSFER_ENCODING);
+        parts.headers.remove(header::CONNECTION);
+        parts.headers.remove(header::UPGRADE);
+        parts.headers.remove("keep-alive");
+        parts.headers.remove("proxy-connection");
+        parts.headers.remove("connection");
+    }
 
     modify_req_headers(req_uri, inner, &mut parts.headers, location_index);
 

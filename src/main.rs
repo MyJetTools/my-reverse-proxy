@@ -88,8 +88,64 @@ async fn main() {
                     );
                 }
             }
+            settings::EndpointType::Https2 {
+                ssl_id,
+                client_ca_id,
+                host_str,
+            } => {
+                if let Some((cert, private_key)) =
+                    app.settings_reader.get_ssl_certificate(&ssl_id).await
+                {
+                    ssh_server_id += 1;
+
+                    let ssl_certificate = SslCertificate::new(
+                        crate::flows::get_file(&cert).await,
+                        crate::flows::get_file(&private_key).await,
+                        private_key.as_str().as_str(),
+                    );
+
+                    if let Some(client_ca_id) = client_ca_id {
+                        if let Some(client_cert) = app
+                            .settings_reader
+                            .get_client_certificate_ca(client_ca_id.as_str())
+                            .await
+                        {
+                            let client_ca = crate::flows::get_file(&client_cert).await;
+                            crate::http_server::start_https2_server(
+                                listen_end_point,
+                                app.clone(),
+                                ssl_certificate,
+                                Some(client_ca.into()),
+                                ssh_server_id,
+                                host_str,
+                            );
+                        } else {
+                            panic!(
+                                "Client certificate ca not found: {} for endpoint: {}",
+                                client_ca_id.as_str(),
+                                listen_port
+                            );
+                        }
+                    } else {
+                        crate::http_server::start_https2_server(
+                            listen_end_point,
+                            app.clone(),
+                            ssl_certificate,
+                            None,
+                            ssh_server_id,
+                            host_str,
+                        );
+                    }
+                } else {
+                    panic!(
+                        "Certificate not found: {} for endpoint: {}",
+                        ssl_id.as_str(),
+                        listen_port
+                    );
+                }
+            }
             settings::EndpointType::Http2(host_str) => {
-                crate::http_server::start_http2_server(listen_end_point, app.clone(), host_str);
+                crate::http_server::start_h2_server(listen_end_point, app.clone(), host_str);
             }
             settings::EndpointType::Tcp(remote_addr) => {
                 crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);

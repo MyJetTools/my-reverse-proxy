@@ -1,11 +1,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use http_body_util::Full;
-use hyper::{body::Bytes, server::conn::http1, service::service_fn};
-use hyper_util::rt::TokioIo;
+use hyper::{body::Bytes, service::service_fn};
+
 use rust_extensions::StopWatch;
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::TlsAcceptor;
+
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder;
 
 use crate::app::{AppContext, SslCertificate};
 
@@ -15,7 +18,7 @@ use super::{ClientCertificateCa, MyClientCertVerifier};
 
 use crate::http_proxy_pass::HttpProxyPass;
 
-pub fn start_https_server(
+pub fn start_https2_server(
     addr: SocketAddr,
     app: Arc<AppContext>,
     certificate: SslCertificate,
@@ -23,8 +26,8 @@ pub fn start_https_server(
     server_id: i64,
     host_str: String,
 ) {
-    println!("Listening http1 on https://{}", addr);
-    tokio::spawn(start_https_server_loop(
+    println!("Listening h2 on https://{}", addr);
+    tokio::spawn(start_https2_server_loop(
         addr,
         app,
         certificate,
@@ -34,7 +37,7 @@ pub fn start_https_server(
     ));
 }
 
-async fn start_https_server_loop(
+async fn start_https2_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
     certificate: SslCertificate,
@@ -63,7 +66,8 @@ async fn start_https_server_loop(
                 )
                 .unwrap();
 
-        server_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        server_config.alpn_protocols =
+            vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
 
         TlsAcceptor::from(Arc::new(server_config))
     } else {
@@ -76,7 +80,8 @@ async fn start_https_server_loop(
                 )
                 .unwrap();
 
-        server_config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        server_config.alpn_protocols =
+            vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
 
         // server_config.key_log = Arc::new(MyKeyLog);
 
@@ -84,8 +89,7 @@ async fn start_https_server_loop(
     };
 
     // Build TLS configuration.
-    let mut http1 = http1::Builder::new();
-    http1.keep_alive(true);
+    let http_builder = Builder::new(TokioExecutor::new());
 
     loop {
         if has_client_cert_ca {
@@ -105,13 +109,13 @@ async fn start_https_server_loop(
             .get_http_endpoint_modify_headers_settings(host_str.as_str())
             .await;
 
-        let http1 = http1.clone();
+        let http_builder = http_builder.clone();
 
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
                 socket_addr,
                 modify_headers_settings,
-                true,
+                false,
             ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
@@ -138,7 +142,7 @@ async fn start_https_server_loop(
                     .await;
             }
 
-            if let Err(err) = http1
+            if let Err(err) = http_builder
                 .clone()
                 .serve_connection(
                     TokioIo::new(tls_stream),
@@ -146,7 +150,6 @@ async fn start_https_server_loop(
                         handle_requests(req, http_proxy_pass.clone(), app.clone())
                     }),
                 )
-                .with_upgrades()
                 .await
             {
                 eprintln!("failed to serve connection: {err:#}");

@@ -40,6 +40,20 @@ impl EndpointSettings {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
             }
+            "https2" => {
+                if let Some(ssl_certificate) = &self.ssl_certificate {
+                    return Ok(EndpointType::Https2 {
+                        host_str: host.to_string(),
+                        ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
+                        client_ca_id: self
+                            .client_certificate_ca
+                            .as_ref()
+                            .map(|x| SslCertificateId::new(x.to_string())),
+                    });
+                } else {
+                    panic!("Host '{}' has https location without ssl certificate", host);
+                }
+            }
             "http2" => return Ok(EndpointType::Http2(host.to_string())),
             "tcp" => {
                 if locations.len() != 1 {
