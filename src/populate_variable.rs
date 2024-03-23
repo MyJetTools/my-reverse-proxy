@@ -27,6 +27,10 @@ pub fn populate_variable<'s>(
                 if let Some(variables) = variables {
                     if let Some(value) = variables.get(placeholder) {
                         result.push_str(value);
+                    } else {
+                        if let Ok(value) = std::env::var(placeholder) {
+                            result.push_str(&value);
+                        }
                     }
                 }
             }

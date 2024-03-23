@@ -64,7 +64,11 @@ impl SourceHttpData {
                                 result.push_str("http");
                             }
                         }
-                        _ => {}
+                        _ => {
+                            if let Ok(value) = std::env::var(placeholder) {
+                                result.push_str(&value);
+                            }
+                        }
                     }
                 }
             }
