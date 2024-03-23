@@ -2,8 +2,6 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use http_body_util::Full;
-use hyper::upgrade::Upgraded;
-use hyper_util::rt::TokioIo;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -176,7 +174,7 @@ impl HttpProxyPass {
                     }
                 },
                 BuildResult::WebSocketUpgrade {
-                    location_index,
+                    location_index: _, //todo!("Handle errors here properly")
                     upgrade_response,
                     web_socket,
                 } => {
@@ -188,9 +186,7 @@ impl HttpProxyPass {
                                 println!("Upgrade Ok");
 
                                 if let Some(web_socket) = web_socket.lock().await.take() {
-                                    tokio::spawn(super::web_socket_loop::web_socket_loop(
-                                        web_socket, upgraded,
-                                    ));
+                                    tokio::spawn(super::web_socket_loop(web_socket, upgraded));
                                 }
 
                                 return Ok(Ok(upgrade_response));
@@ -213,21 +209,5 @@ impl HttpProxyPass {
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
-    }
-}
-
-async fn client_upgraded_io(upgraded: Upgraded) {
-    use tokio::{io::AsyncReadExt, io::AsyncWriteExt};
-    let mut upgraded = TokioIo::new(upgraded);
-
-    loop {
-        // We've gotten an upgraded connection that we can read
-        // and write directly on. Let's start out 'foobar' protocol.
-        upgraded.write_all(b"foo=bar").await.unwrap();
-        println!("client[foobar] sent");
-
-        let mut vec = Vec::new();
-        upgraded.read_to_end(&mut vec).await.unwrap();
-        println!("Client recv: {:?}", std::str::from_utf8(&vec));
     }
 }

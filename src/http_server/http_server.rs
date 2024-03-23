@@ -51,7 +51,7 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str
             .with_upgrades();
 
         tokio::task::spawn(async move {
-            if let Err(err) = connection.await {
+            if let Err(_) = connection.await {
                 /*
                 println!(
                     "{}. Error serving connection: {:?}",

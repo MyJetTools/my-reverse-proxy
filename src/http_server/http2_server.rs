@@ -9,7 +9,7 @@ use crate::app::AppContext;
 use crate::http_proxy_pass::*;
 
 pub fn start_http2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
-    println!("Listening http2 on https://{}", addr);
+    println!("Listening http2 on http://{}", addr);
     tokio::spawn(start_http_server_loop(addr, app, host_str));
 }
 

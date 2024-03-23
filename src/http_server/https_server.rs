@@ -90,7 +90,7 @@ async fn start_https_server_loop(
 
         let (tcp_stream, socket_addr) = listener.accept().await.unwrap();
 
-        let mut tls_acceptor = tls_acceptor.clone();
+        let tls_acceptor = tls_acceptor.clone();
 
         let app = app.clone();
 
