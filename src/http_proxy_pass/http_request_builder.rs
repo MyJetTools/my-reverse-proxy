@@ -1,82 +1,203 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{
     header::{HeaderName, HeaderValue},
-    HeaderMap, Uri,
+    HeaderMap, Request, Uri,
 };
+use hyper_tungstenite::HyperWebsocket;
+use tokio::sync::Mutex;
 
 use crate::settings::ModifyHttpHeadersSettings;
 
 use super::{HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData};
 
+#[derive(Clone)]
+pub enum BuildResult {
+    HttpRequest(LocationIndex),
+    WebSocketUpgrade {
+        location_index: LocationIndex,
+        upgrade_response: hyper::Response<Full<Bytes>>,
+        web_socket: Arc<Mutex<Option<HyperWebsocket>>>,
+    },
+}
+
+impl BuildResult {
+    pub fn get_location_index(&self) -> &LocationIndex {
+        match self {
+            BuildResult::HttpRequest(location_index) => location_index,
+            BuildResult::WebSocketUpgrade { location_index, .. } => location_index,
+        }
+    }
+}
+
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
     result: Option<hyper::Request<Full<Bytes>>>,
+    src_http1: bool,
+    last_result: Option<BuildResult>,
 }
 
 impl HttpRequestBuilder {
-    pub fn new(src: hyper::Request<hyper::body::Incoming>) -> Self {
+    pub fn new(src_http1: bool, src: hyper::Request<hyper::body::Incoming>) -> Self {
         Self {
             src: Some(src),
             result: None,
+            src_http1,
+            last_result: None,
         }
     }
 
     pub async fn populate_and_build(
         &mut self,
         inner: &HttpProxyPassInner,
-    ) -> Result<LocationIndex, ProxyPassError> {
+    ) -> Result<BuildResult, ProxyPassError> {
         let location_index = inner.locations.find_location_index(self.uri())?;
-        if self.result.is_some() {
-            return Ok(location_index);
+        if let Some(last_result) = &self.last_result {
+            return Ok(last_result.clone());
         }
 
-        let (mut parts, incoming) = self.src.take().unwrap().into_parts();
+        let dest_http1 = inner.locations.find(&location_index).is_http1();
 
-        if let Some(modify_headers_settings) = inner
-            .modify_headers_settings
-            .global_modify_headers_settings
-            .as_ref()
-        {
-            modify_headers(
-                &parts.uri,
-                &mut parts.headers,
-                modify_headers_settings,
-                &inner.src,
-            );
+        if self.src_http1 {
+            if dest_http1 {
+                // src_http1 && dest_http1
+                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
+
+                let websocket_update = parts.headers.get("sec-websocket-key").is_some();
+
+                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                let body = into_full_bytes(incoming).await?;
+
+                if websocket_update {
+                    println!("Detected Upgrade");
+                    let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
+                    let (response, web_socket) = hyper_tungstenite::upgrade(upgrade_req, None)?;
+                    //tokio::spawn(super::web_socket_loop(web_socket));
+
+                    let req = hyper::Request::from_parts(parts, body);
+                    self.result = Some(req);
+                    self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+                    return Ok(BuildResult::WebSocketUpgrade {
+                        location_index,
+                        upgrade_response: response,
+                        web_socket: Arc::new(Mutex::new(Some(web_socket))),
+                    });
+                }
+
+                let result = hyper::Request::from_parts(parts, body);
+                self.result = Some(result);
+                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+                return Ok(BuildResult::HttpRequest(location_index));
+            } else {
+                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
+
+                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                let body = into_full_bytes(incoming).await?;
+
+                let result = hyper::Request::from_parts(parts, body);
+
+                self.result = Some(result);
+
+                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+                Ok(BuildResult::HttpRequest(location_index))
+            }
+        } else {
+            if dest_http1 {
+                return self.http2_to_http1(location_index).await;
+            } else {
+                // src_http2 && dest_http2
+                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
+                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                let body = into_full_bytes(incoming).await?;
+
+                self.result = Some(hyper::Request::from_parts(parts, body));
+
+                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+                Ok(BuildResult::HttpRequest(location_index))
+            }
         }
+    }
 
-        if let Some(modify_headers_settings) = inner
-            .modify_headers_settings
-            .endpoint_modify_headers_settings
-            .as_ref()
-        {
-            modify_headers(
-                &parts.uri,
-                &mut parts.headers,
-                modify_headers_settings,
-                &inner.src,
-            );
-        }
+    async fn http2_to_http1(
+        &mut self,
+        location_index: LocationIndex,
+    ) -> Result<BuildResult, ProxyPassError> {
+        let (parts, incoming) = self.src.take().unwrap().into_parts();
 
-        let proxy_pass_location = inner.locations.find(&location_index);
+        let path_and_query = if let Some(path_and_query) = parts.uri.path_and_query() {
+            path_and_query.as_str()
+        } else {
+            "/"
+        };
 
-        if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
-            modify_headers(
-                &parts.uri,
-                &mut parts.headers,
-                modify_headers_settings,
-                &inner.src,
-            );
+        let uri: Uri = path_and_query.parse().unwrap();
+
+        let host_header = if let Some(port) = parts.uri.port() {
+            format!("{}:{}", parts.uri.host().unwrap(), port)
+        } else {
+            parts.uri.host().unwrap().to_string()
+        };
+
+        let mut builder = Request::builder()
+            .uri(uri)
+            .method(parts.method.clone())
+            .header("host", host_header);
+
+        for header in parts.headers.iter() {
+            builder = builder.header(header.0, header.1);
         }
 
         let body = into_full_bytes(incoming).await?;
 
-        self.result = Some(hyper::Request::from_parts(parts, body));
+        if parts.headers.get("sec-websocket-key").is_some() {
+            println!("Detected Upgrade");
+            let req = hyper::Request::from_parts(parts, body.clone());
+            let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
+            //tokio::spawn(super::web_socket_loop(web_socket));
+            let result = builder.body(body).unwrap();
+            self.result = Some(result);
 
-        Ok(location_index)
+            self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+
+            return Ok(BuildResult::WebSocketUpgrade {
+                location_index,
+                upgrade_response: response,
+                web_socket: Arc::new(Mutex::new(Some(web_socket))),
+            });
+        }
+        let result = builder.body(body).unwrap();
+
+        self.result = Some(result);
+        self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
+        return Ok(BuildResult::HttpRequest(location_index));
     }
 
+    /*
+       pub fn try_upgrade_to_web_socket(
+           &mut self,
+       ) -> Result<Option<hyper::Response<Full<Bytes>>>, ProxyPassError> {
+           let mut result = false;
+
+           if let Some(req) = self.src.as_ref() {
+               if req.headers().get("sec-websocket-key").is_some() {
+                   result = true;
+               }
+           }
+
+           if result {
+               if let Some(req) = self.src.take() {
+                   let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
+
+                   tokio::spawn(super::web_socket_loop(web_socket));
+                   return Ok(Some(response));
+               }
+           }
+
+           Ok(None)
+       }
+    */
     pub fn uri(&self) -> &Uri {
         if let Some(src) = self.src.as_ref() {
             return src.uri();
@@ -109,6 +230,35 @@ pub async fn into_full_bytes(
 
     let body = http_body_util::Full::new(bytes);
     Ok(body)
+}
+
+fn handle_headers(
+    inner: &HttpProxyPassInner,
+    uri: &Uri,
+    headers: &mut HeaderMap<HeaderValue>,
+    location_index: &LocationIndex,
+) {
+    if let Some(modify_headers_settings) = inner
+        .modify_headers_settings
+        .global_modify_headers_settings
+        .as_ref()
+    {
+        modify_headers(&uri, headers, modify_headers_settings, &inner.src);
+    }
+
+    if let Some(modify_headers_settings) = inner
+        .modify_headers_settings
+        .endpoint_modify_headers_settings
+        .as_ref()
+    {
+        modify_headers(uri, headers, modify_headers_settings, &inner.src);
+    }
+
+    let proxy_pass_location = inner.locations.find(location_index);
+
+    if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
+        modify_headers(uri, headers, modify_headers_settings, &inner.src);
+    }
 }
 
 fn modify_headers(

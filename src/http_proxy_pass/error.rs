@@ -7,6 +7,7 @@ pub enum ProxyPassError {
     IoError(tokio::io::Error),
     SshSessionError(my_ssh::SshSessionError),
     CanNotReadSettingsConfiguration(String),
+    WebSocketProtocolError(hyper_tungstenite::tungstenite::error::ProtocolError),
     NoConfigurationFound,
     NoLocationFound,
     ConnectionIsDisposed,
@@ -50,5 +51,11 @@ impl From<std::io::Error> for ProxyPassError {
 impl From<my_ssh::SshSessionError> for ProxyPassError {
     fn from(src: my_ssh::SshSessionError) -> Self {
         Self::SshSessionError(src)
+    }
+}
+
+impl From<hyper_tungstenite::tungstenite::error::ProtocolError> for ProxyPassError {
+    fn from(src: hyper_tungstenite::tungstenite::error::ProtocolError) -> Self {
+        Self::WebSocketProtocolError(src)
     }
 }

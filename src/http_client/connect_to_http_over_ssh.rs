@@ -35,7 +35,7 @@ pub async fn connect_to_http_over_ssh(
     let proxy_pass_uri = remote_host.to_string();
 
     tokio::task::spawn(async move {
-        if let Err(err) = conn.await {
+        if let Err(err) = conn.with_upgrades().await {
             println!(
                 "Http Connection to http://{} is failed: {:?}",
                 proxy_pass_uri, err

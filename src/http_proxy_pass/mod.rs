@@ -17,3 +17,5 @@ mod proxy_pass_location;
 pub use proxy_pass_location::*;
 mod http_proxy_pass_content_source;
 pub use http_proxy_pass_content_source::*;
+mod web_socket_loop;
+pub use web_socket_loop::*;

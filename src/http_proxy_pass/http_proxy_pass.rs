@@ -2,28 +2,33 @@ use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use http_body_util::Full;
+use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use tokio::sync::Mutex;
 
 use crate::{
     app::AppContext, http_client::HTTP_CLIENT_TIMEOUT, settings::HttpEndpointModifyHeadersSettings,
 };
 
-use super::{HttpProxyPassInner, HttpRequestBuilder, ProxyPassError, RetryType};
+use super::{BuildResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassError, RetryType};
 
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
+    http_1: bool,
 }
 
 impl HttpProxyPass {
     pub fn new(
         socket_addr: SocketAddr,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
+        http_1: bool,
     ) -> Self {
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
                 socket_addr,
                 modify_headers_settings,
             )),
+            http_1,
         }
     }
 
@@ -37,9 +42,11 @@ impl HttpProxyPass {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        let mut req = HttpRequestBuilder::new(req);
+        println!("Executing send_payload: {}", req.uri());
+        let mut req = HttpRequestBuilder::new(self.http_1, req);
+
         loop {
-            let (future1, future2, location_index, request_executor) = {
+            let (future1, future2, build_result, request_executor) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.initialized() {
@@ -47,9 +54,10 @@ impl HttpProxyPass {
                     inner.init(app, &host_port).await?;
                 }
 
-                let location_index = req.populate_and_build(&inner).await?;
+                let build_result = req.populate_and_build(&inner).await?;
 
-                let proxy_pass_location = inner.locations.find_mut(&location_index);
+                let proxy_pass_location =
+                    inner.locations.find_mut(build_result.get_location_index());
 
                 proxy_pass_location.connect_if_require(app).await?;
 
@@ -79,7 +87,7 @@ impl HttpProxyPass {
                     }
                 };
 
-                (future1, future2, location_index, request_executor)
+                (future1, future2, build_result, request_executor)
             };
 
             let result = if let Some(future1) = future1 {
@@ -121,7 +129,7 @@ impl HttpProxyPass {
                     let result = super::http_response_builder::build_response_from_content(
                         req.uri(),
                         &inner,
-                        &location_index,
+                        build_result.get_location_index(),
                         content_type,
                         content,
                     );
@@ -138,30 +146,63 @@ impl HttpProxyPass {
                 panic!("Both futures are None")
             };
 
-            match result {
-                Ok(response) => {
-                    let inner = self.inner.lock().await;
-                    let response = super::http_response_builder::build_http_response(
-                        req.uri(),
-                        response,
-                        &inner,
-                        &location_index,
-                    )
-                    .await?;
-                    return Ok(Ok(response));
-                }
-                Err(err) => {
-                    let retry = {
-                        let mut inner = self.inner.lock().await;
-                        inner.handle_error(app, &err, &location_index).await?
-                    };
+            match build_result {
+                BuildResult::HttpRequest(location_index) => match result {
+                    Ok(response) => {
+                        let inner = self.inner.lock().await;
+                        let response = super::http_response_builder::build_http_response(
+                            req.uri(),
+                            response,
+                            &inner,
+                            &location_index,
+                        )
+                        .await?;
+                        return Ok(Ok(response));
+                    }
+                    Err(err) => {
+                        let retry = {
+                            let mut inner = self.inner.lock().await;
+                            inner.handle_error(app, &err, &location_index).await?
+                        };
 
-                    match retry {
-                        RetryType::NoRetry => return Err(err.into()),
-                        RetryType::Retry(duration) => {
-                            if let Some(duration) = duration {
-                                tokio::time::sleep(duration).await;
+                        match retry {
+                            RetryType::NoRetry => return Err(err.into()),
+                            RetryType::Retry(duration) => {
+                                if let Some(duration) = duration {
+                                    tokio::time::sleep(duration).await;
+                                }
                             }
+                        }
+                    }
+                },
+                BuildResult::WebSocketUpgrade {
+                    location_index,
+                    upgrade_response,
+                    web_socket,
+                } => {
+                    println!("Doing upgrade");
+
+                    match result {
+                        Ok(res) => match hyper::upgrade::on(res).await {
+                            Ok(upgraded) => {
+                                println!("Upgrade Ok");
+
+                                if let Some(web_socket) = web_socket.lock().await.take() {
+                                    tokio::spawn(super::web_socket_loop::web_socket_loop(
+                                        web_socket, upgraded,
+                                    ));
+                                }
+
+                                return Ok(Ok(upgrade_response));
+                            }
+                            Err(e) => {
+                                println!("Upgrade Error: {:?}", e);
+                                return Err(e.into());
+                            }
+                        },
+                        Err(err) => {
+                            println!("Upgrade Request Error: {:?}", err);
+                            return Err(err);
                         }
                     }
                 }
@@ -172,5 +213,21 @@ impl HttpProxyPass {
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
+    }
+}
+
+async fn client_upgraded_io(upgraded: Upgraded) {
+    use tokio::{io::AsyncReadExt, io::AsyncWriteExt};
+    let mut upgraded = TokioIo::new(upgraded);
+
+    loop {
+        // We've gotten an upgraded connection that we can read
+        // and write directly on. Let's start out 'foobar' protocol.
+        upgraded.write_all(b"foo=bar").await.unwrap();
+        println!("client[foobar] sent");
+
+        let mut vec = Vec::new();
+        upgraded.read_to_end(&mut vec).await.unwrap();
+        println!("Client recv: {:?}", std::str::from_utf8(&vec));
     }
 }

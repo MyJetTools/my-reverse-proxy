@@ -33,6 +33,7 @@ impl RemoteHttpContentSource {
             id,
         }
     }
+
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
         if self.http_client.has_connection() {
             return Ok(());
@@ -40,6 +41,7 @@ impl RemoteHttpContentSource {
 
         match &self.remote_endpoint {
             HttpProxyPassRemoteEndpoint::Http(uri) => {
+                println!("Connecting Http to remote endpoint: {:?}", uri);
                 self.http_client.connect_to_http1(uri).await?;
             }
 

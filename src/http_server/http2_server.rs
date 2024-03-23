@@ -32,8 +32,11 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str
             .await;
 
         tokio::spawn(async move {
-            let http_proxy_pass =
-                Arc::new(HttpProxyPass::new(socket_addr, modify_headers_settings));
+            let http_proxy_pass = Arc::new(HttpProxyPass::new(
+                socket_addr,
+                modify_headers_settings,
+                false,
+            ));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder
                 .serve_connection(
@@ -72,8 +75,6 @@ pub async fn handle_requests(
                         .unwrap());
                 }
                 _ => {
-                    println!("Error: {:?}", err);
-
                     return Ok(hyper::Response::builder()
                         .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
                         .body(Full::from(Bytes::from("Internal Server Error")))

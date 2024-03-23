@@ -3,7 +3,6 @@ use std::{net::SocketAddr, sync::Arc};
 use http_body_util::Full;
 use hyper::{body::Bytes, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
-use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::app::AppContext;
 
@@ -32,7 +31,11 @@ async fn start_http_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str
             .get_http_endpoint_modify_headers_settings(host_str.as_str())
             .await;
 
-        let http_proxy_pass = Arc::new(HttpProxyPass::new(socket_addr, modify_headers_settings));
+        let http_proxy_pass = Arc::new(HttpProxyPass::new(
+            socket_addr,
+            modify_headers_settings,
+            true,
+        ));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();
 
@@ -90,8 +93,6 @@ pub async fn handle_requests(
                         .unwrap());
                 }
                 _ => {
-                    println!("Error: {:?}", err);
-
                     return Ok(hyper::Response::builder()
                         .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
                         .body(Full::from(Bytes::from("Internal Server Error")))

@@ -34,6 +34,20 @@ impl ProxyPassLocation {
         result
     }
 
+    pub fn is_http1(&self) -> bool {
+        match &self.content_source {
+            HttpProxyPassContentSource::Http(remote_http_location) => {
+                remote_http_location.remote_endpoint.is_http1()
+            }
+            HttpProxyPassContentSource::LocalPath(_) => {
+                panic!("LocalPath can not return is_http1")
+            }
+            HttpProxyPassContentSource::PathOverSsh(_) => {
+                panic!("PathOverSsh can not return is_http1")
+            }
+        }
+    }
+
     pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
         match &mut self.content_source {
             HttpProxyPassContentSource::Http(remote_http_location) => {

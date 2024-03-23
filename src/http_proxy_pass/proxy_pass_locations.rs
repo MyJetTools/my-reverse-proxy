@@ -2,6 +2,7 @@ use hyper::Uri;
 
 use super::{ProxyPassError, ProxyPassLocation};
 
+#[derive(Clone)]
 pub struct LocationIndex {
     pub index: usize,
     pub id: i64,

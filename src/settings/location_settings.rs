@@ -27,37 +27,6 @@ impl LocationSettings {
         ProxyPassTo::from_str(proxy_pass_to)
     }
 
-    /*
-       pub fn get_tcp_proxy_pass(
-           &self,
-           variables: &Option<HashMap<String, String>>,
-       ) -> Result<ProxyPassTo, String> {
-           let proxy_pass_to = self.get_proxy_pass(variables);
-
-           match &proxy_pass_to {
-               ProxyPassTo::Tcp(_) => return Ok(proxy_pass_to),
-               ProxyPassTo::Ssh(ssh) => match ssh.remote_content {
-                   super::SshContent::RemoteHost(_) => return Ok(proxy_pass_to),
-                   super::SshContent::FilePath(_) => {
-                       return Err(
-                           "It is not possible to serve remote ssh file over tcp endpoint".to_string(),
-                       );
-                   }
-               },
-               ProxyPassTo::Http(_) => {
-                   return Err(
-                       "It is not possible to serve remote http content over tcp endpoint".to_string(),
-                   );
-               }
-               ProxyPassTo::LocalPath(_) => {
-                   return Err(
-                       "It is not possible to serve local path content over tcp endpoint".to_string(),
-                   );
-               }
-           }
-       }
-    */
-
     pub fn get_http_content_source<'s>(
         &'s self,
         app: &AppContext,
@@ -152,6 +121,6 @@ impl LocationSettings {
             }
         }
 
-        Err(format!("Can not get if remote location is http or https"))
+        Ok(false)
     }
 }

@@ -59,7 +59,7 @@ impl ClientCertVerifier for MyClientCertVerifier {
 
     fn supported_verify_schemes(&self) -> Vec<tokio_rustls::rustls::SignatureScheme> {
         println!("supported_verify_schemes");
-        vec![tokio_rustls::rustls::SignatureScheme::RSA_PSS_SHA256]
+        vec![]
     }
 
     fn verify_client_cert(

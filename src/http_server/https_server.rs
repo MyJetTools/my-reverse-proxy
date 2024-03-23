@@ -58,6 +58,8 @@ async fn start_https_server_loop(
             )
             .unwrap();
 
+        server_config.alpn_protocols = vec![];
+
         server_config.alpn_protocols =
             vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
 
@@ -88,7 +90,7 @@ async fn start_https_server_loop(
 
         let (tcp_stream, socket_addr) = listener.accept().await.unwrap();
 
-        let tls_acceptor = tls_acceptor.clone();
+        let mut tls_acceptor = tls_acceptor.clone();
 
         let app = app.clone();
 
@@ -98,8 +100,11 @@ async fn start_https_server_loop(
             .await;
 
         tokio::spawn(async move {
-            let http_proxy_pass =
-                Arc::new(HttpProxyPass::new(socket_addr, modify_headers_settings));
+            let http_proxy_pass = Arc::new(HttpProxyPass::new(
+                socket_addr,
+                modify_headers_settings,
+                false,
+            ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
                 Ok(tls_stream) => {
@@ -145,7 +150,6 @@ pub async fn handle_requests(
     proxy_pass: Arc<HttpProxyPass>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    //println!("Handling request with host: {:#?}", req);
     match proxy_pass.send_payload(&app, req).await {
         Ok(response) => return response,
         Err(err) => {
@@ -164,8 +168,6 @@ pub async fn handle_requests(
                         .unwrap());
                 }
                 _ => {
-                    println!("Error: {:?}", err);
-
                     return Ok(hyper::Response::builder()
                         .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
                         .body(Full::from(Bytes::from("Internal Server Error")))

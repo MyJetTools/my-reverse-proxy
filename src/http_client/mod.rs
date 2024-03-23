@@ -22,4 +22,7 @@ pub use http_client::*;
 mod connect_to_http2_over_ssh;
 pub use connect_to_http2_over_ssh::*;
 
+mod websocket_client;
+pub use websocket_client::*;
+
 pub const HTTP_CLIENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);

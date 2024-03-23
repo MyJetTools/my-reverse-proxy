@@ -20,7 +20,7 @@ pub async fn connect_to_http_endpoint(
                 Ok((mut sender, conn)) => {
                     let remote_host = remote_host.to_string();
                     tokio::task::spawn(async move {
-                        if let Err(err) = conn.await {
+                        if let Err(err) = conn.with_upgrades().await {
                             println!("Http Connection to {} is failed: {:?}", remote_host, err);
                         }
 
