@@ -181,9 +181,6 @@ hosts:
 * ${CLIENT_CERT_CN} - Common name of client certificate if endpoint is protected by client certificate;
 * ${PATH_AND_QUERY} - path and query of request;
 
-
-
-
 ### Variable tips.
 * All the system variables are upper case, and all the custom variables are lower case.
 
@@ -193,3 +190,61 @@ Example of custom variable:
 variables:
   my_ssh_config: ssh:user@10.12.13.14:22
 ```
+
+## Types of endpoints
+
+### Http
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: http
+```
+
+### Http2
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: http2
+```
+
+### Https
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert        
+```
+
+### Https2
+
+Fallbacks to http/1.1 if client does not support http2
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: https2
+      ssl_certificate: my_ssl_cert        
+```
+
+### Https
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: tcp
+```
+
+## Debugging endpoints
+
+Adding debug flag to endpoint will print all the traffic errors to the console
+
+```yaml
+  localhost:8000:
+    endpoint:
+      type: http
+      debug: true
+```       
