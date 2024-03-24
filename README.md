@@ -247,6 +247,7 @@ hosts:
 Adding debug flag to endpoint will print all the traffic errors to the console
 
 ```yaml
+hosts:
   localhost:8000:
     endpoint:
       type: http
