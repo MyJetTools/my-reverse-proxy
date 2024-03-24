@@ -210,6 +210,9 @@ hosts:
 ```
 
 ### Https
+
+Serves http/1.1 over TLS1.3 and TLS1.2
+
 ```yaml
 hosts:
   localhost:8000:
@@ -220,6 +223,7 @@ hosts:
 
 ### Https2
 
+Serves https/2 over TLS1.3 and TLS1.2
 Fallbacks to http/1.1 if client does not support http2
 
 ```yaml
