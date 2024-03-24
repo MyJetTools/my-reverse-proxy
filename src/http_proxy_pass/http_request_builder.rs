@@ -78,8 +78,6 @@ impl HttpRequestBuilder {
 
                     let request = hyper::Request::from_parts(parts, body);
 
-                    println!("Upgrade request: {:?}", request);
-
                     self.prepared_request = Some(request);
 
                     self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
@@ -102,8 +100,6 @@ impl HttpRequestBuilder {
                 let body = into_full_bytes(incoming).await?;
 
                 let request = hyper::Request::from_parts(parts, body);
-
-                println!("Upgrade request: {:?}", request);
 
                 self.prepared_request = Some(request);
 

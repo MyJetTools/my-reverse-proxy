@@ -12,6 +12,7 @@ pub async fn copy_loop(
     writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
     incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
     buffer_size: usize,
+    debug: bool,
 ) {
     let mut buf = Vec::with_capacity(buffer_size);
 
@@ -45,14 +46,23 @@ pub async fn copy_loop(
 
         //Got Timeout on writer
         if result.is_err() {
-            let _ = writer_access.shutdown().await;
+            let err = writer_access.shutdown().await;
+            if debug {
+                println!("Timeout on tcp: Shutdown socket got error: {:?}", err);
+            }
             break;
         }
 
         let result = result.unwrap();
 
         if result.is_err() {
-            let _ = writer_access.shutdown().await;
+            let err = writer_access.shutdown().await;
+
+            if debug {
+                if let Err(err) = err {
+                    println!("Timeout on Shutting down tcp socket: {:?}", err);
+                }
+            }
         }
     }
 }

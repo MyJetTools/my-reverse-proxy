@@ -341,6 +341,7 @@ mod tests {
                     ssl_certificate: None,
                     client_certificate_ca: None,
                     modify_http_headers: None,
+                    debug: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),

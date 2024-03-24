@@ -1,15 +1,12 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use http_body_util::Full;
-use hyper::{body::Bytes, server::conn::http1, service::service_fn};
+use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
-use rust_extensions::StopWatch;
+
 use tokio_rustls::rustls::version::{TLS12, TLS13};
 use tokio_rustls::TlsAcceptor;
 
 use crate::app::{AppContext, SslCertificate};
-
-use crate::http_proxy_pass::*;
 
 use super::{ClientCertificateCa, MyClientCertVerifier};
 
@@ -22,6 +19,7 @@ pub fn start_https_server(
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
     host_str: String,
+    debug: bool,
 ) {
     println!("Listening http1 on https://{}", addr);
     tokio::spawn(start_https_server_loop(
@@ -31,6 +29,7 @@ pub fn start_https_server(
         client_cert_ca,
         server_id,
         host_str,
+        debug,
     ));
 }
 
@@ -41,6 +40,7 @@ async fn start_https_server_loop(
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
     host_str: String,
+    debug: bool,
 ) {
     //let certified_key = certificate.get_certified_key();
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -112,6 +112,7 @@ async fn start_https_server_loop(
                 socket_addr,
                 modify_headers_settings,
                 true,
+                debug,
             ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
@@ -143,7 +144,11 @@ async fn start_https_server_loop(
                 .serve_connection(
                     TokioIo::new(tls_stream),
                     service_fn(move |req| {
-                        handle_requests(req, http_proxy_pass.clone(), app.clone())
+                        super::handle_request::handle_requests(
+                            req,
+                            http_proxy_pass.clone(),
+                            app.clone(),
+                        )
                     }),
                 )
                 .with_upgrades()
@@ -155,30 +160,42 @@ async fn start_https_server_loop(
     }
 }
 
+/*
+
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: Arc<HttpProxyPass>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    let req_str = format!("[{}]{:?}", req.method(), req.uri());
-    let mut sw = StopWatch::new();
-    sw.start();
-    println!("Req: {}", req_str);
+    let debug = if proxy_pass.debug {
+        let req_str = format!("[{}]{:?}", req.method(), req.uri());
+        let mut sw = StopWatch::new();
+        sw.start();
+        println!("Req: {}", req_str);
+        Some((req_str, sw))
+    } else {
+        None
+    };
 
     match proxy_pass.send_payload(&app, req).await {
         Ok(response) => {
-            sw.pause();
             match response.as_ref() {
                 Ok(response) => {
-                    println!(
-                        "Res: {}->{} {}",
-                        req_str,
-                        response.status(),
-                        sw.duration_as_string()
-                    );
+                    if let Some((req_str, mut sw)) = debug {
+                        sw.pause();
+                        println!(
+                            "Res: {}->{} {}",
+                            req_str,
+                            response.status(),
+                            sw.duration_as_string()
+                        );
+                    }
                 }
                 Err(err) => {
-                    println!("Res: {}->{} {}", req_str, err, sw.duration_as_string());
+                    if let Some((req_str, mut sw)) = debug {
+                        sw.pause();
+                        println!("Res: {}->{} {}", req_str, err, sw.duration_as_string());
+                    }
                 }
             }
 
@@ -209,3 +226,4 @@ pub async fn handle_requests(
         }
     }
 }
+ */

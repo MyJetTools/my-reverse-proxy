@@ -1,19 +1,23 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use http_body_util::Full;
-use hyper::{body::Bytes, service::service_fn};
+use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 
 use crate::app::AppContext;
 
 use crate::http_proxy_pass::*;
 
-pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
+pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String, debug: bool) {
     println!("Listening h2 on http://{}", addr);
-    tokio::spawn(start_https2_server_loop(addr, app, host_str));
+    tokio::spawn(start_https2_server_loop(addr, app, host_str, debug));
 }
 
-async fn start_https2_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_str: String) {
+async fn start_https2_server_loop(
+    addr: SocketAddr,
+    app: Arc<AppContext>,
+    host_str: String,
+    debug: bool,
+) {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),
@@ -36,13 +40,18 @@ async fn start_https2_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_s
                 socket_addr,
                 modify_headers_settings,
                 false,
+                debug,
             ));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder
                 .serve_connection(
                     io,
                     service_fn(move |req| {
-                        handle_requests(req, http_proxy_pass.clone(), app.clone())
+                        super::handle_request::handle_requests(
+                            req,
+                            http_proxy_pass.clone(),
+                            app.clone(),
+                        )
                     }),
                 )
                 .await;
@@ -52,6 +61,7 @@ async fn start_https2_server_loop(addr: SocketAddr, app: Arc<AppContext>, host_s
     }
 }
 
+/*
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: Arc<HttpProxyPass>,
@@ -84,3 +94,4 @@ pub async fn handle_requests(
         }
     }
 }
+ */

@@ -15,9 +15,13 @@ pub struct EndpointSettings {
     pub ssl_certificate: Option<String>,
     pub client_certificate_ca: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
+    pub debug: Option<bool>,
 }
 
 impl EndpointSettings {
+    fn get_debug(&self) -> bool {
+        self.debug.unwrap_or(false)
+    }
     pub fn get_type(
         &self,
         host: &str,
@@ -25,10 +29,14 @@ impl EndpointSettings {
         variables: &Option<HashMap<String, String>>,
     ) -> Result<EndpointType, ProxyPassError> {
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(host.to_string())),
+            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1 {
+                host_str: host.to_string(),
+                debug: self.get_debug(),
+            }),
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
                     return Ok(EndpointType::Https {
+                        debug: self.get_debug(),
                         host_str: host.to_string(),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
@@ -43,6 +51,7 @@ impl EndpointSettings {
             "https2" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
                     return Ok(EndpointType::Https2 {
+                        debug: self.get_debug(),
                         host_str: host.to_string(),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
@@ -54,7 +63,12 @@ impl EndpointSettings {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
             }
-            "http2" => return Ok(EndpointType::Http2(host.to_string())),
+            "http2" => {
+                return Ok(EndpointType::Http2 {
+                    host_str: host.to_string(),
+                    debug: self.get_debug(),
+                })
+            }
             "tcp" => {
                 if locations.len() != 1 {
                     panic!(
@@ -82,6 +96,7 @@ impl EndpointSettings {
                     super::ProxyPassTo::Ssh(ssh_config) => match ssh_config.remote_content {
                         super::SshContent::RemoteHost(remote_host) => {
                             return Ok(EndpointType::TcpOverSsh {
+                                debug: self.get_debug(),
                                 ssh_credentials: ssh_config.credentials,
                                 remote_host,
                             });
@@ -93,8 +108,11 @@ impl EndpointSettings {
                             ));
                         }
                     },
-                    super::ProxyPassTo::Tcp(socket_addr) => {
-                        return Ok(EndpointType::Tcp(socket_addr));
+                    super::ProxyPassTo::Tcp(remote_addr) => {
+                        return Ok(EndpointType::Tcp {
+                            remote_addr,
+                            debug: self.get_debug(),
+                        });
                     }
                 }
 

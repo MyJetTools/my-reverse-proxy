@@ -13,6 +13,7 @@ use super::{BuildResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassError,
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
     http_1: bool,
+    pub debug: bool,
 }
 
 impl HttpProxyPass {
@@ -20,6 +21,7 @@ impl HttpProxyPass {
         socket_addr: SocketAddr,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
         http_1: bool,
+        debug: bool,
     ) -> Self {
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
@@ -27,6 +29,7 @@ impl HttpProxyPass {
                 modify_headers_settings,
             )),
             http_1,
+            debug,
         }
     }
 

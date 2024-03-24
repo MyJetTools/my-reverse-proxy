@@ -9,14 +9,16 @@ pub fn start_tcp(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
+    debug: bool,
 ) {
-    tokio::spawn(tcp_server_accept_loop(app, listen_addr, remote_addr));
+    tokio::spawn(tcp_server_accept_loop(app, listen_addr, remote_addr, debug));
 }
 
 async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
+    debug: bool,
 ) {
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
 
@@ -42,10 +44,12 @@ async fn tcp_server_accept_loop(
         .await;
 
         if remote_tcp_connection_result.is_err() {
-            println!(
-                "Timeout while connecting to remote tcp {} server. Closing incoming connection: {}",
-                remote_addr, socket_addr
-            );
+            if debug {
+                println!(
+                    "Timeout while connecting to remote tcp {} server. Closing incoming connection: {}",
+                    remote_addr, socket_addr
+                );
+            }
             let _ = server_stream.shutdown().await;
             continue;
         }
@@ -53,10 +57,12 @@ async fn tcp_server_accept_loop(
         let remote_tcp_connection_result = remote_tcp_connection_result.unwrap();
 
         if let Err(err) = remote_tcp_connection_result {
-            println!(
-                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
-                remote_addr, err, socket_addr
-            );
+            if debug {
+                println!(
+                    "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
+                    remote_addr, err, socket_addr
+                );
+            }
             let _ = server_stream.shutdown().await;
             continue;
         }
@@ -67,6 +73,7 @@ async fn tcp_server_accept_loop(
             server_stream,
             remote_tcp_connection_result.unwrap(),
             app.connection_settings.buffer_size,
+            debug,
         ));
     }
 }
@@ -77,6 +84,7 @@ async fn connection_loop(
     server_stream: TcpStream,
     remote_stream: TcpStream,
     buffer_size: usize,
+    debug: bool,
 ) {
     let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
 
@@ -93,12 +101,14 @@ async fn connection_loop(
         remote_tcp_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
+        debug,
     ));
     tokio::spawn(super::forwards::copy_loop(
         remote_tcp_read,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
+        debug,
     ));
 
     super::forwards::await_while_alive(
@@ -106,10 +116,12 @@ async fn connection_loop(
         remote_tcp_writer,
         incoming_traffic_moment,
         || {
-            println!(
-                "Dead Tcp PortForward {}->{} connection detected. Closing",
-                listen_addr, remote_addr
-            );
+            if debug {
+                println!(
+                    "Dead Tcp PortForward {}->{} connection detected. Closing",
+                    listen_addr, remote_addr
+                );
+            }
         },
     )
     .await;

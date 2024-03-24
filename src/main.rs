@@ -29,13 +29,19 @@ async fn main() {
         let listen_end_point = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
         match endpoint_type {
-            settings::EndpointType::Http1(host_str) => {
-                crate::http_server::start_http_server(listen_end_point, app.clone(), host_str);
+            settings::EndpointType::Http1 { host_str, debug } => {
+                crate::http_server::start_http_server(
+                    listen_end_point,
+                    app.clone(),
+                    host_str,
+                    debug,
+                );
             }
             settings::EndpointType::Https {
                 ssl_id,
                 client_ca_id,
                 host_str,
+                debug,
             } => {
                 if let Some((cert, private_key)) =
                     app.settings_reader.get_ssl_certificate(&ssl_id).await
@@ -62,6 +68,7 @@ async fn main() {
                                 Some(client_ca.into()),
                                 ssh_server_id,
                                 host_str,
+                                debug,
                             );
                         } else {
                             panic!(
@@ -78,6 +85,7 @@ async fn main() {
                             None,
                             ssh_server_id,
                             host_str,
+                            debug,
                         );
                     }
                 } else {
@@ -92,6 +100,7 @@ async fn main() {
                 ssl_id,
                 client_ca_id,
                 host_str,
+                debug,
             } => {
                 if let Some((cert, private_key)) =
                     app.settings_reader.get_ssl_certificate(&ssl_id).await
@@ -118,6 +127,7 @@ async fn main() {
                                 Some(client_ca.into()),
                                 ssh_server_id,
                                 host_str,
+                                debug,
                             );
                         } else {
                             panic!(
@@ -134,6 +144,7 @@ async fn main() {
                             None,
                             ssh_server_id,
                             host_str,
+                            debug,
                         );
                     }
                 } else {
@@ -144,21 +155,28 @@ async fn main() {
                     );
                 }
             }
-            settings::EndpointType::Http2(host_str) => {
-                crate::http_server::start_h2_server(listen_end_point, app.clone(), host_str);
+            settings::EndpointType::Http2 { host_str, debug } => {
+                crate::http_server::start_h2_server(listen_end_point, app.clone(), host_str, debug);
             }
-            settings::EndpointType::Tcp(remote_addr) => {
-                crate::tcp_port_forward::start_tcp(app.clone(), listen_end_point, remote_addr);
+            settings::EndpointType::Tcp { remote_addr, debug } => {
+                crate::tcp_port_forward::start_tcp(
+                    app.clone(),
+                    listen_end_point,
+                    remote_addr,
+                    debug,
+                );
             }
             settings::EndpointType::TcpOverSsh {
                 ssh_credentials,
                 remote_host,
+                debug,
             } => {
                 crate::tcp_port_forward::start_tcp_over_ssh(
                     app.clone(),
                     listen_end_point,
                     ssh_credentials,
                     remote_host,
+                    debug,
                 );
             }
         }

@@ -11,12 +11,14 @@ pub fn start_tcp_over_ssh(
     listen_addr: std::net::SocketAddr,
     credentials: Arc<SshCredentials>,
     remote_host: RemoteHost,
+    debug: bool,
 ) {
     tokio::spawn(tcp_server_accept_loop(
         app,
         listen_addr,
         credentials,
         remote_host,
+        debug,
     ));
 }
 
@@ -25,6 +27,7 @@ async fn tcp_server_accept_loop(
     listen_addr: std::net::SocketAddr,
     ssh_credentials: Arc<SshCredentials>,
     remote_host: RemoteHost,
+    debug: bool,
 ) {
     let remote_host = Arc::new(remote_host);
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
@@ -63,14 +66,16 @@ async fn tcp_server_accept_loop(
             .await;
 
         if let Err(err) = ssh_channel {
-            println!(
-                "Error connecting to remote tcp {} over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
-                listen_addr.to_string(),
-                ssh_credentials.to_string(),
-                remote_host.as_str(),
-                socket_addr,
-                err
-            );
+            if debug {
+                println!(
+                    "Error connecting to remote tcp {} over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
+                    listen_addr.to_string(),
+                    ssh_credentials.to_string(),
+                    remote_host.as_str(),
+                    socket_addr,
+                    err
+                );
+            }
             let _ = server_stream.shutdown().await;
             continue;
         }
@@ -82,6 +87,7 @@ async fn tcp_server_accept_loop(
             server_stream,
             ssh_channel.unwrap(),
             app.connection_settings.buffer_size,
+            debug,
         ));
     }
 }
@@ -93,6 +99,7 @@ async fn connection_loop(
     server_stream: TcpStream,
     remote_stream: SshAsyncChannel,
     buffer_size: usize,
+    debug: bool,
 ) {
     let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
 
@@ -122,48 +129,15 @@ async fn connection_loop(
         remote_ssh_writer,
         incoming_traffic_moment,
         || {
-            println!(
-                "Dead Tcp PortForward {}->{}->{} connection detected. Closing",
-                listen_addr,
-                ssh_credentials.to_string(),
-                remote_host.as_str()
-            );
+            if debug {
+                println!(
+                    "Dead Tcp PortForward {}->{}->{} connection detected. Closing",
+                    listen_addr,
+                    ssh_credentials.to_string(),
+                    remote_host.as_str()
+                );
+            }
         },
     )
     .await;
-
-    /*
-    loop {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-
-        let now = DateTimeAsMicroseconds::now();
-
-        let last_incoming_traffic =
-            DateTimeAsMicroseconds::new(incoming_traffic_moment.get_unix_microseconds());
-
-        if now
-            .duration_since(last_incoming_traffic)
-            .as_positive_or_zero()
-            > Duration::from_secs(60)
-        {
-            println!(
-                "Dead Tcp PortForward {}->{} connection detected. Closing",
-                listen_addr,
-                ssh_configuration.to_string()
-            );
-
-            {
-                let remote_ssh_writer = remote_ssh_writer.lock().await;
-                remote_ssh_writer.shutdown();
-            }
-
-            {
-                let mut tcp_server_writer = tcp_server_writer.lock().await;
-                let _ = tcp_server_writer.shutdown().await;
-            }
-
-            break;
-        }
-    }
-     */
 }
