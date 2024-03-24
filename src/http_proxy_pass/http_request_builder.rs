@@ -60,6 +60,12 @@ impl HttpRequestBuilder {
 
         let dest_http1 = inner.locations.find(&location_index).is_http1();
 
+        if dest_http1.is_none() {
+            return Ok(BuildResult::HttpRequest(location_index));
+        }
+
+        let dest_http1 = dest_http1.unwrap();
+
         if self.src_http1 {
             if dest_http1 {
                 // src_http1 && dest_http1
@@ -67,7 +73,12 @@ impl HttpRequestBuilder {
 
                 let websocket_update = parts.headers.get("sec-websocket-key").is_some();
 
-                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                handle_headers(
+                    inner,
+                    &self.get_host_port(),
+                    &mut parts.headers,
+                    &location_index,
+                );
                 let body = into_full_bytes(incoming).await?;
 
                 if websocket_update {
@@ -96,7 +107,12 @@ impl HttpRequestBuilder {
             } else {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
-                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                handle_headers(
+                    inner,
+                    &self.get_host_port(),
+                    &mut parts.headers,
+                    &location_index,
+                );
                 let body = into_full_bytes(incoming).await?;
 
                 let request = hyper::Request::from_parts(parts, body);
@@ -112,7 +128,12 @@ impl HttpRequestBuilder {
             } else {
                 // src_http2 && dest_http2
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
-                handle_headers(inner, &parts.uri, &mut parts.headers, &location_index);
+                handle_headers(
+                    inner,
+                    &self.get_host_port(),
+                    &mut parts.headers,
+                    &location_index,
+                );
                 let body = into_full_bytes(incoming).await?;
 
                 self.prepared_request = Some(hyper::Request::from_parts(parts, body));
@@ -214,7 +235,7 @@ pub async fn into_full_bytes(
 
 fn handle_headers(
     inner: &HttpProxyPassInner,
-    uri: &Uri,
+    uri: &HostPort,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
@@ -242,7 +263,7 @@ fn handle_headers(
 }
 
 fn modify_headers(
-    uri: &Uri,
+    host_port: &HostPort,
     headers: &mut HeaderMap<HeaderValue>,
     headers_settings: &ModifyHttpHeadersSettings,
     src: &SourceHttpData,
@@ -258,11 +279,11 @@ fn modify_headers(
     if let Some(add_headers) = headers_settings.add.as_ref() {
         if let Some(add_headers) = add_headers.request.as_ref() {
             for add_header in add_headers {
-                let value = src.populate_value(&add_header.value, uri);
+                let value = src.populate_value(&add_header.value, host_port);
                 if !value.as_str().is_empty() {
                     headers.insert(
                         HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                        src.populate_value(&add_header.value, uri)
+                        src.populate_value(&add_header.value, host_port)
                             .as_str()
                             .parse()
                             .unwrap(),

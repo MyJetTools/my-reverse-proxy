@@ -107,6 +107,7 @@ impl HttpProxyPassInner {
                     }
                     HttpProxyPassContentSource::LocalPath(_) => {}
                     HttpProxyPassContentSource::PathOverSsh(_) => {}
+                    HttpProxyPassContentSource::Static(_) => {}
                 }
             }
         }

@@ -135,6 +135,7 @@ impl SettingsReader {
 
                 let proxy_pass_content_source = location_settings.get_http_content_source(
                     app,
+                    settings_host,
                     location_id,
                     &read_access.variables,
                 );
@@ -349,6 +350,8 @@ mod tests {
                     location_type: Some("http".to_owned()),
                     modify_http_headers: None,
                     default_file: None,
+                    status_code: None,
+                    body: None,
                 }],
             },
         );

@@ -34,17 +34,14 @@ impl ProxyPassLocation {
         result
     }
 
-    pub fn is_http1(&self) -> bool {
+    pub fn is_http1(&self) -> Option<bool> {
         match &self.content_source {
             HttpProxyPassContentSource::Http(remote_http_location) => {
-                remote_http_location.remote_endpoint.is_http1()
+                Some(remote_http_location.remote_endpoint.is_http1())
             }
-            HttpProxyPassContentSource::LocalPath(_) => {
-                panic!("LocalPath can not return is_http1")
-            }
-            HttpProxyPassContentSource::PathOverSsh(_) => {
-                panic!("PathOverSsh can not return is_http1")
-            }
+            HttpProxyPassContentSource::LocalPath(_) => None,
+            HttpProxyPassContentSource::PathOverSsh(_) => None,
+            HttpProxyPassContentSource::Static(_) => None,
         }
     }
 
@@ -58,6 +55,7 @@ impl ProxyPassLocation {
             HttpProxyPassContentSource::PathOverSsh(file_over_ssh) => {
                 return file_over_ssh.connect_if_require(app).await;
             }
+            HttpProxyPassContentSource::Static(_) => return Ok(()),
         }
     }
 }

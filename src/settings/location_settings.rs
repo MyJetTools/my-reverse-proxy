@@ -4,7 +4,9 @@ use serde::*;
 
 use crate::{
     app::AppContext,
-    http_content_source::{LocalPathContentSrc, PathOverSshContentSource, RemoteHttpContentSource},
+    http_content_source::{
+        LocalPathContentSrc, PathOverSshContentSource, RemoteHttpContentSource, StaticContentSrc,
+    },
     http_proxy_pass::HttpProxyPassContentSource,
 };
 
@@ -18,6 +20,8 @@ pub struct LocationSettings {
     pub location_type: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub default_file: Option<String>,
+    pub status_code: Option<u16>,
+    pub body: Option<String>,
 }
 
 impl LocationSettings {
@@ -30,12 +34,30 @@ impl LocationSettings {
     pub fn get_http_content_source<'s>(
         &'s self,
         app: &AppContext,
+        host: &str,
         location_id: i64,
         variables: &Option<HashMap<String, String>>,
     ) -> Result<Option<HttpProxyPassContentSource>, String> {
         let proxy_pass_to = self.get_proxy_pass(variables);
 
         match proxy_pass_to {
+            ProxyPassTo::Static => {
+                return Ok(HttpProxyPassContentSource::Static(StaticContentSrc::new(
+                    match self.status_code {
+                        Some(status_code) => status_code,
+                        None => panic!(
+                            "status_code is required for static content in host {}",
+                            host
+                        ),
+                    },
+                    if let Some(body) = self.body.as_ref() {
+                        body.as_bytes().to_vec()
+                    } else {
+                        vec![]
+                    },
+                ))
+                .into())
+            }
             ProxyPassTo::Http(remote_host) => {
                 if self.is_http2()? {
                     return Ok(

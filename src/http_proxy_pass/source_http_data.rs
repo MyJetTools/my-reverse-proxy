@@ -1,9 +1,10 @@
 use std::net::SocketAddr;
 
-use hyper::Uri;
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
 use crate::populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN};
+
+use super::HostPort;
 
 pub struct SourceHttpData {
     pub is_https: bool,
@@ -22,7 +23,7 @@ impl SourceHttpData {
         }
     }
 
-    pub fn populate_value<'s>(&self, value: &'s str, req_uri: &Uri) -> StrOrString<'s> {
+    pub fn populate_value<'s>(&self, value: &'s str, req_uri: &HostPort<'s>) -> StrOrString<'s> {
         if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
             return value.into();
         }
@@ -46,8 +47,18 @@ impl SourceHttpData {
                         }
 
                         "PATH_AND_QUERY" => {
-                            if let Some(value) = req_uri.path_and_query() {
-                                result.push_str(value.as_str());
+                            if let Some(value) = req_uri.get_path_and_query() {
+                                result.push_str(value);
+                            }
+                        }
+
+                        "HOST_PORT" => {
+                            if let Some(host) = req_uri.get_host() {
+                                result.push_str(host);
+                                if let Some(port) = req_uri.get_port_opt() {
+                                    result.push(':');
+                                    result.push_str(port.to_string().as_str());
+                                }
                             }
                         }
 

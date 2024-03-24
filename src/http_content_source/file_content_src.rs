@@ -4,7 +4,7 @@ use hyper::Uri;
 
 use crate::{http_proxy_pass::ProxyPassError, settings::LocalFilePath};
 
-use super::{RequestExecutor, WebContentType};
+use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct LocalPathContentSrc {
     file_path: String,
@@ -51,13 +51,20 @@ pub struct FileRequestExecutor {
 
 #[async_trait::async_trait]
 impl RequestExecutor for FileRequestExecutor {
-    async fn execute_request(
-        &self,
-    ) -> Result<Option<(Vec<u8>, Option<WebContentType>)>, ProxyPassError> {
-        let content_type = WebContentType::detect_by_extension(&self.file_path);
-        match tokio::fs::read(&self.file_path).await {
-            Ok(content) => Ok(Some((content, content_type))),
-            Err(_) => Ok(None),
-        }
+    async fn execute_request(&self) -> Result<RequestExecutorResult, ProxyPassError> {
+        let result = match tokio::fs::read(&self.file_path).await {
+            Ok(content) => RequestExecutorResult {
+                status_code: 200,
+                content_type: WebContentType::detect_by_extension(&self.file_path),
+                body: content,
+            },
+            Err(_) => RequestExecutorResult {
+                status_code: 404,
+                content_type: None,
+                body: "Not found".as_bytes().to_vec(),
+            },
+        };
+
+        Ok(result)
     }
 }

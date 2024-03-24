@@ -52,8 +52,16 @@ impl<'s> HostPort<'s> {
         None
     }
 
+    pub fn get_path_and_query(&self) -> Option<&str> {
+        self.uri.path_and_query()?.as_str().into()
+    }
+
     pub fn is_https(&self) -> bool {
         self.uri.scheme_str().unwrap_or_default().to_lowercase() == "https"
+    }
+
+    pub fn get_port_opt(&self) -> Option<u16> {
+        self.uri.port_u16()
     }
 
     pub fn get_port(&self) -> u16 {

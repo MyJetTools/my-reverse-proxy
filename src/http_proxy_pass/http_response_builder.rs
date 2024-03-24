@@ -8,10 +8,12 @@ use hyper::{
 
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
 
-use super::{into_full_bytes, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData};
+use super::{
+    into_full_bytes, HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData,
+};
 
 pub async fn build_http_response(
-    req_uri: &hyper::Uri,
+    req_uri: &HostPort<'_>,
     response: hyper::Response<Incoming>,
     inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
@@ -36,13 +38,14 @@ pub async fn build_http_response(
 }
 
 pub fn build_response_from_content(
-    req_uri: &hyper::Uri,
+    req_uri: &HostPort,
     inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
     content_type: Option<WebContentType>,
+    status_code: u16,
     content: Vec<u8>,
 ) -> hyper::Response<Full<Bytes>> {
-    let mut builder = hyper::Response::builder();
+    let mut builder = hyper::Response::builder().status(status_code);
 
     if let Some(content_type) = content_type {
         builder = builder.header("Content-Type", content_type.as_str());
@@ -57,7 +60,7 @@ pub fn build_response_from_content(
 }
 
 fn modify_req_headers(
-    req_uri: &hyper::Uri,
+    req_uri: &HostPort,
     inner: &HttpProxyPassInner,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
@@ -86,7 +89,7 @@ fn modify_req_headers(
 }
 
 fn modify_headers(
-    req_uri: &hyper::Uri,
+    req_uri: &HostPort,
     headers: &mut HeaderMap<hyper::header::HeaderValue>,
     headers_settings: &ModifyHttpHeadersSettings,
     src: &SourceHttpData,

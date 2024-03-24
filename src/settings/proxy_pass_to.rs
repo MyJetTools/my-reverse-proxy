@@ -9,10 +9,15 @@ pub enum ProxyPassTo {
     LocalPath(LocalFilePath),
     Ssh(SshConfiguration),
     Tcp(std::net::SocketAddr),
+    Static,
 }
 
 impl ProxyPassTo {
     pub fn from_str(src: StrOrString<'_>) -> Self {
+        if src.as_str().trim() == "static" {
+            return ProxyPassTo::Static;
+        }
+
         if src.as_str().starts_with("ssh") {
             return ProxyPassTo::Ssh(SshConfiguration::parse(src));
         }

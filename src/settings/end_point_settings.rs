@@ -87,6 +87,12 @@ impl EndpointSettings {
                                 .to_string(),
                         ));
                     }
+                    super::ProxyPassTo::Static => {
+                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                            "It is not possible to serve static content over tcp endpoint"
+                                .to_string(),
+                        ));
+                    }
                     super::ProxyPassTo::LocalPath(_) => {
                         return Err(ProxyPassError::CanNotReadSettingsConfiguration(
                             "It is not possible to serve local path content over tcp endpoint"

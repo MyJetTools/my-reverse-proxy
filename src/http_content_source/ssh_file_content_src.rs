@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
-use super::{RequestExecutor, WebContentType};
+use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct PathOverSshContentSource {
     ssh_session: Option<Arc<SshSession>>,
@@ -86,9 +86,7 @@ pub struct FileOverSshRequestExecutor {
 
 #[async_trait::async_trait]
 impl RequestExecutor for FileOverSshRequestExecutor {
-    async fn execute_request(
-        &self,
-    ) -> Result<Option<(Vec<u8>, Option<WebContentType>)>, ProxyPassError> {
+    async fn execute_request(&self) -> Result<RequestExecutorResult, ProxyPassError> {
         let file_path = if self.file_path.contains("~") {
             let mut home_value = self.home_value.lock().await;
 
@@ -111,10 +109,12 @@ impl RequestExecutor for FileOverSshRequestExecutor {
             .download_remote_file(&file_path, self.execute_timeout)
             .await;
 
-        let content_type = WebContentType::detect_by_extension(&file_path);
-
         match result {
-            Ok(content) => Ok(Some((content, content_type))),
+            Ok(content) => Ok(RequestExecutorResult {
+                status_code: 200,
+                content_type: WebContentType::detect_by_extension(&file_path),
+                body: content,
+            }),
             Err(err) => {
                 println!("{} -> Error: {:?}", file_path, err);
                 match &err {
@@ -122,7 +122,11 @@ impl RequestExecutor for FileOverSshRequestExecutor {
                         if let Some(ssh2_error) = ssh_err.as_ssh2() {
                             if let my_ssh::ssh2::ErrorCode::Session(value) = ssh2_error.code() {
                                 if value == -28 {
-                                    return Ok(None);
+                                    return Ok(RequestExecutorResult {
+                                        status_code: 404,
+                                        content_type: None,
+                                        body: "Not found".as_bytes().to_vec(),
+                                    });
                                 }
                             }
                         }
