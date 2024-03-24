@@ -21,6 +21,7 @@ pub struct LocationSettings {
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub default_file: Option<String>,
     pub status_code: Option<u16>,
+    pub content_type: Option<String>,
     pub body: Option<String>,
 }
 
@@ -50,6 +51,7 @@ impl LocationSettings {
                             host
                         ),
                     },
+                    self.content_type.clone(),
                     if let Some(body) = self.body.as_ref() {
                         body.as_bytes().to_vec()
                     } else {

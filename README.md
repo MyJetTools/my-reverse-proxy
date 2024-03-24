@@ -174,6 +174,41 @@ hosts:
 ```
 
 
+### Serving static content
+
+Example of serving static content with custom headers and body
+
+```yaml
+  7700:
+    endpoint:
+      type: http
+
+    locations:
+    - proxy_pass_to: static
+      status_code: 200
+      content_type: text/html
+      body: <h2>Body H2</h2><h3>Body H3</h3>
+```
+
+
+Example of serving redirect to the same url but with https schema
+
+```yaml
+  7700:
+    endpoint:
+      type: http
+
+    locations:
+    - proxy_pass_to: static
+      status_code: 302
+      modify_http_headers:
+        add:
+          response:
+          - name: Location
+            value: https://${HOST_PORT}${PATH_AND_QUERY}
+```
+
+
 ### Variables which can be used to populate headers or content
 
 * ${ENDPOINT_IP} - ip of server listen endpoint;

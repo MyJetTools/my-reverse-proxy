@@ -352,6 +352,7 @@ mod tests {
                     default_file: None,
                     status_code: None,
                     body: None,
+                    content_type: None,
                 }],
             },
         );
