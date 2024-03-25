@@ -1,9 +1,9 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use my_ssh::SshCredentials;
 use rust_extensions::StrOrString;
 
-use super::RemoteHost;
+use super::{LocalFilePath, RemoteHost, SshConfigSettings};
 
 #[derive(Debug)]
 pub enum SshContent {
@@ -46,56 +46,121 @@ pub struct SshConfiguration {
 }
 
 impl SshConfiguration {
-    pub fn parse(src: StrOrString) -> Self {
+    pub fn parse(
+        src: StrOrString,
+        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<Self, String> {
         let mut parts = src.as_str().split("->");
         let ssh_part = parts.next().unwrap();
         let remote_part = parts.next().unwrap();
 
-        let mut ssh_parts = ssh_part.split("@");
-        let ssh_user_name = ssh_parts.next().unwrap().split(":").last().unwrap();
+        let remote_content = parse_remote_part(remote_part);
 
-        let mut ssh_session_host_port = ssh_parts.next().unwrap().split(":");
-        let ssh_session_host = ssh_session_host_port.next().unwrap();
+        if let Some(ssh_configs) = ssh_configs {
+            if let Some(ssh_config_settings) = ssh_configs.get(ssh_part) {
+                match ssh_config_settings.get_option()? {
+                    super::SshConfigOption::AsPassword(password) => {
+                        let (ssh_user_name, ssh_session_host, ssh_session_port) =
+                            parse_ssh_part(ssh_part);
+                        return Ok(Self {
+                            credentials: SshCredentials::UserNameAndPassword {
+                                ssh_remote_host: ssh_session_host.to_string(),
+                                ssh_remote_port: ssh_session_port,
+                                ssh_user_name: ssh_user_name.to_string(),
+                                password,
+                            }
+                            .into(),
+                            remote_content,
+                        });
+                    }
+                    super::SshConfigOption::AsPrivateKeyFile {
+                        file_path,
+                        passphrase,
+                    } => {
+                        let (ssh_user_name, ssh_session_host, ssh_session_port) =
+                            parse_ssh_part(ssh_part);
+                        return Ok(Self {
+                            credentials: SshCredentials::PrivateKey {
+                                ssh_remote_host: ssh_session_host.to_string(),
+                                ssh_remote_port: ssh_session_port,
+                                ssh_user_name: ssh_user_name.to_string(),
+                                private_key: load_private_key(&file_path)?,
+                                passphrase,
+                            }
+                            .into(),
+                            remote_content,
+                        });
+                    }
+                }
+            } else {
+                let (ssh_user_name, ssh_session_host, ssh_session_port) = parse_ssh_part(ssh_part);
+                let result = Self {
+                    credentials: SshCredentials::SshAgent {
+                        ssh_remote_host: ssh_session_host.to_string(),
+                        ssh_remote_port: ssh_session_port,
+                        ssh_user_name: ssh_user_name.to_string(),
+                    }
+                    .into(),
+                    remote_content,
+                };
 
-        let ssh_session_port = if let Some(port) = ssh_session_host_port.next() {
-            port
-        } else {
-            "22"
-        };
-
-        let remote_content = if remote_part.starts_with("/")
-            || remote_part.starts_with("~")
-            || remote_part.starts_with(".")
-        {
-            SshContent::FilePath(remote_part.to_string())
-        } else {
-            SshContent::RemoteHost(remote_part.to_string().into())
-        };
-
-        Self {
-            credentials: SshCredentials::SshAgent {
-                ssh_remote_host: ssh_session_host.to_string(),
-                ssh_remote_port: ssh_session_port.parse().unwrap(),
-                ssh_user_name: ssh_user_name.to_string(),
+                Ok(result)
             }
-            .into(),
+        } else {
+            let (ssh_user_name, ssh_session_host, ssh_session_port) = parse_ssh_part(ssh_part);
+            let result = Self {
+                credentials: SshCredentials::SshAgent {
+                    ssh_remote_host: ssh_session_host.to_string(),
+                    ssh_remote_port: ssh_session_port,
+                    ssh_user_name: ssh_user_name.to_string(),
+                }
+                .into(),
+                remote_content: parse_remote_part(remote_part),
+            };
 
-            remote_content: remote_content.into(),
+            Ok(result)
         }
     }
+}
 
-    /*
-    pub fn to_string(&self) -> String {
-        let (h, p) = self.credentials.get_host_port();
-        format!(
-            "ssh:{}@{}:{}->{}",
-            self.credentials.get_user_name(),
-            h,
-            p,
-            self.remote_content.as_str()
-        )
+fn parse_ssh_part(ssh_part: &str) -> (&str, &str, u16) {
+    let mut ssh_parts = ssh_part.split("@");
+    let ssh_user_name = ssh_parts.next().unwrap().split(":").last().unwrap();
+
+    let mut ssh_session_host_port = ssh_parts.next().unwrap().split(":");
+    let ssh_session_host = ssh_session_host_port.next().unwrap();
+
+    let ssh_session_port = if let Some(port) = ssh_session_host_port.next() {
+        port
+    } else {
+        "22"
+    };
+
+    (
+        ssh_user_name,
+        ssh_session_host,
+        ssh_session_port.parse().unwrap(),
+    )
+}
+
+fn parse_remote_part(remote_part: &str) -> SshContent {
+    if remote_part.starts_with("/") || remote_part.starts_with("~") || remote_part.starts_with(".")
+    {
+        SshContent::FilePath(remote_part.to_string())
+    } else {
+        SshContent::RemoteHost(remote_part.to_string().into())
     }
-     */
+}
+
+fn load_private_key(file_path: &LocalFilePath) -> Result<String, String> {
+    let file_path = file_path.get_value();
+    std::fs::read_to_string(file_path.as_str()).map_err(|err| {
+        format!(
+            "Can not load ssh private key from {}. Err: {}",
+            file_path.as_str(),
+            err
+        )
+    })
 }
 
 #[cfg(test)]
@@ -105,7 +170,7 @@ mod test {
     fn test_parse_ssh_configuration() {
         let config = "ssh:root@12.12.13.13:22->10.0.0.1:5123";
 
-        let result = super::SshConfiguration::parse(config.into());
+        let result = super::SshConfiguration::parse(config.into(), &None).unwrap();
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(
@@ -123,7 +188,7 @@ mod test {
     fn test_parse_ssh_configuration_as_file() {
         let config = "ssh:root@12.12.13.13:22->/home/user/file.txt";
 
-        let result = super::SshConfiguration::parse(config.into());
+        let result = super::SshConfiguration::parse(config.into(), &None).unwrap();
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(

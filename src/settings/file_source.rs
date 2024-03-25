@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use rust_extensions::StrOrString;
 
-use super::SshConfiguration;
+use super::{SshConfigSettings, SshConfiguration};
 
 pub enum FileSource {
     File(String),
@@ -9,16 +11,19 @@ pub enum FileSource {
 }
 
 impl FileSource {
-    pub fn from_src(src: StrOrString) -> Self {
+    pub fn from_src(
+        src: StrOrString,
+        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<Self, String> {
         if src.as_str().starts_with("http") {
-            return FileSource::Http(src.to_string());
+            return Ok(FileSource::Http(src.to_string()));
         }
 
         if src.as_str().starts_with("ssh") {
-            return FileSource::Ssh(SshConfiguration::parse(src));
+            return Ok(FileSource::Ssh(SshConfiguration::parse(src, ssh_config)?));
         }
 
-        Self::File(src.to_string())
+        Ok(Self::File(src.to_string()))
     }
 
     pub fn as_str<'s>(&'s self) -> StrOrString<'s> {

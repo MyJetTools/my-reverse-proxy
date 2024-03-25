@@ -10,7 +10,10 @@ use crate::{
     http_proxy_pass::HttpProxyPassContentSource,
 };
 
-use super::{HttpProxyPassRemoteEndpoint, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost};
+use super::{
+    HttpProxyPassRemoteEndpoint, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost,
+    SshConfigSettings,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocationSettings {
@@ -26,10 +29,14 @@ pub struct LocationSettings {
 }
 
 impl LocationSettings {
-    pub fn get_proxy_pass(&self, variables: &Option<HashMap<String, String>>) -> ProxyPassTo {
+    pub fn get_proxy_pass(
+        &self,
+        variables: &Option<HashMap<String, String>>,
+        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<ProxyPassTo, String> {
         let proxy_pass_to =
             crate::populate_variable::populate_variable(self.proxy_pass_to.trim(), variables);
-        ProxyPassTo::from_str(proxy_pass_to)
+        ProxyPassTo::from_str(proxy_pass_to, ssh_configs)
     }
 
     pub fn get_http_content_source<'s>(
@@ -38,8 +45,9 @@ impl LocationSettings {
         host: &str,
         location_id: i64,
         variables: &Option<HashMap<String, String>>,
+        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<Option<HttpProxyPassContentSource>, String> {
-        let proxy_pass_to = self.get_proxy_pass(variables);
+        let proxy_pass_to = self.get_proxy_pass(variables, ssh_configs)?;
 
         match proxy_pass_to {
             ProxyPassTo::Static => {

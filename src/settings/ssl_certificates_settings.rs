@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::*;
 
-use super::FileSource;
+use super::{FileSource, SshConfigSettings};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SslCertificatesSettingsModel {
@@ -12,13 +12,21 @@ pub struct SslCertificatesSettingsModel {
 }
 
 impl SslCertificatesSettingsModel {
-    pub fn get_certificate(&self, variables: &Option<HashMap<String, String>>) -> FileSource {
+    pub fn get_certificate(
+        &self,
+        variables: &Option<HashMap<String, String>>,
+        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<FileSource, String> {
         let src = crate::populate_variable::populate_variable(&self.certificate, variables);
-        FileSource::from_src(src)
+        FileSource::from_src(src, ssh_config)
     }
 
-    pub fn get_private_key(&self, variables: &Option<HashMap<String, String>>) -> FileSource {
+    pub fn get_private_key(
+        &self,
+        variables: &Option<HashMap<String, String>>,
+        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<FileSource, String> {
         let src = crate::populate_variable::populate_variable(&self.private_key, variables);
-        FileSource::from_src(src)
+        FileSource::from_src(src, ssh_config)
     }
 }

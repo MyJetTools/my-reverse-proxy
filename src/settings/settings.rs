@@ -4,8 +4,8 @@ use crate::{app::AppContext, http_proxy_pass::*};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
-    GlobalSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings, SslCertificateId,
-    SslCertificatesSettingsModel,
+    GlobalSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings, SshConfigSettings,
+    SslCertificateId, SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -18,6 +18,8 @@ pub struct SettingsModel {
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
     pub global_settings: Option<GlobalSettings>,
+
+    pub ssh: Option<HashMap<String, SshConfigSettings>>,
 }
 
 impl SettingsReader {
@@ -74,7 +76,7 @@ impl SettingsReader {
         result
     }
 
-    pub async fn get_client_certificate_ca(&self, id: &str) -> Option<FileSource> {
+    pub async fn get_client_certificate_ca(&self, id: &str) -> Result<Option<FileSource>, String> {
         let read_access = self.settings.read().await;
 
         if let Some(certs) = &read_access.client_certificate_ca {
@@ -83,17 +85,17 @@ impl SettingsReader {
                     continue;
                 }
 
-                return Some(ca.get_ca(&read_access.variables));
+                return Ok(Some(ca.get_ca(&read_access.variables, &read_access.ssh)?));
             }
         }
 
-        None
+        Ok(None)
     }
 
     pub async fn get_ssl_certificate(
         &self,
         id: &SslCertificateId,
-    ) -> Option<(FileSource, FileSource)> {
+    ) -> Result<Option<(FileSource, FileSource)>, String> {
         let read_access = self.settings.read().await;
 
         if let Some(certs) = &read_access.ssl_certificates {
@@ -102,14 +104,14 @@ impl SettingsReader {
                     continue;
                 }
 
-                return Some((
-                    cert.get_certificate(&read_access.variables),
-                    cert.get_private_key(&read_access.variables),
-                ));
+                return Ok(Some((
+                    cert.get_certificate(&read_access.variables, &read_access.ssh)?,
+                    cert.get_private_key(&read_access.variables, &read_access.ssh)?,
+                )));
             }
         }
 
-        None
+        Ok(None)
     }
 
     pub async fn get_locations<'s>(
@@ -138,6 +140,7 @@ impl SettingsReader {
                     settings_host,
                     location_id,
                     &read_access.variables,
+                    &read_access.ssh,
                 );
 
                 if let Err(err) = proxy_pass_content_source {
@@ -158,37 +161,6 @@ impl SettingsReader {
                     location_settings.modify_http_headers.clone(),
                     proxy_pass_content_source,
                 ));
-
-                /*
-                let content_source = match proxy_pass_to
-                    .to_content_source(location_settings.is_http1(), default_file)
-                {
-                    super::ContentSourceSettings::File {
-                        file_name,
-                        default_file,
-                    } => ProxyPassContentSource::File(FileContentSrc::new(
-                        file_name.get_value().to_string(),
-                        default_file,
-                    )),
-                    super::ContentSourceSettings::FileOverSsh {
-                        file_path,
-                        ssh_credentials,
-                        default_file,
-                    } => ProxyPassContentSource::FileOverSsh(SshFileContentSource::new(
-                        ssh_credentials,
-                        file_path,
-                        default_file,
-                        app.connection_settings.remote_connect_timeout,
-                    )),
-                };
-
-                result.push(ProxyPassLocation::new(
-                    location_id,
-                    location_path,
-                    location_settings.modify_http_headers.clone(),
-                    content_source,
-                ));
-                 */
             }
 
             return Ok(result);
@@ -197,7 +169,7 @@ impl SettingsReader {
         return Ok(vec![]);
     }
 
-    pub async fn get_listen_ports(&self) -> Result<BTreeMap<u16, EndpointType>, ProxyPassError> {
+    pub async fn get_listen_ports(&self) -> Result<BTreeMap<u16, EndpointType>, String> {
         let read_access = self.settings.read().await;
 
         let mut result: BTreeMap<u16, EndpointType> = BTreeMap::new();
@@ -213,6 +185,7 @@ impl SettingsReader {
                             host,
                             proxy_pass.locations.as_slice(),
                             &read_access.variables,
+                            &read_access.ssh,
                         )?,
                     );
                 }
@@ -241,86 +214,6 @@ fn format_mem(size: usize) -> String {
 
     return format!("{:.2}Mb", size);
 }
-
-/*
-fn check_and_get_endpoint_type(
-    host: &str,
-    locations: &[Location],
-    variables: &Option<HashMap<String, String>>,
-) -> EndpointType {
-    let mut tcp_location = None;
-    let mut http_count = 0;
-
-    let mut https_location = None;
-    let mut http2_count = 0;
-    let mut tcp_over_ssh = None;
-
-    for location in locations {
-        match location.get_endpoint_type(host, variables) {
-            EndpointType::Http1 => http_count += 1,
-            EndpointType::Https1(ssl_certificate_id) => {
-                if https_location.is_some() {
-                    panic!(
-                        "Host '{}' has more than one tcp location. It must be only single location",
-                        host
-                    );
-                }
-
-                https_location = Some(ssl_certificate_id);
-            }
-            EndpointType::Http2 => http2_count += 1,
-            EndpointType::Tcp(proxy_pass) => {
-                if tcp_location.is_some() {
-                    panic!(
-                        "Host '{}' has more than one tcp location. It must be only single location",
-                        host
-                    );
-                }
-
-                tcp_location = Some(proxy_pass);
-            }
-            EndpointType::TcpOverSsh(ssh_configuration) => {
-                if tcp_over_ssh.is_some() {
-                    panic!(
-                        "Host '{}' has more than one tcp over SSH location. It must be only single location",
-                        host
-                    );
-                }
-
-                tcp_over_ssh = Some(ssh_configuration);
-            }
-        }
-    }
-    if tcp_location.is_some() && http_count > 0 && http2_count > 0 && tcp_over_ssh.is_some() {
-        panic!(
-            "Host '{}' has {} http, {:?} https, {} http2, '{:?}' tcp and {:?} tcp over ssh configurations",
-            host, http_count, https_location, http2_count, tcp_location, tcp_over_ssh
-        );
-    }
-
-    if let Some(tcp_location) = tcp_location {
-        return EndpointType::Tcp(tcp_location);
-    }
-
-    if let Some(tcp_over_ssh) = tcp_over_ssh {
-        return EndpointType::TcpOverSsh(tcp_over_ssh);
-    }
-
-    if http_count > 0 {
-        return EndpointType::Http1;
-    }
-
-    if let Some(https) = https_location {
-        return EndpointType::Https1(https);
-    }
-
-    if http2_count > 0 {
-        return EndpointType::Http2;
-    }
-
-    panic!("Host '{}' has no locations", host);
-}
- */
 
 #[cfg(test)]
 mod tests {
@@ -357,12 +250,33 @@ mod tests {
             },
         );
 
+        let mut ssh_configs = HashMap::new();
+
+        ssh_configs.insert(
+            "root@10.0.0.1".to_string(),
+            crate::settings::SshConfigSettings {
+                password: "my_password".to_string().into(),
+                private_key_file: None,
+                passphrase: None,
+            },
+        );
+
+        ssh_configs.insert(
+            "root@10.0.0.2".to_string(),
+            crate::settings::SshConfigSettings {
+                password: None,
+                private_key_file: Some("~/certs/private_key.ssh".to_string()),
+                passphrase: Some("my_pass_phrase".to_string()),
+            },
+        );
+
         let model = SettingsModel {
             hosts,
             global_settings: None,
             variables: None,
             ssl_certificates: None,
             client_certificate_ca: None,
+            ssh: Some(ssh_configs),
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

@@ -43,8 +43,11 @@ async fn main() {
                 host_str,
                 debug,
             } => {
-                if let Some((cert, private_key)) =
-                    app.settings_reader.get_ssl_certificate(&ssl_id).await
+                if let Some((cert, private_key)) = app
+                    .settings_reader
+                    .get_ssl_certificate(&ssl_id)
+                    .await
+                    .unwrap()
                 {
                     ssh_server_id += 1;
 
@@ -59,6 +62,7 @@ async fn main() {
                             .settings_reader
                             .get_client_certificate_ca(client_ca_id.as_str())
                             .await
+                            .unwrap()
                         {
                             let client_ca = crate::flows::get_file(&client_cert).await;
                             crate::http_server::start_https_server(
@@ -102,8 +106,11 @@ async fn main() {
                 host_str,
                 debug,
             } => {
-                if let Some((cert, private_key)) =
-                    app.settings_reader.get_ssl_certificate(&ssl_id).await
+                if let Some((cert, private_key)) = app
+                    .settings_reader
+                    .get_ssl_certificate(&ssl_id)
+                    .await
+                    .unwrap()
                 {
                     ssh_server_id += 1;
 
@@ -118,6 +125,7 @@ async fn main() {
                             .settings_reader
                             .get_client_certificate_ca(client_ca_id.as_str())
                             .await
+                            .unwrap()
                         {
                             let client_ca = crate::flows::get_file(&client_cert).await;
                             crate::http_server::start_https2_server(

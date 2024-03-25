@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use serde::*;
 
-use crate::http_proxy_pass::ProxyPassError;
-
-use super::{EndpointType, LocationSettings, ModifyHttpHeadersSettings, SslCertificateId};
+use super::{
+    EndpointType, LocationSettings, ModifyHttpHeadersSettings, SshConfigSettings, SslCertificateId,
+};
 
 const HTTP1_ENDPOINT_TYPE: &str = "http";
 
@@ -27,7 +27,8 @@ impl EndpointSettings {
         host: &str,
         locations: &[LocationSettings],
         variables: &Option<HashMap<String, String>>,
-    ) -> Result<EndpointType, ProxyPassError> {
+        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+    ) -> Result<EndpointType, String> {
         match self.endpoint_type.as_str() {
             HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1 {
                 host_str: host.to_string(),
@@ -80,24 +81,24 @@ impl EndpointSettings {
 
                 let location_settings = locations.get(0).unwrap();
 
-                match location_settings.get_proxy_pass(variables) {
+                match location_settings.get_proxy_pass(variables, ssh_config)? {
                     super::ProxyPassTo::Http(_) => {
-                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                        return Err(
                             "It is not possible to serve remote http content over tcp endpoint"
                                 .to_string(),
-                        ));
+                        );
                     }
                     super::ProxyPassTo::Static => {
-                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                        return Err(
                             "It is not possible to serve static content over tcp endpoint"
                                 .to_string(),
-                        ));
+                        );
                     }
                     super::ProxyPassTo::LocalPath(_) => {
-                        return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                        return Err(
                             "It is not possible to serve local path content over tcp endpoint"
                                 .to_string(),
-                        ));
+                        );
                     }
                     super::ProxyPassTo::Ssh(ssh_config) => match ssh_config.remote_content {
                         super::SshContent::RemoteHost(remote_host) => {
@@ -108,10 +109,10 @@ impl EndpointSettings {
                             });
                         }
                         super::SshContent::FilePath(_) => {
-                            return Err(ProxyPassError::CanNotReadSettingsConfiguration(
+                            return Err(
                                 "It is not possible to serve remote ssh path content over tcp endpoint"
                                     .to_string(),
-                            ));
+                            );
                         }
                     },
                     super::ProxyPassTo::Tcp(remote_addr) => {

@@ -34,3 +34,5 @@ mod file_source;
 pub use file_source::*;
 mod remote_host;
 pub use remote_host::*;
+mod ssh_config_settings;
+pub use ssh_config_settings::*;

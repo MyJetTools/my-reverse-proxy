@@ -209,7 +209,7 @@ Example of serving redirect to the same url but with https schema
 ```
 
 
-### Variables which can be used to populate headers or content
+### System Variables which can be used to populate headers or content
 
 * ${ENDPOINT_IP} - ip of server listen endpoint;
 * ${ENDPOINT_SCHEMA} - http or https schema of listen endpoint;
@@ -217,8 +217,20 @@ Example of serving redirect to the same url but with https schema
 * ${PATH_AND_QUERY} - path and query of request;
 * ${HOST_PORT} - host and port of request;
 
+### Environment variables
+
+As well variables can be read from environment variables
+
+Priory of reading is:
+* System variables;
+* Yaml variables
+* Environment variables
+
+
 ### Variable tips.
-* All the system variables are upper case, and all the custom variables are lower case.
+* All the system variables are upper cased;
+* All the environment variables are upper cased;
+* All the custom variables are lower case;
 
 
 Example of custom variable:
@@ -297,7 +309,7 @@ By default if there is no settings for SSH tunnel - SSH agent is used.
 ### To use password please specify
 ```yaml
 ssh:
-  - ssh_user@10.0.0.5:
+  ssh_user@10.0.0.5:
     password: password
 ```
 
@@ -305,7 +317,7 @@ ssh:
 ### To use private key please specify
 ```yaml
 ssh:
-  - ssh_user@10.0.0.5:
-    private_key: ~/certs/private_key.key
+  ssh_user@10.0.0.5:
+    private_key_file: ~/certs/private_key.key
     passphrase: passphrase
 ```
