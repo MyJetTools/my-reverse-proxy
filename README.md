@@ -289,3 +289,23 @@ hosts:
       type: http
       debug: true
 ```       
+
+## Settings up SSH tunnels.
+
+By default if there is no settings for SSH tunnel - SSH agent is used.
+
+### To use password please specify
+```yaml
+ssh:
+  - ssh_user@10.0.0.5:
+    password: password
+```
+
+
+### To use private key please specify
+```yaml
+ssh:
+  - ssh_user@10.0.0.5:
+    private_key: ~/certs/private_key.key
+    passphrase: passphrase
+```
