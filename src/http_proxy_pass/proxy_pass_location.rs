@@ -25,6 +25,7 @@ impl ProxyPassLocation {
             content_source,
         }
     }
+
     pub fn is_my_uri(&self, uri: &Uri) -> bool {
         let result = rust_extensions::str_utils::starts_with_case_insensitive(
             uri.path(),

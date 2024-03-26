@@ -10,6 +10,16 @@ pub async fn get_locations<'s>(
         return Err(ProxyPassError::NoConfigurationFound);
     }
 
+    for location in &result {
+        println!(
+            "Request  {:?}:{} got locations: {}->{}",
+            host.get_host(),
+            host.get_port(),
+            location.path,
+            location.content_source.to_string()
+        );
+    }
+
     Ok(result)
     /*
     match proxy_pass_settings {

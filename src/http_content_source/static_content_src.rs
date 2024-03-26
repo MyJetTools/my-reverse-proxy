@@ -6,11 +6,13 @@ use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct StaticContentSrc {
     pub inner: Arc<StaticContentExecutor>,
+    pub status_code: u16,
 }
 
 impl StaticContentSrc {
     pub fn new(status_code: u16, content_type: Option<String>, body: Vec<u8>) -> Self {
         Self {
+            status_code,
             inner: Arc::new(StaticContentExecutor {
                 status_code,
                 content_type,

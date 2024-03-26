@@ -7,7 +7,7 @@ use crate::{http_proxy_pass::ProxyPassError, settings::LocalFilePath};
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct LocalPathContentSrc {
-    file_path: String,
+    pub file_path: String,
     default_file: Option<String>,
 }
 

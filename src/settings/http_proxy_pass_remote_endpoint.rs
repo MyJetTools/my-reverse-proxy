@@ -4,6 +4,7 @@ use my_ssh::SshCredentials;
 
 use super::RemoteHost;
 
+#[derive(Debug)]
 pub enum HttpProxyPassRemoteEndpoint {
     Http(RemoteHost),
     Http2(RemoteHost),
