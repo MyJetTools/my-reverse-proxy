@@ -15,9 +15,10 @@ pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>, host_str: Strin
 async fn start_http_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    host_str: String,
+    host_configuration: String,
     debug: bool,
 ) {
+    let host_configuration = Arc::new(host_configuration);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
@@ -32,14 +33,17 @@ async fn start_http_server_loop(
 
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_str.as_str())
+            .get_http_endpoint_modify_headers_settings(host_configuration.as_str())
             .await;
+
+        let host_configuration = host_configuration.clone();
 
         let http_proxy_pass = Arc::new(HttpProxyPass::new(
             socket_addr,
             modify_headers_settings,
             true,
             debug,
+            host_configuration,
         ));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();

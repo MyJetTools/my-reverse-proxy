@@ -14,6 +14,7 @@ pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
     http_1: bool,
     pub debug: bool,
+    pub host_configuration: Arc<String>,
 }
 
 impl HttpProxyPass {
@@ -22,6 +23,7 @@ impl HttpProxyPass {
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
         http_1: bool,
         debug: bool,
+        host_configuration: Arc<String>,
     ) -> Self {
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
@@ -30,6 +32,7 @@ impl HttpProxyPass {
             )),
             http_1,
             debug,
+            host_configuration,
         }
     }
 

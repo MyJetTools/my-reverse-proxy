@@ -18,6 +18,7 @@ async fn start_https2_server_loop(
     host_str: String,
     debug: bool,
 ) {
+    let host_str = Arc::new(host_str);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),
@@ -35,12 +36,15 @@ async fn start_https2_server_loop(
             .get_http_endpoint_modify_headers_settings(host_str.as_str())
             .await;
 
+        let host_configuration = host_str.clone();
+
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
                 socket_addr,
                 modify_headers_settings,
                 false,
                 debug,
+                host_configuration,
             ));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder

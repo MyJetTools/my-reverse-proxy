@@ -41,9 +41,10 @@ async fn start_https2_server_loop(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
-    host_str: String,
+    host_configuration: String,
     debug: bool,
 ) {
+    let host_configuration = Arc::new(host_configuration);
     //let certified_key = certificate.get_certified_key();
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
@@ -110,10 +111,12 @@ async fn start_https2_server_loop(
 
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_str.as_str())
+            .get_http_endpoint_modify_headers_settings(host_configuration.as_str())
             .await;
 
         let http_builder = http_builder.clone();
+
+        let host_configuration = host_configuration.clone();
 
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
@@ -121,6 +124,7 @@ async fn start_https2_server_loop(
                 modify_headers_settings,
                 false,
                 debug,
+                host_configuration,
             ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {

@@ -15,7 +15,12 @@ pub async fn handle_requests(
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
     let debug = if proxy_pass.debug {
-        let req_str = format!("[{}]{:?}", req.method(), req.uri());
+        let req_str = format!(
+            "{}: [{}]{:?}",
+            proxy_pass.host_configuration.as_str(),
+            req.method(),
+            req.uri()
+        );
         let mut sw = StopWatch::new();
         sw.start();
         println!("Req: {}", req_str);
