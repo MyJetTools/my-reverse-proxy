@@ -52,6 +52,9 @@ impl SshConfiguration {
     ) -> Result<Self, String> {
         let mut parts = src.as_str().split("->");
         let ssh_part = parts.next().unwrap();
+
+        let ssh_part = ssh_part[4..].trim();
+
         let remote_part = parts.next().unwrap();
 
         let remote_content = parse_remote_part(remote_part);
@@ -62,6 +65,7 @@ impl SshConfiguration {
                     super::SshConfigOption::AsPassword(password) => {
                         let (ssh_user_name, ssh_session_host, ssh_session_port) =
                             parse_ssh_part(ssh_part);
+                        println!("SSH: {} using Login+Password for authentication", ssh_part);
                         return Ok(Self {
                             credentials: SshCredentials::UserNameAndPassword {
                                 ssh_remote_host: ssh_session_host.to_string(),
@@ -79,6 +83,7 @@ impl SshConfiguration {
                     } => {
                         let (ssh_user_name, ssh_session_host, ssh_session_port) =
                             parse_ssh_part(ssh_part);
+                        println!("SSH: {} using PrivateKey for authentication", ssh_part);
                         return Ok(Self {
                             credentials: SshCredentials::PrivateKey {
                                 ssh_remote_host: ssh_session_host.to_string(),
@@ -94,6 +99,7 @@ impl SshConfiguration {
                 }
             } else {
                 let (ssh_user_name, ssh_session_host, ssh_session_port) = parse_ssh_part(ssh_part);
+                println!("SSH: {} using SshAgent for authentication", ssh_part);
                 let result = Self {
                     credentials: SshCredentials::SshAgent {
                         ssh_remote_host: ssh_session_host.to_string(),
@@ -108,6 +114,8 @@ impl SshConfiguration {
             }
         } else {
             let (ssh_user_name, ssh_session_host, ssh_session_port) = parse_ssh_part(ssh_part);
+            println!("SSH: {} using SshAgent for authentication", ssh_part);
+
             let result = Self {
                 credentials: SshCredentials::SshAgent {
                     ssh_remote_host: ssh_session_host.to_string(),
