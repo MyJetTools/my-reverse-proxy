@@ -57,7 +57,15 @@ impl<'s> HostPort<'s> {
     }
 
     pub fn is_https(&self) -> bool {
-        self.uri.scheme_str().unwrap_or_default().to_lowercase() == "https"
+        if let Some(scheme_str) = self.uri.scheme_str() {
+            return rust_extensions::str_utils::compare_strings_case_insensitive(
+                scheme_str, "https",
+            );
+        }
+
+        println!("HostPort::is_https. No scheme found in uri: {:?}", self.uri);
+
+        return false;
     }
 
     pub fn get_port_opt(&self) -> Option<u16> {
