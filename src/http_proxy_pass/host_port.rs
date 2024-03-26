@@ -3,12 +3,13 @@ use hyper::{header::HeaderValue, HeaderMap, Uri};
 pub struct HostPort<'s> {
     uri: &'s Uri,
     host: Option<&'s HeaderValue>,
+    headers: &'s HeaderMap<HeaderValue>,
 }
 
 impl<'s> HostPort<'s> {
     pub fn new(uri: &'s Uri, headers: &'s HeaderMap<HeaderValue>) -> Self {
         let host = headers.get("host");
-        Self { uri, host }
+        Self { uri, host, headers }
     }
 
     pub fn is_my_host_port(&self, host_port: &str) -> bool {
@@ -63,7 +64,10 @@ impl<'s> HostPort<'s> {
             );
         }
 
-        println!("HostPort::is_https. No scheme found in uri: {:?}", self.uri);
+        println!(
+            "HostPort::is_https. No scheme found in uri: {:?}. Headers: {:#?}",
+            self.uri, self.headers
+        );
 
         return false;
     }
