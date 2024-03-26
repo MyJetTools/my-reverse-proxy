@@ -19,7 +19,7 @@ impl FileSource {
             return Ok(FileSource::Http(src.to_string()));
         }
 
-        if src.as_str().starts_with("ssh") {
+        if src.as_str().starts_with(super::SSH_PREFIX) {
             return Ok(FileSource::Ssh(SshConfiguration::parse(src, ssh_config)?));
         }
 

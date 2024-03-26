@@ -21,7 +21,7 @@ impl ProxyPassTo {
             return Ok(ProxyPassTo::Static);
         }
 
-        if src.as_str().starts_with("ssh") {
+        if src.as_str().starts_with(super::SSH_PREFIX) {
             return Ok(ProxyPassTo::Ssh(SshConfiguration::parse(
                 src,
                 &ssh_configs,

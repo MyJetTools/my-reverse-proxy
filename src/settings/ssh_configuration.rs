@@ -5,6 +5,8 @@ use rust_extensions::StrOrString;
 
 use super::{LocalFilePath, RemoteHost, SshConfigSettings};
 
+pub const SSH_PREFIX: &str = "ssh:";
+
 #[derive(Debug)]
 pub enum SshContent {
     RemoteHost(RemoteHost),
@@ -53,7 +55,7 @@ impl SshConfiguration {
         let mut parts = src.as_str().split("->");
         let ssh_part = parts.next().unwrap();
 
-        let ssh_part = ssh_part[4..].trim();
+        let ssh_part = ssh_part[SSH_PREFIX.len()..].trim();
 
         let remote_part = parts.next().unwrap();
 
