@@ -12,7 +12,7 @@ use crate::app::{AppContext, SslCertificate};
 
 use super::{ClientCertificateCa, MyClientCertVerifier};
 
-use crate::http_proxy_pass::HttpProxyPass;
+use crate::http_proxy_pass::{HttpProxyPass, ProxyPassEndpointInfo};
 
 pub fn start_https2_server(
     addr: SocketAddr,
@@ -20,8 +20,7 @@ pub fn start_https2_server(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
-    host_str: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
     println!("Listening h2 on https://{}", addr);
     tokio::spawn(start_https2_server_loop(
@@ -30,8 +29,7 @@ pub fn start_https2_server(
         certificate,
         client_cert_ca,
         server_id,
-        host_str,
-        debug,
+        endpoint_info,
     ));
 }
 
@@ -41,10 +39,9 @@ async fn start_https2_server_loop(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
-    host_configuration: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
-    let host_configuration = Arc::new(host_configuration);
+    let endpoint_info = Arc::new(endpoint_info);
     //let certified_key = certificate.get_certified_key();
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
@@ -93,12 +90,12 @@ async fn start_https2_server_loop(
 
     loop {
         if has_client_cert_ca {
-            if debug {
+            if endpoint_info.debug {
                 println!("Waiting until we get common_name");
             }
 
             app.saved_client_certs.wait_while_we_read_it(server_id);
-            if debug {
+            if endpoint_info.debug {
                 println!("Waited until we get common_name");
             }
         }
@@ -111,20 +108,18 @@ async fn start_https2_server_loop(
 
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_configuration.as_str())
+            .get_http_endpoint_modify_headers_settings(&endpoint_info)
             .await;
 
         let http_builder = http_builder.clone();
 
-        let host_configuration = host_configuration.clone();
+        let endpoint_info = endpoint_info.clone();
 
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
                 socket_addr,
                 modify_headers_settings,
-                false,
-                debug,
-                host_configuration,
+                endpoint_info.clone(),
             ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
@@ -140,7 +135,7 @@ async fn start_https2_server_loop(
                     if has_client_cert_ca {
                         app.saved_client_certs.get(server_id);
                     }
-                    if debug {
+                    if endpoint_info.debug {
                         eprintln!("failed to perform tls handshake: {err:#}");
                     }
                     return;

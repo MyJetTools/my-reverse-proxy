@@ -7,18 +7,21 @@ use crate::app::AppContext;
 
 use crate::http_proxy_pass::*;
 
-pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String, debug: bool) {
+pub fn start_h2_server(
+    addr: SocketAddr,
+    app: Arc<AppContext>,
+    endpoint_info: ProxyPassEndpointInfo,
+) {
     println!("Listening h2 on http://{}", addr);
-    tokio::spawn(start_https2_server_loop(addr, app, host_str, debug));
+    tokio::spawn(start_https2_server_loop(addr, app, endpoint_info));
 }
 
 async fn start_https2_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    host_str: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
-    let host_str = Arc::new(host_str);
+    let endpoint_info = Arc::new(endpoint_info);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),
@@ -33,18 +36,16 @@ async fn start_https2_server_loop(
         let builder = builder.clone();
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_str.as_str())
+            .get_http_endpoint_modify_headers_settings(endpoint_info.as_ref())
             .await;
 
-        let host_configuration = host_str.clone();
+        let endpoint_info = endpoint_info.clone();
 
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
                 socket_addr,
                 modify_headers_settings,
-                false,
-                debug,
-                host_configuration,
+                endpoint_info,
             ));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder

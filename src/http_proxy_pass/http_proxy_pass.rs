@@ -8,31 +8,28 @@ use crate::{
     app::AppContext, http_client::HTTP_CLIENT_TIMEOUT, settings::HttpEndpointModifyHeadersSettings,
 };
 
-use super::{BuildResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassError, RetryType};
+use super::{
+    BuildResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassEndpointInfo, ProxyPassError,
+    RetryType,
+};
 
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
-    http_1: bool,
-    pub debug: bool,
-    pub host_configuration: Arc<String>,
+    pub endpoint_info: Arc<ProxyPassEndpointInfo>,
 }
 
 impl HttpProxyPass {
     pub fn new(
         socket_addr: SocketAddr,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
-        http_1: bool,
-        debug: bool,
-        host_configuration: Arc<String>,
+        endpoint_info: Arc<ProxyPassEndpointInfo>,
     ) -> Self {
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
                 socket_addr,
                 modify_headers_settings,
             )),
-            http_1,
-            debug,
-            host_configuration,
+            endpoint_info,
         }
     }
 
@@ -46,15 +43,14 @@ impl HttpProxyPass {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
-        let mut req = HttpRequestBuilder::new(self.http_1, req);
+        let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
         loop {
             let (future1, future2, build_result, request_executor, dest_http1) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.initialized() {
-                    let host_port = req.get_host_port();
-                    inner.init(app, &host_port).await?;
+                    inner.init(app, &self.endpoint_info).await?;
                 }
 
                 let build_result = req.populate_and_build(&inner).await?;
@@ -157,7 +153,7 @@ impl HttpProxyPass {
                             response,
                             &inner,
                             &location_index,
-                            self.http_1,
+                            self.endpoint_info.http_type,
                             dest_http1.unwrap(),
                         )
                         .await?;
@@ -184,7 +180,7 @@ impl HttpProxyPass {
                     upgrade_response,
                     web_socket,
                 } => {
-                    if self.debug {
+                    if self.endpoint_info.debug {
                         println!("Doing web_socket upgrade");
                     }
 
@@ -200,7 +196,7 @@ impl HttpProxyPass {
                                 return Ok(Ok(upgrade_response));
                             }
                             Err(e) => {
-                                if self.debug {
+                                if self.endpoint_info.debug {
                                     println!("Upgrade Error: {:?}", e);
                                 }
 
@@ -208,7 +204,7 @@ impl HttpProxyPass {
                             }
                         },
                         Err(err) => {
-                            if self.debug {
+                            if self.endpoint_info.debug {
                                 println!("Upgrade Request Error: {:?}", err);
                             }
 

@@ -19,3 +19,7 @@ mod http_proxy_pass_content_source;
 pub use http_proxy_pass_content_source::*;
 mod web_socket_loop;
 pub use web_socket_loop::*;
+mod proxy_pass_endpoint_info;
+pub use proxy_pass_endpoint_info::*;
+mod http_type;
+pub use http_type::*;

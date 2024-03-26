@@ -23,25 +23,19 @@ async fn main() {
 
     let app = Arc::new(app);
 
-    let mut ssh_server_id = 0;
+    let mut ssl_server_id = 0;
 
     for (listen_port, endpoint_type) in listen_ports {
         let listen_end_point = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
         match endpoint_type {
-            settings::EndpointType::Http1 { host_str, debug } => {
-                crate::http_server::start_http_server(
-                    listen_end_point,
-                    app.clone(),
-                    host_str,
-                    debug,
-                );
+            settings::EndpointType::Http1(endpoint_info) => {
+                crate::http_server::start_http_server(listen_end_point, app.clone(), endpoint_info);
             }
             settings::EndpointType::Https {
                 ssl_id,
                 client_ca_id,
-                host_str,
-                debug,
+                endpoint_info,
             } => {
                 if let Some((cert, private_key)) = app
                     .settings_reader
@@ -49,7 +43,7 @@ async fn main() {
                     .await
                     .unwrap()
                 {
-                    ssh_server_id += 1;
+                    ssl_server_id += 1;
 
                     let ssl_certificate = SslCertificate::new(
                         crate::flows::get_file(&cert).await,
@@ -70,9 +64,8 @@ async fn main() {
                                 app.clone(),
                                 ssl_certificate,
                                 Some(client_ca.into()),
-                                ssh_server_id,
-                                host_str,
-                                debug,
+                                ssl_server_id,
+                                endpoint_info,
                             );
                         } else {
                             panic!(
@@ -87,9 +80,8 @@ async fn main() {
                             app.clone(),
                             ssl_certificate,
                             None,
-                            ssh_server_id,
-                            host_str,
-                            debug,
+                            ssl_server_id,
+                            endpoint_info,
                         );
                     }
                 } else {
@@ -103,8 +95,7 @@ async fn main() {
             settings::EndpointType::Https2 {
                 ssl_id,
                 client_ca_id,
-                host_str,
-                debug,
+                endpoint_info,
             } => {
                 if let Some((cert, private_key)) = app
                     .settings_reader
@@ -112,7 +103,7 @@ async fn main() {
                     .await
                     .unwrap()
                 {
-                    ssh_server_id += 1;
+                    ssl_server_id += 1;
 
                     let ssl_certificate = SslCertificate::new(
                         crate::flows::get_file(&cert).await,
@@ -133,9 +124,8 @@ async fn main() {
                                 app.clone(),
                                 ssl_certificate,
                                 Some(client_ca.into()),
-                                ssh_server_id,
-                                host_str,
-                                debug,
+                                ssl_server_id,
+                                endpoint_info,
                             );
                         } else {
                             panic!(
@@ -150,9 +140,8 @@ async fn main() {
                             app.clone(),
                             ssl_certificate,
                             None,
-                            ssh_server_id,
-                            host_str,
-                            debug,
+                            ssl_server_id,
+                            endpoint_info,
                         );
                     }
                 } else {
@@ -163,8 +152,8 @@ async fn main() {
                     );
                 }
             }
-            settings::EndpointType::Http2 { host_str, debug } => {
-                crate::http_server::start_h2_server(listen_end_point, app.clone(), host_str, debug);
+            settings::EndpointType::Http2(endpoint_info) => {
+                crate::http_server::start_h2_server(listen_end_point, app.clone(), endpoint_info);
             }
             settings::EndpointType::Tcp { remote_addr, debug } => {
                 crate::tcp_port_forward::start_tcp(

@@ -14,10 +14,10 @@ pub async fn handle_requests(
     proxy_pass: Arc<HttpProxyPass>,
     app: Arc<AppContext>,
 ) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    let debug = if proxy_pass.debug {
+    let debug = if proxy_pass.endpoint_info.debug {
         let req_str = format!(
             "{}: [{}]{:?}",
-            proxy_pass.host_configuration.as_str(),
+            proxy_pass.endpoint_info.as_str(),
             req.method(),
             req.uri()
         );

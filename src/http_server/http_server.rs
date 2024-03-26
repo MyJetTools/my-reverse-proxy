@@ -7,18 +7,21 @@ use crate::app::AppContext;
 
 use crate::http_proxy_pass::*;
 
-pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>, host_str: String, debug: bool) {
+pub fn start_http_server(
+    addr: SocketAddr,
+    app: Arc<AppContext>,
+    endpoint_info: ProxyPassEndpointInfo,
+) {
     println!("Listening http1 on http://{}", addr);
-    tokio::spawn(start_http_server_loop(addr, app, host_str, debug));
+    tokio::spawn(start_http_server_loop(addr, app, endpoint_info));
 }
 
 async fn start_http_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    host_configuration: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
-    let host_configuration = Arc::new(host_configuration);
+    let endpoint_info = Arc::new(endpoint_info);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
@@ -33,17 +36,15 @@ async fn start_http_server_loop(
 
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_configuration.as_str())
+            .get_http_endpoint_modify_headers_settings(endpoint_info.as_ref())
             .await;
 
-        let host_configuration = host_configuration.clone();
+        let endpoint_info = endpoint_info.clone();
 
         let http_proxy_pass = Arc::new(HttpProxyPass::new(
             socket_addr,
             modify_headers_settings,
-            true,
-            debug,
-            host_configuration,
+            endpoint_info,
         ));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();

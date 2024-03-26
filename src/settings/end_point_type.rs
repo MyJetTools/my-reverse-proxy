@@ -2,30 +2,24 @@ use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 
+use crate::http_proxy_pass::ProxyPassEndpointInfo;
+
 use super::{RemoteHost, SslCertificateId};
 
 #[derive(Debug)]
 pub enum EndpointType {
-    Http1 {
-        host_str: String,
-        debug: bool,
-    },
+    Http1(ProxyPassEndpointInfo),
     Https {
-        host_str: String,
+        endpoint_info: ProxyPassEndpointInfo,
         ssl_id: super::SslCertificateId,
         client_ca_id: Option<SslCertificateId>,
-        debug: bool,
     },
     Https2 {
-        host_str: String,
+        endpoint_info: ProxyPassEndpointInfo,
         ssl_id: super::SslCertificateId,
         client_ca_id: Option<SslCertificateId>,
-        debug: bool,
     },
-    Http2 {
-        host_str: String,
-        debug: bool,
-    },
+    Http2(ProxyPassEndpointInfo),
     Tcp {
         remote_addr: std::net::SocketAddr,
         debug: bool,

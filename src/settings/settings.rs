@@ -50,7 +50,7 @@ impl SettingsReader {
 
     pub async fn get_http_endpoint_modify_headers_settings(
         &self,
-        host_str: &str,
+        endpoint_info: &ProxyPassEndpointInfo,
     ) -> HttpEndpointModifyHeadersSettings {
         let mut result = HttpEndpointModifyHeadersSettings::default();
         let read_access = self.settings.read().await;
@@ -64,7 +64,7 @@ impl SettingsReader {
         }
 
         for (host, proxy_pass) in &read_access.hosts {
-            if host != host_str {
+            if !endpoint_info.is_my_endpoint(host) {
                 continue;
             }
 
@@ -114,17 +114,18 @@ impl SettingsReader {
         Ok(None)
     }
 
-    pub async fn get_locations<'s>(
+    pub async fn get_locations(
         &self,
         app: &AppContext,
-        host_port: &HostPort<'s>,
+        proxy_pass_endpoint_info: &ProxyPassEndpointInfo,
     ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
         let read_access = self.settings.read().await;
 
         for (settings_host, proxy_pass_settings) in &read_access.hosts {
-            if !host_port.is_my_host_port(settings_host) {
+            if !proxy_pass_endpoint_info.is_my_endpoint(settings_host) {
                 continue;
             }
+
             let location_id = app.get_id();
 
             let mut result = Vec::new();

@@ -8,7 +8,6 @@ use super::HostPort;
 
 pub struct SourceHttpData {
     pub is_https: bool,
-    pub host: Option<String>,
     pub socket_addr: SocketAddr,
     pub client_cert_cn: Option<String>,
 }
@@ -17,7 +16,6 @@ impl SourceHttpData {
     pub fn new(socket_addr: SocketAddr) -> Self {
         Self {
             is_https: false,
-            host: None,
             socket_addr,
             client_cert_cn: None,
         }
@@ -38,7 +36,7 @@ impl SourceHttpData {
                 rust_extensions::placeholders::ContentToken::Placeholder(placeholder) => {
                     match placeholder {
                         "HOST" => {
-                            if let Some(host) = &self.host {
+                            if let Some(host) = req_uri.get_host() {
                                 result.push_str(host);
                             }
                         }

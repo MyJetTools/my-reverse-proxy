@@ -9,7 +9,8 @@ use hyper::{
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
 
 use super::{
-    into_full_bytes, HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData,
+    into_full_bytes, HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError,
+    SourceHttpData,
 };
 
 pub async fn build_http_response(
@@ -17,12 +18,12 @@ pub async fn build_http_response(
     response: hyper::Response<Incoming>,
     inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
-    src_http1: bool,
+    src: HttpType,
     dest_http1: bool,
 ) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
-    if dest_http1 && !src_http1 {
+    if dest_http1 && !src.is_http1() {
         parts.headers.remove(header::TRANSFER_ENCODING);
         parts.headers.remove(header::CONNECTION);
         parts.headers.remove(header::UPGRADE);

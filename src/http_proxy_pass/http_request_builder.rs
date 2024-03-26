@@ -11,7 +11,9 @@ use tokio::sync::Mutex;
 
 use crate::settings::ModifyHttpHeadersSettings;
 
-use super::{HostPort, HttpProxyPassInner, LocationIndex, ProxyPassError, SourceHttpData};
+use super::{
+    HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError, SourceHttpData,
+};
 
 #[derive(Clone)]
 pub enum BuildResult {
@@ -35,16 +37,16 @@ impl BuildResult {
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
-    src_http1: bool,
+    src_http_type: HttpType,
     last_result: Option<BuildResult>,
 }
 
 impl HttpRequestBuilder {
-    pub fn new(src_http1: bool, src: hyper::Request<hyper::body::Incoming>) -> Self {
+    pub fn new(src_http_type: HttpType, src: hyper::Request<hyper::body::Incoming>) -> Self {
         Self {
             src: Some(src),
             prepared_request: None,
-            src_http1,
+            src_http_type,
             last_result: None,
         }
     }
@@ -66,7 +68,7 @@ impl HttpRequestBuilder {
 
         let dest_http1 = dest_http1.unwrap();
 
-        if self.src_http1 {
+        if self.src_http_type.is_http1() {
             if dest_http1 {
                 // src_http1 && dest_http1
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();

@@ -1,12 +1,12 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, settings::HttpEndpointModifyHeadersSettings};
 
 use super::{
-    HostPort, HttpProxyPassContentSource, LocationIndex, ProxyPassError, ProxyPassLocations,
-    SourceHttpData,
+    HttpProxyPassContentSource, LocationIndex, ProxyPassEndpointInfo, ProxyPassError,
+    ProxyPassLocations, SourceHttpData,
 };
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
@@ -46,14 +46,12 @@ impl HttpProxyPassInner {
     pub async fn init<'s>(
         &mut self,
         app: &AppContext,
-        host_port: &HostPort<'s>,
+        endpoint_info: &Arc<ProxyPassEndpointInfo>,
     ) -> Result<(), ProxyPassError> {
-        let locations = crate::flows::get_locations(app, &host_port).await?;
+        let locations = crate::flows::get_locations(app, endpoint_info).await?;
+
         self.locations.init(locations);
-        if let Some(host) = host_port.get_host() {
-            self.src.host = Some(host.to_string());
-        }
-        self.src.is_https = host_port.is_https();
+        self.src.is_https = endpoint_info.http_type.is_https();
         Ok(())
     }
 

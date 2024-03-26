@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use serde::*;
 
+use crate::http_proxy_pass::{HttpType, ProxyPassEndpointInfo};
+
 use super::{
     EndpointType, LocationSettings, ModifyHttpHeadersSettings, SshConfigSettings, SslCertificateId,
 };
@@ -30,15 +32,19 @@ impl EndpointSettings {
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<EndpointType, String> {
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1 {
-                host_str: host.to_string(),
-                debug: self.get_debug(),
-            }),
+            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(ProxyPassEndpointInfo::new(
+                host.to_string(),
+                HttpType::Http1,
+                self.get_debug(),
+            ))),
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
                     return Ok(EndpointType::Https {
-                        debug: self.get_debug(),
-                        host_str: host.to_string(),
+                        endpoint_info: ProxyPassEndpointInfo::new(
+                            host.to_string(),
+                            HttpType::Https1,
+                            self.get_debug(),
+                        ),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
                             .client_certificate_ca
@@ -52,8 +58,11 @@ impl EndpointSettings {
             "https2" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
                     return Ok(EndpointType::Https2 {
-                        debug: self.get_debug(),
-                        host_str: host.to_string(),
+                        endpoint_info: ProxyPassEndpointInfo::new(
+                            host.to_string(),
+                            HttpType::Https2,
+                            self.get_debug(),
+                        ),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
                             .client_certificate_ca
@@ -65,10 +74,11 @@ impl EndpointSettings {
                 }
             }
             "http2" => {
-                return Ok(EndpointType::Http2 {
-                    host_str: host.to_string(),
-                    debug: self.get_debug(),
-                })
+                return Ok(EndpointType::Http2(ProxyPassEndpointInfo::new(
+                    host.to_string(),
+                    HttpType::Http2,
+                    self.get_debug(),
+                )))
             }
             "tcp" => {
                 if locations.len() != 1 {

@@ -10,7 +10,7 @@ use crate::app::{AppContext, SslCertificate};
 
 use super::{ClientCertificateCa, MyClientCertVerifier};
 
-use crate::http_proxy_pass::HttpProxyPass;
+use crate::http_proxy_pass::{HttpProxyPass, ProxyPassEndpointInfo};
 
 pub fn start_https_server(
     addr: SocketAddr,
@@ -18,8 +18,7 @@ pub fn start_https_server(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
-    host_str: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
     println!("Listening http1 on https://{}", addr);
     tokio::spawn(start_https_server_loop(
@@ -28,8 +27,7 @@ pub fn start_https_server(
         certificate,
         client_cert_ca,
         server_id,
-        host_str,
-        debug,
+        endpoint_info,
     ));
 }
 
@@ -39,10 +37,9 @@ async fn start_https_server_loop(
     certificate: SslCertificate,
     client_cert_ca: Option<ClientCertificateCa>,
     server_id: i64,
-    host_configuration: String,
-    debug: bool,
+    endpoint_info: ProxyPassEndpointInfo,
 ) {
-    let host_configuration = Arc::new(host_configuration);
+    let endpoint_info = Arc::new(endpoint_info);
     //let certified_key = certificate.get_certified_key();
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
@@ -103,20 +100,18 @@ async fn start_https_server_loop(
 
         let modify_headers_settings = app
             .settings_reader
-            .get_http_endpoint_modify_headers_settings(host_configuration.as_str())
+            .get_http_endpoint_modify_headers_settings(endpoint_info.as_ref())
             .await;
 
         let http1 = http1.clone();
 
-        let host_configuration = host_configuration.clone();
+        let endpoint_info = endpoint_info.clone();
 
         tokio::spawn(async move {
             let http_proxy_pass = Arc::new(HttpProxyPass::new(
                 socket_addr,
                 modify_headers_settings,
-                true,
-                debug,
-                host_configuration,
+                endpoint_info,
             ));
 
             let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
