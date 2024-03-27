@@ -29,8 +29,8 @@ pub fn generate(app: &AppContext, email: &str) -> String {
     result.as_base_64()
 }
 
-pub fn resolve(app: &AppContext, token: &str) -> Option<String> {
-    let aes = AesEncryptedData::from_base_64(token).ok()?;
+pub fn resolve(app: &AppContext, token_str: &str) -> Option<String> {
+    let aes = AesEncryptedData::from_base_64(token_str).ok()?;
 
     let token = app.token_secret_key.decrypt(&aes).ok()?;
 
@@ -38,7 +38,8 @@ pub fn resolve(app: &AppContext, token: &str) -> Option<String> {
 
     let now = DateTimeAsMicroseconds::now().unix_microseconds;
 
-    if result.expires > now {
+    if result.expires < now {
+        println!("Session Token {} is expired", token_str);
         return None;
     }
 
