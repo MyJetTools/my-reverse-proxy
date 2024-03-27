@@ -119,12 +119,13 @@ impl SettingsReader {
     pub async fn get_locations(
         &self,
         app: &AppContext,
-        proxy_pass_endpoint_info: &ProxyPassEndpointInfo,
+        req: &HttpRequestBuilder,
+        is_https: bool,
     ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
         let read_access = self.settings.read().await;
 
         for (settings_host, proxy_pass_settings) in &read_access.hosts {
-            if !proxy_pass_endpoint_info.is_my_endpoint(settings_host) {
+            if !req.is_mine(settings_host, is_https) {
                 continue;
             }
 

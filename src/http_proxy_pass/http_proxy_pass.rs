@@ -48,17 +48,17 @@ impl HttpProxyPass {
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
         let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
-        match self.handle_auth_with_g_auth(app, &req).await {
-            GoogleAuthResult::Passed(user) => req.g_auth_user = user,
-            GoogleAuthResult::Content(content) => return Ok(content),
-        }
-
         loop {
             let (future1, future2, build_result, request_executor, dest_http1) = {
                 let mut inner = self.inner.lock().await;
 
                 if !inner.initialized() {
-                    inner.init(app, &self.endpoint_info).await?;
+                    inner.init(app, &self.endpoint_info, &req).await?;
+                }
+
+                match self.handle_auth_with_g_auth(app, &req).await {
+                    GoogleAuthResult::Passed(user) => req.g_auth_user = user,
+                    GoogleAuthResult::Content(content) => return Ok(content),
                 }
 
                 let build_result = req.populate_and_build(&inner).await?;
