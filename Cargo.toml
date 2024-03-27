@@ -38,7 +38,7 @@ x509-parser = { version = "*", features = ["verify"] }
 my-tls = { tag = "0.1.1", git = "https://github.com/MyJetTools/my-tls.git" }
 async-trait = "*"
 hyper-tungstenite = "*"
-uuid = "*"
+uuid = { version = "*", features = ["v4"] }
 prost = "*"
 prost-types = "*"
 serde_json = "*"

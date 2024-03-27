@@ -36,10 +36,14 @@ impl AppContext {
 fn generate_token_secret_key() -> Vec<u8> {
     let mut result = Vec::with_capacity(48);
 
-    let mut b = 0;
+    let mut key = vec![];
+
     while result.len() < 48 {
-        result.push(b); //todo!("Make it real")
-        b += 1;
+        if key.len() == 0 {
+            key = uuid::Uuid::new_v4().as_bytes().to_vec();
+        }
+
+        result.push(key.pop().unwrap());
     }
 
     result

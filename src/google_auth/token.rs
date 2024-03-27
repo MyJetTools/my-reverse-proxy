@@ -36,7 +36,11 @@ pub fn resolve(app: &AppContext, token: &str) -> Option<String> {
 
     let result: AuthToken = prost::Message::decode(token.as_slice()).ok()?;
 
-    //todo!("Check if token is expired and return None if it is.")
+    let now = DateTimeAsMicroseconds::now().unix_microseconds;
+
+    if result.expires > now {
+        return None;
+    }
 
     Some(result.email)
 }
