@@ -52,7 +52,10 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
 
     let user_info = serde_json::from_str::<GoogleUserInfo>(resp.as_str()).unwrap();
 
-    Ok(user_info.email)
+    match user_info.email {
+        Some(email) => Ok(email),
+        None => Err(resp),
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -71,5 +74,5 @@ pub struct OAuthResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct GoogleUserInfo {
-    pub email: String,
+    pub email: Option<String>,
 }
