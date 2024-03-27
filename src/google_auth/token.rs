@@ -38,6 +38,11 @@ pub fn resolve(app: &AppContext, token_str: &str) -> Option<String> {
 
     let now = DateTimeAsMicroseconds::now().unix_microseconds;
 
+    println!(
+        "Token Expires: {}",
+        DateTimeAsMicroseconds::new(result.expires).to_rfc3339()
+    );
+
     if result.expires < now {
         println!("Session Token {} is expired", token_str);
         return None;
