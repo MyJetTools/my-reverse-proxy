@@ -18,10 +18,16 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
             grant_type: "authorization_code".to_string(),
         })
         .await
-        .unwrap()
-        .receive_body()
-        .await
         .unwrap();
+
+    println!("status_code: {:?}", response.get_status_code());
+
+    let response = response.receive_body().await.unwrap();
+
+    println!(
+        "response: {}",
+        std::str::from_utf8(response.as_slice()).unwrap()
+    );
 
     let token = serde_json::from_slice::<OAuthResponse>(response.as_slice()).unwrap();
 
