@@ -9,6 +9,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     settings: &GoogleAuthSettings,
 ) -> Result<String, String> {
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
+        .do_not_reuse_connection()
         .with_header("ContentType", "application/json")
         .post_json(GetData {
             code: code.to_string(),
@@ -36,6 +37,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     }
 
     let resp = FlUrl::new("https://www.googleapis.com/oauth2/v1/userinfo")
+        .do_not_reuse_connection()
         .with_header(
             "Authorization",
             format!("Bearer {}", o_auth_response.access_token.unwrap()),
