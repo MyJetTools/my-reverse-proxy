@@ -48,6 +48,8 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
         .unwrap()
         .to_string();
 
+    println!("response_with_email: {}", resp);
+
     let user_info = serde_json::from_str::<GoogleUserInfo>(resp.as_str()).unwrap();
 
     Ok(user_info.email)
