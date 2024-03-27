@@ -265,8 +265,19 @@ impl HttpProxyPass {
 
             let code = req.get_from_query("code").unwrap();
 
-            let email =
-                crate::google_auth::resolve_email(req, code.as_str(), g_auth_settings).await;
+            let email = match crate::google_auth::resolve_email(req, code.as_str(), g_auth_settings)
+                .await
+            {
+                Ok(email) => email,
+                Err(err) => {
+                    let body = Full::from(Bytes::from(err.into_bytes()));
+
+                    return GoogleAuthResult::Content(Ok(hyper::Response::builder()
+                        .status(400)
+                        .body(body)
+                        .unwrap()));
+                }
+            };
 
             let body = Full::from(Bytes::from(
                 crate::google_auth::generate_authorized_page(req, email.as_str()).into_bytes(),

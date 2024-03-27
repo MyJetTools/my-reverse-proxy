@@ -7,7 +7,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     req: &THostPort,
     code: &str,
     settings: &GoogleAuthSettings,
-) -> String {
+) -> Result<String, String> {
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .with_header("ContentType", "application/json")
         .post_json(GetData {
@@ -29,10 +29,17 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
         std::str::from_utf8(response.as_slice()).unwrap()
     );
 
-    let token = serde_json::from_slice::<OAuthResponse>(response.as_slice()).unwrap();
+    let o_auth_response = serde_json::from_slice::<OAuthResponse>(response.as_slice()).unwrap();
+
+    if o_auth_response.access_token.is_none() {
+        return Err(String::from_utf8(response).unwrap());
+    }
 
     let resp = FlUrl::new("https://www.googleapis.com/oauth2/v1/userinfo")
-        .with_header("Authorization", format!("Bearer {}", token.access_token))
+        .with_header(
+            "Authorization",
+            format!("Bearer {}", o_auth_response.access_token.unwrap()),
+        )
         .get()
         .await
         .unwrap()
@@ -43,7 +50,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
 
     let user_info = serde_json::from_str::<GoogleUserInfo>(resp.as_str()).unwrap();
 
-    user_info.email
+    Ok(user_info.email)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,7 +64,7 @@ pub struct GetData {
 
 #[derive(Serialize, Deserialize)]
 pub struct OAuthResponse {
-    pub access_token: String,
+    pub access_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
