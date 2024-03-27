@@ -265,8 +265,13 @@ impl HttpProxyPass {
 
             let code = req.get_from_query("code").unwrap();
 
-            let email = match crate::google_auth::resolve_email(req, code.as_str(), g_auth_settings)
-                .await
+            let email = match crate::google_auth::resolve_email(
+                req,
+                code.as_str(),
+                g_auth_settings,
+                self.endpoint_info.debug,
+            )
+            .await
             {
                 Ok(email) => email,
                 Err(err) => {

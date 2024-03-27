@@ -7,6 +7,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     req: &THostPort,
     code: &str,
     settings: &GoogleAuthSettings,
+    debug: bool,
 ) -> Result<String, String> {
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .do_not_reuse_connection()
@@ -21,14 +22,18 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
         .await
         .unwrap();
 
-    println!("status_code: {:?}", response.get_status_code());
+    if debug {
+        println!("status_code: {:?}", response.get_status_code());
+    }
 
     let response = response.receive_body().await.unwrap();
 
-    println!(
-        "response: {}",
-        std::str::from_utf8(response.as_slice()).unwrap()
-    );
+    if debug {
+        println!(
+            "response: {}",
+            std::str::from_utf8(response.as_slice()).unwrap()
+        );
+    }
 
     let o_auth_response = serde_json::from_slice::<OAuthResponse>(response.as_slice()).unwrap();
 
@@ -50,7 +55,9 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
         .unwrap()
         .to_string();
 
-    println!("response_with_email: {}", resp);
+    if debug {
+        println!("response_with_email: {}", resp);
+    }
 
     let user_info = serde_json::from_str::<GoogleUserInfo>(resp.as_str()).unwrap();
 
