@@ -243,7 +243,6 @@ impl HttpRequestBuilder {
 
                         if name == cookie_name {
                             let value = &itm[eq_index + 1..];
-                            println!("'{}' = '{}'", name, value);
                             return Some(value);
                         }
                     }
