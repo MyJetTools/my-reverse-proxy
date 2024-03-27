@@ -237,16 +237,14 @@ impl HttpRequestBuilder {
 
         match auth_token.to_str() {
             Ok(result) => {
-                println!("Cookie: {}", result);
                 for itm in result.split(";") {
-                    let mut parts = itm.split("=");
+                    if let Some(eq_index) = itm.find("=") {
+                        let name = itm[..eq_index].trim();
 
-                    let left = parts.next().unwrap().trim();
-
-                    if let Some(right) = parts.next() {
-                        if left == cookie_name {
-                            println!("'{}' = '{}'", left, right.trim());
-                            return Some(right.trim());
+                        if name == cookie_name {
+                            let value = &itm[eq_index + 1..];
+                            println!("'{}' = '{}'", name, value);
+                            return Some(value);
                         }
                     }
                 }
