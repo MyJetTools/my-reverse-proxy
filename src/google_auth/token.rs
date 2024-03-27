@@ -36,14 +36,15 @@ pub fn resolve(app: &AppContext, token_str: &str) -> Option<String> {
 
     let result: AuthToken = prost::Message::decode(token.as_slice()).ok()?;
 
-    let now = DateTimeAsMicroseconds::now().unix_microseconds;
+    let now = DateTimeAsMicroseconds::now();
 
     println!(
-        "Token Expires: {}",
-        DateTimeAsMicroseconds::new(result.expires).to_rfc3339()
+        "Token Expires: {}. Noe: {}",
+        DateTimeAsMicroseconds::new(result.expires).to_rfc3339(),
+        now.to_rfc3339()
     );
 
-    if result.expires < now {
+    if result.expires < now.unix_microseconds {
         println!("Session Token {} is expired", token_str);
         return None;
     }
