@@ -6,7 +6,7 @@ use hyper::{
     header::{HeaderName, HeaderValue},
     HeaderMap, Request, Uri,
 };
-use hyper_tungstenite::HyperWebsocket;
+use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 use tokio::sync::Mutex;
 
 use crate::settings::ModifyHttpHeadersSettings;
@@ -14,6 +14,8 @@ use crate::settings::ModifyHttpHeadersSettings;
 use super::{
     HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError, SourceHttpData,
 };
+
+pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
 #[derive(Clone)]
 pub enum BuildResult {
@@ -39,6 +41,7 @@ pub struct HttpRequestBuilder {
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
     src_http_type: HttpType,
     last_result: Option<BuildResult>,
+    pub g_auth_user: Option<String>,
 }
 
 impl HttpRequestBuilder {
@@ -48,6 +51,7 @@ impl HttpRequestBuilder {
             prepared_request: None,
             src_http_type,
             last_result: None,
+            g_auth_user: None,
         }
     }
 
@@ -77,9 +81,9 @@ impl HttpRequestBuilder {
 
                 handle_headers(
                     inner,
-                    &self.get_host_port(),
-                    &mut parts.headers,
+                    &mut parts,
                     &location_index,
+                    self.g_auth_user.as_deref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -111,9 +115,9 @@ impl HttpRequestBuilder {
 
                 handle_headers(
                     inner,
-                    &self.get_host_port(),
-                    &mut parts.headers,
+                    &mut parts,
                     &location_index,
+                    self.g_auth_user.as_deref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -132,9 +136,9 @@ impl HttpRequestBuilder {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
                 handle_headers(
                     inner,
-                    &self.get_host_port(),
-                    &mut parts.headers,
+                    &mut parts,
                     &location_index,
+                    self.g_auth_user.as_deref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -195,7 +199,6 @@ impl HttpRequestBuilder {
             });
         }
         let result = builder.body(body).unwrap();
-
         self.prepared_request = Some(result);
         self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
         return Ok(BuildResult::HttpRequest(location_index));
@@ -209,6 +212,55 @@ impl HttpRequestBuilder {
         self.prepared_request.as_ref().unwrap().uri()
     }
 
+    pub fn get_from_query(&self, param: &str) -> Option<String> {
+        let query = self.get_uri().query()?;
+
+        for itm in query.split("&") {
+            let mut parts = itm.split("=");
+
+            let left = parts.next().unwrap().trim();
+
+            if let Some(right) = parts.next() {
+                if left == param {
+                    return Some(
+                        my_settings_reader::flurl::url_utils::decode_from_url_string(right.trim()),
+                    );
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_cookie(&self, cookie_name: &str) -> Option<&str> {
+        let auth_token = self.get_headers().get("Cookie")?;
+
+        match auth_token.to_str() {
+            Ok(result) => {
+                for itm in result.split(";") {
+                    let mut parts = itm.split("=");
+
+                    let left = parts.next().unwrap().trim();
+
+                    if let Some(right) = parts.next() {
+                        if left == cookie_name {
+                            return Some(right.trim());
+                        }
+                    }
+                }
+
+                Some(result)
+            }
+            Err(_) => None,
+        }
+    }
+
+    pub fn get_authorization_token(&self) -> Option<&str> {
+        let result = self.get_cookie(AUTHORIZED_COOKIE_NAME);
+        result
+    }
+
+    /*
     pub fn get_host_port<'s>(&'s self) -> HostPort<'s> {
         if let Some(src) = self.src.as_ref() {
             return HostPort::new(src.uri(), src.headers());
@@ -217,6 +269,7 @@ impl HttpRequestBuilder {
         let result = self.prepared_request.as_ref().unwrap();
         return HostPort::new(result.uri(), result.headers());
     }
+     */
 
     pub fn get(&self) -> hyper::Request<Full<Bytes>> {
         self.prepared_request.as_ref().unwrap().clone()
@@ -237,16 +290,16 @@ pub async fn into_full_bytes(
 
 fn handle_headers(
     inner: &HttpProxyPassInner,
-    uri: &HostPort,
-    headers: &mut HeaderMap<HeaderValue>,
+    parts: &mut Parts,
     location_index: &LocationIndex,
+    x_auth_user: Option<&str>,
 ) {
     if let Some(modify_headers_settings) = inner
         .modify_headers_settings
         .global_modify_headers_settings
         .as_ref()
     {
-        modify_headers(&uri, headers, modify_headers_settings, &inner.src);
+        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
     }
 
     if let Some(modify_headers_settings) = inner
@@ -254,26 +307,26 @@ fn handle_headers(
         .endpoint_modify_headers_settings
         .as_ref()
     {
-        modify_headers(uri, headers, modify_headers_settings, &inner.src);
+        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
     }
 
     let proxy_pass_location = inner.locations.find(location_index);
 
     if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
-        modify_headers(uri, headers, modify_headers_settings, &inner.src);
+        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
     }
 }
 
-fn modify_headers(
-    host_port: &HostPort,
-    headers: &mut HeaderMap<HeaderValue>,
+fn modify_headers<'s>(
+    parts: &mut Parts,
     headers_settings: &ModifyHttpHeadersSettings,
     src: &SourceHttpData,
+    x_auth_user: Option<&str>,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.request.as_ref() {
             for remove_header in remove_headers {
-                headers.remove(remove_header.as_str());
+                parts.headers.remove(remove_header.as_str());
             }
         }
     }
@@ -281,11 +334,11 @@ fn modify_headers(
     if let Some(add_headers) = headers_settings.add.as_ref() {
         if let Some(add_headers) = add_headers.request.as_ref() {
             for add_header in add_headers {
-                let value = src.populate_value(&add_header.value, host_port);
+                let value = src.populate_value(&add_header.value, parts, x_auth_user);
                 if !value.as_str().is_empty() {
-                    headers.insert(
+                    parts.headers.insert(
                         HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                        src.populate_value(&add_header.value, host_port)
+                        src.populate_value(&add_header.value, parts, x_auth_user)
                             .as_str()
                             .parse()
                             .unwrap(),
@@ -293,5 +346,23 @@ fn modify_headers(
                 }
             }
         }
+    }
+}
+
+impl HostPort for HttpRequestBuilder {
+    fn get_uri(&self) -> &Uri {
+        if let Some(src) = self.src.as_ref() {
+            return src.uri();
+        }
+
+        self.prepared_request.as_ref().unwrap().uri()
+    }
+
+    fn get_headers(&self) -> &HeaderMap<HeaderValue> {
+        if let Some(src) = self.src.as_ref() {
+            return src.headers();
+        }
+
+        self.prepared_request.as_ref().unwrap().headers()
     }
 }

@@ -36,3 +36,5 @@ mod remote_host;
 pub use remote_host::*;
 mod ssh_config_settings;
 pub use ssh_config_settings::*;
+mod google_auth_settings;
+pub use google_auth_settings::*;

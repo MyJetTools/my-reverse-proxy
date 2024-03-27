@@ -8,14 +8,15 @@ edition = "2021"
 [dependencies]
 rust-extensions = { tag = "0.1.4", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
     "placeholders",
+    "base64",
 ] }
 
-my-settings-reader = { tag = "0.3.0", git = "https://github.com/MyJetTools/my-settings-reader.git", features = [
-    "background-reader",
-] }
+my-settings-reader = { tag = "0.3.1", git = "https://github.com/MyJetTools/my-settings-reader.git" }
 
 
 my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.0" }
+
+encryption = { git = "https://github.com/MyJetTools/encryption.git", tag = "0.1.0" }
 
 
 hyper = { version = "*", features = ["full"] }
@@ -37,3 +38,7 @@ x509-parser = { version = "*", features = ["verify"] }
 my-tls = { tag = "0.1.1", git = "https://github.com/MyJetTools/my-tls.git" }
 async-trait = "*"
 hyper-tungstenite = "*"
+uuid = "*"
+prost = "*"
+prost-types = "*"
+serde_json = "*"

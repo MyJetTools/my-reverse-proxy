@@ -5,7 +5,8 @@ use serde::*;
 use crate::http_proxy_pass::{HttpType, ProxyPassEndpointInfo};
 
 use super::{
-    EndpointType, LocationSettings, ModifyHttpHeadersSettings, SshConfigSettings, SslCertificateId,
+    EndpointType, GoogleAuthSettings, LocationSettings, ModifyHttpHeadersSettings,
+    SshConfigSettings, SslCertificateId,
 };
 
 const HTTP1_ENDPOINT_TYPE: &str = "http";
@@ -16,6 +17,7 @@ pub struct EndpointSettings {
     pub endpoint_type: String,
     pub ssl_certificate: Option<String>,
     pub client_certificate_ca: Option<String>,
+    pub google_auth: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub debug: Option<bool>,
 }
@@ -30,12 +32,24 @@ impl EndpointSettings {
         locations: &[LocationSettings],
         variables: &Option<HashMap<String, String>>,
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+        g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
     ) -> Result<EndpointType, String> {
+        let g_auth = if let Some(g_auth_id) = self.google_auth.as_ref() {
+            if let Some(g_auth_settings) = g_auth_settings {
+                g_auth_settings.get(g_auth_id.as_str()).cloned()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         match self.endpoint_type.as_str() {
             HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(ProxyPassEndpointInfo::new(
                 host.to_string(),
                 HttpType::Http1,
                 self.get_debug(),
+                g_auth,
             ))),
             "https" => {
                 if let Some(ssl_certificate) = &self.ssl_certificate {
@@ -44,6 +58,7 @@ impl EndpointSettings {
                             host.to_string(),
                             HttpType::Https1,
                             self.get_debug(),
+                            g_auth,
                         ),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
@@ -62,6 +77,7 @@ impl EndpointSettings {
                             host.to_string(),
                             HttpType::Https2,
                             self.get_debug(),
+                            g_auth,
                         ),
                         ssl_id: SslCertificateId::new(ssl_certificate.to_string()),
                         client_ca_id: self
@@ -78,6 +94,7 @@ impl EndpointSettings {
                     host.to_string(),
                     HttpType::Http2,
                     self.get_debug(),
+                    g_auth,
                 )))
             }
             "tcp" => {

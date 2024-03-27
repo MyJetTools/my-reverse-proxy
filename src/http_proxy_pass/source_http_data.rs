@@ -21,7 +21,12 @@ impl SourceHttpData {
         }
     }
 
-    pub fn populate_value<'s>(&self, value: &'s str, req_uri: &HostPort<'s>) -> StrOrString<'s> {
+    pub fn populate_value<'s, THostPort: HostPort + Send + Sync + 'static>(
+        &'s self,
+        value: &'s str,
+        req_host_port: &THostPort,
+        x_auth_user: Option<&str>,
+    ) -> StrOrString<'s> {
         if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
             return value.into();
         }
@@ -36,7 +41,7 @@ impl SourceHttpData {
                 rust_extensions::placeholders::ContentToken::Placeholder(placeholder) => {
                     match placeholder {
                         "HOST" => {
-                            if let Some(host) = req_uri.get_host() {
+                            if let Some(host) = req_host_port.get_host() {
                                 result.push_str(host);
                             }
                         }
@@ -45,15 +50,15 @@ impl SourceHttpData {
                         }
 
                         "PATH_AND_QUERY" => {
-                            if let Some(value) = req_uri.get_path_and_query() {
+                            if let Some(value) = req_host_port.get_path_and_query() {
                                 result.push_str(value);
                             }
                         }
 
                         "HOST_PORT" => {
-                            if let Some(host) = req_uri.get_host() {
+                            if let Some(host) = req_host_port.get_host() {
                                 result.push_str(host);
-                                if let Some(port) = req_uri.get_port_opt() {
+                                if let Some(port) = req_host_port.get_port() {
                                     result.push(':');
                                     result.push_str(port.to_string().as_str());
                                 }
@@ -63,6 +68,8 @@ impl SourceHttpData {
                         "CLIENT_CERT_CN" => {
                             if let Some(value) = self.client_cert_cn.as_ref() {
                                 result.push_str(value.as_str());
+                            } else if let Some(value) = x_auth_user {
+                                result.push_str(value);
                             }
                         }
 

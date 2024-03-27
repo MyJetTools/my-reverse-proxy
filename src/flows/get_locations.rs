@@ -13,13 +13,15 @@ pub async fn get_locations<'s>(
         return Err(ProxyPassError::NoConfigurationFound);
     }
 
-    for location in &result {
-        println!(
-            "Request {} got locations: {}->{}",
-            endpoint_info.as_str(),
-            location.path,
-            location.content_source.to_string()
-        );
+    if endpoint_info.debug {
+        for location in &result {
+            println!(
+                "Request {} got locations: {}->{}",
+                endpoint_info.as_str(),
+                location.path,
+                location.content_source.to_string()
+            );
+        }
     }
 
     Ok(result)

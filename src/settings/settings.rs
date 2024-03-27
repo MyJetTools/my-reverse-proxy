@@ -4,8 +4,8 @@ use crate::{app::AppContext, http_proxy_pass::*};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
-    GlobalSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings, SshConfigSettings,
-    SslCertificateId, SslCertificatesSettingsModel,
+    GlobalSettings, GoogleAuthSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings,
+    SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -18,6 +18,8 @@ pub struct SettingsModel {
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
     pub global_settings: Option<GlobalSettings>,
+
+    pub g_auth: Option<HashMap<String, GoogleAuthSettings>>,
 
     pub ssh: Option<HashMap<String, SshConfigSettings>>,
 }
@@ -187,6 +189,7 @@ impl SettingsReader {
                             proxy_pass.locations.as_slice(),
                             &read_access.variables,
                             &read_access.ssh,
+                            &read_access.g_auth,
                         )?,
                     );
                 }
@@ -237,6 +240,7 @@ mod tests {
                     client_certificate_ca: None,
                     modify_http_headers: None,
                     debug: None,
+                    google_auth: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -278,6 +282,7 @@ mod tests {
             ssl_certificates: None,
             client_certificate_ca: None,
             ssh: Some(ssh_configs),
+            g_auth: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();
