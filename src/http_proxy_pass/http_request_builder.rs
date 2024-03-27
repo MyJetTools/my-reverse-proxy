@@ -237,6 +237,7 @@ impl HttpRequestBuilder {
 
         match auth_token.to_str() {
             Ok(result) => {
+                println!("Cookie: {}", result);
                 for itm in result.split(";") {
                     let mut parts = itm.split("=");
 
@@ -244,6 +245,7 @@ impl HttpRequestBuilder {
 
                     if let Some(right) = parts.next() {
                         if left == cookie_name {
+                            println!("'{}' = '{}'", left, right.trim());
                             return Some(right.trim());
                         }
                     }
@@ -259,17 +261,6 @@ impl HttpRequestBuilder {
         let result = self.get_cookie(AUTHORIZED_COOKIE_NAME);
         result
     }
-
-    /*
-    pub fn get_host_port<'s>(&'s self) -> HostPort<'s> {
-        if let Some(src) = self.src.as_ref() {
-            return HostPort::new(src.uri(), src.headers());
-        }
-
-        let result = self.prepared_request.as_ref().unwrap();
-        return HostPort::new(result.uri(), result.headers());
-    }
-     */
 
     pub fn get(&self) -> hyper::Request<Full<Bytes>> {
         self.prepared_request.as_ref().unwrap().clone()
