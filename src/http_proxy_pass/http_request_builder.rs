@@ -9,7 +9,7 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::settings::ModifyHttpHeadersSettings;
+use crate::{settings::ModifyHttpHeadersSettings, types::Email};
 
 use super::{
     HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError, SourceHttpData,
@@ -41,7 +41,7 @@ pub struct HttpRequestBuilder {
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
     src_http_type: HttpType,
     last_result: Option<BuildResult>,
-    pub g_auth_user: Option<String>,
+    pub g_auth_user: Option<Email>,
 }
 
 impl HttpRequestBuilder {
@@ -83,7 +83,7 @@ impl HttpRequestBuilder {
                     inner,
                     &mut parts,
                     &location_index,
-                    self.g_auth_user.as_deref(),
+                    self.g_auth_user.as_ref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -117,7 +117,7 @@ impl HttpRequestBuilder {
                     inner,
                     &mut parts,
                     &location_index,
-                    self.g_auth_user.as_deref(),
+                    self.g_auth_user.as_ref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -138,7 +138,7 @@ impl HttpRequestBuilder {
                     inner,
                     &mut parts,
                     &location_index,
-                    self.g_auth_user.as_deref(),
+                    self.g_auth_user.as_ref(),
                 );
                 let body = into_full_bytes(incoming).await?;
 
@@ -308,7 +308,7 @@ fn handle_headers(
     inner: &HttpProxyPassInner,
     parts: &mut Parts,
     location_index: &LocationIndex,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) {
     if let Some(modify_headers_settings) = inner
         .modify_headers_settings
@@ -337,7 +337,7 @@ fn modify_headers<'s>(
     parts: &mut Parts,
     headers_settings: &ModifyHttpHeadersSettings,
     src: &SourceHttpData,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.request.as_ref() {

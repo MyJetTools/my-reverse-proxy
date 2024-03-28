@@ -6,7 +6,9 @@ use hyper::{
     HeaderMap,
 };
 
-use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
+use crate::{
+    http_content_source::WebContentType, settings::ModifyHttpHeadersSettings, types::Email,
+};
 
 use super::{
     into_full_bytes, HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError,
@@ -20,7 +22,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     location_index: &LocationIndex,
     src: HttpType,
     dest_http1: bool,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
@@ -52,7 +54,7 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     content_type: Option<WebContentType>,
     status_code: u16,
     content: Vec<u8>,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) -> hyper::Response<Full<Bytes>> {
     let mut builder = hyper::Response::builder().status(status_code);
 
@@ -73,7 +75,7 @@ fn modify_req_headers<THostPort: HostPort + Send + Sync + 'static>(
     inner: &HttpProxyPassInner,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) {
     if let Some(modify_headers_settings) = inner
         .modify_headers_settings
@@ -121,7 +123,7 @@ fn modify_headers<THostPort: HostPort + Send + Sync + 'static>(
     headers: &mut HeaderMap<hyper::header::HeaderValue>,
     headers_settings: &ModifyHttpHeadersSettings,
     src: &SourceHttpData,
-    x_auth_user: Option<&str>,
+    x_auth_user: Option<&Email>,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.response.as_ref() {

@@ -5,15 +5,12 @@ use http_body_util::Full;
 use tokio::sync::Mutex;
 
 use crate::{
-    app::AppContext,
-    google_auth::{AUTHORIZED_PATH, LOGOUT_PATH},
-    http_client::HTTP_CLIENT_TIMEOUT,
-    settings::HttpEndpointModifyHeadersSettings,
+    app::AppContext, http_client::HTTP_CLIENT_TIMEOUT, settings::HttpEndpointModifyHeadersSettings,
 };
 
 use super::{
-    BuildResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassEndpointInfo, ProxyPassError,
-    RetryType, AUTHORIZED_COOKIE_NAME,
+    BuildResult, GoogleAuthResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassEndpointInfo,
+    ProxyPassError, RetryType,
 };
 
 pub struct HttpProxyPass {
@@ -59,6 +56,9 @@ impl HttpProxyPass {
                 match self.handle_auth_with_g_auth(app, &req).await {
                     GoogleAuthResult::Passed(user) => req.g_auth_user = user,
                     GoogleAuthResult::Content(content) => return Ok(content),
+                    GoogleAuthResult::DomainIsNotAuthorized => {
+                        return Err(ProxyPassError::Unauthorized);
+                    }
                 }
 
                 let build_result = req.populate_and_build(&inner).await?;
@@ -146,7 +146,7 @@ impl HttpProxyPass {
                     response.content_type,
                     response.status_code,
                     response.body,
-                    req.g_auth_user.as_deref(),
+                    req.g_auth_user.as_ref(),
                 );
                 return Ok(Ok(result));
             } else {
@@ -164,7 +164,7 @@ impl HttpProxyPass {
                             &location_index,
                             self.endpoint_info.http_type,
                             dest_http1.unwrap(),
-                            req.g_auth_user.as_deref(),
+                            req.g_auth_user.as_ref(),
                         )
                         .await?;
                         return Ok(Ok(response));
@@ -226,103 +226,8 @@ impl HttpProxyPass {
         }
     }
 
-    async fn handle_auth_with_g_auth(
-        &self,
-        app: &AppContext,
-        req: &HttpRequestBuilder,
-    ) -> GoogleAuthResult {
-        if self.endpoint_info.g_auth.is_none() {
-            return GoogleAuthResult::Passed(None);
-        }
-
-        let g_auth_settings = self.endpoint_info.g_auth.as_ref().unwrap();
-
-        if req.uri().path() == LOGOUT_PATH {
-            let body = Full::from(Bytes::from(
-                crate::google_auth::generate_logout_page(req).into_bytes(),
-            ));
-
-            return GoogleAuthResult::Content(Ok(hyper::Response::builder()
-                .status(200)
-                .body(body)
-                .unwrap()));
-        }
-
-        if req.uri().path() == AUTHORIZED_PATH {
-            if let Some(token) = req.get_authorization_token() {
-                if let Some(email) = crate::google_auth::token::resolve(app, token) {
-                    let body = Full::from(Bytes::from(
-                        crate::google_auth::generate_authorized_page(req, email.as_str())
-                            .into_bytes(),
-                    ));
-
-                    return GoogleAuthResult::Content(Ok(hyper::Response::builder()
-                        .status(200)
-                        .body(body)
-                        .unwrap()));
-                }
-            }
-
-            let code = req.get_from_query("code").unwrap();
-
-            let email = match crate::google_auth::resolve_email(
-                req,
-                code.as_str(),
-                g_auth_settings,
-                self.endpoint_info.debug,
-            )
-            .await
-            {
-                Ok(email) => email,
-                Err(err) => {
-                    let body = Full::from(Bytes::from(err.into_bytes()));
-
-                    return GoogleAuthResult::Content(Ok(hyper::Response::builder()
-                        .status(400)
-                        .body(body)
-                        .unwrap()));
-                }
-            };
-
-            let body = Full::from(Bytes::from(
-                crate::google_auth::generate_authorized_page(req, email.as_str()).into_bytes(),
-            ));
-
-            let token = crate::google_auth::token::generate(app, email.as_str());
-
-            return GoogleAuthResult::Content(Ok(hyper::Response::builder()
-                .status(200)
-                .header(
-                    "Set-Cookie",
-                    format!("{}={}", AUTHORIZED_COOKIE_NAME, token),
-                )
-                .body(body)
-                .unwrap()));
-        }
-
-        if let Some(token) = req.get_authorization_token() {
-            if let Some(email) = crate::google_auth::token::resolve(app, token) {
-                return GoogleAuthResult::Passed(Some(email));
-            }
-        }
-
-        let body = crate::google_auth::generate_login_page(req, g_auth_settings);
-
-        let body = Full::from(Bytes::from(body.into_bytes()));
-
-        return GoogleAuthResult::Content(Ok(hyper::Response::builder()
-            .status(200)
-            .body(body)
-            .unwrap()));
-    }
-
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
     }
-}
-
-pub enum GoogleAuthResult {
-    Passed(Option<String>),
-    Content(hyper::Result<hyper::Response<Full<Bytes>>>),
 }

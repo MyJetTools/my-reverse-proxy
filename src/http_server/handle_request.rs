@@ -4,10 +4,7 @@ use bytes::Bytes;
 use http_body_util::Full;
 use rust_extensions::StopWatch;
 
-use crate::{
-    app::AppContext,
-    http_proxy_pass::{HttpProxyPass, ProxyPassError},
-};
+use crate::{app::AppContext, http_proxy_pass::HttpProxyPass};
 
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
@@ -54,27 +51,7 @@ pub async fn handle_requests(
             return response;
         }
         Err(err) => {
-            if err.is_timeout() {
-                return Ok(hyper::Response::builder()
-                    .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Full::from(Bytes::from("Timeout")))
-                    .unwrap());
-            }
-
-            match err {
-                ProxyPassError::NoLocationFound => {
-                    return Ok(hyper::Response::builder()
-                        .status(hyper::StatusCode::NOT_FOUND)
-                        .body(Full::from(Bytes::from("Not Found")))
-                        .unwrap());
-                }
-                _ => {
-                    return Ok(hyper::Response::builder()
-                        .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Full::from(Bytes::from("Internal Server Error")))
-                        .unwrap());
-                }
-            }
+            return Ok(super::generate_tech_page(err));
         }
     }
 }

@@ -13,6 +13,7 @@ mod http_server;
 mod populate_variable;
 mod settings;
 mod tcp_port_forward;
+mod types;
 
 #[tokio::main]
 async fn main() {

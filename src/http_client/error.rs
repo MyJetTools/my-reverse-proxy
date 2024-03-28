@@ -7,15 +7,6 @@ pub enum HttpClientError {
     TimeOut,
 }
 
-impl HttpClientError {
-    pub fn is_timeout(&self) -> bool {
-        match self {
-            HttpClientError::TimeOut => true,
-            _ => false,
-        }
-    }
-}
-
 impl From<hyper::Error> for HttpClientError {
     fn from(src: hyper::Error) -> Self {
         Self::HyperError(src)

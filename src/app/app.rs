@@ -6,6 +6,8 @@ use crate::settings::{ConnectionsSettingsModel, SettingsReader};
 
 use super::SavedClientCert;
 
+pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 pub struct AppContext {
     pub settings_reader: SettingsReader,
     pub http_connections: AtomicIsize,

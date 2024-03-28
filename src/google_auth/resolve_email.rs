@@ -1,14 +1,14 @@
 use my_settings_reader::flurl::FlUrl;
 use serde::*;
 
-use crate::{http_proxy_pass::HostPort, settings::GoogleAuthSettings};
+use crate::{http_proxy_pass::HostPort, settings::GoogleAuthSettings, types::Email};
 
 pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     req: &THostPort,
     code: &str,
     settings: &GoogleAuthSettings,
     debug: bool,
-) -> Result<String, String> {
+) -> Result<Email, String> {
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .do_not_reuse_connection()
         .with_header("ContentType", "application/json")
@@ -62,7 +62,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     let user_info = serde_json::from_str::<GoogleUserInfo>(resp.as_str()).unwrap();
 
     match user_info.email {
-        Some(email) => Ok(email),
+        Some(email) => Ok(Email::new(email)),
         None => Err(resp),
     }
 }

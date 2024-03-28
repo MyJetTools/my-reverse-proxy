@@ -2,7 +2,10 @@ use std::net::SocketAddr;
 
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
-use crate::populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN};
+use crate::{
+    populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN},
+    types::Email,
+};
 
 use super::HostPort;
 
@@ -25,7 +28,7 @@ impl SourceHttpData {
         &'s self,
         value: &'s str,
         req_host_port: &THostPort,
-        x_auth_user: Option<&str>,
+        x_auth_user: Option<&Email>,
     ) -> StrOrString<'s> {
         if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
             return value.into();
@@ -69,7 +72,7 @@ impl SourceHttpData {
                             if let Some(value) = self.client_cert_cn.as_ref() {
                                 result.push_str(value.as_str());
                             } else if let Some(value) = x_auth_user {
-                                result.push_str(value);
+                                result.push_str(value.as_str());
                             }
                         }
 

@@ -3,7 +3,7 @@ use std::time::Duration;
 use encryption::aes::AesEncryptedData;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::app::AppContext;
+use crate::{app::AppContext, types::*};
 
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AuthToken {
@@ -29,7 +29,7 @@ pub fn generate(app: &AppContext, email: &str) -> String {
     result.as_base_64()
 }
 
-pub fn resolve(app: &AppContext, token_str: &str) -> Option<String> {
+pub fn resolve(app: &AppContext, token_str: &str) -> Option<Email> {
     let aes = AesEncryptedData::from_base_64(token_str).ok()?;
 
     let token = app.token_secret_key.decrypt(&aes).ok()?;
@@ -42,5 +42,5 @@ pub fn resolve(app: &AppContext, token_str: &str) -> Option<String> {
         return None;
     }
 
-    Some(result.email)
+    Some(Email::new(result.email))
 }

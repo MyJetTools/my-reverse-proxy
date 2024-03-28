@@ -13,4 +13,6 @@ mod client_cert_verifier;
 pub use client_cert_verifier::*;
 mod https2_server;
 pub use https2_server::*;
+mod generate_tech_page;
 mod handle_request;
+pub use generate_tech_page::*;
