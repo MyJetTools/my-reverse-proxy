@@ -28,7 +28,7 @@ impl IntoIp for &[u8; 4] {
         result |= (self[0] as u32) << 24;
         result |= (self[1] as u32) << 16;
         result |= (self[2] as u32) << 8;
-        result |= (self[3] as u32) << 8;
+        result |= self[3] as u32;
 
         result
     }

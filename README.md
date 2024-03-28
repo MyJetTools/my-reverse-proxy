@@ -344,3 +344,40 @@ g_auth:
 ```
 
 If 'whitelisted_domains' property is missing - any email from any domain passed thought google authentication is allowed.
+
+
+
+## IP Whitelisting
+
+It's possible to whitelist IP addresses for the endpoint or for HTTP Location
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: http
+      whitelisted_ip: 10.0.0.0;20.0.0.0      
+```
+
+or 
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: http
+      whitelisted_ip: 10.0.0.0-10.0.0.5;15.0.0.0     
+```
+
+Same rules can be applied to any location
+
+```yaml
+hosts:
+  localhost:443:
+    endpoint:
+      type: https
+
+    locations:
+    - proxy_pass_to: http://10.0.0.4:7702
+      whitelisted_ip: 10.0.0.0 
+```

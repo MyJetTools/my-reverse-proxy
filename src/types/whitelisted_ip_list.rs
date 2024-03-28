@@ -9,7 +9,7 @@ impl WhiteListedIpList {
         Self { items: Vec::new() }
     }
 
-    pub fn apply(&mut self, src: Option<&String>) {
+    pub fn apply(&mut self, src: Option<&str>) {
         if src.is_none() {
             return;
         }
@@ -43,5 +43,21 @@ impl WhiteListedIpList {
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_range() {
+        let mut list = super::WhiteListedIpList::new();
+        list.apply(Some("127.0.0.5-127.0.0.10"));
+
+        assert!(list.is_whitelisted(&"127.0.0.5"));
+
+        assert!(list.is_whitelisted(&"127.0.0.10"));
+
+        assert!(!list.is_whitelisted(&"127.0.0.4"));
     }
 }

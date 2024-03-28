@@ -160,8 +160,8 @@ impl SettingsReader {
                 let proxy_pass_content_source = proxy_pass_content_source.unwrap();
 
                 let mut whitelisted_ip = WhiteListedIpList::new();
-                whitelisted_ip.apply(proxy_pass_settings.endpoint.whitelisted_ip.as_ref());
-                whitelisted_ip.apply(location_settings.whitelisted_ip.as_ref());
+                whitelisted_ip.apply(proxy_pass_settings.endpoint.whitelisted_ip.as_deref());
+                whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
 
                 result.push(ProxyPassLocation::new(
                     location_id,
