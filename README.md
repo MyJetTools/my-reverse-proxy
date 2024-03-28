@@ -349,7 +349,7 @@ If 'whitelisted_domains' property is missing - any email from any domain passed 
 
 ## IP Whitelisting
 
-It's possible to whitelist IP addresses for the endpoint or for HTTP Location
+It's possible to IP whitelist and given endpoint
 
 ```yaml
 hosts:
