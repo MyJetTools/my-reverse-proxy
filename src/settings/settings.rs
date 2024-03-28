@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, HashMap};
 use crate::{app::AppContext, http_proxy_pass::*, types::WhiteListedIpList};
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
-    GlobalSettings, GoogleAuthSettings, HttpEndpointModifyHeadersSettings, ProxyPassSettings,
-    SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
+    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointTemplateSettings, EndpointType,
+    FileSource, GlobalSettings, GoogleAuthSettings, HttpEndpointModifyHeadersSettings,
+    ProxyPassSettings, SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -22,6 +22,8 @@ pub struct SettingsModel {
     pub g_auth: Option<HashMap<String, GoogleAuthSettings>>,
 
     pub ssh: Option<HashMap<String, SshConfigSettings>>,
+
+    pub endpoint_templates: Option<HashMap<String, EndpointTemplateSettings>>,
 }
 
 impl SettingsReader {
@@ -70,7 +72,10 @@ impl SettingsReader {
                 continue;
             }
 
-            if let Some(modify_headers) = proxy_pass.endpoint.modify_http_headers.as_ref() {
+            if let Some(modify_headers) = proxy_pass
+                .endpoint
+                .get_modify_http_headers(&read_access.endpoint_templates)
+            {
                 result.endpoint_modify_headers_settings = Some(modify_headers.clone());
             }
         }
@@ -160,7 +165,12 @@ impl SettingsReader {
                 let proxy_pass_content_source = proxy_pass_content_source.unwrap();
 
                 let mut whitelisted_ip = WhiteListedIpList::new();
-                whitelisted_ip.apply(proxy_pass_settings.endpoint.whitelisted_ip.as_deref());
+                whitelisted_ip.apply(
+                    proxy_pass_settings
+                        .endpoint
+                        .get_white_listed_ip(&read_access.endpoint_templates)
+                        .as_deref(),
+                );
                 whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
 
                 result.push(ProxyPassLocation::new(
@@ -193,6 +203,7 @@ impl SettingsReader {
                         proxy_pass.endpoint.get_type(
                             host,
                             proxy_pass.locations.as_slice(),
+                            &read_access.endpoint_templates,
                             &read_access.variables,
                             &read_access.ssh,
                             &read_access.g_auth,
@@ -248,6 +259,7 @@ mod tests {
                     debug: None,
                     google_auth: None,
                     whitelisted_ip: None,
+                    template_id: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -291,6 +303,7 @@ mod tests {
             client_certificate_ca: None,
             ssh: Some(ssh_configs),
             g_auth: None,
+            endpoint_templates: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

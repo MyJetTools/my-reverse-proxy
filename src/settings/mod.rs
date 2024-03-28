@@ -38,3 +38,5 @@ mod ssh_config_settings;
 pub use ssh_config_settings::*;
 mod google_auth_settings;
 pub use google_auth_settings::*;
+mod endpoint_template_settings;
+pub use endpoint_template_settings::*;

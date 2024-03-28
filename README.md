@@ -381,3 +381,24 @@ hosts:
     - proxy_pass_to: http://10.0.0.4:7702
       whitelisted_ip: 10.0.0.0 
 ```
+
+
+
+## Endpoint templates 
+
+If several endpoints have the same configuration it is possible to use templates
+
+```yaml
+hosts:
+  domain.com:443:
+    endpoint:
+      type: https
+      template_id: endpoint_template_id
+
+
+endpoint_templates:
+  endpoint_template_id:
+    ssl_certificate: ssl_cert_id
+    google_auth: google_auth_id
+
+```
