@@ -343,4 +343,4 @@ g_auth:
     whitelisted_domains: domain1.com;domain2.com
 ```
 
-If 'whitelisted_domains' is missing - any email is allowed.
+If 'whitelisted_domains' property is missing - any email from any domain passed thought google authentication is allowed.
