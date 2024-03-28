@@ -400,5 +400,22 @@ endpoint_templates:
   endpoint_template_id:
     ssl_certificate: ssl_cert_id
     google_auth: google_auth_id
-
+    whitelisted_ip: 10.0.0.0
+    modify_http_headers:
+      add:
+        request:
+        - name: x-real-ip
+          value: '${ENDPOINT_IP}'
+        response:
+        - name: header-name1: 
+          value: value1
+        - name: header-name2: 
+          value: value2
+      remove:
+        request:
+        - header-name1
+        - header-name2
+        response:
+        - header-name3
+        - header-name4
 ```
