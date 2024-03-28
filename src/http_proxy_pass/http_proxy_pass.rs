@@ -63,6 +63,14 @@ impl HttpProxyPass {
                     }
                 }
 
+                if let Some(allowed_users) = inner.allowed_user_list.as_ref() {
+                    if let Some(g_auth_user) = req.g_auth_user.as_ref() {
+                        if !allowed_users.is_allowed(g_auth_user.as_str()) {
+                            return Err(ProxyPassError::UserIsForbidden);
+                        }
+                    }
+                }
+
                 let build_result = req.populate_and_build(&inner).await?;
 
                 let proxy_pass_location =

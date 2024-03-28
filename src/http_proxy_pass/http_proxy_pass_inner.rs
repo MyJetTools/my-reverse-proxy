@@ -5,8 +5,8 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 use crate::{app::AppContext, settings::HttpEndpointModifyHeadersSettings};
 
 use super::{
-    HttpProxyPassContentSource, HttpRequestBuilder, LocationIndex, ProxyPassEndpointInfo,
-    ProxyPassError, ProxyPassLocations, SourceHttpData,
+    AllowedUserList, HttpProxyPassContentSource, HttpRequestBuilder, LocationIndex,
+    ProxyPassEndpointInfo, ProxyPassError, ProxyPassLocations, SourceHttpData,
 };
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
@@ -24,6 +24,7 @@ pub struct HttpProxyPassInner {
     pub disposed: bool,
     pub src: SourceHttpData,
     pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
+    pub allowed_user_list: Option<AllowedUserList>,
 }
 
 impl HttpProxyPassInner {
@@ -36,6 +37,7 @@ impl HttpProxyPassInner {
             disposed: false,
             src: SourceHttpData::new(socket_addr),
             modify_headers_settings,
+            allowed_user_list: None,
         }
     }
 
@@ -49,10 +51,12 @@ impl HttpProxyPassInner {
         endpoint_info: &Arc<ProxyPassEndpointInfo>,
         req: &HttpRequestBuilder,
     ) -> Result<(), ProxyPassError> {
-        let locations = crate::flows::get_locations(app, endpoint_info, req).await?;
+        let (locations, allowed_user_list) =
+            crate::flows::get_locations(app, endpoint_info, req).await?;
 
         self.locations.init(locations);
         self.src.is_https = endpoint_info.http_type.is_https();
+        self.allowed_user_list = allowed_user_list;
         Ok(())
     }
 

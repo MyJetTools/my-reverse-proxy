@@ -419,3 +419,24 @@ endpoint_templates:
         - header-name3
         - header-name4
 ```
+
+
+
+## Allowed users list
+
+It is possible to specify allowed users list for the endpoints which has authentication
+
+```yaml
+hosts:
+  domain.com:443:
+    endpoint:
+      type: https
+      allowed_users: list_id
+
+allowed_users:
+  list_id: 
+  - email1@domain.com
+  - email2@domain.com
+  - email3@domain.com
+
+```

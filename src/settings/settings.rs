@@ -24,6 +24,8 @@ pub struct SettingsModel {
     pub ssh: Option<HashMap<String, SshConfigSettings>>,
 
     pub endpoint_templates: Option<HashMap<String, EndpointTemplateSettings>>,
+
+    pub allowed_users: Option<HashMap<String, Vec<String>>>,
 }
 
 impl SettingsReader {
@@ -126,7 +128,7 @@ impl SettingsReader {
         app: &AppContext,
         req: &HttpRequestBuilder,
         is_https: bool,
-    ) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
+    ) -> Result<(Vec<ProxyPassLocation>, Option<AllowedUserList>), ProxyPassError> {
         let read_access = self.settings.read().await;
 
         for (settings_host, proxy_pass_settings) in &read_access.hosts {
@@ -135,6 +137,16 @@ impl SettingsReader {
             }
 
             let location_id = app.get_id();
+
+            let mut allowed_users = None;
+
+            if let Some(allowed_user_id) = &proxy_pass_settings.endpoint.allowed_users {
+                if let Some(users) = &read_access.allowed_users {
+                    if let Some(users) = users.get(allowed_user_id) {
+                        allowed_users = Some(AllowedUserList::new(users.clone()));
+                    }
+                }
+            }
 
             let mut result = Vec::new();
             for location_settings in &proxy_pass_settings.locations {
@@ -182,10 +194,10 @@ impl SettingsReader {
                 ));
             }
 
-            return Ok(result);
+            return Ok((result, allowed_users));
         }
 
-        return Ok(vec![]);
+        return Ok((vec![], None));
     }
 
     pub async fn get_listen_ports(&self) -> Result<BTreeMap<u16, EndpointType>, String> {
@@ -260,6 +272,7 @@ mod tests {
                     google_auth: None,
                     whitelisted_ip: None,
                     template_id: None,
+                    allowed_users: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -304,6 +317,7 @@ mod tests {
             ssh: Some(ssh_configs),
             g_auth: None,
             endpoint_templates: None,
+            allowed_users: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

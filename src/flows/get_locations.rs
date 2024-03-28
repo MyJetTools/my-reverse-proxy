@@ -4,8 +4,8 @@ pub async fn get_locations<'s>(
     app: &AppContext,
     endpoint_info: &ProxyPassEndpointInfo,
     req: &HttpRequestBuilder,
-) -> Result<Vec<ProxyPassLocation>, ProxyPassError> {
-    let result = app
+) -> Result<(Vec<ProxyPassLocation>, Option<AllowedUserList>), ProxyPassError> {
+    let (result, allowed_users_list) = app
         .settings_reader
         .get_locations(app, req, endpoint_info.http_type.is_https())
         .await?;
@@ -34,5 +34,5 @@ pub async fn get_locations<'s>(
         }
     }
 
-    Ok(result)
+    Ok((result, allowed_users_list))
 }

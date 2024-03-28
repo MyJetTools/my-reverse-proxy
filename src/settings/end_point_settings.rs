@@ -25,6 +25,7 @@ pub struct EndpointSettings {
     pub debug: Option<bool>,
     pub whitelisted_ip: Option<String>,
     pub template_id: Option<String>,
+    pub allowed_users: Option<String>,
 }
 
 impl EndpointSettings {

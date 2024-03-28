@@ -12,6 +12,7 @@ pub enum ProxyPassError {
     NoLocationFound,
     ConnectionIsDisposed,
     Unauthorized,
+    UserIsForbidden,
     IpRestricted(String),
     Timeout,
 }

@@ -30,6 +30,17 @@ pub fn generate_tech_page(err: ProxyPassError) -> hyper::Response<Full<Bytes>> {
                 .unwrap();
         }
 
+        ProxyPassError::UserIsForbidden => {
+            return hyper::Response::builder()
+                .status(hyper::StatusCode::FORBIDDEN)
+                .body(Full::from(Bytes::from(generate_layout(
+                    403,
+                    "Access is forbidden",
+                    None,
+                ))))
+                .unwrap();
+        }
+
         ProxyPassError::IpRestricted(ip) => {
             return hyper::Response::builder()
                 .status(hyper::StatusCode::UNAUTHORIZED)
