@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use serde::*;
 
-use crate::http_proxy_pass::{HttpType, ProxyPassEndpointInfo};
+use crate::{
+    http_proxy_pass::{HttpType, ProxyPassEndpointInfo},
+    types::WhiteListedIpList,
+};
 
 use super::{
     EndpointType, GoogleAuthSettings, LocationSettings, ModifyHttpHeadersSettings,
@@ -144,9 +147,13 @@ impl EndpointSettings {
                         }
                     },
                     super::ProxyPassTo::Tcp(remote_addr) => {
+                        let mut whitelisted_ip = WhiteListedIpList::new();
+                        whitelisted_ip.apply(self.whitelisted_ip.as_deref());
+
                         return Ok(EndpointType::Tcp {
                             remote_addr,
                             debug: self.get_debug(),
+                            whitelisted_ip,
                         });
                     }
                 }

@@ -157,11 +157,16 @@ async fn main() {
             settings::EndpointType::Http2(endpoint_info) => {
                 crate::http_server::start_h2_server(listen_end_point, app.clone(), endpoint_info);
             }
-            settings::EndpointType::Tcp { remote_addr, debug } => {
+            settings::EndpointType::Tcp {
+                remote_addr,
+                debug,
+                whitelisted_ip,
+            } => {
                 crate::tcp_port_forward::start_tcp(
                     app.clone(),
                     listen_end_point,
                     remote_addr,
+                    whitelisted_ip,
                     debug,
                 );
             }

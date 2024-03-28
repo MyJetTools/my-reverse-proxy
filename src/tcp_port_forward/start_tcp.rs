@@ -3,21 +3,29 @@ use std::sync::Arc;
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::app::AppContext;
+use crate::{app::AppContext, types::WhiteListedIpList};
 
 pub fn start_tcp(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
+    whitelisted_ip: WhiteListedIpList,
     debug: bool,
 ) {
-    tokio::spawn(tcp_server_accept_loop(app, listen_addr, remote_addr, debug));
+    tokio::spawn(tcp_server_accept_loop(
+        app,
+        listen_addr,
+        remote_addr,
+        whitelisted_ip,
+        debug,
+    ));
 }
 
 async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
     remote_addr: std::net::SocketAddr,
+    whitelisted_ip: WhiteListedIpList,
     debug: bool,
 ) {
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
@@ -36,6 +44,18 @@ async fn tcp_server_accept_loop(
 
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
+
+        if !whitelisted_ip.is_whitelisted(&socket_addr.ip()) {
+            if debug {
+                println!(
+                    "Incoming connection from {} is not whitelisted. Closing it",
+                    socket_addr
+                );
+            }
+
+            let _ = server_stream.shutdown().await;
+            continue;
+        }
 
         let remote_tcp_connection_result = tokio::time::timeout(
             app.connection_settings.remote_connect_timeout,
