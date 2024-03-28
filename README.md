@@ -321,3 +321,26 @@ ssh:
     private_key_file: ~/certs/private_key.key
     passphrase: passphrase
 ```
+
+
+
+## Google OAuth authentication
+
+It is possible to use Google OAuth authentication for the endpoints.
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert  
+      google_auth: g_auth_id
+
+g_auth:
+  g_auth_id:
+    client_id: ...
+    client_secret: ...
+    whitelisted_domains: domain1.com;domain2.com
+```
+
+If 'whitelisted_domains' is missing - any email is allowed.
