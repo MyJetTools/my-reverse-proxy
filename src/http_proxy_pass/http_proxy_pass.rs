@@ -16,6 +16,7 @@ use super::{
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
     pub endpoint_info: Arc<ProxyPassEndpointInfo>,
+    socket_addr: SocketAddr,
 }
 
 impl HttpProxyPass {
@@ -30,6 +31,7 @@ impl HttpProxyPass {
                 modify_headers_settings,
             )),
             endpoint_info,
+            socket_addr,
         }
     }
 
@@ -65,6 +67,15 @@ impl HttpProxyPass {
 
                 let proxy_pass_location =
                     inner.locations.find_mut(build_result.get_location_index());
+
+                if !proxy_pass_location
+                    .whitelisted_ip
+                    .is_whitelisted(&self.socket_addr.ip())
+                {
+                    return Err(ProxyPassError::IpRestricted(
+                        self.socket_addr.ip().to_string(),
+                    ));
+                }
 
                 proxy_pass_location.connect_if_require(app).await?;
 

@@ -6,7 +6,6 @@ use crate::http_proxy_pass::ProxyPassEndpointInfo;
 
 use super::{RemoteHost, SslCertificateId};
 
-#[derive(Debug)]
 pub enum EndpointType {
     Http1(ProxyPassEndpointInfo),
     Https {

@@ -2,7 +2,6 @@ use crate::settings::GoogleAuthSettings;
 
 use super::HttpType;
 
-#[derive(Debug)]
 pub struct ProxyPassEndpointInfo {
     pub host_endpoint: String,
     pub debug: bool,

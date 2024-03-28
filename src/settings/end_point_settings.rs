@@ -20,6 +20,7 @@ pub struct EndpointSettings {
     pub google_auth: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub debug: Option<bool>,
+    pub whitelisted_ip: Option<String>,
 }
 
 impl EndpointSettings {

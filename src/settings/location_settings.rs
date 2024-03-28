@@ -26,6 +26,7 @@ pub struct LocationSettings {
     pub status_code: Option<u16>,
     pub content_type: Option<String>,
     pub body: Option<String>,
+    pub whitelisted_ip: Option<String>,
 }
 
 impl LocationSettings {

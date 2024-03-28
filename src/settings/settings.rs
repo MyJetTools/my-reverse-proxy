@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{app::AppContext, http_proxy_pass::*};
+use crate::{app::AppContext, http_proxy_pass::*, types::WhiteListedIpList};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointType, FileSource,
@@ -159,11 +159,16 @@ impl SettingsReader {
 
                 let proxy_pass_content_source = proxy_pass_content_source.unwrap();
 
+                let mut whitelisted_ip = WhiteListedIpList::new();
+                whitelisted_ip.apply(proxy_pass_settings.endpoint.whitelisted_ip.as_ref());
+                whitelisted_ip.apply(location_settings.whitelisted_ip.as_ref());
+
                 result.push(ProxyPassLocation::new(
                     location_id,
                     location_path,
                     location_settings.modify_http_headers.clone(),
                     proxy_pass_content_source,
+                    whitelisted_ip,
                 ));
             }
 
@@ -242,6 +247,7 @@ mod tests {
                     modify_http_headers: None,
                     debug: None,
                     google_auth: None,
+                    whitelisted_ip: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -252,6 +258,7 @@ mod tests {
                     status_code: None,
                     body: None,
                     content_type: None,
+                    whitelisted_ip: None,
                 }],
             },
         );

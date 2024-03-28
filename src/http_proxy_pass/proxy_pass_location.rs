@@ -1,6 +1,6 @@
 use hyper::Uri;
 
-use crate::{app::AppContext, settings::ModifyHttpHeadersSettings};
+use crate::{app::AppContext, settings::ModifyHttpHeadersSettings, types::WhiteListedIpList};
 
 use super::{HttpProxyPassContentSource, ProxyPassError};
 
@@ -9,6 +9,7 @@ pub struct ProxyPassLocation {
     pub id: i64,
     pub modify_headers: Option<ModifyHttpHeadersSettings>,
     pub content_source: HttpProxyPassContentSource,
+    pub whitelisted_ip: WhiteListedIpList,
 }
 
 impl ProxyPassLocation {
@@ -17,12 +18,14 @@ impl ProxyPassLocation {
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
         content_source: HttpProxyPassContentSource,
+        whitelisted_ip: WhiteListedIpList,
     ) -> Self {
         Self {
             path,
             id,
             modify_headers,
             content_source,
+            whitelisted_ip,
         }
     }
 
