@@ -27,3 +27,5 @@ mod handle_ga;
 pub use handle_ga::*;
 mod allowed_user_list;
 pub use allowed_user_list::*;
+mod http_proxy_pass_identity;
+pub use http_proxy_pass_identity::*;

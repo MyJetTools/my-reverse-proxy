@@ -9,11 +9,9 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::{settings::ModifyHttpHeadersSettings, types::Email};
+use crate::settings::ModifyHttpHeadersSettings;
 
-use super::{
-    HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError, SourceHttpData,
-};
+use super::{HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError};
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
@@ -41,7 +39,6 @@ pub struct HttpRequestBuilder {
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
     src_http_type: HttpType,
     last_result: Option<BuildResult>,
-    pub g_auth_user: Option<Email>,
 }
 
 impl HttpRequestBuilder {
@@ -51,7 +48,6 @@ impl HttpRequestBuilder {
             prepared_request: None,
             src_http_type,
             last_result: None,
-            g_auth_user: None,
         }
     }
 
@@ -79,12 +75,7 @@ impl HttpRequestBuilder {
 
                 let websocket_update = parts.headers.get("sec-websocket-key").is_some();
 
-                handle_headers(
-                    inner,
-                    &mut parts,
-                    &location_index,
-                    self.g_auth_user.as_ref(),
-                );
+                handle_headers(inner, &mut parts, &location_index);
                 let body = into_full_bytes(incoming).await?;
 
                 if websocket_update {
@@ -113,12 +104,7 @@ impl HttpRequestBuilder {
             } else {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
-                handle_headers(
-                    inner,
-                    &mut parts,
-                    &location_index,
-                    self.g_auth_user.as_ref(),
-                );
+                handle_headers(inner, &mut parts, &location_index);
                 let body = into_full_bytes(incoming).await?;
 
                 let request = hyper::Request::from_parts(parts, body);
@@ -134,12 +120,7 @@ impl HttpRequestBuilder {
             } else {
                 // src_http2 && dest_http2
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
-                handle_headers(
-                    inner,
-                    &mut parts,
-                    &location_index,
-                    self.g_auth_user.as_ref(),
-                );
+                handle_headers(inner, &mut parts, &location_index);
                 let body = into_full_bytes(incoming).await?;
 
                 self.prepared_request = Some(hyper::Request::from_parts(parts, body));
@@ -304,18 +285,13 @@ pub async fn into_full_bytes(
     Ok(body)
 }
 
-fn handle_headers(
-    inner: &HttpProxyPassInner,
-    parts: &mut Parts,
-    location_index: &LocationIndex,
-    x_auth_user: Option<&Email>,
-) {
+fn handle_headers(inner: &HttpProxyPassInner, parts: &mut Parts, location_index: &LocationIndex) {
     if let Some(modify_headers_settings) = inner
         .modify_headers_settings
         .global_modify_headers_settings
         .as_ref()
     {
-        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
+        modify_headers(parts, modify_headers_settings, inner);
     }
 
     if let Some(modify_headers_settings) = inner
@@ -323,21 +299,20 @@ fn handle_headers(
         .endpoint_modify_headers_settings
         .as_ref()
     {
-        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
+        modify_headers(parts, modify_headers_settings, inner);
     }
 
     let proxy_pass_location = inner.locations.find(location_index);
 
     if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
-        modify_headers(parts, modify_headers_settings, &inner.src, x_auth_user);
+        modify_headers(parts, modify_headers_settings, inner);
     }
 }
 
 fn modify_headers<'s>(
     parts: &mut Parts,
     headers_settings: &ModifyHttpHeadersSettings,
-    src: &SourceHttpData,
-    x_auth_user: Option<&Email>,
+    inner: &HttpProxyPassInner,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.request.as_ref() {
@@ -350,11 +325,12 @@ fn modify_headers<'s>(
     if let Some(add_headers) = headers_settings.add.as_ref() {
         if let Some(add_headers) = add_headers.request.as_ref() {
             for add_header in add_headers {
-                let value = src.populate_value(&add_header.value, parts, x_auth_user);
+                let value = inner.populate_value(&add_header.value, parts);
                 if !value.as_str().is_empty() {
                     parts.headers.insert(
                         HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                        src.populate_value(&add_header.value, parts, x_auth_user)
+                        inner
+                            .populate_value(&add_header.value, parts)
                             .as_str()
                             .parse()
                             .unwrap(),

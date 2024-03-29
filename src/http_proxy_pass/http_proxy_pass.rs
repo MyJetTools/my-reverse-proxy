@@ -37,7 +37,7 @@ impl HttpProxyPass {
 
     pub async fn update_client_cert_cn_name(&self, client_cert_cn: String) {
         let mut inner = self.inner.lock().await;
-        inner.src.client_cert_cn = Some(client_cert_cn);
+        inner.identity.client_cert_cn = Some(client_cert_cn);
     }
 
     pub async fn send_payload(
@@ -56,7 +56,7 @@ impl HttpProxyPass {
                 }
 
                 match self.handle_auth_with_g_auth(app, &req).await {
-                    GoogleAuthResult::Passed(user) => req.g_auth_user = user,
+                    GoogleAuthResult::Passed(user) => inner.identity.ga_user = user,
                     GoogleAuthResult::Content(content) => return Ok(content),
                     GoogleAuthResult::DomainIsNotAuthorized => {
                         return Err(ProxyPassError::Unauthorized);
@@ -64,8 +64,8 @@ impl HttpProxyPass {
                 }
 
                 if let Some(allowed_users) = inner.allowed_user_list.as_ref() {
-                    if let Some(g_auth_user) = req.g_auth_user.as_ref() {
-                        if !allowed_users.is_allowed(g_auth_user.as_str()) {
+                    if let Some(identity) = inner.identity.get_identity() {
+                        if !allowed_users.is_allowed(identity) {
                             return Err(ProxyPassError::UserIsForbidden);
                         }
                     }
@@ -165,7 +165,6 @@ impl HttpProxyPass {
                     response.content_type,
                     response.status_code,
                     response.body,
-                    req.g_auth_user.as_ref(),
                 );
                 return Ok(Ok(result));
             } else {
@@ -183,7 +182,6 @@ impl HttpProxyPass {
                             &location_index,
                             self.endpoint_info.http_type,
                             dest_http1.unwrap(),
-                            req.g_auth_user.as_ref(),
                         )
                         .await?;
                         return Ok(Ok(response));

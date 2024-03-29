@@ -1,12 +1,19 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::{
+    date_time::DateTimeAsMicroseconds, placeholders::PlaceholdersIterator, StrOrString,
+};
 
-use crate::{app::AppContext, settings::HttpEndpointModifyHeadersSettings};
+use crate::{
+    app::AppContext,
+    populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN},
+    settings::HttpEndpointModifyHeadersSettings,
+};
 
 use super::{
-    AllowedUserList, HttpProxyPassContentSource, HttpRequestBuilder, LocationIndex,
-    ProxyPassEndpointInfo, ProxyPassError, ProxyPassLocations, SourceHttpData,
+    AllowedUserList, HostPort, HttpProxyPassContentSource, HttpProxyPassIdentity,
+    HttpRequestBuilder, LocationIndex, ProxyPassEndpointInfo, ProxyPassError, ProxyPassLocations,
+    SourceHttpData,
 };
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
@@ -25,6 +32,8 @@ pub struct HttpProxyPassInner {
     pub src: SourceHttpData,
     pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
     pub allowed_user_list: Option<AllowedUserList>,
+
+    pub identity: HttpProxyPassIdentity,
 }
 
 impl HttpProxyPassInner {
@@ -38,6 +47,7 @@ impl HttpProxyPassInner {
             src: SourceHttpData::new(socket_addr),
             modify_headers_settings,
             allowed_user_list: None,
+            identity: HttpProxyPassIdentity::new(),
         }
     }
 
@@ -116,5 +126,74 @@ impl HttpProxyPassInner {
         }
 
         Ok(do_retry)
+    }
+
+    pub fn populate_value<'s, THostPort: HostPort + Send + Sync + 'static>(
+        &'s self,
+        value: &'s str,
+        req_host_port: &THostPort,
+    ) -> StrOrString<'s> {
+        if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
+            return value.into();
+        }
+
+        let mut result = String::new();
+
+        for token in
+            PlaceholdersIterator::new(value, PLACEHOLDER_OPEN_TOKEN, PLACEHOLDER_CLOSE_TOKEN)
+        {
+            match token {
+                rust_extensions::placeholders::ContentToken::Text(text) => result.push_str(text),
+                rust_extensions::placeholders::ContentToken::Placeholder(placeholder) => {
+                    match placeholder {
+                        "HOST" => {
+                            if let Some(host) = req_host_port.get_host() {
+                                result.push_str(host);
+                            }
+                        }
+                        "ENDPOINT_IP" => {
+                            result.push_str(format!("{}", self.src.socket_addr.ip()).as_str());
+                        }
+
+                        "PATH_AND_QUERY" => {
+                            if let Some(value) = req_host_port.get_path_and_query() {
+                                result.push_str(value);
+                            }
+                        }
+
+                        "HOST_PORT" => {
+                            if let Some(host) = req_host_port.get_host() {
+                                result.push_str(host);
+                                if let Some(port) = req_host_port.get_port() {
+                                    result.push(':');
+                                    result.push_str(port.to_string().as_str());
+                                }
+                            }
+                        }
+
+                        "CLIENT_CERT_CN" => {
+                            if let Some(value) = self.identity.get_identity() {
+                                result.push_str(value);
+                            }
+                        }
+
+                        "ENDPOINT_SCHEMA" => {
+                            if self.src.is_https {
+                                result.push_str("https");
+                            } else {
+                                result.push_str("http");
+                            }
+                        }
+                        _ => {
+                            if let Ok(value) = std::env::var(placeholder) {
+                                result.push_str(&value);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        result.into()
     }
 }
