@@ -47,6 +47,7 @@ impl LocationSettings {
         location_id: i64,
         variables: &Option<HashMap<String, String>>,
         ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
+        debug: bool,
     ) -> Result<Option<HttpProxyPassContentSource>, String> {
         let proxy_pass_to = self.get_proxy_pass(variables, ssh_configs)?;
 
@@ -77,6 +78,7 @@ impl LocationSettings {
                             HttpProxyPassRemoteEndpoint::Http2(RemoteHost::new(
                                 remote_host.to_string(),
                             )),
+                            debug,
                         ))
                         .into(),
                     );
@@ -87,6 +89,7 @@ impl LocationSettings {
                             HttpProxyPassRemoteEndpoint::Http(RemoteHost::new(
                                 remote_host.to_string(),
                             )),
+                            debug,
                         ))
                         .into(),
                     );
@@ -111,6 +114,7 @@ impl LocationSettings {
                                     ssh_credentials: ssh_configuration.credentials,
                                     remote_host,
                                 },
+                                debug,
                             ))
                             .into(),
                         );
@@ -122,6 +126,7 @@ impl LocationSettings {
                                     ssh_credentials: ssh_configuration.credentials,
                                     remote_host,
                                 },
+                                debug,
                             ))
                             .into(),
                         );

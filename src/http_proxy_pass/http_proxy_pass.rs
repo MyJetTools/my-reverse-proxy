@@ -85,7 +85,9 @@ impl HttpProxyPass {
                     ));
                 }
 
-                proxy_pass_location.connect_if_require(app).await?;
+                proxy_pass_location
+                    .connect_if_require(app, self.endpoint_info.debug)
+                    .await?;
 
                 let (future1, future2, request_executor, is_http_1) = {
                     match &mut proxy_pass_location.content_source {
@@ -189,7 +191,9 @@ impl HttpProxyPass {
                     Err(err) => {
                         let retry = {
                             let mut inner = self.inner.lock().await;
-                            inner.handle_error(app, &err, &location_index).await?
+                            inner
+                                .handle_error(app, &err, &location_index, self.endpoint_info.debug)
+                                .await?
                         };
 
                         match retry {
@@ -217,7 +221,11 @@ impl HttpProxyPass {
                                 println!("Upgrade Ok");
 
                                 if let Some(web_socket) = web_socket.lock().await.take() {
-                                    tokio::spawn(super::web_socket_loop(web_socket, upgraded));
+                                    tokio::spawn(super::web_socket_loop(
+                                        web_socket,
+                                        upgraded,
+                                        self.endpoint_info.debug,
+                                    ));
                                 }
 
                                 return Ok(Ok(upgrade_response));

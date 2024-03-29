@@ -75,17 +75,20 @@ impl HttpProxyPassInner {
         app: &AppContext,
         err: &ProxyPassError,
         location_index: &LocationIndex,
+        debug: bool,
     ) -> Result<RetryType, ProxyPassError> {
         let mut do_retry = RetryType::NoRetry;
 
         if err.is_disposed() {
-            println!(
-                "ProxyPassInner::handle_error. Connection with id {} and index {} is disposed. Trying to reconnect",
-                location_index.id,
-                location_index.index
-            );
+            if debug {
+                println!(
+                    "ProxyPassInner::handle_error. Connection with id {} and index {} is disposed. Trying to reconnect",
+                    location_index.id,
+                    location_index.index
+                );
+            }
             let location = self.locations.find_mut(location_index);
-            location.connect_if_require(app).await?;
+            location.connect_if_require(app, debug).await?;
             return Ok(RetryType::Retry(None));
         }
 
@@ -115,7 +118,9 @@ impl HttpProxyPassInner {
 
                         if dispose_connection {
                             remote_http_content_source.dispose();
-                            remote_http_content_source.connect_if_require(app).await?;
+                            remote_http_content_source
+                                .connect_if_require(app, debug)
+                                .await?;
                         }
                     }
                     HttpProxyPassContentSource::LocalPath(_) => {}

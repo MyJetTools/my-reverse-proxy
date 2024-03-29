@@ -10,7 +10,11 @@ use hyper_util::rt::TokioIo;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub async fn web_socket_loop(server_web_socket: HyperWebsocket, to_remote_upgraded: Upgraded) {
+pub async fn web_socket_loop(
+    server_web_socket: HyperWebsocket,
+    to_remote_upgraded: Upgraded,
+    debug: bool,
+) {
     let ws_stream = server_web_socket.await;
 
     let to_remote = WebSocketStream::from_raw_socket(
@@ -30,11 +34,20 @@ pub async fn web_socket_loop(server_web_socket: HyperWebsocket, to_remote_upgrad
 
             while let Some(message) = from_remote_read.next().await {
                 let message = message.unwrap();
-                ws_sender.send(message).await.unwrap();
+
+                if let Err(err) = ws_sender.send(message).await {
+                    if debug {
+                        println!("ws_sender.send error: {:?}", err);
+                    }
+
+                    return;
+                }
             }
         }
         Err(err) => {
-            println!("Error in websocket connection: {}", err);
+            if debug {
+                println!("Error in websocket connection: {}", err);
+            }
         }
     }
 }

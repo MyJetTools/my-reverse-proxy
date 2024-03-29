@@ -25,8 +25,6 @@ async fn main() {
 
     let app = Arc::new(app);
 
-    let mut ssl_server_id = 0;
-
     for (listen_port, endpoint_type) in listen_ports {
         let listen_end_point = std::net::SocketAddr::from(([0, 0, 0, 0], listen_port));
 
@@ -45,8 +43,6 @@ async fn main() {
                     .await
                     .unwrap()
                 {
-                    ssl_server_id += 1;
-
                     let ssl_certificate = SslCertificate::new(
                         crate::flows::get_file(&cert).await,
                         crate::flows::get_file(&private_key).await,
@@ -66,7 +62,6 @@ async fn main() {
                                 app.clone(),
                                 ssl_certificate,
                                 Some(client_ca.into()),
-                                ssl_server_id,
                                 endpoint_info,
                             );
                         } else {
@@ -82,7 +77,6 @@ async fn main() {
                             app.clone(),
                             ssl_certificate,
                             None,
-                            ssl_server_id,
                             endpoint_info,
                         );
                     }
@@ -105,8 +99,6 @@ async fn main() {
                     .await
                     .unwrap()
                 {
-                    ssl_server_id += 1;
-
                     let ssl_certificate = SslCertificate::new(
                         crate::flows::get_file(&cert).await,
                         crate::flows::get_file(&private_key).await,
@@ -126,7 +118,6 @@ async fn main() {
                                 app.clone(),
                                 ssl_certificate,
                                 Some(client_ca.into()),
-                                ssl_server_id,
                                 endpoint_info,
                             );
                         } else {
@@ -142,7 +133,6 @@ async fn main() {
                             app.clone(),
                             ssl_certificate,
                             None,
-                            ssl_server_id,
                             endpoint_info,
                         );
                     }

@@ -29,7 +29,7 @@ pub struct EndpointSettings {
 }
 
 impl EndpointSettings {
-    fn get_debug(&self) -> bool {
+    pub fn get_debug(&self) -> bool {
         self.debug.unwrap_or(false)
     }
 

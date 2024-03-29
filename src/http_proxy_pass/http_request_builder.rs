@@ -327,13 +327,11 @@ fn modify_headers<'s>(
             for add_header in add_headers {
                 let value = inner.populate_value(&add_header.value, parts);
                 if !value.as_str().is_empty() {
+                    let value = inner.populate_value(&add_header.value, parts);
+                    //println!("Adding Header: '{}'='{}'", add_header.name, value.as_str());
                     parts.headers.insert(
                         HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                        inner
-                            .populate_value(&add_header.value, parts)
-                            .as_str()
-                            .parse()
-                            .unwrap(),
+                        value.as_str().parse().unwrap(),
                     );
                 }
             }

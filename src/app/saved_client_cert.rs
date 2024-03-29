@@ -1,51 +1,40 @@
-use std::{sync::Mutex, thread, time::Duration};
+use std::{collections::HashMap, sync::Mutex};
 
 pub struct SavedClientCert {
-    items: Mutex<Vec<(i64, String)>>,
+    items: Mutex<HashMap<u16, Vec<(u64, String)>>>,
 }
 
 impl SavedClientCert {
     pub fn new() -> Self {
         Self {
-            items: Mutex::new(Vec::new()),
+            items: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn wait_while_we_read_it(&self, id: i64) {
-        loop {
-            let we_have_it = {
-                let we_have_it = false;
+    pub fn save(&self, port: u16, id: u64, cert: String) {
+        let mut read_access = self.items.lock().unwrap();
 
-                let read_access = self.items.lock().unwrap();
-
-                for itm in read_access.iter() {
-                    if itm.0 == id {
-                        break;
-                    }
-                }
-
-                we_have_it
-            };
-
-            if !we_have_it {
-                return;
-            }
-            thread::sleep(Duration::from_millis(10));
+        if !read_access.contains_key(&port) {
+            read_access.insert(port, Vec::new());
         }
-    }
 
-    pub fn save(&self, id: i64, cert: String) {
-        let mut items = self.items.lock().unwrap();
-        let index = items.iter().position(|x| x.0 == id);
+        let by_port = read_access.get_mut(&port).unwrap();
+
+        let index = by_port.iter().position(|x| x.0 == id);
         if let Some(index) = index {
-            items.remove(index);
+            by_port.remove(index);
         }
-        items.push((id, cert));
+        by_port.push((id, cert));
     }
 
-    pub fn get(&self, id: i64) -> Option<String> {
-        let mut items = self.items.lock().unwrap();
-        let index = items.iter().position(|x| x.0 == id)?;
-        Some(items.remove(index).1)
+    pub fn get(&self, port: u16, id: u64) -> Option<String> {
+        let mut read_access = self.items.lock().unwrap();
+
+        if let Some(by_port) = read_access.get_mut(&port) {
+            let index = by_port.iter().position(|x| x.0 == id)?;
+            return Some(by_port.remove(index).1);
+        }
+
+        None
     }
 }

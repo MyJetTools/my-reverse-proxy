@@ -8,20 +8,31 @@ use super::ClientCertificateCa;
 
 pub struct MyClientCertVerifier {
     app: Arc<AppContext>,
-    pub ca: ClientCertificateCa,
-    server_id: i64,
+    pub ca: Arc<ClientCertificateCa>,
+    endpoint_port: u16,
+    connection_id: u64,
 }
 
 impl MyClientCertVerifier {
-    pub fn new(app: Arc<AppContext>, ca: ClientCertificateCa, server_id: i64) -> Self {
-        Self { ca, app, server_id }
+    pub fn new(
+        app: Arc<AppContext>,
+        ca: Arc<ClientCertificateCa>,
+        endpoint_port: u16,
+        connection_id: u64,
+    ) -> Self {
+        Self {
+            ca,
+            app,
+            endpoint_port,
+            connection_id,
+        }
     }
 }
 
 impl Debug for MyClientCertVerifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MyClientCertVerifier")
-            .field("server_id", &self.server_id)
+            .field("server_id", &self.endpoint_port)
             .finish()
     }
 }
@@ -69,12 +80,14 @@ impl ClientCertVerifier for MyClientCertVerifier {
         _now: rustls_pki_types::UnixTime,
     ) -> Result<tokio_rustls::rustls::server::danger::ClientCertVerified, tokio_rustls::rustls::Error>
     {
+        println!("Verifying Client Cert");
+
         if let Some(common_name) = self.ca.check_certificate(end_entity) {
             println!("Accepted certificate with common name: {}", common_name);
 
             self.app
                 .saved_client_certs
-                .save(self.server_id, common_name);
+                .save(self.endpoint_port, self.connection_id, common_name);
 
             return Ok(tokio_rustls::rustls::server::danger::ClientCertVerified::assertion());
         }

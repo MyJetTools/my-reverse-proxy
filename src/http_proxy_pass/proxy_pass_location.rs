@@ -49,10 +49,14 @@ impl ProxyPassLocation {
         }
     }
 
-    pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
+    pub async fn connect_if_require(
+        &mut self,
+        app: &AppContext,
+        debug: bool,
+    ) -> Result<(), ProxyPassError> {
         match &mut self.content_source {
             HttpProxyPassContentSource::Http(remote_http_location) => {
-                return remote_http_location.connect_if_require(app).await;
+                return remote_http_location.connect_if_require(app, debug).await;
             }
 
             HttpProxyPassContentSource::LocalPath(_) => return Ok(()),

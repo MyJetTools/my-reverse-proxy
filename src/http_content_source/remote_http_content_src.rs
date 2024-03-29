@@ -21,31 +21,42 @@ pub struct RemoteHttpContentSource {
     http_client: HttpClient,
     pub remote_endpoint: HttpProxyPassRemoteEndpoint,
     id: i64,
+    debug: bool,
 }
 
 impl RemoteHttpContentSource {
-    pub fn new(id: i64, remote_endpoint: HttpProxyPassRemoteEndpoint) -> Self {
+    pub fn new(id: i64, remote_endpoint: HttpProxyPassRemoteEndpoint, debug: bool) -> Self {
         CONNECTIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
             http_client: HttpClient::new(),
             ssh_session: None,
             remote_endpoint,
             id,
+            debug,
         }
     }
 
-    pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
+    pub async fn connect_if_require(
+        &mut self,
+        app: &AppContext,
+        debug: bool,
+    ) -> Result<(), ProxyPassError> {
         if self.http_client.has_connection() {
             return Ok(());
         }
 
         match &self.remote_endpoint {
             HttpProxyPassRemoteEndpoint::Http(uri) => {
-                println!("Connecting Http to remote endpoint: {:?}", uri);
+                if debug {
+                    println!("Connecting to Http remote endpoint: {:?}", uri);
+                }
                 self.http_client.connect_to_http1(uri).await?;
             }
 
             HttpProxyPassRemoteEndpoint::Http2(uri) => {
+                if debug {
+                    println!("Connecting to Http2 remote endpoint: {:?}", uri);
+                }
                 self.http_client.connect_to_http2(uri).await?;
             }
 
@@ -56,24 +67,30 @@ impl RemoteHttpContentSource {
                 let mut sw = StopWatch::new();
 
                 sw.start();
-                println!(
-                    "[{}]. Http1OverSsh. Connecting to remote endpoint: {}",
-                    self.id,
-                    ssh_credentials.to_string(),
-                );
+
+                if debug {
+                    println!(
+                        "[{}]. Http1OverSsh. Connecting to remote endpoint: {}",
+                        self.id,
+                        ssh_credentials.to_string(),
+                    );
+                }
                 let ssh_session = self
                     .http_client
                     .connect_to_http1_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
-                println!(
-                    "[{}]. Http1OverSsh. Connected to remote endpoint: {}@{} in {}",
-                    self.id,
-                    ssh_credentials.to_string(),
-                    remote_host.to_string(),
-                    sw.duration_as_string()
-                );
+
+                if debug {
+                    println!(
+                        "[{}]. Http1OverSsh. Connected to remote endpoint: {}@{} in {}",
+                        self.id,
+                        ssh_credentials.to_string(),
+                        remote_host.to_string(),
+                        sw.duration_as_string()
+                    );
+                }
             }
 
             HttpProxyPassRemoteEndpoint::Http2OverSsh {
@@ -83,25 +100,31 @@ impl RemoteHttpContentSource {
                 let mut sw = StopWatch::new();
 
                 sw.start();
-                println!(
-                    "[{}]. Http2OverSsh. Connecting to remote endpoint: {}@{}",
-                    self.id,
-                    ssh_credentials.to_string(),
-                    remote_host.to_string()
-                );
+
+                if debug {
+                    println!(
+                        "[{}]. Http2OverSsh. Connecting to remote endpoint: {}@{}",
+                        self.id,
+                        ssh_credentials.to_string(),
+                        remote_host.to_string()
+                    );
+                }
                 let ssh_session = self
                     .http_client
                     .connect_to_http2_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
                 self.ssh_session = Some(ssh_session);
-                println!(
-                    "[{}]. Http2OverSsh. Connected to remote endpoint: {}@{} in {}",
-                    self.id,
-                    ssh_credentials.to_string(),
-                    remote_host.to_string(),
-                    sw.duration_as_string()
-                );
+
+                if debug {
+                    println!(
+                        "[{}]. Http2OverSsh. Connected to remote endpoint: {}@{} in {}",
+                        self.id,
+                        ssh_credentials.to_string(),
+                        remote_host.to_string(),
+                        sw.duration_as_string()
+                    );
+                }
             }
         }
 
@@ -141,7 +164,9 @@ impl RemoteHttpContentSource {
     }
 
     pub fn dispose(&mut self) {
-        println!("Disposing ProxyPassConfiguration: {}", self.id);
+        if self.debug {
+            println!("Disposing ProxyPassConfiguration: {}", self.id);
+        }
         self.http_client.dispose();
     }
 }
@@ -151,9 +176,12 @@ impl Drop for RemoteHttpContentSource {
         CONNECTIONS.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
         let connections_remain = CONNECTIONS.load(std::sync::atomic::Ordering::SeqCst);
-        println!(
-            "[{}]. --------- Dropping ProxyPassConfiguration. Connections remain: {}",
-            self.id, connections_remain
-        )
+
+        if self.debug {
+            println!(
+                "[{}]. --------- Dropping ProxyPassConfiguration. Connections remain: {}",
+                self.id, connections_remain
+            )
+        }
     }
 }

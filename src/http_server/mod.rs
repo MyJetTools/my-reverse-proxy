@@ -16,3 +16,4 @@ pub use https2_server::*;
 mod generate_tech_page;
 mod handle_request;
 pub use generate_tech_page::*;
+mod server_cert_resolver;

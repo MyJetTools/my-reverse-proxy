@@ -162,6 +162,7 @@ impl SettingsReader {
                     location_id,
                     &read_access.variables,
                     &read_access.ssh,
+                    proxy_pass_settings.endpoint.get_debug(),
                 );
 
                 if let Err(err) = proxy_pass_content_source {
