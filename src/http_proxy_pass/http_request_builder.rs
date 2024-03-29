@@ -54,6 +54,7 @@ impl HttpRequestBuilder {
     pub async fn populate_and_build(
         &mut self,
         inner: &HttpProxyPassInner,
+        debug: bool,
     ) -> Result<BuildResult, ProxyPassError> {
         let location_index = inner.locations.find_location_index(self.uri())?;
         if let Some(last_result) = &self.last_result {
@@ -79,7 +80,10 @@ impl HttpRequestBuilder {
                 let body = into_full_bytes(incoming).await?;
 
                 if websocket_update {
-                    println!("Detected Upgrade http1->http1");
+                    if debug {
+                        println!("Detected Upgrade http1->http1");
+                    }
+
                     let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
                     let (response, web_socket) = hyper_tungstenite::upgrade(upgrade_req, None)?;
                     //tokio::spawn(super::web_socket_loop(web_socket));
@@ -116,7 +120,7 @@ impl HttpRequestBuilder {
             }
         } else {
             if dest_http1 {
-                return self.http2_to_http1(location_index).await;
+                return self.http2_to_http1(location_index, debug).await;
             } else {
                 // src_http2 && dest_http2
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
@@ -134,6 +138,7 @@ impl HttpRequestBuilder {
     async fn http2_to_http1(
         &mut self,
         location_index: LocationIndex,
+        debug: bool,
     ) -> Result<BuildResult, ProxyPassError> {
         let (parts, incoming) = self.src.take().unwrap().into_parts();
 
@@ -163,7 +168,9 @@ impl HttpRequestBuilder {
         let body = into_full_bytes(incoming).await?;
 
         if parts.headers.get("sec-websocket-key").is_some() {
-            println!("Detected Upgrade");
+            if debug {
+                println!("Detected Upgrade");
+            }
             let req = hyper::Request::from_parts(parts, body.clone());
             let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
             //tokio::spawn(super::web_socket_loop(web_socket));

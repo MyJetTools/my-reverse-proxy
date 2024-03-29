@@ -71,7 +71,9 @@ impl HttpProxyPass {
                     }
                 }
 
-                let build_result = req.populate_and_build(&inner).await?;
+                let build_result = req
+                    .populate_and_build(&inner, self.endpoint_info.debug)
+                    .await?;
 
                 let proxy_pass_location =
                     inner.locations.find_mut(build_result.get_location_index());
@@ -218,7 +220,9 @@ impl HttpProxyPass {
                     match result {
                         Ok(res) => match hyper::upgrade::on(res).await {
                             Ok(upgraded) => {
-                                println!("Upgrade Ok");
+                                if self.endpoint_info.debug {
+                                    println!("Upgrade Ok");
+                                }
 
                                 if let Some(web_socket) = web_socket.lock().await.take() {
                                     tokio::spawn(super::web_socket_loop(
