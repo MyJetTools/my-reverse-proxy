@@ -4,8 +4,9 @@ use crate::{app::AppContext, http_proxy_pass::*, types::WhiteListedIpList};
 
 use super::{
     ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointTemplateSettings, EndpointType,
-    FileSource, GlobalSettings, GoogleAuthSettings, HttpEndpointModifyHeadersSettings,
-    ProxyPassSettings, SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
+    FileSource, GlobalSettings, GoogleAuthSettings, HostStr, HostString,
+    HttpEndpointModifyHeadersSettings, ProxyPassSettings, SshConfigSettings, SslCertificateId,
+    SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -56,7 +57,7 @@ impl SettingsReader {
 
     pub async fn get_http_endpoint_modify_headers_settings(
         &self,
-        endpoint_info: &ProxyPassEndpointInfo,
+        endpoint_info: &HttpServerConnectionInfo,
     ) -> HttpEndpointModifyHeadersSettings {
         let mut result = HttpEndpointModifyHeadersSettings::default();
         let read_access = self.settings.read().await;
@@ -121,6 +122,45 @@ impl SettingsReader {
         }
 
         Ok(None)
+    }
+
+    pub async fn get_https_connection_configuration(
+        &self,
+        connection_server_name: &str,
+        endpoint_listen_port: u16,
+    ) -> Result<HttpServerConnectionInfo, String> {
+        let read_access = self.settings.read().await;
+
+        for (settings_host, proxy_pass_settings) in &read_access.hosts {
+            let host_str = HostStr::new(settings_host);
+
+            if !host_str.is_my_https_server_name(connection_server_name, endpoint_listen_port) {
+                continue;
+            }
+
+            let endpoint_template_settings = proxy_pass_settings
+                .endpoint
+                .get_endpoint_template(&read_access.endpoint_templates)?;
+
+            let result = HttpServerConnectionInfo::new(
+                HostString::new(settings_host.to_string()),
+                proxy_pass_settings.endpoint.get_http_type(),
+                proxy_pass_settings.endpoint.get_debug(),
+                proxy_pass_settings
+                    .endpoint
+                    .get_google_auth_settings(endpoint_template_settings, &read_access.g_auth)?,
+                proxy_pass_settings
+                    .endpoint
+                    .get_client_certificate_id(endpoint_template_settings),
+            );
+
+            return Ok(result);
+        }
+
+        Err(format!(
+            "Can not find https server configuration for '{}:{}'",
+            connection_server_name, endpoint_listen_port
+        ))
     }
 
     pub async fn get_locations(

@@ -10,7 +10,7 @@ use crate::http_proxy_pass::*;
 pub fn start_http_server(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    endpoint_info: ProxyPassEndpointInfo,
+    endpoint_info: HttpServerConnectionInfo,
 ) {
     println!("Listening http1 on http://{}", addr);
     tokio::spawn(start_http_server_loop(addr, app, endpoint_info));
@@ -19,7 +19,7 @@ pub fn start_http_server(
 async fn start_http_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    endpoint_info: ProxyPassEndpointInfo,
+    endpoint_info: HttpServerConnectionInfo,
 ) {
     let endpoint_info = Arc::new(endpoint_info);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -45,6 +45,7 @@ async fn start_http_server_loop(
             socket_addr,
             modify_headers_settings,
             endpoint_info,
+            None,
         ));
 
         let http_proxy_pass_to_dispose = http_proxy_pass.clone();

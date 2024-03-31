@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SslCertificateId(String);
 
 impl SslCertificateId {

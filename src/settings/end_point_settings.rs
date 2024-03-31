@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use serde::*;
 
 use crate::{
-    http_proxy_pass::{HttpType, ProxyPassEndpointInfo},
+    http_proxy_pass::{HttpServerConnectionInfo, HttpType},
     types::WhiteListedIpList,
 };
 
 use super::{
-    EndpointTemplateSettings, EndpointType, GoogleAuthSettings, LocationSettings,
+    EndpointTemplateSettings, EndpointType, GoogleAuthSettings, HostString, LocationSettings,
     ModifyHttpHeadersSettings, SshConfigSettings, SslCertificateId,
 };
 
@@ -68,7 +68,7 @@ impl EndpointSettings {
         template.whitelisted_ip.clone()
     }
 
-    fn get_google_auth_settings(
+    pub fn get_google_auth_settings(
         &self,
         endpoint_template: Option<&EndpointTemplateSettings>,
         g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
@@ -116,7 +116,7 @@ impl EndpointSettings {
         None
     }
 
-    fn get_client_certificate_id(
+    pub fn get_client_certificate_id(
         &self,
         endpoint_template: Option<&EndpointTemplateSettings>,
     ) -> Option<SslCertificateId> {
@@ -133,19 +133,14 @@ impl EndpointSettings {
         None
     }
 
-    pub fn get_type(
-        &self,
-        host: &str,
-        locations: &[LocationSettings],
-        endpoint_templates: &Option<HashMap<String, EndpointTemplateSettings>>,
-        variables: &Option<HashMap<String, String>>,
-        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
-        g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
-    ) -> Result<EndpointType, String> {
-        let endpoint_template = if let Some(template_id) = self.template_id.as_ref() {
+    pub fn get_endpoint_template<'s>(
+        &'s self,
+        endpoint_templates: &'s Option<HashMap<String, EndpointTemplateSettings>>,
+    ) -> Result<Option<&'s EndpointTemplateSettings>, String> {
+        if let Some(template_id) = self.template_id.as_ref() {
             match endpoint_templates {
                 Some(endpoint_templates) => match endpoint_templates.get(template_id) {
-                    Some(template) => Some(template),
+                    Some(template) => return Ok(Some(template)),
                     None => {
                         return Err(format!(
                             "Can not find template with id '{}' for endpoint",
@@ -161,56 +156,54 @@ impl EndpointSettings {
                 }
             }
         } else {
-            None
-        };
+            return Ok(None);
+        }
+    }
+
+    pub fn get_http_type(&self) -> HttpType {
+        match self.endpoint_type.as_str() {
+            "https" => HttpType::Https1,
+            "https2" => HttpType::Https2,
+            "http2" => HttpType::Http2,
+            _ => HttpType::Http1,
+        }
+    }
+
+    pub fn get_type(
+        &self,
+        host: &str,
+        locations: &[LocationSettings],
+        endpoint_templates: &Option<HashMap<String, EndpointTemplateSettings>>,
+        variables: &Option<HashMap<String, String>>,
+        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+        g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
+    ) -> Result<EndpointType, String> {
+        let endpoint_template = self.get_endpoint_template(endpoint_templates)?;
 
         let g_auth = self.get_google_auth_settings(endpoint_template, g_auth_settings)?;
 
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(ProxyPassEndpointInfo::new(
-                host.to_string(),
+            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(HttpServerConnectionInfo::new(
+                HostString::new(host.to_string()),
                 HttpType::Http1,
                 self.get_debug(),
                 g_auth,
+                None,
             ))),
             "https" => {
                 if let Some(ssl_id) = self.get_ssl_id(endpoint_template) {
-                    return Ok(EndpointType::Https {
-                        endpoint_info: ProxyPassEndpointInfo::new(
-                            host.to_string(),
-                            HttpType::Https1,
-                            self.get_debug(),
-                            g_auth,
-                        ),
-                        ssl_id,
-                        client_ca_id: self.get_client_certificate_id(endpoint_template),
-                    });
-                } else {
-                    panic!("Host '{}' has https location without ssl certificate", host);
-                }
-            }
-            "https2" => {
-                if let Some(ssl_id) = self.get_ssl_id(endpoint_template) {
-                    return Ok(EndpointType::Https2 {
-                        endpoint_info: ProxyPassEndpointInfo::new(
-                            host.to_string(),
-                            HttpType::Https2,
-                            self.get_debug(),
-                            g_auth,
-                        ),
-                        ssl_id,
-                        client_ca_id: self.get_client_certificate_id(endpoint_template),
-                    });
+                    return Ok(EndpointType::Https(ssl_id));
                 } else {
                     panic!("Host '{}' has https location without ssl certificate", host);
                 }
             }
             "http2" => {
-                return Ok(EndpointType::Http2(ProxyPassEndpointInfo::new(
-                    host.to_string(),
+                return Ok(EndpointType::Http2(HttpServerConnectionInfo::new(
+                    HostString::new(host.to_string()),
                     HttpType::Http2,
                     self.get_debug(),
                     g_auth,
+                    None,
                 )))
             }
             "tcp" => {

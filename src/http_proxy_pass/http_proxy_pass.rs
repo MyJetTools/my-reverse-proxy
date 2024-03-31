@@ -9,13 +9,13 @@ use crate::{
 };
 
 use super::{
-    BuildResult, GoogleAuthResult, HttpProxyPassInner, HttpRequestBuilder, ProxyPassEndpointInfo,
-    ProxyPassError, RetryType,
+    BuildResult, GoogleAuthResult, HttpProxyPassInner, HttpRequestBuilder,
+    HttpServerConnectionInfo, ProxyPassError, RetryType,
 };
 
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
-    pub endpoint_info: Arc<ProxyPassEndpointInfo>,
+    pub endpoint_info: Arc<HttpServerConnectionInfo>,
     socket_addr: SocketAddr,
 }
 
@@ -23,21 +23,18 @@ impl HttpProxyPass {
     pub fn new(
         socket_addr: SocketAddr,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
-        endpoint_info: Arc<ProxyPassEndpointInfo>,
+        endpoint_info: Arc<HttpServerConnectionInfo>,
+        client_cert_cn: Option<String>,
     ) -> Self {
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
                 socket_addr,
                 modify_headers_settings,
+                client_cert_cn,
             )),
             endpoint_info,
             socket_addr,
         }
-    }
-
-    pub async fn update_client_cert_cn_name(&self, client_cert_cn: String) {
-        let mut inner = self.inner.lock().await;
-        inner.identity.client_cert_cn = Some(client_cert_cn);
     }
 
     pub async fn send_payload(

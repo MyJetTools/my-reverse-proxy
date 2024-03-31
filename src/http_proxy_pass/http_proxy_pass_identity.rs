@@ -6,9 +6,9 @@ pub struct HttpProxyPassIdentity {
 }
 
 impl HttpProxyPassIdentity {
-    pub fn new() -> Self {
+    pub fn new(client_cert_cn: Option<String>) -> Self {
         Self {
-            client_cert_cn: None,
+            client_cert_cn,
             ga_user: None,
         }
     }

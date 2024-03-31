@@ -40,3 +40,5 @@ mod google_auth_settings;
 pub use google_auth_settings::*;
 mod endpoint_template_settings;
 pub use endpoint_template_settings::*;
+mod host_str;
+pub use host_str::*;

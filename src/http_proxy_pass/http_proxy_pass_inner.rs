@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, time::Duration};
 
 use rust_extensions::{
     date_time::DateTimeAsMicroseconds, placeholders::PlaceholdersIterator, StrOrString,
@@ -12,8 +12,8 @@ use crate::{
 
 use super::{
     AllowedUserList, HostPort, HttpProxyPassContentSource, HttpProxyPassIdentity,
-    HttpRequestBuilder, LocationIndex, ProxyPassEndpointInfo, ProxyPassError, ProxyPassLocations,
-    SourceHttpData,
+    HttpRequestBuilder, HttpServerConnectionInfo, LocationIndex, ProxyPassError,
+    ProxyPassLocations, SourceHttpData,
 };
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
@@ -40,6 +40,7 @@ impl HttpProxyPassInner {
     pub fn new(
         socket_addr: SocketAddr,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
+        client_cert_cn: Option<String>,
     ) -> Self {
         Self {
             locations: ProxyPassLocations::new(),
@@ -47,7 +48,7 @@ impl HttpProxyPassInner {
             src: SourceHttpData::new(socket_addr),
             modify_headers_settings,
             allowed_user_list: None,
-            identity: HttpProxyPassIdentity::new(),
+            identity: HttpProxyPassIdentity::new(client_cert_cn),
         }
     }
 
@@ -58,7 +59,7 @@ impl HttpProxyPassInner {
     pub async fn init<'s>(
         &mut self,
         app: &AppContext,
-        endpoint_info: &Arc<ProxyPassEndpointInfo>,
+        endpoint_info: &HttpServerConnectionInfo,
         req: &HttpRequestBuilder,
     ) -> Result<(), ProxyPassError> {
         let (locations, allowed_user_list) =

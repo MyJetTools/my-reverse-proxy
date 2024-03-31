@@ -2,23 +2,15 @@ use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 
-use crate::{http_proxy_pass::ProxyPassEndpointInfo, types::WhiteListedIpList};
+use crate::{http_proxy_pass::HttpServerConnectionInfo, types::WhiteListedIpList};
 
-use super::{RemoteHost, SslCertificateId};
+use super::RemoteHost;
 
 pub enum EndpointType {
-    Http1(ProxyPassEndpointInfo),
-    Https {
-        endpoint_info: ProxyPassEndpointInfo,
-        ssl_id: super::SslCertificateId,
-        client_ca_id: Option<SslCertificateId>,
-    },
-    Https2 {
-        endpoint_info: ProxyPassEndpointInfo,
-        ssl_id: super::SslCertificateId,
-        client_ca_id: Option<SslCertificateId>,
-    },
-    Http2(ProxyPassEndpointInfo),
+    Http1(HttpServerConnectionInfo),
+    Http2(HttpServerConnectionInfo),
+    Https(super::SslCertificateId),
+
     Tcp {
         remote_addr: std::net::SocketAddr,
         debug: bool,

@@ -32,11 +32,7 @@ async fn main() {
             settings::EndpointType::Http1(endpoint_info) => {
                 crate::http_server::start_http_server(listen_end_point, app.clone(), endpoint_info);
             }
-            settings::EndpointType::Https {
-                ssl_id,
-                client_ca_id,
-                endpoint_info,
-            } => {
+            settings::EndpointType::Https(ssl_id) => {
                 if let Some((cert, private_key)) = app
                     .settings_reader
                     .get_ssl_certificate(&ssl_id)
@@ -49,37 +45,11 @@ async fn main() {
                         private_key.as_str().as_str(),
                     );
 
-                    if let Some(client_ca_id) = client_ca_id {
-                        if let Some(client_cert) = app
-                            .settings_reader
-                            .get_client_certificate_ca(client_ca_id.as_str())
-                            .await
-                            .unwrap()
-                        {
-                            let client_ca = crate::flows::get_file(&client_cert).await;
-                            crate::http_server::start_https_server(
-                                listen_end_point,
-                                app.clone(),
-                                ssl_certificate,
-                                Some(client_ca.into()),
-                                endpoint_info,
-                            );
-                        } else {
-                            panic!(
-                                "Client certificate ca not found: {} for endpoint: {}",
-                                client_ca_id.as_str(),
-                                listen_port
-                            );
-                        }
-                    } else {
-                        crate::http_server::start_https_server(
-                            listen_end_point,
-                            app.clone(),
-                            ssl_certificate,
-                            None,
-                            endpoint_info,
-                        );
-                    }
+                    crate::http_server::start_https_server(
+                        listen_end_point,
+                        app.clone(),
+                        ssl_certificate,
+                    );
                 } else {
                     panic!(
                         "Certificate not found: {} for endpoint: {}",
@@ -88,6 +58,7 @@ async fn main() {
                     );
                 }
             }
+            /*
             settings::EndpointType::Https2 {
                 ssl_id,
                 client_ca_id,
@@ -144,6 +115,7 @@ async fn main() {
                     );
                 }
             }
+             */
             settings::EndpointType::Http2(endpoint_info) => {
                 crate::http_server::start_h2_server(listen_end_point, app.clone(), endpoint_info);
             }

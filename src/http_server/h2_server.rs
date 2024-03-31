@@ -10,7 +10,7 @@ use crate::http_proxy_pass::*;
 pub fn start_h2_server(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    endpoint_info: ProxyPassEndpointInfo,
+    endpoint_info: HttpServerConnectionInfo,
 ) {
     println!("Listening h2 on http://{}", addr);
     tokio::spawn(start_https2_server_loop(addr, app, endpoint_info));
@@ -19,7 +19,7 @@ pub fn start_h2_server(
 async fn start_https2_server_loop(
     addr: SocketAddr,
     app: Arc<AppContext>,
-    endpoint_info: ProxyPassEndpointInfo,
+    endpoint_info: HttpServerConnectionInfo,
 ) {
     let endpoint_info = Arc::new(endpoint_info);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -46,6 +46,7 @@ async fn start_https2_server_loop(
                 socket_addr,
                 modify_headers_settings,
                 endpoint_info,
+                None,
             ));
             let proxy_pass_to_dispose = http_proxy_pass.clone();
             let _ = builder

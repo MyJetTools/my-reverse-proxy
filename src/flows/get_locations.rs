@@ -2,7 +2,7 @@ use crate::{app::AppContext, http_proxy_pass::*};
 
 pub async fn get_locations<'s>(
     app: &AppContext,
-    endpoint_info: &ProxyPassEndpointInfo,
+    endpoint_info: &HttpServerConnectionInfo,
     req: &HttpRequestBuilder,
 ) -> Result<(Vec<ProxyPassLocation>, Option<AllowedUserList>), ProxyPassError> {
     let (result, allowed_users_list) = app
