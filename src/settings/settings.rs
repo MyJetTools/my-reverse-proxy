@@ -55,6 +55,18 @@ impl SettingsReader {
         result
     }
 
+    pub async fn get_session_key(&self) -> Option<String> {
+        let read_access = self.settings.read().await;
+
+        if let Some(global_settings) = read_access.global_settings.as_ref() {
+            if let Some(connection_settings) = global_settings.connection_settings.as_ref() {
+                return connection_settings.session_key.clone();
+            }
+        }
+
+        None
+    }
+
     pub async fn get_http_endpoint_modify_headers_settings(
         &self,
         endpoint_info: &HttpServerConnectionInfo,

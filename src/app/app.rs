@@ -21,13 +21,20 @@ pub struct AppContext {
 impl AppContext {
     pub async fn new(settings_reader: SettingsReader) -> Self {
         let connection_settings = settings_reader.get_connections_settings().await;
+
+        let token_secret_key = if let Some(session_key) = settings_reader.get_session_key().await {
+            AesKey::new(get_token_secret_key_from_settings(session_key.as_bytes()).as_slice())
+        } else {
+            AesKey::new(generate_random_token_secret_key().as_slice())
+        };
+
         Self {
             settings_reader,
             http_connections: AtomicIsize::new(0),
             id: AtomicI64::new(0),
             connection_settings,
             saved_client_certs: SavedClientCert::new(),
-            token_secret_key: AesKey::new(generate_token_secret_key().as_slice()),
+            token_secret_key,
             client_certificates: ClientCertificatesCache::new(),
         }
     }
@@ -37,7 +44,7 @@ impl AppContext {
     }
 }
 
-fn generate_token_secret_key() -> Vec<u8> {
+fn generate_random_token_secret_key() -> Vec<u8> {
     let mut result = Vec::with_capacity(48);
 
     let mut key = vec![];
@@ -45,6 +52,22 @@ fn generate_token_secret_key() -> Vec<u8> {
     while result.len() < 48 {
         if key.len() == 0 {
             key = uuid::Uuid::new_v4().as_bytes().to_vec();
+        }
+
+        result.push(key.pop().unwrap());
+    }
+
+    result
+}
+
+fn get_token_secret_key_from_settings(session_key: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(48);
+
+    let mut key = vec![];
+
+    while result.len() < 48 {
+        if key.len() == 0 {
+            key = session_key.to_vec();
         }
 
         result.push(key.pop().unwrap());

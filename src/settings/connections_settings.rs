@@ -10,6 +10,7 @@ const DEFAULT_CONNECT_TO_REMOTE_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct ConnectionsSettings {
     pub buffer_size: Option<String>,
     pub connect_to_remote_timeout: Option<String>,
+    pub session_key: Option<String>,
 }
 
 impl ConnectionsSettings {
