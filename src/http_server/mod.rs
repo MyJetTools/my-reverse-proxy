@@ -16,5 +16,6 @@ pub use client_cert_verifier::*;
 mod generate_tech_page;
 mod handle_request;
 pub use generate_tech_page::*;
+mod client_cert_cell;
 mod server_cert_resolver;
 mod tls_acceptor;

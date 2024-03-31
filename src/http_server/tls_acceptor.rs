@@ -6,7 +6,10 @@ use tokio_rustls::rustls::{
     ServerConfig,
 };
 
-use crate::{app::AppContext, http_proxy_pass::HttpServerConnectionInfo};
+use crate::{
+    app::AppContext, http_proxy_pass::HttpServerConnectionInfo,
+    http_server::client_cert_cell::ClientCertCell,
+};
 
 use super::{server_cert_resolver::MyCertResolver, MyClientCertVerifier};
 
@@ -14,9 +17,15 @@ pub async fn create_config(
     app: Arc<AppContext>,
     server_name: &str,
     endpoint_port: u16,
-    connection_id: u64,
     certified_key: Arc<CertifiedKey>,
-) -> Result<(ServerConfig, HttpServerConnectionInfo), String> {
+) -> Result<
+    (
+        ServerConfig,
+        HttpServerConnectionInfo,
+        Option<Arc<ClientCertCell>>,
+    ),
+    String,
+> {
     let endpoint_info = app
         .settings_reader
         .get_https_connection_configuration(server_name, endpoint_port)
@@ -26,11 +35,12 @@ pub async fn create_config(
         let client_cert_ca =
             crate::flows::get_client_certificate(&app, client_cert_ca_id, endpoint_port).await?;
 
+        let client_cert_cell = Arc::new(ClientCertCell::new());
+
         let client_cert_verifier = Arc::new(MyClientCertVerifier::new(
-            app.clone(),
+            client_cert_cell.clone(),
             client_cert_ca,
             endpoint_port,
-            connection_id,
         ));
 
         let mut server_config =
@@ -43,7 +53,7 @@ pub async fn create_config(
             !endpoint_info.http_type.is_http1()
         );
         server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
-        return Ok((server_config, endpoint_info));
+        return Ok((server_config, endpoint_info, Some(client_cert_cell)));
     }
 
     let mut server_config =
@@ -53,7 +63,7 @@ pub async fn create_config(
 
     server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
 
-    Ok((server_config, endpoint_info))
+    Ok((server_config, endpoint_info, None))
 }
 
 fn get_alpn_protocol(https2: bool) -> Vec<Vec<u8>> {

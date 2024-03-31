@@ -4,7 +4,7 @@ use encryption::aes::AesKey;
 
 use crate::settings::{ConnectionsSettingsModel, SettingsReader};
 
-use super::{ClientCertificatesCache, SavedClientCert};
+use super::ClientCertificatesCache;
 
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -13,7 +13,7 @@ pub struct AppContext {
     pub http_connections: AtomicIsize,
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
-    pub saved_client_certs: SavedClientCert,
+    //pub saved_client_certs: SavedClientCert,
     pub token_secret_key: AesKey,
     pub client_certificates: ClientCertificatesCache,
 }
@@ -33,7 +33,7 @@ impl AppContext {
             http_connections: AtomicIsize::new(0),
             id: AtomicI64::new(0),
             connection_settings,
-            saved_client_certs: SavedClientCert::new(),
+            // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
             client_certificates: ClientCertificatesCache::new(),
         }

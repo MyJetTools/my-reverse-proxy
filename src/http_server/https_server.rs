@@ -28,11 +28,7 @@ async fn start_https_server_loop(
 
     // Build TLS configuration.
 
-    let mut connection_id = 0;
-
     loop {
-        connection_id += 1;
-
         let (tcp_stream, socket_addr) = listener.accept().await.unwrap();
 
         println!("Accepted connection");
@@ -40,7 +36,6 @@ async fn start_https_server_loop(
         let result = lazy_accept_tcp_stream(
             app.clone(),
             endpoint_port,
-            connection_id,
             certified_key.clone(),
             tcp_stream,
         )
@@ -76,7 +71,6 @@ async fn start_https_server_loop(
 async fn lazy_accept_tcp_stream(
     app: Arc<AppContext>,
     endpoint_port: u16,
-    connection_id: u64,
     certified_key: Arc<CertifiedKey>,
     tcp_stream: TcpStream,
 ) -> Result<
@@ -103,7 +97,6 @@ async fn lazy_accept_tcp_stream(
                     app.clone(),
                     server_name,
                     endpoint_port,
-                    connection_id,
                     certified_key,
                 )
                 .await;
@@ -112,12 +105,12 @@ async fn lazy_accept_tcp_stream(
                     return Err(format!("failed to create tls config: {err:#}"));
                 }
 
-                let (config, endpoint_info) = config_result.unwrap();
+                let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
 
                 let tls_stream = start.into_stream(config.into()).await.unwrap();
 
-                let cn_user_name = if endpoint_info.client_certificate_id.is_some() {
-                    app.saved_client_certs.get(endpoint_port, connection_id)
+                let cn_user_name = if let Some(client_cert_cell) = client_cert_cell {
+                    client_cert_cell.get()
                 } else {
                     None
                 };
