@@ -7,6 +7,7 @@ global_settings:
   connection_settings:
     buffer_size: 512Kb # Buffer, which is allocated twice (read/write) per connection to pass traffic by
     connect_to_remote_timeout: 5s # Timeout to connect to remote host
+    session_key: # key to encrypt session data. Not having this field means that key is going to be randomly generated
   
 hosts:
   localhost:8000:
