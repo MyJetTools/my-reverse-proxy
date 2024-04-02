@@ -9,20 +9,20 @@ use hyper::{
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
 
 use super::{
-    into_full_bytes, HostPort, HttpProxyPassInner, HttpType, LocationIndex, ProxyPassError,
+    into_full_bytes, HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError,
 };
 
 pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
+    proxy_pass: &HttpProxyPass,
+    inner: &HttpProxyPassInner,
     req_host_port: &THostPort,
     response: hyper::Response<Incoming>,
-    inner: &HttpProxyPassInner,
     location_index: &LocationIndex,
-    src: HttpType,
     dest_http1: bool,
 ) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
-    if dest_http1 && !src.is_http1() {
+    if dest_http1 && !proxy_pass.listening_port_info.http_type.is_http1() {
         parts.headers.remove(header::TRANSFER_ENCODING);
         parts.headers.remove(header::CONNECTION);
         parts.headers.remove(header::UPGRADE);
@@ -31,15 +31,22 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
         parts.headers.remove("connection");
     }
 
-    modify_req_headers(req_host_port, inner, &mut parts.headers, location_index);
+    modify_req_headers(
+        proxy_pass,
+        inner,
+        req_host_port,
+        &mut parts.headers,
+        location_index,
+    );
 
     let body = into_full_bytes(incoming).await?;
     Ok(hyper::Response::from_parts(parts, body))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
-    req_host_port: &THostPort,
+    http_proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
+    req_host_port: &THostPort,
     location_index: &LocationIndex,
     content_type: Option<WebContentType>,
     status_code: u16,
@@ -52,7 +59,13 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     }
 
     if let Some(headers) = builder.headers_mut() {
-        modify_req_headers(req_host_port, inner, headers, location_index);
+        modify_req_headers(
+            http_proxy_pass,
+            inner,
+            req_host_port,
+            headers,
+            location_index,
+        );
     }
 
     let full_body = http_body_util::Full::new(hyper::body::Bytes::from(content));
@@ -60,39 +73,42 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
 }
 
 fn modify_req_headers<THostPort: HostPort + Send + Sync + 'static>(
-    req_host_port: &THostPort,
+    proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
+    req_host_port: &THostPort,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
-    if let Some(modify_headers_settings) = inner
+    if let Some(modify_headers_settings) = proxy_pass
+        .endpoint_info
         .modify_headers_settings
         .global_modify_headers_settings
         .as_ref()
     {
-        modify_headers(req_host_port, headers, modify_headers_settings, inner);
+        modify_headers(inner, req_host_port, headers, modify_headers_settings);
     }
 
-    if let Some(modify_headers_settings) = inner
+    if let Some(modify_headers_settings) = proxy_pass
+        .endpoint_info
         .modify_headers_settings
         .endpoint_modify_headers_settings
         .as_ref()
     {
-        modify_headers(req_host_port, headers, modify_headers_settings, inner);
+        modify_headers(inner, req_host_port, headers, modify_headers_settings);
     }
 
     let proxy_pass_location = inner.locations.find(location_index);
 
-    if let Some(modify_headers_settings) = proxy_pass_location.modify_headers.as_ref() {
-        modify_headers(req_host_port, headers, modify_headers_settings, inner);
+    if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
+        modify_headers(inner, req_host_port, headers, modify_headers_settings);
     }
 }
 
 fn modify_headers<THostPort: HostPort + Send + Sync + 'static>(
+    inner: &HttpProxyPassInner,
     req_host_port: &THostPort,
     headers: &mut HeaderMap<hyper::header::HeaderValue>,
     headers_settings: &ModifyHttpHeadersSettings,
-    inner: &HttpProxyPassInner,
 ) {
     if let Some(remove_header) = headers_settings.remove.as_ref() {
         if let Some(remove_headers) = remove_header.response.as_ref() {

@@ -1,12 +1,14 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{app::AppContext, http_proxy_pass::*, types::WhiteListedIpList};
+use crate::{
+    app::AppContext,
+    app_configuration::{EndpointType, HttpListenPortConfiguration, ListenPortConfiguration},
+};
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointTemplateSettings, EndpointType,
-    FileSource, GlobalSettings, GoogleAuthSettings, HostStr, HostString,
-    HttpEndpointModifyHeadersSettings, ProxyPassSettings, SshConfigSettings, SslCertificateId,
-    SslCertificatesSettingsModel,
+    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointTemplateSettings, FileSource,
+    GlobalSettings, GoogleAuthSettings, HostString, ProxyPassSettings, SshConfigSettings,
+    SslCertificateId, SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -28,6 +30,81 @@ pub struct SettingsModel {
 
     pub allowed_users: Option<HashMap<String, Vec<String>>>,
 }
+
+/*
+
+impl SettingsModel {
+    pub fn get_locations(
+        &self,
+        app: &AppContext,
+        req: &HttpRequestBuilder,
+        is_https: bool,
+    ) -> Result<(Vec<ProxyPassLocationConfig>, Option<AllowedUserList>), String> {
+
+
+        for (settings_host, proxy_pass_settings) in &self.hosts {
+            if !req.is_mine(settings_host, is_https) {
+                continue;
+            }
+
+            let location_id = app.get_id();
+
+            let mut allowed_users = None;
+
+            if let Some(allowed_user_id) = &proxy_pass_settings.endpoint.allowed_users {
+                if let Some(users) = &self.allowed_users {
+                    if let Some(users) = users.get(allowed_user_id) {
+                        allowed_users = Some(AllowedUserList::new(users.clone()));
+                    }
+                }
+            }
+
+            let mut result = Vec::new();
+            for location_settings in &proxy_pass_settings.locations {
+                let location_path = if let Some(location) = &location_settings.path {
+                    location.to_string()
+                } else {
+                    "/".to_string()
+                };
+
+                /*
+                                let proxy_pass_content_source = location_settings.get_http_content_source(
+                                    app,
+                                    settings_host,
+                                    location_id,
+                                    &self.variables,
+                                    &self.ssh,
+                                    proxy_pass_settings.endpoint.get_debug(),
+                                )?;
+
+
+                                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
+                */
+                let mut whitelisted_ip = WhiteListedIpList::new();
+                whitelisted_ip.apply(
+                    proxy_pass_settings
+                        .endpoint
+                        .get_white_listed_ip(&self.endpoint_templates)
+                        .as_deref(),
+                );
+                whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
+
+                result.push(ProxyPassLocationConfig::new(
+                    location_id,
+                    location_path,
+                    location_settings.modify_http_headers.clone(),
+                    whitelisted_ip,
+                ));
+            }
+
+            return Ok((result, allowed_users));
+        }
+
+        return Ok((vec![], None));
+
+    }
+}
+    */
 
 impl SettingsReader {
     pub async fn get_connections_settings(&self) -> ConnectionsSettingsModel {
@@ -65,37 +142,6 @@ impl SettingsReader {
         }
 
         None
-    }
-
-    pub async fn get_http_endpoint_modify_headers_settings(
-        &self,
-        endpoint_info: &HttpServerConnectionInfo,
-    ) -> HttpEndpointModifyHeadersSettings {
-        let mut result = HttpEndpointModifyHeadersSettings::default();
-        let read_access = self.settings.read().await;
-
-        if let Some(global_settings) = read_access.global_settings.as_ref() {
-            if let Some(all_http_endpoints) = global_settings.all_http_endpoints.as_ref() {
-                if let Some(modify_headers) = all_http_endpoints.modify_http_headers.as_ref() {
-                    result.global_modify_headers_settings = Some(modify_headers.clone());
-                }
-            }
-        }
-
-        for (host, proxy_pass) in &read_access.hosts {
-            if !endpoint_info.is_my_endpoint(host) {
-                continue;
-            }
-
-            if let Some(modify_headers) = proxy_pass
-                .endpoint
-                .get_modify_http_headers(&read_access.endpoint_templates)
-            {
-                result.endpoint_modify_headers_settings = Some(modify_headers.clone());
-            }
-        }
-
-        result
     }
 
     pub async fn get_client_certificate_ca(&self, id: &str) -> Result<Option<FileSource>, String> {
@@ -136,148 +182,121 @@ impl SettingsReader {
         Ok(None)
     }
 
-    pub async fn get_https_connection_configuration(
+    /*
+       pub async fn get_https_connection_configuration(
+           &self,
+           connection_server_name: &str,
+           endpoint_listen_port: u16,
+       ) -> Result<HttpEndpointInfo, String> {
+           let read_access = self.settings.read().await;
+
+           for (settings_host, proxy_pass_settings) in &read_access.hosts {
+               let host_str = HostStr::new(settings_host);
+
+               if !host_str.is_my_https_server_name(connection_server_name, endpoint_listen_port) {
+                   continue;
+               }
+
+               let endpoint_template_settings = proxy_pass_settings
+                   .endpoint
+                   .get_endpoint_template(&read_access.endpoint_templates)?;
+
+               let result = HttpEndpointInfo::new(
+                   HostString::new(settings_host.to_string())?,
+                   proxy_pass_settings.endpoint.get_http_type(),
+                   proxy_pass_settings.endpoint.get_debug(),
+                   proxy_pass_settings
+                       .endpoint
+                       .get_google_auth_settings(endpoint_template_settings, &read_access.g_auth)?,
+                   proxy_pass_settings
+                       .endpoint
+                       .get_client_certificate_id(endpoint_template_settings),
+               );
+
+               return Ok(result);
+           }
+
+           Err(format!(
+               "Can not find https server configuration for '{}:{}'",
+               connection_server_name, endpoint_listen_port
+           ))
+       }
+    */
+    pub async fn get_listen_ports(
         &self,
-        connection_server_name: &str,
-        endpoint_listen_port: u16,
-    ) -> Result<HttpServerConnectionInfo, String> {
+        app: &AppContext,
+    ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
         let read_access = self.settings.read().await;
 
-        for (settings_host, proxy_pass_settings) in &read_access.hosts {
-            let host_str = HostStr::new(settings_host);
+        let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
 
-            if !host_str.is_my_https_server_name(connection_server_name, endpoint_listen_port) {
-                continue;
-            }
+        for (host, proxy_pass) in &read_access.hosts {
+            let end_point = HostString::new(host.to_string())?;
 
-            let endpoint_template_settings = proxy_pass_settings
+            let port = end_point.get_port();
+
+            let endpoint_template_settings = proxy_pass
                 .endpoint
                 .get_endpoint_template(&read_access.endpoint_templates)?;
 
-            let result = HttpServerConnectionInfo::new(
-                HostString::new(settings_host.to_string()),
-                proxy_pass_settings.endpoint.get_http_type(),
-                proxy_pass_settings.endpoint.get_debug(),
-                proxy_pass_settings
-                    .endpoint
-                    .get_google_auth_settings(endpoint_template_settings, &read_access.g_auth)?,
-                proxy_pass_settings
-                    .endpoint
-                    .get_client_certificate_id(endpoint_template_settings),
-            );
+            let allowed_users = proxy_pass
+                .get_allowed_users(&read_access.allowed_users, endpoint_template_settings)?;
 
-            return Ok(result);
-        }
+            let endpoint_type = proxy_pass.endpoint.get_type(
+                end_point,
+                &proxy_pass.endpoint,
+                proxy_pass.locations.as_slice(),
+                endpoint_template_settings,
+                &read_access.variables,
+                &read_access.ssh,
+                &read_access.g_auth,
+                allowed_users,
+                &read_access.global_settings,
+                app,
+            )?;
 
-        Err(format!(
-            "Can not find https server configuration for '{}:{}'",
-            connection_server_name, endpoint_listen_port
-        ))
-    }
-
-    pub async fn get_locations(
-        &self,
-        app: &AppContext,
-        req: &HttpRequestBuilder,
-        is_https: bool,
-    ) -> Result<(Vec<ProxyPassLocation>, Option<AllowedUserList>), ProxyPassError> {
-        let read_access = self.settings.read().await;
-
-        for (settings_host, proxy_pass_settings) in &read_access.hosts {
-            if !req.is_mine(settings_host, is_https) {
-                continue;
-            }
-
-            let location_id = app.get_id();
-
-            let mut allowed_users = None;
-
-            if let Some(allowed_user_id) = &proxy_pass_settings.endpoint.allowed_users {
-                if let Some(users) = &read_access.allowed_users {
-                    if let Some(users) = users.get(allowed_user_id) {
-                        allowed_users = Some(AllowedUserList::new(users.clone()));
+            match endpoint_type {
+                EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
+                    Some(other_port_configuration) => {
+                        other_port_configuration
+                            .add_http_endpoint_info(host, http_endpoint_info)?;
                     }
-                }
-            }
-
-            let mut result = Vec::new();
-            for location_settings in &proxy_pass_settings.locations {
-                let location_path = if let Some(location) = &location_settings.path {
-                    location.to_string()
-                } else {
-                    "/".to_string()
-                };
-
-                let proxy_pass_content_source = location_settings.get_http_content_source(
-                    app,
-                    settings_host,
-                    location_id,
-                    &read_access.variables,
-                    &read_access.ssh,
-                    proxy_pass_settings.endpoint.get_debug(),
-                );
-
-                if let Err(err) = proxy_pass_content_source {
-                    return Err(ProxyPassError::CanNotReadSettingsConfiguration(err));
-                }
-
-                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
-
-                if proxy_pass_content_source.is_none() {
-                    continue;
-                }
-
-                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
-
-                let mut whitelisted_ip = WhiteListedIpList::new();
-                whitelisted_ip.apply(
-                    proxy_pass_settings
-                        .endpoint
-                        .get_white_listed_ip(&read_access.endpoint_templates)
-                        .as_deref(),
-                );
-                whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
-
-                result.push(ProxyPassLocation::new(
-                    location_id,
-                    location_path,
-                    location_settings.modify_http_headers.clone(),
-                    proxy_pass_content_source,
-                    whitelisted_ip,
-                ));
-            }
-
-            return Ok((result, allowed_users));
-        }
-
-        return Ok((vec![], None));
-    }
-
-    pub async fn get_listen_ports(&self) -> Result<BTreeMap<u16, EndpointType>, String> {
-        let read_access = self.settings.read().await;
-
-        let mut result: BTreeMap<u16, EndpointType> = BTreeMap::new();
-
-        for (host, proxy_pass) in &read_access.hosts {
-            let host_port = host.split(':');
-
-            match host_port.last().unwrap().parse::<u16>() {
-                Ok(port) => {
-                    result.insert(
-                        port,
-                        proxy_pass.endpoint.get_type(
+                    None => {
+                        result.insert(
+                            port,
+                            ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
+                                http_endpoint_info.into(),
+                                proxy_pass.endpoint.get_ssl_id(endpoint_template_settings),
+                            )),
+                        );
+                    }
+                },
+                EndpointType::Tcp(endpoint_info) => match result.get(&port) {
+                    Some(other_end_point_type) => {
+                        return Err(format!(
+                            "Port {} is used twice by host configurations {} and {}",
+                            port,
                             host,
-                            proxy_pass.locations.as_slice(),
-                            &read_access.endpoint_templates,
-                            &read_access.variables,
-                            &read_access.ssh,
-                            &read_access.g_auth,
-                        )?,
-                    );
-                }
-                Err(_) => {
-                    panic!("Can not read port from host: '{}'", host);
-                }
+                            other_end_point_type.get_endpoint_host_as_str()
+                        ));
+                    }
+                    None => {
+                        result.insert(port, ListenPortConfiguration::Tcp(endpoint_info));
+                    }
+                },
+                EndpointType::TcpOverSsh(endpoint_info) => match result.get(&port) {
+                    Some(other_end_point_type) => {
+                        return Err(format!(
+                            "Port {} is used twice by host configurations {} and {}",
+                            port,
+                            host,
+                            other_end_point_type.get_endpoint_host_as_str()
+                        ));
+                    }
+                    None => {
+                        result.insert(port, ListenPortConfiguration::TcpOverSsh(endpoint_info));
+                    }
+                },
             }
         }
 

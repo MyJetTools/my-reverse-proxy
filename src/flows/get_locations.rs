@@ -1,38 +1,33 @@
-use crate::{app::AppContext, http_proxy_pass::*};
+use std::sync::Arc;
 
+use crate::{app::AppContext, app_configuration::HttpEndpointInfo, http_proxy_pass::*};
+
+//todo!("delete")
 pub async fn get_locations<'s>(
     app: &AppContext,
-    endpoint_info: &HttpServerConnectionInfo,
+    endpoint_info: &HttpEndpointInfo,
     req: &HttpRequestBuilder,
-) -> Result<(Vec<ProxyPassLocation>, Option<AllowedUserList>), ProxyPassError> {
-    let (result, allowed_users_list) = app
-        .settings_reader
-        .get_locations(app, req, endpoint_info.http_type.is_https())
-        .await?;
+) -> Result<(Vec<ProxyPassLocation>, Option<Arc<AllowedUserList>>), ProxyPassError> {
+    let read_access = app.current_app_configuration.read().await;
 
-    if result.len() == 0 {
-        let scheme = if endpoint_info.http_type.is_https() {
-            "https"
-        } else {
-            "http"
-        };
-        println!(
-            "Request {scheme}://{} has no locations to serve",
-            req.get_host_port(),
-        );
-        return Err(ProxyPassError::NoConfigurationFound);
-    }
+    let result =
+        read_access.get_http_locations(endpoint_info, req, endpoint_info.http_type.is_https());
 
-    if endpoint_info.debug {
-        for location in &result {
-            println!(
-                "Request {} got locations: {}->{}",
-                endpoint_info.as_str(),
-                location.path,
-                location.content_source.to_string()
-            );
+    match result {
+        Ok(result) => {
+            if endpoint_info.debug {
+                for location in &result.0 {
+                    println!(
+                        "Request {} got locations: {}->{}",
+                        endpoint_info.as_str(),
+                        location.config.path,
+                        location.content_source.to_string()
+                    );
+                }
+            }
+
+            Ok(result)
         }
+        Err(e) => Err(ProxyPassError::CanNotReadSettingsConfiguration(e)),
     }
-
-    Ok((result, allowed_users_list))
 }

@@ -6,8 +6,7 @@ mod connections_settings;
 pub use connections_settings::*;
 mod proxy_pass_to;
 pub use proxy_pass_to::*;
-mod http_proxy_pass_remote_endpoint;
-pub use http_proxy_pass_remote_endpoint::*;
+
 mod ssl_certificates_settings;
 pub use ssl_certificates_settings::*;
 mod local_file_path;
@@ -20,8 +19,7 @@ mod end_point_settings;
 pub use end_point_settings::*;
 mod location_settings;
 pub use location_settings::*;
-mod end_point_type;
-pub use end_point_type::*;
+
 mod client_certificate_ca_settings;
 pub use client_certificate_ca_settings::*;
 mod global_settings;

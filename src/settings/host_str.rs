@@ -1,43 +1,45 @@
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct HostString(Arc<String>);
+pub struct HostString {
+    src: Arc<String>,
+    port: u16,
+}
 
 impl HostString {
-    pub fn new(host: String) -> Self {
-        Self(Arc::new(host))
+    pub fn new(host: String) -> Result<Self, String> {
+        let port: u16 = match host.split(':').last().unwrap().parse() {
+            Ok(result) => result,
+            Err(_) => {
+                return Err(format!("Can not pars endpoint port for host: {}", host));
+            }
+        };
+
+        let result = Self {
+            src: Arc::new(host),
+            port,
+        };
+
+        Ok(result)
+    }
+
+    pub fn is_my_server_name(&self, server_name: &str) -> bool {
+        let index = self.src.find(':');
+
+        match index {
+            Some(index) => {
+                let name = &self.src[..index];
+                rust_extensions::str_utils::compare_strings_case_insensitive(name, server_name)
+            }
+            None => true,
+        }
     }
 
     pub fn as_str(&self) -> &str {
-        &self.0
+        &self.src
     }
 
-    pub fn eq(&self, other: &str) -> bool {
-        self.as_str() == other
+    pub fn get_port(&self) -> u16 {
+        self.port
     }
-}
-
-pub struct HostStr<'s>(&'s str);
-
-impl<'s> HostStr<'s> {
-    pub fn new(host: &'s str) -> Self {
-        Self(host)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn is_my_https_server_name(&self, connection_server_name: &str, listen_port: u16) -> bool {
-        let (host, port) = parse_https_host_port(self.as_str());
-
-        host == connection_server_name && port == listen_port
-    }
-}
-
-fn parse_https_host_port(src: &str) -> (&str, u16) {
-    let mut parts = src.split(':');
-    let host = parts.next().unwrap();
-    let port = parts.next().map(|p| p.parse().unwrap()).unwrap_or(443);
-    (host, port)
 }

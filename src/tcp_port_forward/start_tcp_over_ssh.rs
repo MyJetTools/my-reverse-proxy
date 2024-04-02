@@ -4,40 +4,31 @@ use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::{app::AppContext, settings::RemoteHost};
+use crate::{
+    app::AppContext, app_configuration::TcpOverSshEndpointHostConfig, settings::RemoteHost,
+};
 
 pub fn start_tcp_over_ssh(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    credentials: Arc<SshCredentials>,
-    remote_host: RemoteHost,
-    debug: bool,
+    endpoint_info: Arc<TcpOverSshEndpointHostConfig>,
 ) {
-    tokio::spawn(tcp_server_accept_loop(
-        app,
-        listen_addr,
-        credentials,
-        remote_host,
-        debug,
-    ));
+    tokio::spawn(tcp_server_accept_loop(app, listen_addr, endpoint_info));
 }
 
 async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    ssh_credentials: Arc<SshCredentials>,
-    remote_host: RemoteHost,
-    debug: bool,
+    endpoint_info: Arc<TcpOverSshEndpointHostConfig>,
 ) {
-    let remote_host = Arc::new(remote_host);
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
 
     if let Err(err) = listener {
         println!(
             "Error binding to tcp port {} for forwarding to {}->{} has Error: {:?}",
             listen_addr,
-            ssh_credentials.to_string(),
-            remote_host.as_str(),
+            endpoint_info.ssh_credentials.to_string(),
+            endpoint_info.remote_host.as_str(),
             err
         );
         return;
@@ -48,30 +39,30 @@ async fn tcp_server_accept_loop(
     println!(
         "Enabled PortForward: {}->{}->{}",
         listen_addr,
-        ssh_credentials.to_string(),
-        remote_host.as_str()
+        endpoint_info.ssh_credentials.to_string(),
+        endpoint_info.remote_host.as_str()
     );
 
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
 
-        let ssh_session = SshSession::new(ssh_credentials.clone());
+        let ssh_session = SshSession::new(endpoint_info.ssh_credentials.clone());
 
         let ssh_channel = ssh_session
             .connect_to_remote_host(
-                remote_host.get_host(),
-                remote_host.get_port(),
+                endpoint_info.remote_host.get_host(),
+                endpoint_info.remote_host.get_port(),
                 app.connection_settings.remote_connect_timeout,
             )
             .await;
 
         if let Err(err) = ssh_channel {
-            if debug {
+            if endpoint_info.debug {
                 println!(
                     "Error connecting to remote tcp {} over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
                     listen_addr.to_string(),
-                    ssh_credentials.to_string(),
-                    remote_host.as_str(),
+                    endpoint_info.ssh_credentials.to_string(),
+                    endpoint_info.remote_host.as_str(),
                     socket_addr,
                     err
                 );
@@ -82,12 +73,12 @@ async fn tcp_server_accept_loop(
 
         tokio::spawn(connection_loop(
             listen_addr,
-            ssh_credentials.clone(),
-            remote_host.clone(),
+            endpoint_info.ssh_credentials.clone(),
+            endpoint_info.remote_host.clone(),
             server_stream,
             ssh_channel.unwrap(),
             app.connection_settings.buffer_size,
-            debug,
+            endpoint_info.debug,
         ));
     }
 }

@@ -1,18 +1,30 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use serde::*;
 
 use crate::{
-    http_proxy_pass::{HttpServerConnectionInfo, HttpType},
+    app::AppContext,
+    app_configuration::{
+        EndpointType, HttpEndpointInfo, HttpType, ProxyPassLocationConfig, TcpEndpointHostConfig,
+        TcpOverSshEndpointHostConfig,
+    },
+    http_proxy_pass::AllowedUserList,
     types::WhiteListedIpList,
 };
 
 use super::{
-    EndpointTemplateSettings, EndpointType, GoogleAuthSettings, HostString, LocationSettings,
-    ModifyHttpHeadersSettings, SshConfigSettings, SslCertificateId,
+    EndpointTemplateSettings, GlobalSettings, GoogleAuthSettings, HostString,
+    HttpEndpointModifyHeadersSettings, LocationSettings, ModifyHttpHeadersSettings,
+    SshConfigSettings, SslCertificateId,
 };
 
 const HTTP1_ENDPOINT_TYPE: &str = "http";
+const HTTP2_ENDPOINT_TYPE: &str = "http2";
+
+const HTTPS1_ENDPOINT_TYPE: &str = "https";
+const HTTPS2_ENDPOINT_TYPE: &str = "https2";
+
+const TCP_ENDPOINT_TYPE: &str = "tcp";
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EndpointSettings {
@@ -33,20 +45,38 @@ impl EndpointSettings {
         self.debug.unwrap_or(false)
     }
 
+    pub fn get_http_endpoint_modify_headers_settings(
+        &self,
+        global_settings: &Option<GlobalSettings>,
+        endpoint_template_settings: Option<&EndpointTemplateSettings>,
+    ) -> HttpEndpointModifyHeadersSettings {
+        let mut result = HttpEndpointModifyHeadersSettings::default();
+
+        if let Some(global_settings) = global_settings {
+            if let Some(all_http_endpoints) = global_settings.all_http_endpoints.as_ref() {
+                if let Some(modify_headers) = all_http_endpoints.modify_http_headers.as_ref() {
+                    result.global_modify_headers_settings = Some(modify_headers.clone());
+                }
+            }
+        }
+
+        if let Some(modify_headers) = self.get_modify_http_headers(endpoint_template_settings) {
+            result.endpoint_modify_headers_settings = Some(modify_headers.clone());
+        }
+
+        result
+    }
+
     pub fn get_modify_http_headers(
         &self,
-        endpoint_templates: &Option<HashMap<String, EndpointTemplateSettings>>,
+        endpoint_templates: Option<&EndpointTemplateSettings>,
     ) -> Option<ModifyHttpHeadersSettings> {
         if self.modify_http_headers.is_none() {
             return self.modify_http_headers.clone();
         }
 
-        if let Some(template_id) = self.template_id.as_ref() {
-            if let Some(endpoint_templates) = endpoint_templates {
-                if let Some(template) = endpoint_templates.get(template_id) {
-                    return template.modify_http_headers.clone();
-                }
-            }
+        if let Some(endpoint_template_settings) = endpoint_templates {
+            return endpoint_template_settings.modify_http_headers.clone();
         }
 
         None
@@ -54,18 +84,15 @@ impl EndpointSettings {
 
     pub fn get_white_listed_ip(
         &self,
-        endpoint_templates: &Option<HashMap<String, EndpointTemplateSettings>>,
+        endpoint_template_settings: Option<&EndpointTemplateSettings>,
     ) -> Option<String> {
         if let Some(whitelisted_ip) = self.whitelisted_ip.as_ref() {
             return Some(whitelisted_ip.to_string());
         }
 
-        let template_id = self.template_id.as_deref()?;
-        let endpoint_templates = endpoint_templates.as_ref()?;
+        let endpoint_template_settings = endpoint_template_settings?;
 
-        let template = endpoint_templates.get(template_id)?;
-
-        template.whitelisted_ip.clone()
+        endpoint_template_settings.whitelisted_ip.clone()
     }
 
     pub fn get_google_auth_settings(
@@ -99,7 +126,7 @@ impl EndpointSettings {
         ))
     }
 
-    fn get_ssl_id(
+    pub fn get_ssl_id(
         &self,
         endpoint_template: Option<&EndpointTemplateSettings>,
     ) -> Option<SslCertificateId> {
@@ -160,71 +187,150 @@ impl EndpointSettings {
         }
     }
 
-    pub fn get_http_type(&self) -> HttpType {
-        match self.endpoint_type.as_str() {
-            "https" => HttpType::Https1,
-            "https2" => HttpType::Https2,
-            "http2" => HttpType::Http2,
-            _ => HttpType::Http1,
-        }
-    }
-
     pub fn get_type(
         &self,
-        host: &str,
+        host: HostString,
+        endpoint_settings: &EndpointSettings,
         locations: &[LocationSettings],
-        endpoint_templates: &Option<HashMap<String, EndpointTemplateSettings>>,
+        endpoint_template_settings: Option<&EndpointTemplateSettings>,
         variables: &Option<HashMap<String, String>>,
-        ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
         g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
+        allowed_user_list: Option<Arc<AllowedUserList>>,
+        global_settings: &Option<GlobalSettings>,
+        app: &AppContext,
     ) -> Result<EndpointType, String> {
-        let endpoint_template = self.get_endpoint_template(endpoint_templates)?;
-
-        let g_auth = self.get_google_auth_settings(endpoint_template, g_auth_settings)?;
+        let g_auth = self.get_google_auth_settings(endpoint_template_settings, g_auth_settings)?;
 
         match self.endpoint_type.as_str() {
-            HTTP1_ENDPOINT_TYPE => Ok(EndpointType::Http1(HttpServerConnectionInfo::new(
-                HostString::new(host.to_string()),
-                HttpType::Http1,
-                self.get_debug(),
-                g_auth,
-                None,
-            ))),
-            "https" => {
-                if let Some(ssl_id) = self.get_ssl_id(endpoint_template) {
-                    return Ok(EndpointType::Https(ssl_id));
-                } else {
-                    panic!("Host '{}' has https location without ssl certificate", host);
-                }
+            HTTP1_ENDPOINT_TYPE => {
+                let locations = convert_to_http_locations(
+                    &host,
+                    locations,
+                    endpoint_settings,
+                    endpoint_template_settings,
+                    variables,
+                    ssh_configs,
+                    app,
+                )?;
+
+                return Ok(EndpointType::Http(HttpEndpointInfo::new(
+                    host,
+                    HttpType::Http1,
+                    self.get_debug(),
+                    g_auth,
+                    None,
+                    locations,
+                    allowed_user_list,
+                    self.get_http_endpoint_modify_headers_settings(
+                        global_settings,
+                        endpoint_template_settings,
+                    ),
+                )));
             }
-            "http2" => {
-                return Ok(EndpointType::Http2(HttpServerConnectionInfo::new(
-                    HostString::new(host.to_string()),
+            HTTP2_ENDPOINT_TYPE => {
+                let locations = convert_to_http_locations(
+                    &host,
+                    locations,
+                    endpoint_settings,
+                    endpoint_template_settings,
+                    variables,
+                    ssh_configs,
+                    app,
+                )?;
+
+                return Ok(EndpointType::Http(HttpEndpointInfo::new(
+                    host,
                     HttpType::Http2,
                     self.get_debug(),
                     g_auth,
                     None,
-                )))
+                    locations,
+                    allowed_user_list,
+                    self.get_http_endpoint_modify_headers_settings(
+                        global_settings,
+                        endpoint_template_settings,
+                    ),
+                )));
             }
-            "tcp" => {
+            HTTPS1_ENDPOINT_TYPE => {
+                let locations = convert_to_http_locations(
+                    &host,
+                    locations,
+                    endpoint_settings,
+                    endpoint_template_settings,
+                    variables,
+                    ssh_configs,
+                    app,
+                )?;
+
+                return Ok(EndpointType::Http(HttpEndpointInfo::new(
+                    host,
+                    HttpType::Https1,
+                    self.get_debug(),
+                    g_auth,
+                    self.get_client_certificate_id(endpoint_template_settings),
+                    locations,
+                    allowed_user_list,
+                    self.get_http_endpoint_modify_headers_settings(
+                        global_settings,
+                        endpoint_template_settings,
+                    ),
+                )));
+            }
+
+            HTTPS2_ENDPOINT_TYPE => {
+                let locations = convert_to_http_locations(
+                    &host,
+                    locations,
+                    endpoint_settings,
+                    endpoint_template_settings,
+                    variables,
+                    ssh_configs,
+                    app,
+                )?;
+
+                return Ok(EndpointType::Http(HttpEndpointInfo::new(
+                    host,
+                    HttpType::Https2,
+                    self.get_debug(),
+                    g_auth,
+                    self.get_client_certificate_id(endpoint_template_settings),
+                    locations,
+                    allowed_user_list,
+                    self.get_http_endpoint_modify_headers_settings(
+                        global_settings,
+                        endpoint_template_settings,
+                    ),
+                )));
+            }
+
+            TCP_ENDPOINT_TYPE => {
                 if locations.len() != 1 {
                     panic!(
                         "Tcp Host '{}' has {} locations to proxy_pass. Tcp Host must have 1 location",
-                        host,
+                        host.as_str(),
                         locations.len()
                     );
                 }
 
                 let location_settings = locations.get(0).unwrap();
 
-                match location_settings.get_proxy_pass(variables, ssh_config)? {
+                match location_settings.get_proxy_pass(host.as_str(), variables, ssh_configs)? {
                     super::ProxyPassTo::Http(_) => {
                         return Err(
                             "It is not possible to serve remote http content over tcp endpoint"
                                 .to_string(),
                         );
                     }
-                    super::ProxyPassTo::Static => {
+
+                    super::ProxyPassTo::Http2(_) => {
+                        return Err(
+                            "It is not possible to serve remote http2 content over tcp endpoint"
+                                .to_string(),
+                        );
+                    }
+                    super::ProxyPassTo::Static(_) => {
                         return Err(
                             "It is not possible to serve static content over tcp endpoint"
                                 .to_string(),
@@ -236,13 +342,17 @@ impl EndpointSettings {
                                 .to_string(),
                         );
                     }
-                    super::ProxyPassTo::Ssh(ssh_config) => match ssh_config.remote_content {
+                    super::ProxyPassTo::Ssh(model) => match model.ssh_config.remote_content {
                         super::SshContent::RemoteHost(remote_host) => {
-                            return Ok(EndpointType::TcpOverSsh {
-                                debug: self.get_debug(),
-                                ssh_credentials: ssh_config.credentials,
-                                remote_host,
-                            });
+                            return Ok(EndpointType::TcpOverSsh(
+                                TcpOverSshEndpointHostConfig {
+                                    ssh_credentials: model.ssh_config.credentials.clone(),
+                                    remote_host: Arc::new(remote_host),
+                                    debug: self.get_debug(),
+                                    host,
+                                }
+                                .into(),
+                            ));
                         }
                         super::SshContent::FilePath(_) => {
                             return Err(
@@ -256,15 +366,60 @@ impl EndpointSettings {
 
                         whitelisted_ip.apply(self.whitelisted_ip.as_deref());
 
-                        return Ok(EndpointType::Tcp {
-                            remote_addr,
-                            debug: self.get_debug(),
-                            whitelisted_ip,
-                        });
+                        return Ok(EndpointType::Tcp(
+                            TcpEndpointHostConfig {
+                                remote_addr,
+                                debug: self.get_debug(),
+                                whitelisted_ip,
+                                host,
+                            }
+                            .into(),
+                        ));
                     }
                 }
             }
             _ => panic!("Unknown location type: '{}'", self.endpoint_type),
         }
     }
+}
+
+fn convert_to_http_locations(
+    host: &HostString,
+    src: &[LocationSettings],
+    endpoint_settings: &EndpointSettings,
+    endpoint_template_settings: Option<&EndpointTemplateSettings>,
+    variables: &Option<HashMap<String, String>>,
+    ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
+    app: &AppContext,
+) -> Result<Vec<Arc<ProxyPassLocationConfig>>, String> {
+    let mut result = Vec::with_capacity(src.len());
+
+    for location_settings in src {
+        let location_path = if let Some(location) = &location_settings.path {
+            location.to_string()
+        } else {
+            "/".to_string()
+        };
+
+        let mut whitelisted_ip = WhiteListedIpList::new();
+        whitelisted_ip.apply(
+            endpoint_settings
+                .get_white_listed_ip(endpoint_template_settings)
+                .as_deref(),
+        );
+        whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
+
+        result.push(
+            ProxyPassLocationConfig::new(
+                app.get_id(),
+                location_path,
+                location_settings.modify_http_headers.clone(),
+                whitelisted_ip,
+                location_settings.get_proxy_pass(host.as_str(), variables, ssh_configs)?,
+            )
+            .into(),
+        );
+    }
+
+    Ok(result)
 }

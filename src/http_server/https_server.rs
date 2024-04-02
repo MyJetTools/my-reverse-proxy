@@ -2,28 +2,25 @@ use std::{net::SocketAddr, sync::Arc};
 
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
-use tokio_rustls::rustls::sign::CertifiedKey;
 
 use tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
-use crate::app::{AppContext, SslCertificate};
+use crate::app::AppContext;
 
-use crate::http_proxy_pass::{HttpProxyPass, HttpServerConnectionInfo};
+use crate::app_configuration::HttpEndpointInfo;
+use crate::http_proxy_pass::HttpProxyPass;
+use crate::http_server::handle_request::HttpRequestHandler;
 
-pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>, certificate: SslCertificate) {
+pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>) {
     println!("Listening https://{}", addr);
 
-    tokio::spawn(start_https_server_loop(addr, app, certificate));
+    tokio::spawn(start_https_server_loop(addr, app));
 }
 
-async fn start_https_server_loop(
-    addr: SocketAddr,
-    app: Arc<AppContext>,
-    certificate: SslCertificate,
-) {
+async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
     let endpoint_port = addr.port();
     //let endpoint_info = Arc::new(endpoint_info);
-    let certified_key = Arc::new(certificate.get_certified_key());
+
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
     // Build TLS configuration.
@@ -33,13 +30,7 @@ async fn start_https_server_loop(
 
         println!("Accepted connection");
 
-        let result = lazy_accept_tcp_stream(
-            app.clone(),
-            endpoint_port,
-            certified_key.clone(),
-            tcp_stream,
-        )
-        .await;
+        let result = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream).await;
 
         if let Err(err) = &result {
             eprintln!("failed to perform tls handshake: {err:#}");
@@ -55,6 +46,7 @@ async fn start_https_server_loop(
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
+                endpoint_port,
             );
         } else {
             kick_off_https2(
@@ -63,6 +55,7 @@ async fn start_https_server_loop(
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
+                endpoint_port,
             );
         }
     }
@@ -71,12 +64,11 @@ async fn start_https_server_loop(
 async fn lazy_accept_tcp_stream(
     app: Arc<AppContext>,
     endpoint_port: u16,
-    certified_key: Arc<CertifiedKey>,
     tcp_stream: TcpStream,
 ) -> Result<
     (
         tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-        HttpServerConnectionInfo,
+        Arc<HttpEndpointInfo>,
         Option<String>,
     ),
     String,
@@ -93,13 +85,9 @@ async fn lazy_accept_tcp_stream(
                     return Err("Unknown server name detecting from client hello".to_string());
                 };
 
-                let config_result = super::tls_acceptor::create_config(
-                    app.clone(),
-                    server_name,
-                    endpoint_port,
-                    certified_key,
-                )
-                .await;
+                let config_result =
+                    super::tls_acceptor::create_config(app.clone(), server_name, endpoint_port)
+                        .await;
 
                 if let Err(err) = &config_result {
                     return Err(format!("failed to create tls config: {err:#}"));
@@ -138,26 +126,25 @@ async fn lazy_accept_tcp_stream(
 fn kick_off_https1(
     app: Arc<AppContext>,
     socket_addr: SocketAddr,
-    endpoint_info: HttpServerConnectionInfo,
+    endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<String>,
+    listening_port: u16,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
     tokio::spawn(async move {
-        let modify_headers_settings = app
-            .settings_reader
-            .get_http_endpoint_modify_headers_settings(&endpoint_info)
-            .await;
+        let listening_port_info =
+            endpoint_info.get_listening_port_info(listening_port, socket_addr);
 
-        let http_proxy_pass = Arc::new(HttpProxyPass::new(
-            socket_addr,
-            modify_headers_settings,
-            endpoint_info.into(),
+        let http_proxy_pass = HttpProxyPass::new(
+            endpoint_info,
+            listening_port_info,
             cn_user_name,
-        ));
+            app.connection_settings.remote_connect_timeout,
+        );
 
         /*
                    let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
@@ -180,15 +167,21 @@ fn kick_off_https1(
                    };
         */
 
+        let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
+
+        let http_request_handler = Arc::new(http_request_handler);
+
+        let http_request_handler_dispose = http_request_handler.clone();
+
         if let Err(err) = http1
             .clone()
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::handle_request::handle_requests(
+                    super::handle_request::handle_request(
+                        http_request_handler.clone(),
                         req,
-                        http_proxy_pass.clone(),
-                        app.clone(),
+                        app.connection_settings.remote_connect_timeout,
                     )
                 }),
             )
@@ -197,15 +190,18 @@ fn kick_off_https1(
         {
             eprintln!("failed to serve connection: {err:#}");
         }
+
+        http_request_handler_dispose.dispose().await;
     });
 }
 
 fn kick_off_https2(
     app: Arc<AppContext>,
     socket_addr: SocketAddr,
-    endpoint_info: HttpServerConnectionInfo,
+    endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<String>,
+    listening_port: u16,
 ) {
     use hyper::service::service_fn;
     use hyper_util::server::conn::auto::Builder;
@@ -215,27 +211,31 @@ fn kick_off_https2(
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
 
-        let modify_headers_settings = app
-            .settings_reader
-            .get_http_endpoint_modify_headers_settings(&endpoint_info)
-            .await;
+        let listening_port_info =
+            endpoint_info.get_listening_port_info(listening_port, socket_addr);
 
-        let http_proxy_pass = Arc::new(HttpProxyPass::new(
-            socket_addr,
-            modify_headers_settings,
-            endpoint_info.into(),
+        let http_proxy_pass = HttpProxyPass::new(
+            endpoint_info,
+            listening_port_info,
             cn_user_name,
-        ));
+            app.connection_settings.remote_connect_timeout,
+        );
+
+        let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
+
+        let http_request_handler = Arc::new(http_request_handler);
+
+        let http_request_handler_dispose = http_request_handler.clone();
 
         if let Err(err) = http_builder
             .clone()
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::handle_request::handle_requests(
+                    super::handle_request::handle_request(
+                        http_request_handler.clone(),
                         req,
-                        http_proxy_pass.clone(),
-                        app.clone(),
+                        app.connection_settings.remote_connect_timeout,
                     )
                 }),
             )
@@ -243,6 +243,8 @@ fn kick_off_https2(
         {
             eprintln!("failed to serve connection: {err:#}");
         }
+
+        http_request_handler_dispose.dispose().await;
     });
 }
 

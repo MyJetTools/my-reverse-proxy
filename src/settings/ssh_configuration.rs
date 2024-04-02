@@ -1,7 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use my_ssh::SshCredentials;
-use rust_extensions::StrOrString;
 
 use super::{LocalFilePath, RemoteHost, SshConfigSettings};
 
@@ -49,10 +48,10 @@ pub struct SshConfiguration {
 
 impl SshConfiguration {
     pub fn parse(
-        src: StrOrString,
+        src: &str,
         ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<Self, String> {
-        let mut parts = src.as_str().split("->");
+        let mut parts = src.split("->");
         let ssh_part = parts.next().unwrap();
 
         let ssh_part = ssh_part[SSH_PREFIX.len()..].trim();

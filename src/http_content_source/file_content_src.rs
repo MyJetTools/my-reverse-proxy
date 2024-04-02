@@ -12,7 +12,7 @@ pub struct LocalPathContentSrc {
 }
 
 impl LocalPathContentSrc {
-    pub fn new(file_path: LocalFilePath, default_file: Option<String>) -> Self {
+    pub fn new(file_path: &LocalFilePath, default_file: Option<String>) -> Self {
         let mut file_path = file_path.get_value().to_string();
 
         let last_char = *file_path.as_bytes().last().unwrap() as char;

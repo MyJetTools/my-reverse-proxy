@@ -3,50 +3,46 @@ use std::sync::Arc;
 use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::{app::AppContext, types::WhiteListedIpList};
+use crate::{app::AppContext, app_configuration::TcpEndpointHostConfig};
 
 pub fn start_tcp(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    whitelisted_ip: WhiteListedIpList,
-    debug: bool,
+    endpoint_info: Arc<TcpEndpointHostConfig>,
 ) {
-    tokio::spawn(tcp_server_accept_loop(
-        app,
-        listen_addr,
-        remote_addr,
-        whitelisted_ip,
-        debug,
-    ));
+    tokio::spawn(tcp_server_accept_loop(app, listen_addr, endpoint_info));
 }
 
 async fn tcp_server_accept_loop(
     app: Arc<AppContext>,
     listen_addr: std::net::SocketAddr,
-    remote_addr: std::net::SocketAddr,
-    whitelisted_ip: WhiteListedIpList,
-    debug: bool,
+    endpoint_info: Arc<TcpEndpointHostConfig>,
 ) {
     let listener = tokio::net::TcpListener::bind(listen_addr).await;
 
     if let Err(err) = listener {
         println!(
             "Error binding to tcp port {} for forwarding to {} has Error: {:?}",
-            listen_addr, remote_addr, err
+            listen_addr, endpoint_info.remote_addr, err
         );
         return;
     }
 
     let listener = listener.unwrap();
 
-    println!("Enabled PortForward: {} -> {}", listen_addr, remote_addr);
+    println!(
+        "Enabled PortForward: {} -> {}",
+        listen_addr, endpoint_info.remote_addr
+    );
 
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
 
-        if !whitelisted_ip.is_whitelisted(&socket_addr.ip()) {
-            if debug {
+        if !endpoint_info
+            .whitelisted_ip
+            .is_whitelisted(&socket_addr.ip())
+        {
+            if endpoint_info.debug {
                 println!(
                     "Incoming connection from {} is not whitelisted. Closing it",
                     socket_addr
@@ -59,15 +55,15 @@ async fn tcp_server_accept_loop(
 
         let remote_tcp_connection_result = tokio::time::timeout(
             app.connection_settings.remote_connect_timeout,
-            TcpStream::connect(remote_addr),
+            TcpStream::connect(endpoint_info.remote_addr),
         )
         .await;
 
         if remote_tcp_connection_result.is_err() {
-            if debug {
+            if endpoint_info.debug {
                 println!(
                     "Timeout while connecting to remote tcp {} server. Closing incoming connection: {}",
-                    remote_addr, socket_addr
+                    endpoint_info.remote_addr, socket_addr
                 );
             }
             let _ = server_stream.shutdown().await;
@@ -77,10 +73,10 @@ async fn tcp_server_accept_loop(
         let remote_tcp_connection_result = remote_tcp_connection_result.unwrap();
 
         if let Err(err) = remote_tcp_connection_result {
-            if debug {
+            if endpoint_info.debug {
                 println!(
                     "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
-                    remote_addr, err, socket_addr
+                    endpoint_info.remote_addr, err, socket_addr
                 );
             }
             let _ = server_stream.shutdown().await;
@@ -89,11 +85,11 @@ async fn tcp_server_accept_loop(
 
         tokio::spawn(connection_loop(
             listen_addr,
-            remote_addr,
+            endpoint_info.remote_addr,
             server_stream,
             remote_tcp_connection_result.unwrap(),
             app.connection_settings.buffer_size,
-            debug,
+            endpoint_info.debug,
         ));
     }
 }

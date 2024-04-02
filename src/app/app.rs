@@ -1,10 +1,12 @@
 use std::sync::atomic::{AtomicI64, AtomicIsize, Ordering};
 
 use encryption::aes::AesKey;
+use tokio::sync::RwLock;
 
-use crate::settings::{ConnectionsSettingsModel, SettingsReader};
-
-use super::ClientCertificatesCache;
+use crate::{
+    app_configuration::AppConfiguration,
+    settings::{ConnectionsSettingsModel, SettingsReader},
+};
 
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -15,7 +17,8 @@ pub struct AppContext {
     pub connection_settings: ConnectionsSettingsModel,
     //pub saved_client_certs: SavedClientCert,
     pub token_secret_key: AesKey,
-    pub client_certificates: ClientCertificatesCache,
+
+    pub current_app_configuration: RwLock<Option<AppConfiguration>>,
 }
 
 impl AppContext {
@@ -35,7 +38,7 @@ impl AppContext {
             connection_settings,
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
-            client_certificates: ClientCertificatesCache::new(),
+            current_app_configuration: RwLock::new(None),
         }
     }
 

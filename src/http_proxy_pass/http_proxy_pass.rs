@@ -1,39 +1,50 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::Full;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
 use crate::{
-    app::AppContext, http_client::HTTP_CLIENT_TIMEOUT, settings::HttpEndpointModifyHeadersSettings,
+    app::AppContext,
+    app_configuration::{HttpEndpointInfo, HttpListenPortInfo},
+    http_client::HTTP_CLIENT_TIMEOUT,
 };
 
+const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
+
+const NEW_CONNECTION_NOT_READY_RETRY_DELAY: Duration = Duration::from_millis(50);
+
 use super::{
-    BuildResult, GoogleAuthResult, HttpProxyPassInner, HttpRequestBuilder,
-    HttpServerConnectionInfo, ProxyPassError, RetryType,
+    BuildResult, GoogleAuthResult, HttpProxyPassContentSource, HttpProxyPassIdentity,
+    HttpProxyPassInner, HttpRequestBuilder, LocationIndex, ProxyPassError, ProxyPassLocations,
+    RetryType,
 };
 
 pub struct HttpProxyPass {
     pub inner: Mutex<HttpProxyPassInner>,
-    pub endpoint_info: Arc<HttpServerConnectionInfo>,
-    socket_addr: SocketAddr,
+    pub listening_port_info: HttpListenPortInfo,
+    pub endpoint_info: Arc<HttpEndpointInfo>,
 }
 
 impl HttpProxyPass {
     pub fn new(
-        socket_addr: SocketAddr,
-        modify_headers_settings: HttpEndpointModifyHeadersSettings,
-        endpoint_info: Arc<HttpServerConnectionInfo>,
+        endpoint_info: Arc<HttpEndpointInfo>,
+        listening_port_info: HttpListenPortInfo,
         client_cert_cn: Option<String>,
+        request_timeout: Duration,
     ) -> Self {
+        let locations = ProxyPassLocations::new(&endpoint_info, request_timeout);
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
-                socket_addr,
-                modify_headers_settings,
-                client_cert_cn,
+                endpoint_info.clone(),
+                HttpProxyPassIdentity::new(client_cert_cn),
+                locations,
+                listening_port_info.clone(),
             )),
+
+            listening_port_info,
             endpoint_info,
-            socket_addr,
         }
     }
 
@@ -48,10 +59,6 @@ impl HttpProxyPass {
             let (future1, future2, build_result, request_executor, dest_http1) = {
                 let mut inner = self.inner.lock().await;
 
-                if !inner.initialized() {
-                    inner.init(app, &self.endpoint_info, &req).await?;
-                }
-
                 match self.handle_auth_with_g_auth(app, &req).await {
                     GoogleAuthResult::Passed(user) => inner.identity.ga_user = user,
                     GoogleAuthResult::Content(content) => return Ok(content),
@@ -60,7 +67,7 @@ impl HttpProxyPass {
                     }
                 }
 
-                if let Some(allowed_users) = inner.allowed_user_list.as_ref() {
+                if let Some(allowed_users) = self.endpoint_info.allowed_user_list.as_ref() {
                     if let Some(identity) = inner.identity.get_identity() {
                         if !allowed_users.is_allowed(identity) {
                             return Err(ProxyPassError::UserIsForbidden);
@@ -68,19 +75,18 @@ impl HttpProxyPass {
                     }
                 }
 
-                let build_result = req
-                    .populate_and_build(&inner, self.endpoint_info.debug)
-                    .await?;
+                let build_result = req.populate_and_build(self, &inner).await?;
 
                 let proxy_pass_location =
                     inner.locations.find_mut(build_result.get_location_index());
 
                 if !proxy_pass_location
+                    .config
                     .whitelisted_ip
-                    .is_whitelisted(&self.socket_addr.ip())
+                    .is_whitelisted(&self.listening_port_info.socket_addr.ip())
                 {
                     return Err(ProxyPassError::IpRestricted(
-                        self.socket_addr.ip().to_string(),
+                        self.listening_port_info.socket_addr.ip().to_string(),
                     ));
                 }
 
@@ -160,8 +166,9 @@ impl HttpProxyPass {
                 let inner = self.inner.lock().await;
 
                 let result = super::http_response_builder::build_response_from_content(
-                    &req,
+                    self,
                     &inner,
+                    &req,
                     build_result.get_location_index(),
                     response.content_type,
                     response.status_code,
@@ -177,11 +184,11 @@ impl HttpProxyPass {
                     Ok(response) => {
                         let inner = self.inner.lock().await;
                         let response = super::http_response_builder::build_http_response(
+                            self,
+                            &inner,
                             &req,
                             response,
-                            &inner,
                             &location_index,
-                            self.endpoint_info.http_type,
                             dest_http1.unwrap(),
                         )
                         .await?;
@@ -189,9 +196,7 @@ impl HttpProxyPass {
                     }
                     Err(err) => {
                         let retry = {
-                            let mut inner = self.inner.lock().await;
-                            inner
-                                .handle_error(app, &err, &location_index, self.endpoint_info.debug)
+                            self.handle_error(app, &err, &location_index, self.endpoint_info.debug)
                                 .await?
                         };
 
@@ -255,5 +260,70 @@ impl HttpProxyPass {
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
         inner.disposed = true;
+    }
+
+    pub async fn handle_error(
+        &self,
+        app: &AppContext,
+        err: &ProxyPassError,
+        location_index: &LocationIndex,
+        debug: bool,
+    ) -> Result<RetryType, ProxyPassError> {
+        let mut do_retry = RetryType::NoRetry;
+
+        if err.is_disposed() {
+            if debug {
+                println!(
+                    "ProxyPassInner::handle_error. Connection with id {} and index {} is disposed. Trying to reconnect",
+                    location_index.id,
+                    location_index.index
+                );
+            }
+            let mut inner = self.inner.lock().await;
+            let location = inner.locations.find_mut(location_index);
+            location.connect_if_require(app, debug).await?;
+            return Ok(RetryType::Retry(None));
+        }
+
+        if let ProxyPassError::HyperError(err) = err {
+            if err.is_canceled() {
+                let mut inner = self.inner.lock().await;
+                let location = inner.locations.find_mut(location_index);
+
+                match &mut location.content_source {
+                    HttpProxyPassContentSource::Http(remote_http_content_source) => {
+                        let mut dispose_connection = false;
+
+                        if let Some(connected_moment) =
+                            remote_http_content_source.get_connected_moment()
+                        {
+                            let now = DateTimeAsMicroseconds::now();
+
+                            if now.duration_since(connected_moment).as_positive_or_zero()
+                                > OLD_CONNECTION_DELAY
+                            {
+                                dispose_connection = true;
+                                do_retry = RetryType::Retry(None);
+                            } else {
+                                do_retry =
+                                    RetryType::Retry(NEW_CONNECTION_NOT_READY_RETRY_DELAY.into());
+                            }
+                        }
+
+                        if dispose_connection {
+                            remote_http_content_source.dispose();
+                            remote_http_content_source
+                                .connect_if_require(app, debug)
+                                .await?;
+                        }
+                    }
+                    HttpProxyPassContentSource::LocalPath(_) => {}
+                    HttpProxyPassContentSource::PathOverSsh(_) => {}
+                    HttpProxyPassContentSource::Static(_) => {}
+                }
+            }
+        }
+
+        Ok(do_retry)
     }
 }

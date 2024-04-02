@@ -10,8 +10,9 @@ use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
 use crate::{
-    app::AppContext, http_client::HttpClient, http_proxy_pass::ProxyPassError,
-    settings::HttpProxyPassRemoteEndpoint,
+    app::AppContext,
+    http_client::HttpClient,
+    http_proxy_pass::{HttpProxyPassRemoteEndpoint, ProxyPassError},
 };
 
 static CONNECTIONS: AtomicI64 = AtomicI64::new(0);

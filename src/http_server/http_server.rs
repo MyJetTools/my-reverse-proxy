@@ -5,63 +5,40 @@ use hyper_util::rt::TokioIo;
 
 use crate::app::AppContext;
 
-use crate::http_proxy_pass::*;
+use super::handle_request::HttpRequestHandler;
 
-pub fn start_http_server(
-    addr: SocketAddr,
-    app: Arc<AppContext>,
-    endpoint_info: HttpServerConnectionInfo,
-) {
+pub fn start_http_server(addr: SocketAddr, app: Arc<AppContext>) {
     println!("Listening http1 on http://{}", addr);
-    tokio::spawn(start_http_server_loop(addr, app, endpoint_info));
+    tokio::spawn(start_http_server_loop(addr, app));
 }
 
-async fn start_http_server_loop(
-    addr: SocketAddr,
-    app: Arc<AppContext>,
-    endpoint_info: HttpServerConnectionInfo,
-) {
-    let endpoint_info = Arc::new(endpoint_info);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>) {
+    let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
+
+    let request_timeout = app.connection_settings.remote_connect_timeout;
 
     loop {
         let (stream, socket_addr) = listener.accept().await.unwrap();
 
         let io = TokioIo::new(stream);
 
-        app.http_connections
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let http_request_handler =
+            HttpRequestHandler::new_lazy(app.clone(), listening_addr.port(), socket_addr);
 
-        let modify_headers_settings = app
-            .settings_reader
-            .get_http_endpoint_modify_headers_settings(endpoint_info.as_ref())
-            .await;
+        let http_request_handler = Arc::new(http_request_handler);
 
-        let endpoint_info = endpoint_info.clone();
-
-        let http_proxy_pass = Arc::new(HttpProxyPass::new(
-            socket_addr,
-            modify_headers_settings,
-            endpoint_info,
-            None,
-        ));
-
-        let http_proxy_pass_to_dispose = http_proxy_pass.clone();
-
-        let app = app.clone();
-
-        let app_disposed = app.clone();
+        let http_request_handler_disposed = http_request_handler.clone();
 
         let connection = http1
             .serve_connection(
                 io,
                 service_fn(move |req| {
-                    super::handle_request::handle_requests(
+                    super::handle_request::handle_request(
+                        http_request_handler.clone(),
                         req,
-                        http_proxy_pass.clone(),
-                        app.clone(),
+                        request_timeout,
                     )
                 }),
             )
@@ -78,11 +55,7 @@ async fn start_http_server_loop(
                  */
             }
 
-            http_proxy_pass_to_dispose.dispose().await;
-
-            app_disposed
-                .http_connections
-                .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            http_request_handler_disposed.dispose().await;
         });
     }
 }

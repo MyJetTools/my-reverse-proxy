@@ -20,7 +20,10 @@ impl FileSource {
         }
 
         if src.as_str().starts_with(super::SSH_PREFIX) {
-            return Ok(FileSource::Ssh(SshConfiguration::parse(src, ssh_config)?));
+            return Ok(FileSource::Ssh(SshConfiguration::parse(
+                src.as_str(),
+                ssh_config,
+            )?));
         }
 
         Ok(Self::File(src.to_string()))

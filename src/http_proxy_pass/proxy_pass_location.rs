@@ -1,52 +1,46 @@
+use std::{sync::Arc, time::Duration};
+
 use hyper::Uri;
 
-use crate::{app::AppContext, settings::ModifyHttpHeadersSettings, types::WhiteListedIpList};
+use crate::{
+    app::AppContext, app_configuration::ProxyPassLocationConfig,
+    http_proxy_pass::HttpProxyPassContentSource,
+};
 
-use super::{HttpProxyPassContentSource, ProxyPassError};
+use super::ProxyPassError;
 
 pub struct ProxyPassLocation {
-    pub path: String,
-    pub id: i64,
-    pub modify_headers: Option<ModifyHttpHeadersSettings>,
     pub content_source: HttpProxyPassContentSource,
-    pub whitelisted_ip: WhiteListedIpList,
+    pub config: Arc<ProxyPassLocationConfig>,
+    pub is_http1: Option<bool>,
 }
 
 impl ProxyPassLocation {
     pub fn new(
-        id: i64,
-        path: String,
-        modify_headers: Option<ModifyHttpHeadersSettings>,
-        content_source: HttpProxyPassContentSource,
-        whitelisted_ip: WhiteListedIpList,
+        config: Arc<ProxyPassLocationConfig>,
+        debug: bool,
+        request_timeout: Duration,
     ) -> Self {
+        let content_source = config.create_content_source(debug, request_timeout);
+        let is_http1 = content_source.is_http1();
         Self {
-            path,
-            id,
-            modify_headers,
-            content_source,
-            whitelisted_ip,
+            content_source: content_source,
+            config,
+            is_http1,
         }
     }
 
     pub fn is_my_uri(&self, uri: &Uri) -> bool {
         let result = rust_extensions::str_utils::starts_with_case_insensitive(
             uri.path(),
-            self.path.as_str(),
+            self.config.path.as_str(),
         );
 
         result
     }
 
     pub fn is_http1(&self) -> Option<bool> {
-        match &self.content_source {
-            HttpProxyPassContentSource::Http(remote_http_location) => {
-                Some(remote_http_location.remote_endpoint.is_http1())
-            }
-            HttpProxyPassContentSource::LocalPath(_) => None,
-            HttpProxyPassContentSource::PathOverSsh(_) => None,
-            HttpProxyPassContentSource::Static(_) => None,
-        }
+        self.is_http1
     }
 
     pub async fn connect_if_require(
@@ -54,16 +48,6 @@ impl ProxyPassLocation {
         app: &AppContext,
         debug: bool,
     ) -> Result<(), ProxyPassError> {
-        match &mut self.content_source {
-            HttpProxyPassContentSource::Http(remote_http_location) => {
-                return remote_http_location.connect_if_require(app, debug).await;
-            }
-
-            HttpProxyPassContentSource::LocalPath(_) => return Ok(()),
-            HttpProxyPassContentSource::PathOverSsh(file_over_ssh) => {
-                return file_over_ssh.connect_if_require(app).await;
-            }
-            HttpProxyPassContentSource::Static(_) => return Ok(()),
-        }
+        self.content_source.connect_if_require(app, debug).await
     }
 }

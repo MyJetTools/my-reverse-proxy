@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use tokio_rustls::rustls::{
-    sign::CertifiedKey,
     version::{TLS12, TLS13},
     ServerConfig,
 };
 
 use crate::{
-    app::AppContext, http_proxy_pass::HttpServerConnectionInfo,
+    app::AppContext, app_configuration::HttpEndpointInfo,
     http_server::client_cert_cell::ClientCertCell,
 };
 
@@ -17,29 +16,54 @@ pub async fn create_config(
     app: Arc<AppContext>,
     server_name: &str,
     endpoint_port: u16,
-    certified_key: Arc<CertifiedKey>,
 ) -> Result<
     (
         ServerConfig,
-        HttpServerConnectionInfo,
+        Arc<HttpEndpointInfo>,
         Option<Arc<ClientCertCell>>,
     ),
     String,
 > {
-    let endpoint_info = app
-        .settings_reader
-        .get_https_connection_configuration(server_name, endpoint_port)
+    let certified_key = app
+        .current_app_configuration
+        .read()
+        .await
+        .as_ref()
+        .unwrap()
+        .get_ssl_certified_key(endpoint_port)
         .await?;
 
+    let endpoint_info = app
+        .current_app_configuration
+        .read()
+        .await
+        .as_ref()
+        .unwrap()
+        .get_http_endpoint_info(endpoint_port, server_name)
+        .await?;
     if let Some(client_cert_ca_id) = &endpoint_info.client_certificate_id {
-        let client_cert_ca =
-            crate::flows::get_client_certificate(&app, client_cert_ca_id, endpoint_port).await?;
+        let client_cert_ca = app
+            .current_app_configuration
+            .read()
+            .await
+            .as_ref()
+            .unwrap()
+            .client_certificates_cache
+            .get(client_cert_ca_id);
+
+        if client_cert_ca.is_none() {
+            return Err(format!(
+                "Client certificate ca not found: {} for endpoint: {}",
+                client_cert_ca_id.as_str(),
+                endpoint_port
+            ));
+        }
 
         let client_cert_cell = Arc::new(ClientCertCell::new());
 
         let client_cert_verifier = Arc::new(MyClientCertVerifier::new(
             client_cert_cell.clone(),
-            client_cert_ca,
+            client_cert_ca.unwrap(),
             endpoint_port,
         ));
 

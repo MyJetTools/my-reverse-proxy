@@ -64,7 +64,7 @@ pub fn generate_tech_page(err: ProxyPassError) -> hyper::Response<Full<Bytes>> {
     }
 }
 
-fn generate_layout(status_code: u16, text: &str, second_line: Option<&str>) -> Vec<u8> {
+pub fn generate_layout(status_code: u16, text: &str, second_line: Option<&str>) -> Vec<u8> {
     let second_line = if let Some(second_line) = second_line {
         format!("<h4>{}</h4>", second_line)
     } else {

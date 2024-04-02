@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 
-use super::RemoteHost;
+use crate::settings::RemoteHost;
 
+//todo!("Remove this file")
 #[derive(Debug)]
 pub enum HttpProxyPassRemoteEndpoint {
     Http(RemoteHost),
