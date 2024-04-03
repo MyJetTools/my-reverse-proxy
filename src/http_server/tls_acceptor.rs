@@ -10,7 +10,7 @@ use crate::{
     http_server::client_cert_cell::ClientCertCell,
 };
 
-use super::{server_cert_resolver::MyCertResolver, MyClientCertVerifier};
+use super::MyClientCertVerifier;
 
 pub async fn create_config(
     app: Arc<AppContext>,
@@ -24,13 +24,13 @@ pub async fn create_config(
     ),
     String,
 > {
-    let certified_key = app
+    let ssl_cert = app
         .current_app_configuration
         .read()
         .await
         .as_ref()
         .unwrap()
-        .get_ssl_certified_key(endpoint_port)
+        .get_ssl_key(endpoint_port)
         .await?;
 
     let endpoint_info = app
@@ -70,7 +70,12 @@ pub async fn create_config(
         let mut server_config =
             tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
                 .with_client_cert_verifier(client_cert_verifier)
-                .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
+                .with_single_cert(
+                    ssl_cert.certificates.clone(),
+                    ssl_cert.private_key.as_ref().clone_key(),
+                )
+                .unwrap();
+        //.with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
         println!(
             "Applying ALPN protocols: {:?}",
@@ -83,7 +88,11 @@ pub async fn create_config(
     let mut server_config =
         tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
             .with_no_client_auth()
-            .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
+            .with_single_cert(
+                ssl_cert.certificates.clone(),
+                ssl_cert.private_key.as_ref().clone_key(),
+            )
+            .unwrap();
 
     server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
 

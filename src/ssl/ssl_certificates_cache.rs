@@ -5,7 +5,7 @@ use crate::settings::SslCertificateId;
 use super::SslCertificate;
 
 pub struct SslCertificatesCache {
-    data: HashMap<String, SslCertificate>,
+    data: HashMap<String, Arc<SslCertificate>>,
 }
 
 impl SslCertificatesCache {
@@ -16,7 +16,7 @@ impl SslCertificatesCache {
     }
 
     pub fn add(&mut self, cert_id: &SslCertificateId, ssl_cert: SslCertificate) {
-        self.data.insert(cert_id.to_string(), ssl_cert);
+        self.data.insert(cert_id.to_string(), ssl_cert.into());
     }
 
     pub fn has_certificate(&self, cert_id: &SslCertificateId) -> bool {
@@ -30,5 +30,11 @@ impl SslCertificatesCache {
         self.data
             .get(cert_id.as_str())
             .map(|ssl_cert| ssl_cert.get_certified_key())
+    }
+
+    pub fn get_ssl_key(&self, cert_id: &SslCertificateId) -> Option<Arc<SslCertificate>> {
+        self.data
+            .get(cert_id.as_str())
+            .map(|ssl_cert| ssl_cert.clone())
     }
 }

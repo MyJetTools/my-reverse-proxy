@@ -146,27 +146,6 @@ fn kick_off_https1(
             app.connection_settings.remote_connect_timeout,
         );
 
-        /*
-                   let (tls_stream, client_cert_cn) = match tls_acceptor.accept(tcp_stream).await {
-                       Ok(tls_stream) => {
-                           let cert_common_name = if has_client_cert_ca {
-                               app.saved_client_certs.get(endpoint_port, connection_id)
-                           } else {
-                               None
-                           };
-                           println!("Cert common name: {:?}", cert_common_name);
-                           (tls_stream, cert_common_name)
-                       }
-                       Err(err) => {
-                           if has_client_cert_ca {
-                               app.saved_client_certs.get(endpoint_port, connection_id);
-                           }
-                           eprintln!("failed to perform tls handshake: {err:#}");
-                           return;
-                       }
-                   };
-        */
-
         let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
 
         let http_request_handler = Arc::new(http_request_handler);
@@ -247,42 +226,3 @@ fn kick_off_https2(
         http_request_handler_dispose.dispose().await;
     });
 }
-
-/*
-fn create_tls_acceptor(
-    app: Arc<AppContext>,
-    client_cert_ca: Option<Arc<ClientCertificateCa>>,
-    endpoint_port: u16,
-    connection_id: u64,
-    certified_key: Arc<CertifiedKey>,
-) -> TlsAcceptor {
-    if let Some(client_cert_ca) = client_cert_ca {
-        let client_cert_verifier = Arc::new(MyClientCertVerifier::new(
-            app,
-            client_cert_ca,
-            endpoint_port,
-            connection_id,
-        ));
-
-        let mut server_config =
-            tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
-                .with_client_cert_verifier(client_cert_verifier)
-                .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
-
-        server_config.alpn_protocols = vec![b"http/1.1".to_vec()];
-
-        return TlsAcceptor::from(Arc::new(server_config));
-    }
-
-    let mut server_config =
-        tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
-            .with_no_client_auth()
-            .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
-
-    server_config.alpn_protocols = vec![b"http/1.1".to_vec()];
-
-    // server_config.key_log = Arc::new(MyKeyLog);
-
-    TlsAcceptor::from(Arc::new(server_config))
-}
- */
