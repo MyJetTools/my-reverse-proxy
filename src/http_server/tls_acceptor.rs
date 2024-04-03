@@ -6,8 +6,9 @@ use tokio_rustls::rustls::{
 };
 
 use crate::{
-    app::AppContext, app_configuration::HttpEndpointInfo,
-    http_server::client_cert_cell::ClientCertCell,
+    app::AppContext,
+    app_configuration::HttpEndpointInfo,
+    http_server::{client_cert_cell::ClientCertCell, server_cert_resolver::MyCertResolver},
 };
 
 use super::MyClientCertVerifier;
@@ -24,13 +25,13 @@ pub async fn create_config(
     ),
     String,
 > {
-    let ssl_cert = app
+    let certified_key = app
         .current_app_configuration
         .read()
         .await
         .as_ref()
         .unwrap()
-        .get_ssl_key(endpoint_port)
+        .get_ssl_certified_key(endpoint_port)
         .await?;
 
     let endpoint_info = app
@@ -70,11 +71,8 @@ pub async fn create_config(
         let mut server_config =
             tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
                 .with_client_cert_verifier(client_cert_verifier)
-                .with_single_cert(
-                    ssl_cert.certificates.clone(),
-                    ssl_cert.private_key.as_ref().clone_key(),
-                )
-                .unwrap();
+                .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
+
         //.with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
         println!(
@@ -88,11 +86,7 @@ pub async fn create_config(
     let mut server_config =
         tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
             .with_no_client_auth()
-            .with_single_cert(
-                ssl_cert.certificates.clone(),
-                ssl_cert.private_key.as_ref().clone_key(),
-            )
-            .unwrap();
+            .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
     server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
 

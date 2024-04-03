@@ -95,8 +95,11 @@ async fn lazy_accept_tcp_stream(
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
 
+                println!("Created config");
+
                 let tls_stream = start.into_stream(config.into()).await.unwrap();
 
+                println!("Applied config");
                 let cn_user_name = if let Some(client_cert_cell) = client_cert_cell {
                     client_cert_cell.get()
                 } else {
