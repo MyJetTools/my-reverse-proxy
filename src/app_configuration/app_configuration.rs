@@ -6,6 +6,8 @@ use crate::ssl::*;
 
 use super::{HttpEndpointInfo, ListenPortConfiguration};
 
+pub const SELF_SIGNED_CERT_NAME: &str = "self_signed";
+
 pub struct AppConfiguration {
     pub client_certificates_cache: ClientCertificatesCache,
     pub ssl_certificates_cache: SslCertificatesCache,
@@ -63,7 +65,7 @@ impl AppConfiguration {
 
             let ssl_certificate_id = ssl_certificate_id.unwrap();
 
-            if ssl_certificate_id.as_str() == "self_signed" {
+            if ssl_certificate_id.as_str() == SELF_SIGNED_CERT_NAME {
                 return Ok(Arc::new(crate::self_signed_cert::generate(
                     server_name.to_string(),
                 )));

@@ -1,4 +1,8 @@
-use crate::{app::AppContext, app_configuration::AppConfiguration, ssl::*};
+use crate::{
+    app::AppContext,
+    app_configuration::{AppConfiguration, SELF_SIGNED_CERT_NAME},
+    ssl::*,
+};
 
 pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfiguration, String> {
     let settings_reader = crate::settings::SettingsReader::new(".my-reverse-proxy").await;
@@ -10,6 +14,9 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
 
     for (listen_port, port_config) in &listen_ports {
         if let Some(ssl_cert_id) = port_config.get_ssl_certificate() {
+            if ssl_cert_id.as_str() == SELF_SIGNED_CERT_NAME {
+                continue;
+            }
             if !ssl_certificates_cache.has_certificate(ssl_cert_id) {
                 let ssl_certificate =
                     crate::flows::load_ssl_certificate(&settings_reader, ssl_cert_id, *listen_port)
