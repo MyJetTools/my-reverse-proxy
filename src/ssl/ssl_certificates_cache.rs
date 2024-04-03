@@ -32,9 +32,11 @@ impl SslCertificatesCache {
             .map(|ssl_cert| ssl_cert.get_certified_key())
     }
 
+    /*
     pub fn get_ssl_key(&self, cert_id: &SslCertificateId) -> Option<Arc<SslCertificate>> {
         self.data
             .get(cert_id.as_str())
             .map(|ssl_cert| ssl_cert.clone())
     }
+     */
 }

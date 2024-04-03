@@ -27,6 +27,6 @@ mod tests {
 
     #[test]
     fn generate_private_key() {
-        let signed = super::generate("localhost".to_string());
+        let _ = super::generate("localhost".to_string());
     }
 }
