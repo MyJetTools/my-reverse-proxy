@@ -26,6 +26,11 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
         }
 
         for client_cert_id in port_config.get_client_certificates() {
+            println!(
+                "Port: {} has client certificate {}",
+                *listen_port,
+                client_cert_id.as_str()
+            );
             if !client_certificates_cache.has_certificate(client_cert_id) {
                 let client_certificate = crate::flows::load_client_certificate(
                     &settings_reader,
