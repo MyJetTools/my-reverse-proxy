@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct HostString {
+pub struct EndpointHttpHostString {
     src: Arc<String>,
     port: u16,
 }
 
-impl HostString {
+impl EndpointHttpHostString {
     pub fn new(host: String) -> Result<Self, String> {
         let port: u16 = match host.split(':').last().unwrap().parse() {
             Ok(result) => result,

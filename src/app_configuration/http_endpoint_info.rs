@@ -3,14 +3,15 @@ use std::{net::SocketAddr, sync::Arc};
 use crate::{
     http_proxy_pass::AllowedUserList,
     settings::{
-        GoogleAuthSettings, HostString, HttpEndpointModifyHeadersSettings, SslCertificateId,
+        EndpointHttpHostString, GoogleAuthSettings, HttpEndpointModifyHeadersSettings,
+        SslCertificateId,
     },
 };
 
 use super::{HttpListenPortInfo, HttpType, ProxyPassLocationConfig};
 
 pub struct HttpEndpointInfo {
-    pub host_endpoint: HostString,
+    pub host_endpoint: EndpointHttpHostString,
     pub debug: bool,
     pub http_type: HttpType,
     pub g_auth: Option<GoogleAuthSettings>,
@@ -23,7 +24,7 @@ pub struct HttpEndpointInfo {
 
 impl HttpEndpointInfo {
     pub fn new(
-        host_endpoint: HostString,
+        host_endpoint: EndpointHttpHostString,
         http_type: HttpType,
         debug: bool,
         g_auth: Option<GoogleAuthSettings>,

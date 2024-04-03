@@ -6,9 +6,9 @@ use crate::{
 };
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointTemplateSettings, FileSource,
-    GlobalSettings, GoogleAuthSettings, HostString, ProxyPassSettings, SshConfigSettings,
-    SslCertificateId, SslCertificatesSettingsModel,
+    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointHttpHostString,
+    EndpointTemplateSettings, FileSource, GlobalSettings, GoogleAuthSettings, ProxyPassSettings,
+    SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -231,7 +231,9 @@ impl SettingsReader {
         let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
 
         for (host, proxy_pass) in &read_access.hosts {
-            let end_point = HostString::new(host.to_string())?;
+            let host = crate::populate_variable::populate_variable(host, &read_access.variables);
+
+            let end_point = EndpointHttpHostString::new(host.as_str().to_string())?;
 
             let port = end_point.get_port();
 
@@ -259,7 +261,7 @@ impl SettingsReader {
                 EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
                     Some(other_port_configuration) => {
                         other_port_configuration
-                            .add_http_endpoint_info(host, http_endpoint_info)?;
+                            .add_http_endpoint_info(host.as_str(), http_endpoint_info)?;
                     }
                     None => {
                         result.insert(
@@ -275,7 +277,7 @@ impl SettingsReader {
                         return Err(format!(
                             "Port {} is used twice by host configurations {} and {}",
                             port,
-                            host,
+                            host.as_str(),
                             other_end_point_type.get_endpoint_host_as_str()
                         ));
                     }
@@ -288,7 +290,7 @@ impl SettingsReader {
                         return Err(format!(
                             "Port {} is used twice by host configurations {} and {}",
                             port,
-                            host,
+                            host.as_str(),
                             other_end_point_type.get_endpoint_host_as_str()
                         ));
                     }

@@ -65,7 +65,7 @@ impl AppConfiguration {
 
             let ssl_certificate_id = ssl_certificate_id.unwrap();
 
-            print!(
+            println!(
                 "Applying ssl_certificate_id: {} for {}",
                 ssl_certificate_id.as_str(),
                 server_name

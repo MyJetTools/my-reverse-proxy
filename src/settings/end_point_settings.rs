@@ -13,7 +13,7 @@ use crate::{
 };
 
 use super::{
-    EndpointTemplateSettings, GlobalSettings, GoogleAuthSettings, HostString,
+    EndpointHttpHostString, EndpointTemplateSettings, GlobalSettings, GoogleAuthSettings,
     HttpEndpointModifyHeadersSettings, LocationSettings, ModifyHttpHeadersSettings,
     SshConfigSettings, SslCertificateId,
 };
@@ -189,7 +189,7 @@ impl EndpointSettings {
 
     pub fn get_type(
         &self,
-        host: HostString,
+        host: EndpointHttpHostString,
         endpoint_settings: &EndpointSettings,
         locations: &[LocationSettings],
         endpoint_template_settings: Option<&EndpointTemplateSettings>,
@@ -388,7 +388,7 @@ impl EndpointSettings {
 }
 
 fn convert_to_http_locations(
-    host: &HostString,
+    host: &EndpointHttpHostString,
     src: &[LocationSettings],
     endpoint_settings: &EndpointSettings,
     endpoint_template_settings: Option<&EndpointTemplateSettings>,
