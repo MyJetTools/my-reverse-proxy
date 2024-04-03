@@ -14,6 +14,7 @@ pub struct HttpEndpointInfo {
     pub debug: bool,
     pub http_type: HttpType,
     pub g_auth: Option<GoogleAuthSettings>,
+    pub ssl_certificate_id: Option<SslCertificateId>,
     pub client_certificate_id: Option<SslCertificateId>,
     pub locations: Vec<Arc<ProxyPassLocationConfig>>,
     pub allowed_user_list: Option<Arc<AllowedUserList>>,
@@ -26,6 +27,7 @@ impl HttpEndpointInfo {
         http_type: HttpType,
         debug: bool,
         g_auth: Option<GoogleAuthSettings>,
+        ssl_certificate_id: Option<SslCertificateId>,
         client_certificate_id: Option<SslCertificateId>,
         locations: Vec<Arc<ProxyPassLocationConfig>>,
         allowed_user_list: Option<Arc<AllowedUserList>>,
@@ -40,6 +42,7 @@ impl HttpEndpointInfo {
             locations,
             allowed_user_list,
             modify_headers_settings,
+            ssl_certificate_id,
         }
     }
 

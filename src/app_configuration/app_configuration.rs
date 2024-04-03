@@ -54,7 +54,7 @@ impl AppConfiguration {
         server_name: &str,
     ) -> Result<Arc<CertifiedKey>, String> {
         if let Some(port_configuration) = self.listen_ports.get(&listen_port) {
-            let ssl_certificate_id = port_configuration.get_ssl_certificate();
+            let ssl_certificate_id = port_configuration.get_ssl_certificate(server_name);
 
             if ssl_certificate_id.is_none() {
                 return Err(format!(

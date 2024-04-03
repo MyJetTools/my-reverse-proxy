@@ -266,7 +266,6 @@ impl SettingsReader {
                             port,
                             ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
                                 http_endpoint_info.into(),
-                                proxy_pass.endpoint.get_ssl_id(endpoint_template_settings),
                             )),
                         );
                     }
