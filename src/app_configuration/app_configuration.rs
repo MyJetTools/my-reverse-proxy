@@ -58,8 +58,8 @@ impl AppConfiguration {
 
             if ssl_certificate_id.is_none() {
                 return Err(format!(
-                    "Can not find ssl_certified_key for port: {}",
-                    listen_port
+                    "ServerName {} on port {} does not have assigned ssl_certificate_id",
+                    server_name, listen_port
                 ));
             }
 
