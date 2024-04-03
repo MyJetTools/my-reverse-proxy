@@ -70,7 +70,7 @@ impl ListenPortConfiguration {
                         server_name
                     );
                     if endpoint_info.is_my_endpoint(server_name) {
-                        if let Some(ssl_id) = endpoint_info.client_certificate_id.as_ref() {
+                        if let Some(ssl_id) = endpoint_info.ssl_certificate_id.as_ref() {
                             return Some(ssl_id);
                         }
                     }
