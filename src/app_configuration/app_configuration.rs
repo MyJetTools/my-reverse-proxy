@@ -49,6 +49,7 @@ impl AppConfiguration {
     pub async fn get_ssl_certified_key(
         &self,
         listen_port: u16,
+        server_name: &str,
     ) -> Result<Arc<CertifiedKey>, String> {
         if let Some(port_configuration) = self.listen_ports.get(&listen_port) {
             let ssl_certificate_id = port_configuration.get_ssl_certificate();
@@ -61,6 +62,12 @@ impl AppConfiguration {
             }
 
             let ssl_certificate_id = ssl_certificate_id.unwrap();
+
+            if ssl_certificate_id.as_str() == "self_signed" {
+                return Ok(Arc::new(crate::self_signed_cert::generate(
+                    server_name.to_string(),
+                )));
+            }
 
             if let Some(key) = self
                 .ssl_certificates_cache
@@ -78,32 +85,33 @@ impl AppConfiguration {
         }
     }
 
-    pub async fn get_ssl_key(&self, listen_port: u16) -> Result<Arc<SslCertificate>, String> {
-        if let Some(port_configuration) = self.listen_ports.get(&listen_port) {
-            let ssl_certificate_id = port_configuration.get_ssl_certificate();
+    /*
+       pub async fn get_ssl_key(&self, listen_port: u16) -> Result<Arc<SslCertificate>, String> {
+           if let Some(port_configuration) = self.listen_ports.get(&listen_port) {
+               let ssl_certificate_id = port_configuration.get_ssl_certificate();
 
-            if ssl_certificate_id.is_none() {
-                return Err(format!(
-                    "Can not find ssl_certified_key for port: {}",
-                    listen_port
-                ));
-            }
+               if ssl_certificate_id.is_none() {
+                   return Err(format!(
+                       "Can not find ssl_certified_key for port: {}",
+                       listen_port
+                   ));
+               }
 
-            let ssl_certificate_id = ssl_certificate_id.unwrap();
+               let ssl_certificate_id = ssl_certificate_id.unwrap();
 
-            if let Some(result) = self.ssl_certificates_cache.get_ssl_key(&ssl_certificate_id) {
-                return Ok(result);
-            } else {
-                return Err(format!(
-                    "Can not find ssl_certified_key for port: {}",
-                    listen_port
-                ));
-            }
-        } else {
-            panic!("Can not find ssl_certified_key for port: {}", listen_port);
-        }
-    }
-
+               if let Some(result) = self.ssl_certificates_cache.get_ssl_key(&ssl_certificate_id) {
+                   return Ok(result);
+               } else {
+                   return Err(format!(
+                       "Can not find ssl_certified_key for port: {}",
+                       listen_port
+                   ));
+               }
+           } else {
+               panic!("Can not find ssl_certified_key for port: {}", listen_port);
+           }
+       }
+    */
     pub async fn get_http_endpoint_info(
         &self,
         listen_port: u16,

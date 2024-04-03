@@ -31,7 +31,7 @@ pub async fn create_config(
         .await
         .as_ref()
         .unwrap()
-        .get_ssl_certified_key(endpoint_port)
+        .get_ssl_certified_key(endpoint_port, server_name)
         .await?;
 
     let endpoint_info = app

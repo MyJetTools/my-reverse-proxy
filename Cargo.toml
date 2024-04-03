@@ -42,3 +42,4 @@ uuid = { version = "*", features = ["v4"] }
 prost = "*"
 prost-types = "*"
 serde_json = "*"
+rcgen = "*"

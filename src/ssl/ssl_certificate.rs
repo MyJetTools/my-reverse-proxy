@@ -29,7 +29,7 @@ impl SslCertificate {
     }
 }
 
-fn calc_cert_key(
+pub fn calc_cert_key(
     private_key: &PrivateKeyDer<'static>,
     certificates: Vec<CertificateDer<'static>>,
 ) -> tokio_rustls::rustls::sign::CertifiedKey {

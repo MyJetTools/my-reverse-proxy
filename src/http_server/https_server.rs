@@ -75,7 +75,9 @@ async fn lazy_accept_tcp_stream(
 > {
     let result = tokio::spawn(async move {
         let lazy_acceptor = LazyConfigAcceptor::new(Acceptor::default(), tcp_stream);
+
         tokio::pin!(lazy_acceptor);
+
         let (tls_stream, endpoint_info, cn_user_name) = match lazy_acceptor.as_mut().await {
             Ok(start) => {
                 let client_hello = start.client_hello();

@@ -13,6 +13,7 @@ mod http_content_source;
 mod http_proxy_pass;
 mod http_server;
 mod populate_variable;
+mod self_signed_cert;
 mod settings;
 mod ssl;
 mod tcp_port_forward;
