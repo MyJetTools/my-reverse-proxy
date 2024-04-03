@@ -65,6 +65,12 @@ impl AppConfiguration {
 
             let ssl_certificate_id = ssl_certificate_id.unwrap();
 
+            print!(
+                "Applying ssl_certificate_id: {} for {}",
+                ssl_certificate_id.as_str(),
+                server_name
+            );
+
             if ssl_certificate_id.as_str() == SELF_SIGNED_CERT_NAME {
                 return Ok(Arc::new(crate::self_signed_cert::generate(
                     server_name.to_string(),

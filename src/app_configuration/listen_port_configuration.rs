@@ -64,11 +64,6 @@ impl ListenPortConfiguration {
         match self {
             ListenPortConfiguration::Http(port_configuration) => {
                 for endpoint_info in &port_configuration.endpoint_info {
-                    println!(
-                        "Checking {} with server name {}",
-                        endpoint_info.host_endpoint.as_str(),
-                        server_name
-                    );
                     if endpoint_info.is_my_endpoint(server_name) {
                         if let Some(ssl_id) = endpoint_info.ssl_certificate_id.as_ref() {
                             return Some(ssl_id);
