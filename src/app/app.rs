@@ -12,6 +12,7 @@ use crate::{
     settings::{ConnectionsSettingsModel, SettingsReader},
 };
 
+pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub struct AppContext {

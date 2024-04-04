@@ -6,6 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+my-http-server = { tag = "0.7.0", git = "https://github.com/MyJetTools/my-http-server.git", features = [
+    "static-files",
+    "macros",
+] }
+
 rust-extensions = { tag = "0.1.4", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
     "placeholders",
     "base64",
@@ -14,6 +19,7 @@ rust-extensions = { tag = "0.1.4", git = "https://github.com/MyJetTools/rust-ext
 
 my-settings-reader = { tag = "0.3.1", git = "https://github.com/MyJetTools/my-settings-reader.git" }
 
+my-logger = { tag = "1.0.3", git = "https://github.com/MyJetTools/my-logger.git" }
 
 my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.0" }
 

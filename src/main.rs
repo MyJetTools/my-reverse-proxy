@@ -10,6 +10,7 @@ mod app_configuration;
 mod google_auth;
 mod http_client;
 mod http_content_source;
+mod http_control;
 mod http_proxy_pass;
 mod http_server;
 mod populate_variable;
@@ -35,6 +36,8 @@ async fn main() {
         .replace(app_configuration);
 
     kick_off_endpoints(&app).await;
+
+    crate::http_control::start(&app);
 
     app.states.wait_until_shutdown().await;
 }
