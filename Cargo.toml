@@ -9,6 +9,7 @@ edition = "2021"
 rust-extensions = { tag = "0.1.4", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
     "placeholders",
     "base64",
+    "with-tokio",
 ] }
 
 my-settings-reader = { tag = "0.3.1", git = "https://github.com/MyJetTools/my-settings-reader.git" }

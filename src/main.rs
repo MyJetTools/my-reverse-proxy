@@ -36,7 +36,5 @@ async fn main() {
 
     kick_off_endpoints(&app).await;
 
-    loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+    app.states.wait_until_shutdown().await;
 }

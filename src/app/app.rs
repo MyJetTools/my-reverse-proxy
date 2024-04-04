@@ -1,6 +1,10 @@
-use std::sync::atomic::{AtomicI64, AtomicIsize, Ordering};
+use std::sync::{
+    atomic::{AtomicI64, AtomicIsize, Ordering},
+    Arc,
+};
 
 use encryption::aes::AesKey;
+use rust_extensions::AppStates;
 use tokio::sync::RwLock;
 
 use crate::{
@@ -17,8 +21,8 @@ pub struct AppContext {
     pub connection_settings: ConnectionsSettingsModel,
     //pub saved_client_certs: SavedClientCert,
     pub token_secret_key: AesKey,
-
     pub current_app_configuration: RwLock<Option<AppConfiguration>>,
+    pub states: Arc<AppStates>,
 }
 
 impl AppContext {
@@ -39,6 +43,7 @@ impl AppContext {
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
             current_app_configuration: RwLock::new(None),
+            states: Arc::new(AppStates::create_initialized()),
         }
     }
 
