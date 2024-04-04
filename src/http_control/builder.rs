@@ -11,5 +11,9 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
         super::controllers::configuration::TestConfigurationAction::new(app.clone()),
     ));
 
+    result.register_get_action(Arc::new(
+        super::controllers::configuration::TestAndApplyAction::new(app.clone()),
+    ));
+
     result
 }
