@@ -58,18 +58,12 @@ impl AppConfiguration {
 
             if ssl_certificate_id.is_none() {
                 return Err(format!(
-                    "ServerName {} on port {} does not have assigned ssl_certificate_id",
+                    "No matching configuration for server_name {} on port {}.",
                     server_name, listen_port
                 ));
             }
 
             let ssl_certificate_id = ssl_certificate_id.unwrap();
-
-            println!(
-                "Applying ssl_certificate_id: {} for {}",
-                ssl_certificate_id.as_str(),
-                server_name
-            );
 
             if ssl_certificate_id.as_str() == SELF_SIGNED_CERT_NAME {
                 return Ok(Arc::new(crate::self_signed_cert::generate(
@@ -89,7 +83,10 @@ impl AppConfiguration {
                 ));
             }
         } else {
-            panic!("Can not find ssl_certified_key for port: {}", listen_port);
+            Err(format!(
+                "Can not find ssl_certified_key for port: {}",
+                listen_port
+            ))
         }
     }
 

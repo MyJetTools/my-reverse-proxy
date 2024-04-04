@@ -92,7 +92,7 @@ async fn lazy_accept_tcp_stream(
                         .await;
 
                 if let Err(err) = &config_result {
-                    return Err(format!("failed to create tls config: {err:#}"));
+                    return Err(format!("Failed to create tls config. Err: {err:#}"));
                 }
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
