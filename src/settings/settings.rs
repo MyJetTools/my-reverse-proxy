@@ -31,6 +31,155 @@ pub struct SettingsModel {
     pub allowed_users: Option<HashMap<String, Vec<String>>>,
 }
 
+impl SettingsModel {
+    pub fn get_connections_settings(&self) -> ConnectionsSettingsModel {
+        let result = if let Some(global_settings) = self.global_settings.as_ref() {
+            match global_settings.connection_settings.as_ref() {
+                Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
+                None => ConnectionsSettingsModel::default(),
+            }
+        } else {
+            ConnectionsSettingsModel::default()
+        };
+
+        println!(
+            "Each connection is going to use buffer: {}",
+            format_mem(result.buffer_size)
+        );
+
+        println!(
+            "Timeout to connect to remote endpoint is: {}",
+            result.remote_connect_timeout.format_to_string()
+        );
+
+        result
+    }
+
+    pub fn get_session_key(&self) -> Option<String> {
+        if let Some(global_settings) = self.global_settings.as_ref() {
+            if let Some(connection_settings) = global_settings.connection_settings.as_ref() {
+                return connection_settings.session_key.clone();
+            }
+        }
+
+        None
+    }
+
+    pub fn get_listen_ports(
+        &self,
+        app: &AppContext,
+    ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
+        let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
+
+        for (host, proxy_pass) in &self.hosts {
+            let host = crate::populate_variable::populate_variable(host, &self.variables);
+
+            let end_point = EndpointHttpHostString::new(host.as_str().to_string())?;
+
+            let port = end_point.get_port();
+
+            let endpoint_template_settings = proxy_pass
+                .endpoint
+                .get_endpoint_template(&self.endpoint_templates)?;
+
+            let allowed_users =
+                proxy_pass.get_allowed_users(&self.allowed_users, endpoint_template_settings)?;
+
+            let endpoint_type = proxy_pass.endpoint.get_type(
+                end_point,
+                &proxy_pass.endpoint,
+                proxy_pass.locations.as_slice(),
+                endpoint_template_settings,
+                &self.variables,
+                &self.ssh,
+                &self.g_auth,
+                allowed_users,
+                &self.global_settings,
+                app,
+            )?;
+
+            match endpoint_type {
+                EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
+                    Some(other_port_configuration) => {
+                        other_port_configuration
+                            .add_http_endpoint_info(host.as_str(), http_endpoint_info)?;
+                    }
+                    None => {
+                        result.insert(
+                            port,
+                            ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
+                                http_endpoint_info.into(),
+                            )),
+                        );
+                    }
+                },
+                EndpointType::Tcp(endpoint_info) => match result.get(&port) {
+                    Some(other_end_point_type) => {
+                        return Err(format!(
+                            "Port {} is used twice by host configurations {} and {}",
+                            port,
+                            host.as_str(),
+                            other_end_point_type.get_endpoint_host_as_str()
+                        ));
+                    }
+                    None => {
+                        result.insert(port, ListenPortConfiguration::Tcp(endpoint_info));
+                    }
+                },
+                EndpointType::TcpOverSsh(endpoint_info) => match result.get(&port) {
+                    Some(other_end_point_type) => {
+                        return Err(format!(
+                            "Port {} is used twice by host configurations {} and {}",
+                            port,
+                            host.as_str(),
+                            other_end_point_type.get_endpoint_host_as_str()
+                        ));
+                    }
+                    None => {
+                        result.insert(port, ListenPortConfiguration::TcpOverSsh(endpoint_info));
+                    }
+                },
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub fn get_client_certificate_ca(&self, id: &str) -> Result<Option<FileSource>, String> {
+        if let Some(certs) = &self.client_certificate_ca {
+            for ca in certs {
+                if ca.id != id {
+                    continue;
+                }
+
+                return Ok(Some(ca.get_ca(&self.variables, &self.ssh)?));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn get_ssl_certificate(
+        &self,
+        id: &SslCertificateId,
+    ) -> Result<Option<(FileSource, FileSource)>, String> {
+        if let Some(certs) = &self.ssl_certificates {
+            for cert in certs {
+                if cert.id != id.as_str() {
+                    continue;
+                }
+
+                return Ok(Some((
+                    cert.get_certificate(&self.variables, &self.ssh)?,
+                    cert.get_private_key(&self.variables, &self.ssh)?,
+                )));
+            }
+        }
+
+        Ok(None)
+    }
+}
+
 /*
 
 impl SettingsModel {
@@ -105,205 +254,6 @@ impl SettingsModel {
     }
 }
     */
-
-impl SettingsReader {
-    pub async fn get_connections_settings(&self) -> ConnectionsSettingsModel {
-        let read_access = self.settings.read().await;
-
-        let result = if let Some(global_settings) = read_access.global_settings.as_ref() {
-            match global_settings.connection_settings.as_ref() {
-                Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
-                None => ConnectionsSettingsModel::default(),
-            }
-        } else {
-            ConnectionsSettingsModel::default()
-        };
-
-        println!(
-            "Each connection is going to use buffer: {}",
-            format_mem(result.buffer_size)
-        );
-
-        println!(
-            "Timeout to connect to remote endpoint is: {}",
-            result.remote_connect_timeout.format_to_string()
-        );
-
-        result
-    }
-
-    pub async fn get_session_key(&self) -> Option<String> {
-        let read_access = self.settings.read().await;
-
-        if let Some(global_settings) = read_access.global_settings.as_ref() {
-            if let Some(connection_settings) = global_settings.connection_settings.as_ref() {
-                return connection_settings.session_key.clone();
-            }
-        }
-
-        None
-    }
-
-    pub async fn get_client_certificate_ca(&self, id: &str) -> Result<Option<FileSource>, String> {
-        let read_access = self.settings.read().await;
-
-        if let Some(certs) = &read_access.client_certificate_ca {
-            for ca in certs {
-                if ca.id != id {
-                    continue;
-                }
-
-                return Ok(Some(ca.get_ca(&read_access.variables, &read_access.ssh)?));
-            }
-        }
-
-        Ok(None)
-    }
-
-    pub async fn get_ssl_certificate(
-        &self,
-        id: &SslCertificateId,
-    ) -> Result<Option<(FileSource, FileSource)>, String> {
-        let read_access = self.settings.read().await;
-
-        if let Some(certs) = &read_access.ssl_certificates {
-            for cert in certs {
-                if cert.id != id.as_str() {
-                    continue;
-                }
-
-                return Ok(Some((
-                    cert.get_certificate(&read_access.variables, &read_access.ssh)?,
-                    cert.get_private_key(&read_access.variables, &read_access.ssh)?,
-                )));
-            }
-        }
-
-        Ok(None)
-    }
-
-    /*
-       pub async fn get_https_connection_configuration(
-           &self,
-           connection_server_name: &str,
-           endpoint_listen_port: u16,
-       ) -> Result<HttpEndpointInfo, String> {
-           let read_access = self.settings.read().await;
-
-           for (settings_host, proxy_pass_settings) in &read_access.hosts {
-               let host_str = HostStr::new(settings_host);
-
-               if !host_str.is_my_https_server_name(connection_server_name, endpoint_listen_port) {
-                   continue;
-               }
-
-               let endpoint_template_settings = proxy_pass_settings
-                   .endpoint
-                   .get_endpoint_template(&read_access.endpoint_templates)?;
-
-               let result = HttpEndpointInfo::new(
-                   HostString::new(settings_host.to_string())?,
-                   proxy_pass_settings.endpoint.get_http_type(),
-                   proxy_pass_settings.endpoint.get_debug(),
-                   proxy_pass_settings
-                       .endpoint
-                       .get_google_auth_settings(endpoint_template_settings, &read_access.g_auth)?,
-                   proxy_pass_settings
-                       .endpoint
-                       .get_client_certificate_id(endpoint_template_settings),
-               );
-
-               return Ok(result);
-           }
-
-           Err(format!(
-               "Can not find https server configuration for '{}:{}'",
-               connection_server_name, endpoint_listen_port
-           ))
-       }
-    */
-    pub async fn get_listen_ports(
-        &self,
-        app: &AppContext,
-    ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
-        let read_access = self.settings.read().await;
-
-        let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
-
-        for (host, proxy_pass) in &read_access.hosts {
-            let host = crate::populate_variable::populate_variable(host, &read_access.variables);
-
-            let end_point = EndpointHttpHostString::new(host.as_str().to_string())?;
-
-            let port = end_point.get_port();
-
-            let endpoint_template_settings = proxy_pass
-                .endpoint
-                .get_endpoint_template(&read_access.endpoint_templates)?;
-
-            let allowed_users = proxy_pass
-                .get_allowed_users(&read_access.allowed_users, endpoint_template_settings)?;
-
-            let endpoint_type = proxy_pass.endpoint.get_type(
-                end_point,
-                &proxy_pass.endpoint,
-                proxy_pass.locations.as_slice(),
-                endpoint_template_settings,
-                &read_access.variables,
-                &read_access.ssh,
-                &read_access.g_auth,
-                allowed_users,
-                &read_access.global_settings,
-                app,
-            )?;
-
-            match endpoint_type {
-                EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
-                    Some(other_port_configuration) => {
-                        other_port_configuration
-                            .add_http_endpoint_info(host.as_str(), http_endpoint_info)?;
-                    }
-                    None => {
-                        result.insert(
-                            port,
-                            ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
-                                http_endpoint_info.into(),
-                            )),
-                        );
-                    }
-                },
-                EndpointType::Tcp(endpoint_info) => match result.get(&port) {
-                    Some(other_end_point_type) => {
-                        return Err(format!(
-                            "Port {} is used twice by host configurations {} and {}",
-                            port,
-                            host.as_str(),
-                            other_end_point_type.get_endpoint_host_as_str()
-                        ));
-                    }
-                    None => {
-                        result.insert(port, ListenPortConfiguration::Tcp(endpoint_info));
-                    }
-                },
-                EndpointType::TcpOverSsh(endpoint_info) => match result.get(&port) {
-                    Some(other_end_point_type) => {
-                        return Err(format!(
-                            "Port {} is used twice by host configurations {} and {}",
-                            port,
-                            host.as_str(),
-                            other_end_point_type.get_endpoint_host_as_str()
-                        ));
-                    }
-                    None => {
-                        result.insert(port, ListenPortConfiguration::TcpOverSsh(endpoint_info));
-                    }
-                },
-            }
-        }
-
-        Ok(result)
-    }
-}
 
 fn format_mem(size: usize) -> String {
     if size < 1024 {

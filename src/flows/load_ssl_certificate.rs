@@ -1,14 +1,14 @@
 use crate::{
-    settings::{SettingsReader, SslCertificateId},
+    settings::{SettingsModel, SslCertificateId},
     ssl::SslCertificate,
 };
 
 pub async fn load_ssl_certificate(
-    settings_reader: &SettingsReader,
+    settings_model: &SettingsModel,
     ssl_id: &SslCertificateId,
     listen_port: u16,
 ) -> Result<SslCertificate, String> {
-    let cert_result = settings_reader.get_ssl_certificate(ssl_id).await?;
+    let cert_result = settings_model.get_ssl_certificate(ssl_id)?;
 
     if cert_result.is_none() {
         return Err(format!(

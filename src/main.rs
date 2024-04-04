@@ -22,9 +22,11 @@ mod types;
 
 #[tokio::main]
 async fn main() {
-    let settings_reader = settings::SettingsReader::new(".my-reverse-proxy").await;
+    let settings_model = settings::SettingsModel::load(".my-reverse-proxy")
+        .await
+        .unwrap();
 
-    let app = AppContext::new(settings_reader).await;
+    let app = AppContext::new(settings_model);
 
     let app = Arc::new(app);
 

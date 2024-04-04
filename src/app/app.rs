@@ -9,14 +9,13 @@ use tokio::sync::RwLock;
 
 use crate::{
     app_configuration::AppConfiguration,
-    settings::{ConnectionsSettingsModel, SettingsReader},
+    settings::{ConnectionsSettingsModel, SettingsModel},
 };
 
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub struct AppContext {
-    pub settings_reader: SettingsReader,
     pub http_connections: AtomicIsize,
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
@@ -27,17 +26,16 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    pub async fn new(settings_reader: SettingsReader) -> Self {
-        let connection_settings = settings_reader.get_connections_settings().await;
+    pub fn new(settings_model: SettingsModel) -> Self {
+        let connection_settings = settings_model.get_connections_settings();
 
-        let token_secret_key = if let Some(session_key) = settings_reader.get_session_key().await {
+        let token_secret_key = if let Some(session_key) = settings_model.get_session_key() {
             AesKey::new(get_token_secret_key_from_settings(session_key.as_bytes()).as_slice())
         } else {
             AesKey::new(generate_random_token_secret_key().as_slice())
         };
 
         Self {
-            settings_reader,
             http_connections: AtomicIsize::new(0),
             id: AtomicI64::new(0),
             connection_settings,

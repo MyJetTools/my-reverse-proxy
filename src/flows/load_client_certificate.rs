@@ -2,17 +2,15 @@ use std::sync::Arc;
 
 use crate::{
     http_server::ClientCertificateCa,
-    settings::{SettingsReader, SslCertificateId},
+    settings::{SettingsModel, SslCertificateId},
 };
 
 pub async fn load_client_certificate(
-    settings_reader: &SettingsReader,
+    settings_model: &SettingsModel,
     cert_id: &SslCertificateId,
     listen_port: u16,
 ) -> Result<Arc<ClientCertificateCa>, String> {
-    let cert_result = settings_reader
-        .get_client_certificate_ca(cert_id.as_str())
-        .await?;
+    let cert_result = settings_model.get_client_certificate_ca(cert_id.as_str())?;
 
     if cert_result.is_none() {
         return Err(format!(
