@@ -6,8 +6,10 @@ use my_http_server::{
 
 use crate::{
     app::AppContext,
-    app_configuration::{AppConfiguration, SELF_SIGNED_CERT_NAME},
+    app_configuration::{AppConfiguration, HttpType, SELF_SIGNED_CERT_NAME},
 };
+
+const RIGHT_BADGE_STYLE: &str = "border-radius: 0 5px 5px 0;";
 
 #[http_route(
     method: "GET",
@@ -62,16 +64,16 @@ fn create_html_content(config: &AppConfiguration) -> String {
             let mut locations_html = String::new();
             for location in &http_endpoint.locations {
                 let proxy_pass_to = location.get_proxy_pass_to_as_string();
-                let remote_type = location.remote_type.to_str();
+                let remote_type = render_http_badge(location.remote_type);
                 let path = location.path.as_str();
                 locations_html.push_str(
-                    format!(r##"<div>'{path}' -> [{remote_type}]{proxy_pass_to}</div>"##,).as_str(),
+                    format!(r##"<div><span class="badge text-bg-secondary">{path}</span> → {remote_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{proxy_pass_to}</span></div>"##,).as_str(),
                 );
             }
 
             let host = http_endpoint.host_endpoint.as_str();
 
-            let host_type = http_endpoint.http_type.to_str();
+            let host_type = render_http_badge(http_endpoint.http_type);
 
             let ssl_cert = if let Some(ssl_cert) = &http_endpoint.ssl_certificate_id {
                 let ssl_cert = ssl_cert.as_str();
@@ -93,7 +95,7 @@ fn create_html_content(config: &AppConfiguration) -> String {
 
             table_lines.push_str(
                 format!(
-                    r##"<tr><td>{draw_port}</td><td>[{host_type}]{host} {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
+                    r##"<tr><td>{draw_port}</td><td>{host_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span> {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
                 )
                 .as_str(),
             );
@@ -108,7 +110,7 @@ fn create_html_content(config: &AppConfiguration) -> String {
 <html>
     <head>
         <title>MyReverseProxy</title>
-
+        <meta http-equiv="content-type" content="text/html; charset=utf-8">
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     </head>
     <body>
@@ -127,4 +129,21 @@ fn create_html_content(config: &AppConfiguration) -> String {
     </body>          
     "##
     )
+}
+
+fn render_http_badge(src: HttpType) -> &'static str {
+    match src {
+        HttpType::Http1 => {
+            r##"<span class="badge text-bg-warning" style="border-radius: 5px 0 0 5px;">http1</span>"##
+        }
+        HttpType::Http2 => {
+            r##"<span class="badge text-bg-info" style="border-radius: 5px 0 0 5px;">http2</span>"##
+        }
+        HttpType::Https1 => {
+            r##"<span class="badge text-bg-primary" style="border-radius: 5px 0 0 5px;">https1</span>"##
+        }
+        HttpType::Https2 => {
+            r##"<span class="badge text-bg-success" style="border-radius: 5px 0 0 5px;">https1</span>"##
+        }
+    }
 }
