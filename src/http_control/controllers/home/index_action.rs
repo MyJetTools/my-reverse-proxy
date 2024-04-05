@@ -143,7 +143,7 @@ fn render_http_badge(src: HttpType) -> &'static str {
             r##"<span class="badge text-bg-primary" style="border-radius: 5px 0 0 5px;">https1</span>"##
         }
         HttpType::Https2 => {
-            r##"<span class="badge text-bg-success" style="border-radius: 5px 0 0 5px;">https1</span>"##
+            r##"<span class="badge text-bg-success" style="border-radius: 5px 0 0 5px;">https2</span>"##
         }
     }
 }
