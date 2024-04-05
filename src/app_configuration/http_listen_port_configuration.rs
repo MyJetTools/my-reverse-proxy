@@ -19,7 +19,7 @@ impl HttpListenPortConfiguration {
 
     pub fn is_http1(&self) -> bool {
         for info in &self.endpoint_info {
-            if info.http_type.is_http1() {
+            if info.http_type.is_protocol_http1() {
                 return true;
             }
         }

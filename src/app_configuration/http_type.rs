@@ -7,9 +7,16 @@ pub enum HttpType {
 }
 
 impl HttpType {
-    pub fn is_http1(&self) -> bool {
+    pub fn is_protocol_http1(&self) -> bool {
         match self {
             HttpType::Http1 | HttpType::Https1 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_protocol_http2(&self) -> bool {
+        match self {
+            HttpType::Http2 | HttpType::Https2 => true,
             _ => false,
         }
     }

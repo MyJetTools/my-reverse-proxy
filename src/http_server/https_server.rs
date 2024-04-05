@@ -39,7 +39,7 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
 
         let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
 
-        if endpoint_info.http_type.is_http1() {
+        if endpoint_info.http_type.is_protocol_http1() {
             kick_off_https1(
                 app.clone(),
                 socket_addr,

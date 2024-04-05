@@ -2,6 +2,8 @@ use std::{collections::HashMap, str::FromStr};
 
 use serde::*;
 
+use crate::app_configuration::HttpType;
+
 use super::{
     LocalFilePath, LocalPathModel, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost,
     SshConfigSettings, SshConfiguration, SshProxyPassModel, StaticContentModel,
@@ -56,13 +58,13 @@ impl LocationSettings {
         if proxy_pass_to.as_str().starts_with(super::SSH_PREFIX) {
             return Ok(ProxyPassTo::Ssh(SshProxyPassModel {
                 ssh_config: SshConfiguration::parse(proxy_pass_to.as_str(), &ssh_configs)?,
-                http2: self.is_http2()?,
+                http2: self.get_type().is_protocol_http2(),
                 default_file: self.default_file.clone(),
             }));
         }
 
         if proxy_pass_to.as_str().starts_with("http") {
-            if self.is_http2()? {
+            if self.get_type().is_protocol_http2() {
                 return Ok(ProxyPassTo::Http2(RemoteHost::new(
                     proxy_pass_to.to_string(),
                 )));
@@ -88,6 +90,20 @@ impl LocationSettings {
         ))
     }
 
+    pub fn get_type(&self) -> HttpType {
+        match self.location_type.as_ref() {
+            Some(location_type) => match location_type.as_str() {
+                "http" => HttpType::Http1,
+                "http2" => HttpType::Http2,
+                "https1" => HttpType::Https1,
+                "https2" => HttpType::Https2,
+                _ => HttpType::Http1,
+            },
+            None => HttpType::Http1,
+        }
+    }
+
+    /*
     pub fn is_http2(&self) -> Result<bool, String> {
         if let Some(location_type) = self.location_type.as_ref() {
             match location_type.as_str() {
@@ -99,4 +115,5 @@ impl LocationSettings {
 
         Ok(false)
     }
+     */
 }

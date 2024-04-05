@@ -77,9 +77,10 @@ pub async fn create_config(
 
         println!(
             "Applying ALPN protocols: {:?}",
-            !endpoint_info.http_type.is_http1()
+            !endpoint_info.http_type.is_protocol_http1()
         );
-        server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
+        server_config.alpn_protocols =
+            get_alpn_protocol(!endpoint_info.http_type.is_protocol_http1());
         return Ok((server_config, endpoint_info, Some(client_cert_cell)));
     }
 
@@ -88,7 +89,7 @@ pub async fn create_config(
             .with_no_client_auth()
             .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
-    server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_http1());
+    server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_protocol_http1());
 
     Ok((server_config, endpoint_info, None))
 }

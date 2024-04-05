@@ -22,7 +22,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
 ) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
-    if dest_http1 && !proxy_pass.listening_port_info.http_type.is_http1() {
+    if dest_http1 && !proxy_pass.listening_port_info.http_type.is_protocol_http1() {
         parts.headers.remove(header::TRANSFER_ENCODING);
         parts.headers.remove(header::CONNECTION);
         parts.headers.remove(header::UPGRADE);

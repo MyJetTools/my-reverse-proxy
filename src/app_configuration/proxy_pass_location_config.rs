@@ -9,11 +9,14 @@ use crate::{
     types::WhiteListedIpList,
 };
 
+use super::HttpType;
+
 pub struct ProxyPassLocationConfig {
     pub path: String,
     pub id: i64,
     pub modify_headers: Option<ModifyHttpHeadersSettings>,
     pub whitelisted_ip: WhiteListedIpList,
+    pub remote_type: HttpType,
     proxy_pass_to: ProxyPassTo,
 }
 
@@ -24,6 +27,7 @@ impl ProxyPassLocationConfig {
         modify_headers: Option<ModifyHttpHeadersSettings>,
         whitelisted_ip: WhiteListedIpList,
         proxy_pass_to: ProxyPassTo,
+        remote_type: HttpType,
     ) -> Self {
         Self {
             path,
@@ -31,6 +35,7 @@ impl ProxyPassLocationConfig {
             modify_headers,
             whitelisted_ip,
             proxy_pass_to,
+            remote_type,
         }
     }
     pub fn get_proxy_pass_to_as_string(&self) -> String {

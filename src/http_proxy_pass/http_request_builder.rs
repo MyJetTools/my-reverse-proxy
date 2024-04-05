@@ -69,7 +69,7 @@ impl HttpRequestBuilder {
 
         let dest_http1 = dest_http1.unwrap();
 
-        if self.src_http_type.is_http1() {
+        if self.src_http_type.is_protocol_http1() {
             if dest_http1 {
                 // src_http1 && dest_http1
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
