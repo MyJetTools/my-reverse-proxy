@@ -4,7 +4,10 @@ use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
 };
 
-use crate::{app::AppContext, app_configuration::AppConfiguration};
+use crate::{
+    app::AppContext,
+    app_configuration::{AppConfiguration, SELF_SIGNED_CERT_NAME},
+};
 
 #[http_route(
     method: "GET",
@@ -36,10 +39,7 @@ async fn handle_request(
 fn create_html_content(config: &AppConfiguration) -> String {
     let mut table_lines = String::new();
     for (port, config) in &config.http_endpoints {
-        table_lines.push_str(
-            format!(r##"<tr style="background:black; color:white;"><td>{port}</td><td colspan="4"></td></tr>"##)
-                .as_str(),
-        );
+        let mut draw_port = port.to_string();
 
         for http_endpoint in &config.endpoint_info {
             let allowed_users_html = if let Some(allowed_user_list) =
@@ -74,9 +74,14 @@ fn create_html_content(config: &AppConfiguration) -> String {
             let host_type = http_endpoint.http_type.to_str();
 
             let ssl_cert = if let Some(ssl_cert) = &http_endpoint.ssl_certificate_id {
-                ssl_cert.as_str()
+                let ssl_cert = ssl_cert.as_str();
+                if ssl_cert == SELF_SIGNED_CERT_NAME {
+                    format!(r##"<span class="badge text-bg-warning">{ssl_cert}</span>"##)
+                } else {
+                    format!(r##"<span class="badge text-bg-success">{ssl_cert}</span>"##)
+                }
             } else {
-                "-"
+                "-".to_string()
             };
 
             let client_ssl_cert =
@@ -88,10 +93,12 @@ fn create_html_content(config: &AppConfiguration) -> String {
 
             table_lines.push_str(
                 format!(
-                    r##"<tr><td></td><td>[{host_type}]{host} {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
+                    r##"<tr><td>{draw_port}</td><td>[{host_type}]{host} {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
                 )
                 .as_str(),
             );
+
+            draw_port = "".to_string();
         }
     }
 
