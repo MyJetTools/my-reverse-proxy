@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::app::AppContext;
 
 pub async fn kick_off_endpoints(app: &Arc<AppContext>) {
-    let app_configuration = app.current_app_configuration.read().await;
-    for (listen_port, port_configuration) in &app_configuration.as_ref().unwrap().http_endpoints {
+    let app_configuration = app.get_current_app_configuration().await;
+    for (listen_port, port_configuration) in &app_configuration.http_endpoints {
         let listen_end_point = std::net::SocketAddr::new([0, 0, 0, 0].into(), *listen_port);
 
         if port_configuration.is_https() {
@@ -16,7 +16,7 @@ pub async fn kick_off_endpoints(app: &Arc<AppContext>) {
         }
     }
 
-    for (listen_port, port_configuration) in &app_configuration.as_ref().unwrap().tcp_endpoints {
+    for (listen_port, port_configuration) in &app_configuration.tcp_endpoints {
         let listen_end_point = std::net::SocketAddr::new([0, 0, 0, 0].into(), *listen_port);
 
         crate::tcp_port_forward::start_tcp(
@@ -26,9 +26,7 @@ pub async fn kick_off_endpoints(app: &Arc<AppContext>) {
         );
     }
 
-    for (listen_port, port_configuration) in
-        &app_configuration.as_ref().unwrap().tcp_over_ssh_endpoints
-    {
+    for (listen_port, port_configuration) in &app_configuration.tcp_over_ssh_endpoints {
         let listen_end_point = std::net::SocketAddr::new([0, 0, 0, 0].into(), *listen_port);
 
         crate::tcp_port_forward::start_tcp_over_ssh(

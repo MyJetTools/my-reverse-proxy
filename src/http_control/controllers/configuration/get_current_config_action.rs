@@ -28,9 +28,9 @@ async fn handle_request(
     action: &GetCurrentConfigAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let config = action.app.current_app_configuration.read().await;
+    let config = action.app.get_current_app_configuration().await;
 
-    let result = CurrentConfigurationHttpModel::new(config.as_ref().unwrap());
+    let result = CurrentConfigurationHttpModel::new(config.as_ref());
 
     HttpOutput::as_json(result).into_ok_result(true).into()
 }

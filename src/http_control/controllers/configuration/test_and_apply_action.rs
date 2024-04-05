@@ -32,10 +32,8 @@ async fn handle_request(
         Ok(app_configuration) => {
             action
                 .app
-                .current_app_configuration
-                .write()
-                .await
-                .replace(app_configuration);
+                .set_current_app_configuration(app_configuration)
+                .await;
             return HttpOutput::as_text("Configuration is ok".to_string())
                 .into_ok_result(true)
                 .into();

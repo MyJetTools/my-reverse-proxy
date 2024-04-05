@@ -32,10 +32,7 @@ async fn main() {
 
     let app_configuration = crate::flows::get_and_check_app_config(&app).await.unwrap();
 
-    app.current_app_configuration
-        .write()
-        .await
-        .replace(app_configuration);
+    app.set_current_app_configuration(app_configuration).await;
 
     kick_off_endpoints(&app).await;
 

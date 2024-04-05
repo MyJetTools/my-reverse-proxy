@@ -95,7 +95,7 @@ impl AppConfiguration {
         }
     }
 
-    pub async fn get_http_endpoint_info(
+    pub fn get_http_endpoint_info(
         &self,
         listen_port: u16,
         server_name: &str,

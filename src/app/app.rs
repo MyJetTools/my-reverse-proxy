@@ -21,7 +21,7 @@ pub struct AppContext {
     pub connection_settings: ConnectionsSettingsModel,
     //pub saved_client_certs: SavedClientCert,
     pub token_secret_key: AesKey,
-    pub current_app_configuration: RwLock<Option<AppConfiguration>>,
+    current_app_configuration: RwLock<Option<Arc<AppConfiguration>>>,
     pub states: Arc<AppStates>,
 }
 
@@ -44,6 +44,20 @@ impl AppContext {
             current_app_configuration: RwLock::new(None),
             states: Arc::new(AppStates::create_initialized()),
         }
+    }
+
+    pub async fn set_current_app_configuration(&self, app_config: AppConfiguration) {
+        let mut current_app_configuration = self.current_app_configuration.write().await;
+        *current_app_configuration = Some(Arc::new(app_config));
+    }
+
+    pub async fn get_current_app_configuration(&self) -> Arc<AppConfiguration> {
+        self.current_app_configuration
+            .read()
+            .await
+            .as_ref()
+            .unwrap()
+            .clone()
     }
 
     pub fn get_id(&self) -> i64 {

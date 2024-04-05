@@ -25,30 +25,15 @@ pub async fn create_config(
     ),
     String,
 > {
-    let certified_key = app
-        .current_app_configuration
-        .read()
-        .await
-        .as_ref()
-        .unwrap()
+    let app_configuration = app.get_current_app_configuration().await;
+    let certified_key = app_configuration
         .get_ssl_certified_key(endpoint_port, server_name)
         .await?;
 
-    let endpoint_info = app
-        .current_app_configuration
-        .read()
-        .await
-        .as_ref()
-        .unwrap()
-        .get_http_endpoint_info(endpoint_port, server_name)
-        .await?;
+    let endpoint_info = app_configuration.get_http_endpoint_info(endpoint_port, server_name)?;
+
     if let Some(client_cert_ca_id) = &endpoint_info.client_certificate_id {
-        let client_cert_ca = app
-            .current_app_configuration
-            .read()
-            .await
-            .as_ref()
-            .unwrap()
+        let client_cert_ca = app_configuration
             .client_certificates_cache
             .get(client_cert_ca_id);
 

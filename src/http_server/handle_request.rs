@@ -79,13 +79,9 @@ pub async fn handle_request(
 
             if proxy_pass_result.is_none() {
                 let http_endpoint_info = app
-                    .current_app_configuration
-                    .read()
+                    .get_current_app_configuration()
                     .await
-                    .as_ref()
-                    .unwrap()
-                    .get_http_endpoint_info(*listen_port, req.get_host().unwrap())
-                    .await;
+                    .get_http_endpoint_info(*listen_port, req.get_host().unwrap());
 
                 match http_endpoint_info {
                     Ok(endpoint_info) => {

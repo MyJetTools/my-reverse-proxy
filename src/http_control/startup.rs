@@ -4,7 +4,7 @@ use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer};
 
 use crate::app::AppContext;
 
-const DEFAULT_PORT: u16 = 5000;
+const DEFAULT_PORT: u16 = 8000;
 
 pub fn start(app: &Arc<AppContext>) {
     let http_port = if let Ok(result) = std::env::var("CONTROL_HTTP_PORT") {
