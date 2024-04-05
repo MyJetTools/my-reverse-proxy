@@ -20,4 +20,13 @@ impl HttpType {
             _ => false,
         }
     }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            HttpType::Http1 => "http1",
+            HttpType::Https1 => "https1",
+            HttpType::Http2 => "http2",
+            HttpType::Https2 => "https2",
+        }
+    }
 }

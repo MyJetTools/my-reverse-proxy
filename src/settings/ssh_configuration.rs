@@ -130,6 +130,15 @@ impl SshConfiguration {
             Ok(result)
         }
     }
+
+    pub fn to_string(&self) -> String {
+        format!(
+            "{}@{}->{}",
+            self.credentials.get_user_name(),
+            self.credentials.get_host_port_as_string(),
+            self.remote_content.as_str()
+        )
+    }
 }
 
 fn parse_ssh_part(ssh_part: &str) -> (&str, &str, u16) {

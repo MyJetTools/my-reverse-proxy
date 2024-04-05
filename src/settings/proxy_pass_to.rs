@@ -6,15 +6,38 @@ pub struct StaticContentModel {
     pub body: Vec<u8>,
 }
 
+impl StaticContentModel {
+    pub fn to_string(&self) -> String {
+        format!(
+            "status_code: {}, content_type: {:?}, body: {}bytes",
+            self.status_code,
+            self.content_type,
+            self.body.len()
+        )
+    }
+}
+
 pub struct LocalPathModel {
     pub local_path: LocalFilePath,
     pub default_file: Option<String>,
+}
+
+impl LocalPathModel {
+    pub fn to_string(&self) -> String {
+        self.local_path.get_value().to_string()
+    }
 }
 
 pub struct SshProxyPassModel {
     pub ssh_config: SshConfiguration,
     pub http2: bool,
     pub default_file: Option<String>,
+}
+
+impl SshProxyPassModel {
+    pub fn to_string(&self) -> String {
+        self.ssh_config.to_string()
+    }
 }
 
 pub enum ProxyPassTo {
@@ -24,6 +47,19 @@ pub enum ProxyPassTo {
     Ssh(SshProxyPassModel),
     Tcp(std::net::SocketAddr),
     Static(StaticContentModel),
+}
+
+impl ProxyPassTo {
+    pub fn to_string(&self) -> String {
+        match self {
+            ProxyPassTo::Http(remote_host) => remote_host.to_string(),
+            ProxyPassTo::Http2(remote_host) => remote_host.to_string(),
+            ProxyPassTo::LocalPath(model) => model.to_string(),
+            ProxyPassTo::Ssh(model) => model.to_string(),
+            ProxyPassTo::Tcp(socket_addr) => format!("{}", socket_addr),
+            ProxyPassTo::Static(model) => model.to_string(),
+        }
+    }
 }
 
 /*

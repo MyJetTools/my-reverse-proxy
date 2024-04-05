@@ -33,6 +33,9 @@ impl ProxyPassLocationConfig {
             proxy_pass_to,
         }
     }
+    pub fn get_proxy_pass_to_as_string(&self) -> String {
+        self.proxy_pass_to.to_string()
+    }
 
     /*
     pub fn is_my_uri(&self, uri: &Uri) -> bool {

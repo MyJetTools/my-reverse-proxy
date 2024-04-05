@@ -4,14 +4,19 @@ use tokio_rustls::rustls::sign::CertifiedKey;
 
 use crate::ssl::*;
 
-use super::{HttpEndpointInfo, ListenPortConfiguration};
+use super::{
+    HttpEndpointInfo, HttpListenPortConfiguration, TcpEndpointHostConfig,
+    TcpOverSshEndpointHostConfig,
+};
 
 pub const SELF_SIGNED_CERT_NAME: &str = "self_signed";
 
 pub struct AppConfiguration {
     pub client_certificates_cache: ClientCertificatesCache,
     pub ssl_certificates_cache: SslCertificatesCache,
-    pub listen_ports: BTreeMap<u16, ListenPortConfiguration>,
+    pub http_endpoints: BTreeMap<u16, HttpListenPortConfiguration>,
+    pub tcp_endpoints: BTreeMap<u16, Arc<TcpEndpointHostConfig>>,
+    pub tcp_over_ssh_endpoints: BTreeMap<u16, Arc<TcpOverSshEndpointHostConfig>>,
 }
 
 impl AppConfiguration {
@@ -53,7 +58,7 @@ impl AppConfiguration {
         listen_port: u16,
         server_name: &str,
     ) -> Result<Arc<CertifiedKey>, String> {
-        if let Some(port_configuration) = self.listen_ports.get(&listen_port) {
+        if let Some(port_configuration) = self.http_endpoints.get(&listen_port) {
             let ssl_certificate_id = port_configuration.get_ssl_certificate(server_name);
 
             if ssl_certificate_id.is_none() {
@@ -95,30 +100,12 @@ impl AppConfiguration {
         listen_port: u16,
         server_name: &str,
     ) -> Result<Arc<HttpEndpointInfo>, String> {
-        if let Some(listen_port_config) = self.listen_ports.get(&listen_port) {
-            return match listen_port_config {
-                ListenPortConfiguration::Http(http_listen_port_configuration) => {
-                    for endpoint_info in &http_listen_port_configuration.endpoint_info {
-                        if endpoint_info.is_my_endpoint(server_name) {
-                            return Ok(endpoint_info.clone());
-                        }
-                    }
-
-                    return Err(format!(
-                        "Can not find http endpoint info for port: {} and server name: {}",
-                        listen_port, server_name
-                    ));
+        if let Some(listen_port_config) = self.http_endpoints.get(&listen_port) {
+            for endpoint_info in &listen_port_config.endpoint_info {
+                if endpoint_info.is_my_endpoint(server_name) {
+                    return Ok(endpoint_info.clone());
                 }
-                ListenPortConfiguration::Tcp(_) => Err(format!(
-                    "Can not get Http endpoint configuration from tcp endpoint port {}",
-                    listen_port
-                )),
-
-                ListenPortConfiguration::TcpOverSsh(_) => Err(format!(
-                    "Can not get Http endpoint configuration from tcp over ssh endpoint port {}",
-                    listen_port
-                )),
-            };
+            }
         }
 
         Err(format!("Not port is listening at port: {}", listen_port))

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crate::settings::SslCertificateId;
-
 use super::{
     HttpEndpointInfo, HttpListenPortConfiguration, TcpEndpointHostConfig,
     TcpOverSshEndpointHostConfig,
@@ -60,48 +58,7 @@ impl ListenPortConfiguration {
         Ok(())
     }
 
-    pub fn get_ssl_certificate(&self, server_name: &str) -> Option<&SslCertificateId> {
-        match self {
-            ListenPortConfiguration::Http(port_configuration) => {
-                for endpoint_info in &port_configuration.endpoint_info {
-                    if endpoint_info.is_my_endpoint(server_name) {
-                        if let Some(ssl_id) = endpoint_info.ssl_certificate_id.as_ref() {
-                            return Some(ssl_id);
-                        }
-                    }
-                }
-
-                None
-            }
-            ListenPortConfiguration::Tcp(_) => None,
-            ListenPortConfiguration::TcpOverSsh(_) => None,
-        }
-    }
-
-    pub fn get_ssl_certificates(&self) -> Option<Vec<&SslCertificateId>> {
-        match self {
-            ListenPortConfiguration::Http(port_configuration) => {
-                let mut result: Vec<&SslCertificateId> = vec![];
-
-                for endpoint_info in &port_configuration.endpoint_info {
-                    if let Some(ssl_id) = endpoint_info.ssl_certificate_id.as_ref() {
-                        if !result.iter().any(|itm| itm.as_str() == ssl_id.as_str()) {
-                            result.push(ssl_id);
-                        }
-                    }
-                }
-
-                if result.len() > 0 {
-                    return Some(result);
-                }
-
-                None
-            }
-            ListenPortConfiguration::Tcp(_) => None,
-            ListenPortConfiguration::TcpOverSsh(_) => None,
-        }
-    }
-
+    /*
     pub fn get_client_certificates(&self) -> Vec<&SslCertificateId> {
         let mut result = vec![];
         match self {
@@ -118,4 +75,5 @@ impl ListenPortConfiguration {
             ListenPortConfiguration::TcpOverSsh(_) => result,
         }
     }
+     */
 }
