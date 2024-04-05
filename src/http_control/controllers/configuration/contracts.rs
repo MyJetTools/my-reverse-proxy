@@ -69,6 +69,8 @@ impl HttpEndpointInfoModel {
 pub struct HttpProxyPassLocationModel {
     pub path: String,
     pub to: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
 }
 
 impl HttpProxyPassLocationModel {
@@ -76,6 +78,7 @@ impl HttpProxyPassLocationModel {
         Self {
             path: src.path.to_string(),
             to: src.get_proxy_pass_to_as_string(),
+            r#type: src.remote_type.to_str().to_string(),
         }
     }
 }
