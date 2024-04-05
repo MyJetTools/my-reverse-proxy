@@ -50,38 +50,3 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         });
     }
 }
-
-/*
-pub async fn handle_requests(
-    req: hyper::Request<hyper::body::Incoming>,
-    proxy_pass: Arc<HttpProxyPass>,
-    app: Arc<AppContext>,
-) -> hyper::Result<hyper::Response<Full<Bytes>>> {
-    match proxy_pass.send_payload(&app, req).await {
-        Ok(response) => return response,
-        Err(err) => {
-            if err.is_timeout() {
-                return Ok(hyper::Response::builder()
-                    .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Full::from(Bytes::from("Timeout")))
-                    .unwrap());
-            }
-
-            match err {
-                ProxyPassError::NoLocationFound => {
-                    return Ok(hyper::Response::builder()
-                        .status(hyper::StatusCode::NOT_FOUND)
-                        .body(Full::from(Bytes::from("Not Found")))
-                        .unwrap());
-                }
-                _ => {
-                    return Ok(hyper::Response::builder()
-                        .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Full::from(Bytes::from("Internal Server Error")))
-                        .unwrap());
-                }
-            }
-        }
-    }
-}
- */

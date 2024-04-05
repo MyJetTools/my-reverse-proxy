@@ -53,6 +53,15 @@ impl HttpProxyPass {
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
+        if self.endpoint_info.debug {
+            println!(
+                "Request: {}. Uri: {}. Headers{:?}",
+                self.endpoint_info.host_endpoint.as_str(),
+                req.uri(),
+                req.headers()
+            );
+        }
+
         let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
         loop {
