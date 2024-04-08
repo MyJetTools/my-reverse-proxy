@@ -15,24 +15,6 @@ pub enum HttpProxyPassContentSource {
 }
 
 impl HttpProxyPassContentSource {
-    /*
-       pub fn to_string(&self) -> String {
-           match self {
-               Self::Http(remote_http_location) => {
-                   return format!("HttpProxyPass: {:?}", remote_http_location.remote_endpoint);
-               }
-               Self::LocalPath(local_path) => {
-                   return format!("LocalPath: {}", local_path.file_path);
-               }
-               Self::PathOverSsh(path_over_ssh) => {
-                   return format!("PathOverSsh: {}", path_over_ssh.file_path);
-               }
-               Self::Static(static_content) => {
-                   return format!("Static: {}", static_content.status_code);
-               }
-           }
-       }
-    */
     pub fn is_http1(&self) -> Option<bool> {
         match self {
             Self::Http(remote_http_location) => {
