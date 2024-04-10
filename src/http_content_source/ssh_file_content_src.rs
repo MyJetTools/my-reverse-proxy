@@ -91,7 +91,7 @@ impl RequestExecutor for FileOverSshRequestExecutor {
             let mut home_value = self.home_value.lock().await;
 
             if home_value.is_none() {
-                let home = self
+                let (home, _) = self
                     .session
                     .execute_command("echo $HOME", self.execute_timeout)
                     .await?;
