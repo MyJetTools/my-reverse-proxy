@@ -49,10 +49,17 @@ fn create_html_content(config: &AppConfiguration) -> String {
             {
                 let mut allowed_users_html = String::new();
                 allowed_users_html.push_str("<div>");
+                let mut i = 0;
                 for user in allowed_user_list.get_list() {
                     allowed_users_html.push_str(
                         format!(r##"<span class="badge text-bg-success">{user}</span>"##).as_str(),
                     );
+
+                    i += 1;
+                    if i > 2 {
+                        allowed_users_html.push_str("<br/>");
+                        i = 0;
+                    }
                 }
                 allowed_users_html.push_str("</div>");
 
