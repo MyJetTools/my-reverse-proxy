@@ -23,7 +23,13 @@ impl GoogleAuthSettings {
 
         let email_domain = email_domain.unwrap();
 
-        for whitelisted_domain in self.whitelisted_domains.split(',') {
+        let separator = if self.whitelisted_domains.contains(',') {
+            ','
+        } else {
+            ';'
+        };
+
+        for whitelisted_domain in self.whitelisted_domains.split(separator) {
             if rust_extensions::str_utils::compare_strings_case_insensitive(
                 whitelisted_domain,
                 email_domain,
