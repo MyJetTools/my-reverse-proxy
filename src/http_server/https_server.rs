@@ -26,9 +26,18 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
     // Build TLS configuration.
 
     loop {
-        let (tcp_stream, socket_addr) = listener.accept().await.unwrap();
+        println!("Waiting to accept new connection");
 
-        println!("Accepted connection");
+        let accepted_connection = listener.accept().await;
+
+        if let Err(err) = &accepted_connection {
+            eprintln!("Error accepting connection {}. Err: {:?}", addr, err);
+            continue;
+        }
+
+        let (tcp_stream, socket_addr) = accepted_connection.unwrap();
+
+        println!("Accepted connection from  {}", socket_addr);
 
         let result = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream).await;
 

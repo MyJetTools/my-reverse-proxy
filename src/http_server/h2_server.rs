@@ -18,15 +18,24 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         TokioExecutor::new(),
     ));
     loop {
-        let (stream, socket_addr) = listener.accept().await.unwrap();
+        let accepted_connection = listener.accept().await;
 
-        let io = TokioIo::new(stream);
+        if let Err(err) = &accepted_connection {
+            println!(
+                "Error accepting connection {}. Err: {:?}",
+                listening_addr, err
+            );
+            continue;
+        }
+
+        let (stream, socket_addr) = accepted_connection.unwrap();
 
         let app = app.clone();
-
         let builder = builder.clone();
 
         tokio::spawn(async move {
+            let io = TokioIo::new(stream);
+
             let http_request_handler =
                 HttpRequestHandler::new_lazy(app.clone(), listening_addr.port(), socket_addr);
 
