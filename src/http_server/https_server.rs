@@ -108,7 +108,13 @@ async fn lazy_accept_tcp_stream(
 
                 println!("Created config");
 
-                let tls_stream = start.into_stream(config.into()).await.unwrap();
+                let tls_stream = start.into_stream(config.into()).await;
+
+                if let Err(err) = &tls_stream {
+                    return Err(format!("failed to perform tls handshake: {err:#}"));
+                }
+
+                let tls_stream = tls_stream.unwrap();
 
                 println!("Applied config");
                 let cn_user_name = if let Some(client_cert_cell) = client_cert_cell {
