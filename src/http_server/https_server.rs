@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
 
 use hyper_util::rt::TokioIo;
@@ -39,34 +40,52 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
 
         println!("Accepted connection from  {}", socket_addr);
 
-        let result = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream).await;
+        let app = app.clone();
+        tokio::spawn(async move { handle_connection(app, endpoint_port, tcp_stream, socket_addr) });
+    }
+}
 
-        if let Err(err) = &result {
-            eprintln!("failed to perform tls handshake: {err:#}");
-            continue;
-        }
+async fn handle_connection(
+    app: Arc<AppContext>,
+    endpoint_port: u16,
+    tcp_stream: TcpStream,
+    socket_addr: SocketAddr,
+) {
+    let future = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream);
 
-        let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
+    let result = tokio::time::timeout(Duration::from_secs(10), future).await;
 
-        if endpoint_info.http_type.is_protocol_http1() {
-            kick_off_https1(
-                app.clone(),
-                socket_addr,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                endpoint_port,
-            );
-        } else {
-            kick_off_https2(
-                app.clone(),
-                socket_addr,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                endpoint_port,
-            );
-        }
+    if result.is_err() {
+        println!("Timeout waiting for tls handshake from {}", socket_addr);
+    }
+
+    let result = result.unwrap();
+
+    if let Err(err) = &result {
+        eprintln!("failed to perform tls handshake: {err:#}");
+        return;
+    }
+
+    let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
+
+    if endpoint_info.http_type.is_protocol_http1() {
+        kick_off_https1(
+            app,
+            socket_addr,
+            endpoint_info,
+            tls_stream,
+            cn_user_name,
+            endpoint_port,
+        );
+    } else {
+        kick_off_https2(
+            app,
+            socket_addr,
+            endpoint_info,
+            tls_stream,
+            cn_user_name,
+            endpoint_port,
+        );
     }
 }
 

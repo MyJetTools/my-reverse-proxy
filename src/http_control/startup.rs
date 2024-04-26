@@ -7,7 +7,7 @@ use crate::app::AppContext;
 const DEFAULT_PORT: u16 = 8000;
 
 pub fn start(app: &Arc<AppContext>) {
-    let http_port = if let Ok(result) = std::env::var("CONTROL_HTTP_PORT") {
+    let http_port = if let Ok(result) = std::env::var("HTTP_PORT") {
         match result.parse() {
             Ok(port) => port,
             Err(_) => DEFAULT_PORT,
