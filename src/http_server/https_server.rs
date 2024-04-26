@@ -41,7 +41,7 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
         println!("Accepted connection from  {}", socket_addr);
 
         let app = app.clone();
-        tokio::spawn(async move { handle_connection(app, endpoint_port, tcp_stream, socket_addr) });
+        handle_connection(app, endpoint_port, tcp_stream, socket_addr).await;
     }
 }
 
