@@ -57,6 +57,7 @@ async fn handle_connection(
 
     if result.is_err() {
         println!("Timeout waiting for tls handshake from {}", socket_addr);
+        return;
     }
 
     let result = result.unwrap();
