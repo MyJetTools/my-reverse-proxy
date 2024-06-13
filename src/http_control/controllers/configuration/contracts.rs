@@ -49,6 +49,7 @@ pub struct HttpEndpointInfoModel {
     #[serde(rename = "type")]
     pub r#type: String,
     pub locations: Vec<HttpProxyPassLocationModel>,
+    pub debug: bool,
 }
 
 impl HttpEndpointInfoModel {
@@ -56,6 +57,7 @@ impl HttpEndpointInfoModel {
         Self {
             host: endpoint.host_endpoint.as_str().to_string(),
             r#type: endpoint.http_type.to_str().to_string(),
+            debug: endpoint.debug,
             locations: endpoint
                 .locations
                 .iter()

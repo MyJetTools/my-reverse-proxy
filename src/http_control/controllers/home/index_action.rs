@@ -82,6 +82,12 @@ fn create_html_content(config: &AppConfiguration) -> String {
 
             let host_type = render_http_badge(http_endpoint.http_type);
 
+            let debug = if http_endpoint.debug {
+                r##"<span class="badge text-bg-warning" style="border-radius: 5px 0 0 5px;">debug</span>"##
+            } else {
+                ""
+            };
+
             let ssl_cert = if let Some(ssl_cert) = &http_endpoint.ssl_certificate_id {
                 let ssl_cert = ssl_cert.as_str();
                 if ssl_cert == SELF_SIGNED_CERT_NAME {
@@ -102,7 +108,7 @@ fn create_html_content(config: &AppConfiguration) -> String {
 
             table_lines.push_str(
                 format!(
-                    r##"<tr><td>{draw_port}</td><td>{host_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span> {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
+                    r##"<tr><td>{draw_port}</td><td>{host_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span> {debug} {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
                 )
                 .as_str(),
             );
