@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use serde::*;
 
@@ -15,15 +15,13 @@ pub struct ProxyPassSettings {
 impl ProxyPassSettings {
     pub fn get_allowed_users(
         &self,
-        allowed_users: &Option<HashMap<String, Vec<String>>>,
+        allowed_users: &AllowedUsersSettingsModel,
         endpoint_template_settings: Option<&EndpointTemplateSettings>,
     ) -> Result<Option<Arc<AllowedUserList>>, String> {
         let mut result = None;
         if let Some(allowed_user_id) = &self.endpoint.allowed_users {
-            if let Some(users) = allowed_users {
-                if let Some(users) = users.get(allowed_user_id) {
-                    result = Some(Arc::new(AllowedUserList::new(users.clone())));
-                }
+            if let Some(allowed_users) = allowed_users.get_configuration(allowed_user_id) {
+                result = Some(Arc::new(allowed_users));
             }
         }
 

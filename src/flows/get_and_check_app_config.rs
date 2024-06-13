@@ -8,7 +8,7 @@ use crate::{
 
 pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfiguration, String> {
     let settings_model = crate::settings::SettingsModel::load(".my-reverse-proxy").await?;
-    let listen_ports = settings_model.get_listen_ports(app)?;
+    let listen_ports = settings_model.get_listen_ports(app).await?;
 
     let mut ssl_certificates_cache = SslCertificatesCache::new();
 

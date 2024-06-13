@@ -1,5 +1,3 @@
-mod get_file;
-pub use get_file::*;
 mod load_client_certificate;
 pub use load_client_certificate::*;
 mod get_and_check_app_config;

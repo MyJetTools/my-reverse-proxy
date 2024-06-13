@@ -441,3 +441,23 @@ allowed_users:
   - email3@domain.com
 
 ```
+
+Allowed users can be located in remote file. To specify remote file please use next example:
+
+```yaml
+hosts:
+  domain.com:443:
+    endpoint:
+      type: https
+      allowed_users: list_id
+
+allowed_users:
+  from_file: 
+  - http://remote_host:5123/allowed_users_list.yaml
+  - ~/allowed_users_list.yaml
+  - root@127.0.0.1->~/allowed_users_list.yaml
+
+```
+
+In this case - allowed_users configuration with id='list_id' must be located inside of one of remote files specified in yaml.
+

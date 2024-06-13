@@ -40,3 +40,5 @@ mod endpoint_template_settings;
 pub use endpoint_template_settings::*;
 mod host_str;
 pub use host_str::*;
+mod allowed_users_settings_model;
+pub use allowed_users_settings_model::*;

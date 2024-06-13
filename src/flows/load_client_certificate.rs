@@ -20,7 +20,9 @@ pub async fn load_client_certificate(
         ));
     }
 
-    let client_ca = crate::flows::get_file(cert_result.as_ref().unwrap()).await;
+    let cert_result = cert_result.unwrap();
+
+    let client_ca = cert_result.load_file_content().await;
 
     let client_ca: Arc<ClientCertificateCa> = Arc::new(client_ca.into());
     return Ok(client_ca);

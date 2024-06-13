@@ -20,8 +20,8 @@ pub async fn load_ssl_certificate(
 
     let (cert, key) = cert_result.unwrap();
 
-    let certificates = crate::flows::get_file(&cert).await;
-    let private_key = crate::flows::get_file(&key).await;
+    let certificates = cert.load_file_content().await;
+    let private_key = cert.load_file_content().await;
 
     let ssl_certificate = SslCertificate::new(certificates, private_key, key.as_str().as_str());
 

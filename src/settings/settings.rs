@@ -6,9 +6,10 @@ use crate::{
 };
 
 use super::{
-    ClientCertificateCaSettings, ConnectionsSettingsModel, EndpointHttpHostString,
-    EndpointTemplateSettings, FileSource, GlobalSettings, GoogleAuthSettings, ProxyPassSettings,
-    SshConfigSettings, SslCertificateId, SslCertificatesSettingsModel,
+    AllowedUsersSettingsModel, ClientCertificateCaSettings, ConnectionsSettingsModel,
+    EndpointHttpHostString, EndpointTemplateSettings, FileSource, GlobalSettings,
+    GoogleAuthSettings, ProxyPassSettings, SshConfigSettings, SslCertificateId,
+    SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
@@ -28,7 +29,7 @@ pub struct SettingsModel {
 
     pub endpoint_templates: Option<HashMap<String, EndpointTemplateSettings>>,
 
-    pub allowed_users: Option<HashMap<String, Vec<String>>>,
+    allowed_users: Option<HashMap<String, Vec<String>>>,
 }
 
 impl SettingsModel {
@@ -65,7 +66,28 @@ impl SettingsModel {
         None
     }
 
-    pub fn get_listen_ports(
+    async fn get_allowed_users_settings(&self) -> Result<AllowedUsersSettingsModel, String> {
+        let mut allowed_users = self.allowed_users.clone();
+
+        let mut files_to_load = None;
+
+        if let Some(allowed_users) = allowed_users.as_mut() {
+            files_to_load = allowed_users.remove("from_file");
+        }
+
+        let mut result = AllowedUsersSettingsModel::new(self.allowed_users.clone());
+
+        if let Some(files_to_load) = files_to_load {
+            for file_to_load in files_to_load {
+                let file_src = FileSource::from_src(file_to_load.into(), &self.ssh)?;
+                result.populate_from_file(file_src).await?;
+            }
+        }
+
+        Ok(result)
+    }
+
+    pub async fn get_listen_ports(
         &self,
         app: &AppContext,
     ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
@@ -82,8 +104,10 @@ impl SettingsModel {
                 .endpoint
                 .get_endpoint_template(&self.endpoint_templates)?;
 
-            let allowed_users =
-                proxy_pass.get_allowed_users(&self.allowed_users, endpoint_template_settings)?;
+            let allowed_users_settings = self.get_allowed_users_settings().await?;
+
+            let allowed_users = proxy_pass
+                .get_allowed_users(&allowed_users_settings, endpoint_template_settings)?;
 
             let endpoint_type = proxy_pass.endpoint.get_type(
                 end_point,
@@ -179,81 +203,6 @@ impl SettingsModel {
         Ok(None)
     }
 }
-
-/*
-
-impl SettingsModel {
-    pub fn get_locations(
-        &self,
-        app: &AppContext,
-        req: &HttpRequestBuilder,
-        is_https: bool,
-    ) -> Result<(Vec<ProxyPassLocationConfig>, Option<AllowedUserList>), String> {
-
-
-        for (settings_host, proxy_pass_settings) in &self.hosts {
-            if !req.is_mine(settings_host, is_https) {
-                continue;
-            }
-
-            let location_id = app.get_id();
-
-            let mut allowed_users = None;
-
-            if let Some(allowed_user_id) = &proxy_pass_settings.endpoint.allowed_users {
-                if let Some(users) = &self.allowed_users {
-                    if let Some(users) = users.get(allowed_user_id) {
-                        allowed_users = Some(AllowedUserList::new(users.clone()));
-                    }
-                }
-            }
-
-            let mut result = Vec::new();
-            for location_settings in &proxy_pass_settings.locations {
-                let location_path = if let Some(location) = &location_settings.path {
-                    location.to_string()
-                } else {
-                    "/".to_string()
-                };
-
-                /*
-                                let proxy_pass_content_source = location_settings.get_http_content_source(
-                                    app,
-                                    settings_host,
-                                    location_id,
-                                    &self.variables,
-                                    &self.ssh,
-                                    proxy_pass_settings.endpoint.get_debug(),
-                                )?;
-
-
-                                let proxy_pass_content_source = proxy_pass_content_source.unwrap();
-                */
-                let mut whitelisted_ip = WhiteListedIpList::new();
-                whitelisted_ip.apply(
-                    proxy_pass_settings
-                        .endpoint
-                        .get_white_listed_ip(&self.endpoint_templates)
-                        .as_deref(),
-                );
-                whitelisted_ip.apply(location_settings.whitelisted_ip.as_deref());
-
-                result.push(ProxyPassLocationConfig::new(
-                    location_id,
-                    location_path,
-                    location_settings.modify_http_headers.clone(),
-                    whitelisted_ip,
-                ));
-            }
-
-            return Ok((result, allowed_users));
-        }
-
-        return Ok((vec![], None));
-
-    }
-}
-    */
 
 fn format_mem(size: usize) -> String {
     if size < 1024 {
