@@ -79,6 +79,9 @@ impl SettingsModel {
 
         if let Some(files_to_load) = files_to_load {
             for file_to_load in files_to_load {
+                let file_to_load =
+                    crate::populate_variable::populate_variable(&file_to_load, &self.variables);
+
                 let file_src = FileSource::from_src(file_to_load.into(), &self.ssh)?;
                 result.populate_from_file(file_src).await?;
             }
