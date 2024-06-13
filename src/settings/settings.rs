@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use crate::{
     app::AppContext,
     app_configuration::{EndpointType, HttpListenPortConfiguration, ListenPortConfiguration},
+    files_cache::FilesCache,
 };
 
 use super::{
@@ -66,7 +67,10 @@ impl SettingsModel {
         None
     }
 
-    async fn get_allowed_users_settings(&self) -> Result<AllowedUsersSettingsModel, String> {
+    async fn get_allowed_users_settings(
+        &self,
+        files_cache: &FilesCache,
+    ) -> Result<AllowedUsersSettingsModel, String> {
         let mut allowed_users = self.allowed_users.clone();
 
         let mut files_to_load = None;
@@ -83,7 +87,7 @@ impl SettingsModel {
                     crate::populate_variable::populate_variable(&file_to_load, &self.variables);
 
                 let file_src = FileSource::from_src(file_to_load.into(), &self.ssh)?;
-                result.populate_from_file(file_src).await?;
+                result.populate_from_file(file_src, files_cache).await?;
             }
         }
 
@@ -94,6 +98,7 @@ impl SettingsModel {
         &self,
         app: &AppContext,
     ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
+        let files_cache = FilesCache::new();
         let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
 
         for (host, proxy_pass) in &self.hosts {
@@ -107,7 +112,7 @@ impl SettingsModel {
                 .endpoint
                 .get_endpoint_template(&self.endpoint_templates)?;
 
-            let allowed_users_settings = self.get_allowed_users_settings().await?;
+            let allowed_users_settings = self.get_allowed_users_settings(&files_cache).await?;
 
             let allowed_users = proxy_pass
                 .get_allowed_users(&allowed_users_settings, endpoint_template_settings)?;

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde::*;
 
-use crate::http_proxy_pass::AllowedUserList;
+use crate::{files_cache::FilesCache, http_proxy_pass::AllowedUserList};
 
 use super::FileSource;
 
@@ -15,8 +15,12 @@ impl AllowedUsersSettingsModel {
     pub fn new(data: Option<HashMap<String, Vec<String>>>) -> Self {
         AllowedUsersSettingsModel { data }
     }
-    pub async fn populate_from_file(&mut self, file: FileSource) -> Result<(), String> {
-        let file_content = file.load_file_content().await;
+    pub async fn populate_from_file(
+        &mut self,
+        file: FileSource,
+        cache: &FilesCache,
+    ) -> Result<(), String> {
+        let file_content = file.load_file_content(cache).await;
 
         let allowed_users: Result<AllowedUsersRemoteYamlModel, _> =
             serde_yaml::from_slice(file_content.as_slice());

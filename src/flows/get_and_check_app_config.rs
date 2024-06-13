@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
     app::AppContext,
     app_configuration::{AppConfiguration, SELF_SIGNED_CERT_NAME},
+    files_cache::FilesCache,
     ssl::*,
 };
 
@@ -20,6 +21,8 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
 
     let mut tcp_over_ssh_endpoints = BTreeMap::new();
 
+    let files_cache = FilesCache::new();
+
     for (listen_port, port_config) in listen_ports {
         match port_config {
             crate::app_configuration::ListenPortConfiguration::Http(port_config) => {
@@ -31,6 +34,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                                     &settings_model,
                                     ssl_cert_id,
                                     listen_port,
+                                    &files_cache,
                                 )
                                 .await?;
                                 ssl_certificates_cache.add(ssl_cert_id, ssl_certificate);
@@ -46,6 +50,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                                 &settings_model,
                                 client_cert_id,
                                 listen_port,
+                                &files_cache,
                             )
                             .await?;
 

@@ -4,7 +4,7 @@ use my_settings_reader::flurl::FlUrl;
 use my_ssh::SshSession;
 use rust_extensions::StrOrString;
 
-use crate::settings::LocalFilePath;
+use crate::{files_cache::FilesCache, settings::LocalFilePath};
 
 use super::{SshConfigSettings, SshConfiguration};
 
@@ -46,7 +46,7 @@ impl FileSource {
         }
     }
 
-    pub async fn load_file_content(&self) -> Vec<u8> {
+    pub async fn load_file_content(&self, cache: &FilesCache) -> Vec<u8> {
         match self {
             FileSource::File(file_name) => {
                 println!("Loading file {}", file_name);
@@ -58,9 +58,15 @@ impl FileSource {
 
                 result
             }
-            FileSource::Http(path) => {
-                let response = FlUrl::new(path).get().await.unwrap();
+            FileSource::Http(url) => {
+                if let Some(value) = cache.get(url).await {
+                    return value;
+                }
+
+                let response = FlUrl::new(url).get().await.unwrap();
                 let result = response.receive_body().await.unwrap();
+
+                cache.add(url.to_string(), result.clone()).await;
                 result
             }
             FileSource::Ssh(ssh_credentials) => match &ssh_credentials.remote_content {
@@ -68,6 +74,12 @@ impl FileSource {
                     panic!("Reading file is not supported from socket yet");
                 }
                 crate::settings::SshContent::FilePath(path) => {
+                    let ssh_cred_as_string = ssh_credentials.to_string();
+
+                    if let Some(value) = cache.get(ssh_cred_as_string.as_str()).await {
+                        return value;
+                    }
+
                     println!(
                         "Loading file {}->{}",
                         ssh_credentials.credentials.to_string(),
@@ -80,6 +92,7 @@ impl FileSource {
                         .await
                         .unwrap();
 
+                    cache.add(ssh_cred_as_string, result.clone()).await;
                     result
                 }
             },

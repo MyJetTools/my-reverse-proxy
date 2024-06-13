@@ -7,6 +7,7 @@ mod app;
 mod flows;
 //mod http2_executor;
 mod app_configuration;
+mod files_cache;
 mod google_auth;
 mod http_client;
 mod http_content_source;
