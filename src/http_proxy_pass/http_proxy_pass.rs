@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
@@ -52,7 +52,7 @@ impl HttpProxyPass {
         &self,
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
-    ) -> Result<hyper::Result<hyper::Response<Full<Bytes>>>, ProxyPassError> {
+    ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
             println!(
                 "Request: {}. Uri: {}. Headers{:?}",
@@ -191,7 +191,27 @@ impl HttpProxyPass {
             match build_result {
                 BuildResult::HttpRequest(location_index) => match result {
                     Ok(response) => {
+                        let mut chunked_response = false;
+                        if let Some(value) = response.headers().get("Transfer-Encoding") {
+                            chunked_response = value == "chunked";
+                            println!("Chunked response found");
+                        }
+
                         let inner = self.inner.lock().await;
+
+                        if chunked_response {
+                            let response =
+                                super::http_response_builder::build_chunked_http_response(
+                                    self,
+                                    &inner,
+                                    &req,
+                                    response,
+                                    &location_index,
+                                )
+                                .await?;
+                            return Ok(Ok(response));
+                        }
+
                         let response = super::http_response_builder::build_http_response(
                             self,
                             &inner,
@@ -243,7 +263,12 @@ impl HttpProxyPass {
                                     ));
                                 }
 
-                                return Ok(Ok(upgrade_response));
+                                let (parts, body) = upgrade_response.into_parts();
+
+                                return Ok(Ok(hyper::Response::from_parts(
+                                    parts,
+                                    body.map_err(|e| crate::to_hyper_error(e)).boxed(),
+                                )));
                             }
                             Err(e) => {
                                 if self.endpoint_info.debug {

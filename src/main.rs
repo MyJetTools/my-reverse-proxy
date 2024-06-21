@@ -21,6 +21,10 @@ mod ssl;
 mod tcp_port_forward;
 mod types;
 
+pub fn to_hyper_error(e: std::convert::Infallible) -> String {
+    e.to_string()
+}
+
 #[tokio::main]
 async fn main() {
     let settings_model = settings::SettingsModel::load(".my-reverse-proxy")

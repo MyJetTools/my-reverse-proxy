@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 
 use crate::{
     app::AppContext,
@@ -11,7 +11,7 @@ use super::{HttpProxyPass, HttpRequestBuilder, AUTHORIZED_COOKIE_NAME};
 
 pub enum GoogleAuthResult {
     Passed(Option<Email>),
-    Content(hyper::Result<hyper::Response<Full<Bytes>>>),
+    Content(hyper::Result<hyper::Response<BoxBody<Bytes, String>>>),
     DomainIsNotAuthorized,
 }
 
@@ -33,6 +33,8 @@ impl HttpProxyPass {
                     .into_bytes(),
             ));
 
+            let body = body.map_err(|e| crate::to_hyper_error(e)).boxed();
+
             return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                 .status(200)
                 .body(body)
@@ -53,7 +55,7 @@ impl HttpProxyPass {
 
                         return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                             .status(200)
-                            .body(body)
+                            .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                             .unwrap()));
                     }
 
@@ -64,7 +66,7 @@ impl HttpProxyPass {
 
                     return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                         .status(200)
-                        .body(body)
+                        .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                         .unwrap()));
                 }
             }
@@ -85,7 +87,7 @@ impl HttpProxyPass {
 
                     return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                         .status(400)
-                        .body(body)
+                        .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                         .unwrap()));
                 }
             };
@@ -98,7 +100,7 @@ impl HttpProxyPass {
 
                 return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                     .status(200)
-                    .body(body)
+                    .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                     .unwrap()));
             }
 
@@ -114,7 +116,7 @@ impl HttpProxyPass {
                     "Set-Cookie",
                     format!("{}={}", AUTHORIZED_COOKIE_NAME, token),
                 )
-                .body(body)
+                .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                 .unwrap()));
         }
 
@@ -133,7 +135,7 @@ impl HttpProxyPass {
 
         return GoogleAuthResult::Content(Ok(hyper::Response::builder()
             .status(200)
-            .body(body)
+            .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
             .unwrap()));
     }
 }

@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use rust_extensions::StopWatch;
 use tokio::sync::Mutex;
 
@@ -64,7 +64,7 @@ pub async fn handle_request(
     handler: Arc<HttpRequestHandler>,
     req: hyper::Request<hyper::body::Incoming>,
     request_timeout: std::time::Duration,
-) -> hyper::Result<hyper::Response<Full<Bytes>>> {
+) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     match handler.as_ref() {
         HttpRequestHandler::LazyInit {
             proxy_pass,
@@ -103,7 +103,11 @@ pub async fn handle_request(
 
                         return Ok(hyper::Response::builder()
                             .status(hyper::StatusCode::BAD_REQUEST)
-                            .body(Full::from(content))
+                            .body(
+                                Full::new(content)
+                                    .map_err(|e| crate::to_hyper_error(e))
+                                    .boxed(),
+                            )
                             .unwrap());
                     }
                 }
@@ -123,7 +127,7 @@ async fn handle_requests(
     app: &Arc<AppContext>,
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
-) -> hyper::Result<hyper::Response<Full<Bytes>>> {
+) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     let debug = if proxy_pass.endpoint_info.debug {
         let req_str = format!(
             "{}: [{}]{:?}",

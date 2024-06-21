@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::{
     body::Incoming,
     header::{self, HeaderName, HeaderValue},
@@ -8,9 +8,7 @@ use hyper::{
 
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
 
-use super::{
-    into_full_bytes, HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError,
-};
+use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError};
 
 pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
@@ -19,7 +17,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     response: hyper::Response<Incoming>,
     location_index: &LocationIndex,
     dest_http1: bool,
-) -> Result<hyper::Response<Full<Bytes>>, ProxyPassError> {
+) -> Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
     if dest_http1 && !proxy_pass.listening_port_info.http_type.is_protocol_http1() {
@@ -39,8 +37,36 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
         location_index,
     );
 
-    let body = into_full_bytes(incoming).await?;
-    Ok(hyper::Response::from_parts(parts, body))
+    //let body = into_full_bytes(incoming).await?;
+    Ok(hyper::Response::from_parts(
+        parts,
+        incoming.map_err(|e| e.to_string()).boxed(),
+    ))
+}
+
+pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'static>(
+    proxy_pass: &HttpProxyPass,
+    inner: &HttpProxyPassInner,
+    req_host_port: &THostPort,
+    mut response: hyper::Response<Incoming>,
+    location_index: &LocationIndex,
+) -> Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError> {
+    modify_req_headers(
+        proxy_pass,
+        inner,
+        req_host_port,
+        response.headers_mut(),
+        location_index,
+    );
+
+    let (parts, body) = response.into_parts();
+
+    //tokio::spawn(async move { while let Some(chunk) = in_stream.next().await {} });
+
+    Ok(hyper::Response::from_parts(
+        parts,
+        body.map_err(|e| e.to_string()).boxed(),
+    ))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
@@ -51,7 +77,7 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     content_type: Option<WebContentType>,
     status_code: u16,
     content: Vec<u8>,
-) -> hyper::Response<Full<Bytes>> {
+) -> hyper::Response<BoxBody<Bytes, String>> {
     let mut builder = hyper::Response::builder().status(status_code);
 
     if let Some(content_type) = content_type {
@@ -69,7 +95,9 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     }
 
     let full_body = http_body_util::Full::new(hyper::body::Bytes::from(content));
-    builder.body(full_body).unwrap()
+    builder
+        .body(full_body.map_err(|e| crate::to_hyper_error(e)).boxed())
+        .unwrap()
 }
 
 fn modify_req_headers<THostPort: HostPort + Send + Sync + 'static>(
