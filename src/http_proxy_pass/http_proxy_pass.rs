@@ -212,7 +212,6 @@ impl HttpProxyPass {
                             return Ok(Ok(response));
                         }
 
-                        let inner = self.inner.lock().await;
                         let response = super::http_response_builder::build_http_response(
                             self,
                             &inner,
