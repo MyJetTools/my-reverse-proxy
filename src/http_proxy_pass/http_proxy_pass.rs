@@ -191,28 +191,26 @@ impl HttpProxyPass {
             match build_result {
                 BuildResult::HttpRequest(location_index) => match result {
                     Ok(response) => {
-                        /*
-                                               let mut chunked_response = false;
-                                               if let Some(value) = response.headers().get("Transfer-Encoding") {
-                                                   chunked_response = value == "chunked";
-                                                   println!("Chunked response found");
-                                               }
+                        let mut chunked_response = false;
+                        if let Some(value) = response.headers().get("Transfer-Encoding") {
+                            chunked_response = value == "chunked";
+                            println!("Chunked response found");
+                        }
 
-                                               let inner = self.inner.lock().await;
+                        let inner = self.inner.lock().await;
 
-                                               if chunked_response {
-                                                   let response =
-                                                       super::http_response_builder::build_chunked_http_response(
-                                                           self,
-                                                           &inner,
-                                                           &req,
-                                                           response,
-                                                           &location_index,
-                                                       )
-                                                       .await?;
-                                                   return Ok(Ok(response));
-                                               }
-                        */
+                        if chunked_response {
+                            let response =
+                                super::http_response_builder::build_chunked_http_response(
+                                    self,
+                                    &inner,
+                                    &req,
+                                    response,
+                                    &location_index,
+                                )
+                                .await?;
+                            return Ok(Ok(response));
+                        }
 
                         let inner = self.inner.lock().await;
                         let response = super::http_response_builder::build_http_response(

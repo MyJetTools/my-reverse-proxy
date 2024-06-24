@@ -44,7 +44,6 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     ))
 }
 
-/*
 pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
@@ -69,7 +68,6 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
         body.map_err(|e| e.to_string()).boxed(),
     ))
 }
- */
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     http_proxy_pass: &HttpProxyPass,
