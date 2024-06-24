@@ -51,18 +51,19 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     mut response: hyper::Response<Incoming>,
     location_index: &LocationIndex,
 ) -> Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError> {
-    modify_req_headers(
-        proxy_pass,
-        inner,
-        req_host_port,
-        response.headers_mut(),
-        location_index,
-    );
+    //  modify_req_headers(
+    //      proxy_pass,
+    //      inner,
+    //      req_host_port,
+    //      response.headers_mut(),
+    //      location_index,
+    //  );
 
     let (parts, body) = response.into_parts();
 
     //tokio::spawn(async move { while let Some(chunk) = in_stream.next().await {} });
 
+    // let response = response.map_err(|e| e.to_string()).boxed();
     Ok(hyper::Response::from_parts(
         parts,
         body.map_err(|e| e.to_string()).boxed(),
