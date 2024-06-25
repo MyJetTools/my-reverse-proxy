@@ -4,7 +4,7 @@ use http_body_util::{combinators::BoxBody, BodyExt, StreamBody};
 use hyper::{
     body::Incoming,
     header::{self, HeaderName, HeaderValue},
-    HeaderMap,
+    HeaderMap, Version,
 };
 
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
@@ -93,7 +93,11 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     // let response = response.map_err(|e| e.to_string()).boxed();
 
     let body = BoxBody::new(stream_body);
-    Ok(hyper::Response::from_parts(parts, body))
+    Ok(hyper::Response::builder()
+        .version(Version::HTTP_11)
+        .header(header::TRANSFER_ENCODING, "chunked")
+        .body(body)
+        .unwrap())
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
