@@ -63,7 +63,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     let (parts, body) = response.into_parts();
 
     let mut in_stream = body.into_data_stream();
-    let (mut sender, receiver) = futures::channel::mpsc::channel(0);
+    let (mut sender, receiver) = futures::channel::mpsc::channel(1024);
 
     let stream_body = StreamBody::new(receiver);
 
@@ -72,19 +72,12 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
         while let Some(chunk) = in_stream.next().await {
             match chunk {
                 Ok(chunk) => {
-                    let mut bytes = chunk.to_vec();
-
-                    bytes.push(13);
-                    bytes.push(10);
-
                     //println!("Chunk size: {}", bytes.len());
                     //if bytes.len() > 3 {
                     //    println!("Chunk: {:?}", &bytes[bytes.len() - 3..]);
                     // } else {
                     //    println!("Chunk: {:?}", &bytes);
                     // }
-
-                    let chunk = Bytes::from(bytes);
 
                     let chunk = hyper::body::Frame::data(chunk);
                     let send_result = sender.send(Ok(chunk)).await;
