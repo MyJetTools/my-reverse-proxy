@@ -68,6 +68,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     let stream_body = StreamBody::new(receiver);
 
     tokio::spawn(async move {
+        println!("Http 1.1 Channel opened");
         while let Some(chunk) = in_stream.next().await {
             match chunk {
                 Ok(chunk) => {
@@ -76,10 +77,12 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
                 }
                 Err(e) => {
                     println!("Channel send error: {:?}", e);
-                    return;
+                    break;
                 }
             }
         }
+
+        println!("Http 1.1 Channel closed");
     });
 
     // let response = response.map_err(|e| e.to_string()).boxed();
