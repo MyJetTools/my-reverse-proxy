@@ -73,10 +73,15 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
             match chunk {
                 Ok(chunk) => {
                     let chunk = hyper::body::Frame::data(chunk);
-                    let _ = sender.send(Ok(chunk)).await;
+                    let send_result = sender.send(Ok(chunk)).await;
+
+                    if let Err(err) = send_result {
+                        println!("Channel send error: {:?}", err);
+                        break;
+                    }
                 }
                 Err(e) => {
-                    println!("Channel send error: {:?}", e);
+                    println!("Channel receive error: {:?}", e);
                     break;
                 }
             }
