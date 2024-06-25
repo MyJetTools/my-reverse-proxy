@@ -99,8 +99,12 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
 
     // let response = response.map_err(|e| e.to_string()).boxed();
 
-    let body = BoxBody::new(stream_body);
-    Ok(hyper::Response::from_parts(parts, body))
+    let box_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
+    Ok(hyper::Response::builder()
+        .status(200)
+        .header("Transfer-Encoding", "chunked")
+        .body(box_body)
+        .unwrap())
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
