@@ -72,6 +72,15 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
         while let Some(chunk) = in_stream.next().await {
             match chunk {
                 Ok(chunk) => {
+                    let bytes = chunk.to_vec();
+
+                    println!("Chunk size: {}", bytes.len());
+                    if bytes.len() > 3 {
+                        println!("Chunk: {:?}", &bytes[bytes.len() - 3..]);
+                    } else {
+                        println!("Chunk: {:?}", &bytes);
+                    }
+
                     let chunk = hyper::body::Frame::data(chunk);
                     let send_result = sender.send(Ok(chunk)).await;
 
@@ -93,11 +102,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     // let response = response.map_err(|e| e.to_string()).boxed();
 
     let body = BoxBody::new(stream_body);
-    Ok(hyper::Response::builder()
-        .version(Version::HTTP_11)
-        .header(header::TRANSFER_ENCODING, "chunked")
-        .body(body)
-        .unwrap())
+    Ok(hyper::Response::from_parts(parts, body))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
