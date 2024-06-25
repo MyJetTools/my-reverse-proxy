@@ -207,7 +207,7 @@ fn kick_off_https1(
             .with_upgrades()
             .await
         {
-            eprintln!("failed to serve connection: {err:#}");
+            eprintln!("failed to serve HTTP 1.1 connection: {err:#}");
         }
 
         http_request_handler_dispose.dispose().await;
@@ -260,7 +260,7 @@ fn kick_off_https2(
             )
             .await
         {
-            eprintln!("failed to serve connection: {err:#}");
+            eprintln!("failed to serve Https2 connection: {err:#}");
         }
 
         http_request_handler_dispose.dispose().await;
