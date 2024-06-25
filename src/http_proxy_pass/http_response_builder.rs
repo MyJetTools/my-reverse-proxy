@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use futures::StreamExt;
-use http_body_util::{combinators::BoxBody, BodyExt, Empty};
+use futures::{SinkExt, StreamExt};
+use http_body_util::{combinators::BoxBody, BodyExt, StreamBody};
 use hyper::{
     body::Incoming,
     header::{self, HeaderName, HeaderValue},
@@ -63,24 +63,29 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     let (parts, body) = response.into_parts();
 
     let mut in_stream = body.into_data_stream();
+    let (mut sender, receiver) = futures::channel::mpsc::channel(0);
+
+    let stream_body = StreamBody::new(receiver);
 
     tokio::spawn(async move {
         while let Some(chunk) = in_stream.next().await {
-            let chunk = chunk.unwrap();
-
-            let as_vec = chunk.to_vec();
-
-            println!("chunk: {:?}", String::from_utf8(as_vec));
+            match chunk {
+                Ok(chunk) => {
+                    let chunk = hyper::body::Frame::data(chunk);
+                    let _ = sender.send(Ok(chunk)).await;
+                }
+                Err(e) => {
+                    println!("Channel send error: {:?}", e);
+                    return;
+                }
+            }
         }
     });
 
-    let empty_body: Empty<Bytes> = Empty::new();
-
     // let response = response.map_err(|e| e.to_string()).boxed();
-    Ok(hyper::Response::from_parts(
-        parts,
-        empty_body.map_err(|e| e.to_string()).boxed(),
-    ))
+
+    let body = BoxBody::new(stream_body);
+    Ok(hyper::Response::from_parts(parts, body))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
