@@ -72,6 +72,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
         while let Some(chunk) = in_stream.next().await {
             match chunk {
                 Ok(chunk) => {
+                    let data_len = chunk.len();
                     //println!("Chunk size: {}", bytes.len());
                     //if bytes.len() > 3 {
                     //    println!("Chunk: {:?}", &bytes[bytes.len() - 3..]);
@@ -85,6 +86,8 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
                     if let Err(err) = send_result {
                         println!("Channel send error: {:?}", err);
                         break;
+                    } else {
+                        println!("Sent to channel: {} bytes", data_len);
                     }
                 }
                 Err(e) => {
