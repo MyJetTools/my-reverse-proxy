@@ -1,6 +1,5 @@
 use bytes::Bytes;
-use futures::{SinkExt, StreamExt};
-use http_body_util::{combinators::BoxBody, BodyExt, StreamBody};
+use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::{
     body::Incoming,
     header::{self, HeaderName, HeaderValue},
@@ -62,41 +61,45 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
 
     let (parts, body) = response.into_parts();
 
-    let mut in_stream = body.into_data_stream();
-    let (mut sender, receiver) = futures::channel::mpsc::channel(1024);
+    /*
+       let mut in_stream = body.into_data_stream();
+       let (mut sender, receiver) = futures::channel::mpsc::channel(1024);
 
-    let stream_body = StreamBody::new(receiver);
+       let stream_body = StreamBody::new(receiver);
 
-    tokio::spawn(async move {
-        while let Some(chunk) = in_stream.next().await {
-            match chunk {
-                Ok(chunk) => {
-                    let data_len = chunk.len();
+       tokio::spawn(async move {
+           while let Some(chunk) = in_stream.next().await {
+               match chunk {
+                   Ok(chunk) => {
+                       let data_len = chunk.len();
 
-                    let chunk = hyper::body::Frame::data(chunk);
-                    let send_result = sender.send(Ok(chunk)).await;
+                       let chunk = hyper::body::Frame::data(chunk);
+                       let send_result = sender.send(Ok(chunk)).await;
 
-                    if let Err(err) = send_result {
-                        println!("Channel send error: {:?}", err);
-                        break;
-                    } else {
-                        println!("Sent to channel: {} bytes", data_len);
-                    }
-                }
-                Err(e) => {
-                    println!("Channel receive error: {:?}", e);
-                    break;
-                }
-            }
-        }
+                       if let Err(err) = send_result {
+                           println!("Channel send error: {:?}", err);
+                           break;
+                       } else {
+                           println!("Sent to channel: {} bytes", data_len);
+                       }
+                   }
+                   Err(e) => {
+                       println!("Channel receive error: {:?}", e);
+                       break;
+                   }
+               }
+           }
 
-        println!("Http 1.1 Channel closed");
-    });
-
+           println!("Http 1.1 Channel closed");
+       });
+    */
     // let response = response.map_err(|e| e.to_string()).boxed();
 
-    let box_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
-    Ok(hyper::Response::from_parts(parts, box_body))
+    // let box_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
+    Ok(hyper::Response::from_parts(
+        parts,
+        body.map_err(|e| e.to_string()).boxed(),
+    ))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
