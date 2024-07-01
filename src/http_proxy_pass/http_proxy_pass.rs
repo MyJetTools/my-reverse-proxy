@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, BodyExt};
+use hyper::header;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
@@ -194,12 +195,17 @@ impl HttpProxyPass {
                         let mut chunked_response = false;
                         if let Some(value) = response.headers().get("Transfer-Encoding") {
                             chunked_response = value == "chunked";
+
                             println!("Chunked response found");
                         }
 
                         let inner = self.inner.lock().await;
 
                         if chunked_response {
+                            for header in response.headers().iter() {
+                                println!("Header: {:?}", header);
+                            }
+
                             let response =
                                 super::http_response_builder::build_chunked_http_response(
                                     self,
