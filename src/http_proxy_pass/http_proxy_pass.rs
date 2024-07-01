@@ -202,10 +202,6 @@ impl HttpProxyPass {
                         let inner = self.inner.lock().await;
 
                         if chunked_response {
-                            for header in response.headers().iter() {
-                                println!("Header: {:?}", header);
-                            }
-
                             let response =
                                 super::http_response_builder::build_chunked_http_response(
                                     self,

@@ -4,7 +4,7 @@ use http_body_util::{combinators::BoxBody, BodyExt, StreamBody};
 use hyper::{
     body::Incoming,
     header::{self, HeaderName, HeaderValue},
-    HeaderMap, Version,
+    HeaderMap,
 };
 
 use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
@@ -68,17 +68,10 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     let stream_body = StreamBody::new(receiver);
 
     tokio::spawn(async move {
-        println!("Http 1.1 Channel opened");
         while let Some(chunk) = in_stream.next().await {
             match chunk {
                 Ok(chunk) => {
                     let data_len = chunk.len();
-                    //println!("Chunk size: {}", bytes.len());
-                    //if bytes.len() > 3 {
-                    //    println!("Chunk: {:?}", &bytes[bytes.len() - 3..]);
-                    // } else {
-                    //    println!("Chunk: {:?}", &bytes);
-                    // }
 
                     let chunk = hyper::body::Frame::data(chunk);
                     let send_result = sender.send(Ok(chunk)).await;
@@ -103,11 +96,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
     // let response = response.map_err(|e| e.to_string()).boxed();
 
     let box_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
-    Ok(hyper::Response::builder()
-        .status(200)
-        .header("Transfer-Encoding", "chunked")
-        .body(box_body)
-        .unwrap())
+    Ok(hyper::Response::from_parts(parts, box_body))
 }
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
