@@ -44,6 +44,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     ))
 }
 
+/*
 pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
@@ -61,7 +62,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
 
     let (parts, body) = response.into_parts();
 
-    /*
+
        let mut in_stream = body.into_data_stream();
        let (mut sender, receiver) = futures::channel::mpsc::channel(1024);
 
@@ -92,7 +93,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
 
            println!("Http 1.1 Channel closed");
        });
-    */
+
     // let response = response.map_err(|e| e.to_string()).boxed();
 
     // let box_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
@@ -101,6 +102,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
         body.map_err(|e| e.to_string()).boxed(),
     ))
 }
+    */
 
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     http_proxy_pass: &HttpProxyPass,
