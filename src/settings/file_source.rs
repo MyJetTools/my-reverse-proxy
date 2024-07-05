@@ -4,7 +4,7 @@ use my_settings_reader::flurl::FlUrl;
 use my_ssh::SshSession;
 use rust_extensions::StrOrString;
 
-use crate::{files_cache::FilesCache, settings::LocalFilePath};
+use crate::{files_cache::FilesCache, settings::LocalFilePath, variables_reader::VariablesReader};
 
 use super::{SshConfigSettings, SshConfiguration};
 
@@ -18,6 +18,7 @@ impl FileSource {
     pub fn from_src(
         src: StrOrString,
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
+        variables: VariablesReader,
     ) -> Result<Self, String> {
         if src.as_str().starts_with("http") {
             return Ok(FileSource::Http(src.to_string()));
@@ -27,6 +28,7 @@ impl FileSource {
             return Ok(FileSource::Ssh(SshConfiguration::parse(
                 src.as_str(),
                 ssh_config,
+                variables,
             )?));
         }
 

@@ -57,7 +57,11 @@ impl LocationSettings {
 
         if proxy_pass_to.as_str().starts_with(super::SSH_PREFIX) {
             return Ok(ProxyPassTo::Ssh(SshProxyPassModel {
-                ssh_config: SshConfiguration::parse(proxy_pass_to.as_str(), &ssh_configs)?,
+                ssh_config: SshConfiguration::parse(
+                    proxy_pass_to.as_str(),
+                    &ssh_configs,
+                    variables,
+                )?,
                 http2: self.get_type().is_protocol_http2(),
                 default_file: self.default_file.clone(),
             }));

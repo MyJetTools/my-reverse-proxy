@@ -2,6 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use my_ssh::SshCredentials;
 
+use crate::variables_reader::VariablesReader;
+
 use super::{LocalFilePath, RemoteHost, SshConfigSettings};
 
 pub const SSH_PREFIX: &str = "ssh:";
@@ -50,6 +52,7 @@ impl SshConfiguration {
     pub fn parse(
         src: &str,
         ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
+        variables_reader: VariablesReader,
     ) -> Result<Self, String> {
         let mut parts = src.split("->");
         let ssh_part = parts.next().unwrap();
@@ -62,7 +65,7 @@ impl SshConfiguration {
 
         if let Some(ssh_configs) = ssh_configs {
             if let Some(ssh_config_settings) = ssh_configs.get(ssh_part) {
-                match ssh_config_settings.get_option()? {
+                match ssh_config_settings.get_option(variables_reader)? {
                     super::SshConfigOption::AsPassword(password) => {
                         let (ssh_user_name, ssh_session_host, ssh_session_port) =
                             parse_ssh_part(ssh_part);
@@ -188,7 +191,7 @@ mod test {
     fn test_parse_ssh_configuration() {
         let config = "ssh:root@12.12.13.13:22->10.0.0.1:5123";
 
-        let result = super::SshConfiguration::parse(config.into(), &None).unwrap();
+        let result = super::SshConfiguration::parse(config.into(), &None, (&None).into()).unwrap();
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(
@@ -206,7 +209,7 @@ mod test {
     fn test_parse_ssh_configuration_as_file() {
         let config = "ssh:root@12.12.13.13:22->/home/user/file.txt";
 
-        let result = super::SshConfiguration::parse(config.into(), &None).unwrap();
+        let result = super::SshConfiguration::parse(config.into(), &None, (&None).into()).unwrap();
 
         assert_eq!(result.credentials.get_user_name(), "root");
         assert_eq!(

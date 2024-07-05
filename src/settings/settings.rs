@@ -82,13 +82,12 @@ impl SettingsModel {
         let mut result = AllowedUsersSettingsModel::new(self.allowed_users.clone());
 
         if let Some(files_to_load) = files_to_load {
+            let variables = (&self.variables).into();
             for file_to_load in files_to_load {
-                let file_to_load = crate::populate_variable::populate_variable(
-                    &file_to_load,
-                    (&self.variables).into(),
-                );
+                let file_to_load =
+                    crate::populate_variable::populate_variable(&file_to_load, variables);
 
-                let file_src = FileSource::from_src(file_to_load.into(), &self.ssh)?;
+                let file_src = FileSource::from_src(file_to_load.into(), &self.ssh, variables)?;
                 result.populate_from_file(file_src, files_cache).await?;
             }
         }

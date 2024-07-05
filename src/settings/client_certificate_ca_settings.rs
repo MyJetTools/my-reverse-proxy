@@ -19,6 +19,6 @@ impl ClientCertificateCaSettings {
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<FileSource, String> {
         let src = crate::populate_variable::populate_variable(&self.ca, variables);
-        FileSource::from_src(src, ssh_config)
+        FileSource::from_src(src, ssh_config, variables)
     }
 }
