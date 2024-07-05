@@ -81,7 +81,7 @@ impl FileSource {
                     }
 
                     println!(
-                        "Loading file {}->{}",
+                        "Loading file from remove resource using SSH. {}->{}",
                         ssh_credentials.credentials.to_string(),
                         path
                     );
@@ -89,8 +89,52 @@ impl FileSource {
 
                     let result = ssh_session
                         .download_remote_file(&path, Duration::from_secs(5))
-                        .await
-                        .unwrap();
+                        .await;
+
+                    if let Err(err) = result {
+                        match ssh_credentials.credentials.as_ref() {
+                            my_ssh::SshCredentials::SshAgent {
+                                ssh_remote_host,
+                                ssh_remote_port,
+                                ssh_user_name,
+                            } => {
+                                println!(
+                                    "SSH Agent: {}:{}@{}",
+                                    ssh_user_name, ssh_remote_port, ssh_remote_host
+                                )
+                            }
+                            my_ssh::SshCredentials::UserNameAndPassword {
+                                ssh_remote_host,
+                                ssh_remote_port,
+                                ssh_user_name,
+                                password: _,
+                            } => {
+                                println!(
+                                    "SSH User: {}:{}@{}",
+                                    ssh_user_name, ssh_remote_port, ssh_remote_host
+                                )
+                            }
+                            my_ssh::SshCredentials::PrivateKey {
+                                ssh_remote_host,
+                                ssh_remote_port,
+                                ssh_user_name,
+                                private_key: _,
+                                passphrase, //todo!("Debug and remove")
+                            } => {
+                                println!(
+                                    "SSH Private Key: {}:{}@{}. Passphrase: {:?}",
+                                    ssh_user_name, ssh_remote_port, ssh_remote_host, passphrase
+                                )
+                            }
+                        }
+
+                        panic!(
+                            "Can not download file from remote resource. Error: {:?}",
+                            err
+                        );
+                    }
+
+                    let result = result.unwrap();
 
                     cache.add(ssh_cred_as_string, result.clone()).await;
                     result
