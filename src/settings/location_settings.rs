@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use serde::*;
 
-use crate::app_configuration::HttpType;
+use crate::{app_configuration::HttpType, variables_reader::VariablesReader};
 
 use super::{
     LocalFilePath, LocalPathModel, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost,
@@ -37,7 +37,7 @@ impl LocationSettings {
     pub fn get_proxy_pass(
         &self,
         endpoint_str: &str,
-        variables: &Option<HashMap<String, String>>,
+        variables: VariablesReader,
         ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<ProxyPassTo, String> {
         let proxy_pass_to =

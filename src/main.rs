@@ -20,6 +20,7 @@ mod settings;
 mod ssl;
 mod tcp_port_forward;
 mod types;
+mod variables_reader;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {
     e.to_string()

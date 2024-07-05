@@ -10,6 +10,7 @@ use crate::{
     },
     http_proxy_pass::AllowedUserList,
     types::WhiteListedIpList,
+    variables_reader::VariablesReader,
 };
 
 use super::{
@@ -193,7 +194,7 @@ impl EndpointSettings {
         endpoint_settings: &EndpointSettings,
         locations: &[LocationSettings],
         endpoint_template_settings: Option<&EndpointTemplateSettings>,
-        variables: &Option<HashMap<String, String>>,
+        variables: VariablesReader,
         ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
         g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
         allowed_user_list: Option<Arc<AllowedUserList>>,
@@ -392,7 +393,7 @@ fn convert_to_http_locations(
     src: &[LocationSettings],
     endpoint_settings: &EndpointSettings,
     endpoint_template_settings: Option<&EndpointTemplateSettings>,
-    variables: &Option<HashMap<String, String>>,
+    variables: VariablesReader,
     ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
     app: &AppContext,
 ) -> Result<Vec<Arc<ProxyPassLocationConfig>>, String> {

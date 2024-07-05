@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use serde::*;
 
+use crate::variables_reader::VariablesReader;
+
 use super::{FileSource, SshConfigSettings};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -14,7 +16,7 @@ pub struct SslCertificatesSettingsModel {
 impl SslCertificatesSettingsModel {
     pub fn get_certificate(
         &self,
-        variables: &Option<HashMap<String, String>>,
+        variables: VariablesReader,
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<FileSource, String> {
         let src = crate::populate_variable::populate_variable(&self.certificate, variables);
@@ -23,7 +25,7 @@ impl SslCertificatesSettingsModel {
 
     pub fn get_private_key(
         &self,
-        variables: &Option<HashMap<String, String>>,
+        variables: VariablesReader,
         ssh_config: &Option<HashMap<String, SshConfigSettings>>,
     ) -> Result<FileSource, String> {
         let src = crate::populate_variable::populate_variable(&self.private_key, variables);

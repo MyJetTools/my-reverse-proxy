@@ -83,8 +83,10 @@ impl SettingsModel {
 
         if let Some(files_to_load) = files_to_load {
             for file_to_load in files_to_load {
-                let file_to_load =
-                    crate::populate_variable::populate_variable(&file_to_load, &self.variables);
+                let file_to_load = crate::populate_variable::populate_variable(
+                    &file_to_load,
+                    (&self.variables).into(),
+                );
 
                 let file_src = FileSource::from_src(file_to_load.into(), &self.ssh)?;
                 result.populate_from_file(file_src, files_cache).await?;
@@ -102,7 +104,7 @@ impl SettingsModel {
         let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
 
         for (host, proxy_pass) in &self.hosts {
-            let host = crate::populate_variable::populate_variable(host, &self.variables);
+            let host = crate::populate_variable::populate_variable(host, (&self.variables).into());
 
             let end_point = EndpointHttpHostString::new(host.as_str().to_string())?;
 
@@ -122,7 +124,7 @@ impl SettingsModel {
                 &proxy_pass.endpoint,
                 proxy_pass.locations.as_slice(),
                 endpoint_template_settings,
-                &self.variables,
+                (&self.variables).into(),
                 &self.ssh,
                 &self.g_auth,
                 allowed_users,
@@ -184,7 +186,7 @@ impl SettingsModel {
                     continue;
                 }
 
-                return Ok(Some(ca.get_ca(&self.variables, &self.ssh)?));
+                return Ok(Some(ca.get_ca((&self.variables).into(), &self.ssh)?));
             }
         }
 
@@ -202,8 +204,8 @@ impl SettingsModel {
                 }
 
                 return Ok(Some((
-                    cert.get_certificate(&self.variables, &self.ssh)?,
-                    cert.get_private_key(&self.variables, &self.ssh)?,
+                    cert.get_certificate((&self.variables).into(), &self.ssh)?,
+                    cert.get_private_key((&self.variables).into(), &self.ssh)?,
                 )));
             }
         }
