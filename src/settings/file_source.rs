@@ -121,11 +121,11 @@ impl FileSource {
                                 ssh_remote_port,
                                 ssh_user_name,
                                 private_key: _,
-                                passphrase, //todo!("Debug and remove")
+                                passphrase: _,
                             } => {
                                 println!(
-                                    "SSH Private Key: {}:{}@{}. Passphrase: {:?}",
-                                    ssh_user_name, ssh_remote_port, ssh_remote_host, passphrase
+                                    "SSH Private Key: {}:{}@{}",
+                                    ssh_user_name, ssh_remote_port, ssh_remote_host
                                 )
                             }
                         }
