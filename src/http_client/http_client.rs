@@ -60,10 +60,24 @@ impl HttpClient {
     pub async fn connect_to_http1(
         &mut self,
         remote_host: &RemoteHost,
+        domain_name: &Option<String>,
     ) -> Result<(), HttpClientError> {
-        let client = Http1Client::connect(remote_host).await?;
-        *self = Self::Http(client);
-        Ok(())
+        let connect_result = Http1Client::connect(remote_host, domain_name).await;
+
+        match connect_result {
+            Ok(client) => {
+                *self = Self::Http(client);
+                Ok(())
+            }
+            Err(err) => {
+                println!(
+                    "Can not connect to remote port: {}. Err:{:?}",
+                    remote_host.get_host_port(),
+                    err
+                );
+                Err(err)
+            }
+        }
     }
 
     pub async fn connect_to_http1_over_ssh(

@@ -29,11 +29,14 @@ impl HttpProxyPassContentSource {
     pub async fn connect_if_require(
         &mut self,
         app: &AppContext,
+        domain_name: &Option<String>,
         debug: bool,
     ) -> Result<(), ProxyPassError> {
         match self {
             Self::Http(remote_http_location) => {
-                return remote_http_location.connect_if_require(app, debug).await;
+                return remote_http_location
+                    .connect_if_require(app, domain_name, debug)
+                    .await;
             }
 
             Self::LocalPath(_) => return Ok(()),

@@ -48,6 +48,8 @@ impl ProxyPassLocation {
         app: &AppContext,
         debug: bool,
     ) -> Result<(), ProxyPassError> {
-        self.content_source.connect_if_require(app, debug).await
+        self.content_source
+            .connect_if_require(app, &self.config.domain_name, debug)
+            .await
     }
 }

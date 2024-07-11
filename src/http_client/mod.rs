@@ -6,15 +6,11 @@ mod error;
 pub use error::*;
 mod connect_to_tls_endpoint;
 pub use connect_to_tls_endpoint::*;
-//mod http1_client_connection;
 
-//pub use http1_client_connection::*;
 mod connect_to_http_over_ssh;
 pub use connect_to_http_over_ssh::*;
 mod connect_to_http2_endpoint;
 pub use connect_to_http2_endpoint::*;
-//mod http2_client_connection;
-//pub use http2_client_connection::*;
 mod http2_client;
 pub use http2_client::*;
 mod http_client;

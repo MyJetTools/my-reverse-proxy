@@ -15,6 +15,7 @@ pub struct LocationSettings {
     pub proxy_pass_to: String,
     #[serde(rename = "type")]
     pub location_type: Option<String>,
+    pub domain_name: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub default_file: Option<String>,
     pub status_code: Option<u16>,

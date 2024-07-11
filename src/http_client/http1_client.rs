@@ -15,8 +15,11 @@ pub struct Http1Client {
 }
 
 impl Http1Client {
-    pub async fn connect(remote_host: &RemoteHost) -> Result<Self, HttpClientError> {
-        let send_request = Self::connect_to_http(remote_host).await?;
+    pub async fn connect(
+        remote_host: &RemoteHost,
+        domain_name: &Option<String>,
+    ) -> Result<Self, HttpClientError> {
+        let send_request = Self::connect_to_http(remote_host, domain_name).await?;
 
         let result = Self {
             send_request,
@@ -44,9 +47,10 @@ impl Http1Client {
 
     async fn connect_to_http(
         remote_host: &RemoteHost,
+        domain_name: &Option<String>,
     ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
         if remote_host.is_https() {
-            let future = super::connect_to_tls_endpoint(remote_host);
+            let future = super::connect_to_tls_endpoint(remote_host, domain_name);
 
             let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future).await;
 

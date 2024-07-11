@@ -351,7 +351,7 @@ impl HttpProxyPass {
                         if dispose_connection {
                             remote_http_content_source.dispose();
                             remote_http_content_source
-                                .connect_if_require(app, debug)
+                                .connect_if_require(app, &location.config.domain_name, debug)
                                 .await?;
                         }
                     }

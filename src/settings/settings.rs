@@ -265,6 +265,7 @@ mod tests {
                     body: None,
                     content_type: None,
                     whitelisted_ip: None,
+                    domain_name: None,
                 }],
             },
         );

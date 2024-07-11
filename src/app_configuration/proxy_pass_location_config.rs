@@ -17,6 +17,7 @@ pub struct ProxyPassLocationConfig {
     pub modify_headers: Option<ModifyHttpHeadersSettings>,
     pub whitelisted_ip: WhiteListedIpList,
     pub remote_type: HttpType,
+    pub domain_name: Option<String>,
     proxy_pass_to: ProxyPassTo,
 }
 
@@ -27,6 +28,7 @@ impl ProxyPassLocationConfig {
         modify_headers: Option<ModifyHttpHeadersSettings>,
         whitelisted_ip: WhiteListedIpList,
         proxy_pass_to: ProxyPassTo,
+        domain_name: Option<String>,
         remote_type: HttpType,
     ) -> Self {
         Self {
@@ -36,6 +38,7 @@ impl ProxyPassLocationConfig {
             whitelisted_ip,
             proxy_pass_to,
             remote_type,
+            domain_name,
         }
     }
     pub fn get_proxy_pass_to_as_string(&self) -> String {
