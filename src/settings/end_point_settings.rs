@@ -100,6 +100,7 @@ impl EndpointSettings {
         &self,
         endpoint_template: Option<&EndpointTemplateSettings>,
         g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
+        var: VariablesReader,
     ) -> Result<Option<GoogleAuthSettings>, String> {
         let mut g_auth_id = self.google_auth.as_ref();
 
@@ -117,7 +118,7 @@ impl EndpointSettings {
 
         if let Some(g_auth_settings) = g_auth_settings {
             if let Some(result) = g_auth_settings.get(g_auth_id) {
-                return Ok(Some(result.clone()));
+                return Ok(Some(result.clone_an_populate(var)));
             }
         }
 
@@ -201,7 +202,8 @@ impl EndpointSettings {
         global_settings: &Option<GlobalSettings>,
         app: &AppContext,
     ) -> Result<EndpointType, String> {
-        let g_auth = self.get_google_auth_settings(endpoint_template_settings, g_auth_settings)?;
+        let g_auth =
+            self.get_google_auth_settings(endpoint_template_settings, g_auth_settings, variables)?;
 
         match self.endpoint_type.as_str() {
             HTTP1_ENDPOINT_TYPE => {
