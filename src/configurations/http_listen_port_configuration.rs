@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::settings::SslCertificateId;
 
-use super::HttpEndpointInfo;
+use super::*;
 
 pub struct HttpListenPortConfiguration {
     pub endpoint_info: Vec<Arc<HttpEndpointInfo>>,

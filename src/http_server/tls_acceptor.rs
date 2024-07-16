@@ -7,7 +7,7 @@ use tokio_rustls::rustls::{
 
 use crate::{
     app::AppContext,
-    app_configuration::HttpEndpointInfo,
+    configurations::*,
     http_server::{client_cert_cell::ClientCertCell, server_cert_resolver::MyCertResolver},
 };
 

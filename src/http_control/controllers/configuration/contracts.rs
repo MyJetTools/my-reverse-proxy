@@ -3,7 +3,7 @@ use std::sync::Arc;
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::app_configuration::{AppConfiguration, HttpEndpointInfo, ProxyPassLocationConfig};
+use crate::configurations::*;
 
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct CurrentConfigurationHttpModel {

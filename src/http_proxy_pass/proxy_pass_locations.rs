@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use hyper::Uri;
 
-use crate::app_configuration::HttpEndpointInfo;
+use crate::configurations::*;
 
 use super::{ProxyPassError, ProxyPassLocation};
 

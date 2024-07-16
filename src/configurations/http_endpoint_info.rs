@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-use super::{HttpListenPortInfo, HttpType, ProxyPassLocationConfig};
+use super::*;
 
 pub struct HttpEndpointInfo {
     pub host_endpoint: EndpointHttpHostString,

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{HttpEndpointInfo, TcpEndpointHostConfig, TcpOverSshEndpointHostConfig};
+use super::*;
 
 pub enum EndpointType {
     Http(HttpEndpointInfo),

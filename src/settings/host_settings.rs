@@ -7,12 +7,12 @@ use crate::{http_proxy_pass::AllowedUserList, types::WhiteListedIpList};
 use super::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ProxyPassSettings {
+pub struct HostSettings {
     pub endpoint: EndpointSettings,
     pub locations: Vec<LocationSettings>,
 }
 
-impl ProxyPassSettings {
+impl HostSettings {
     pub fn get_allowed_users(
         &self,
         allowed_users: &AllowedUsersSettingsModel,

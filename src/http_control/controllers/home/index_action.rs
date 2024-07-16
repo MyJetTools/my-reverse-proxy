@@ -4,10 +4,7 @@ use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
 };
 
-use crate::{
-    app::AppContext,
-    app_configuration::{AppConfiguration, HttpType, SELF_SIGNED_CERT_NAME},
-};
+use crate::{app::AppContext, configurations::*};
 
 const RIGHT_BADGE_STYLE: &str = "border-radius: 0 5px 5px 0;";
 

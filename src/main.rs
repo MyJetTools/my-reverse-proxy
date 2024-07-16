@@ -6,7 +6,7 @@ use flows::kick_off_endpoints;
 mod app;
 mod flows;
 //mod http2_executor;
-mod app_configuration;
+mod configurations;
 mod files_cache;
 mod google_auth;
 mod http_client;

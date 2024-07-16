@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use super::HttpType;
+use super::*;
 
 #[derive(Clone)]
 pub struct HttpListenPortInfo {

@@ -1,15 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 
-use crate::{
-    app::AppContext,
-    app_configuration::{EndpointType, HttpListenPortConfiguration, ListenPortConfiguration},
-    files_cache::FilesCache,
-};
+use crate::{app::AppContext, configurations::*, files_cache::FilesCache};
+
+use crate::configurations::*;
 
 use super::{
     AllowedUsersSettingsModel, ClientCertificateCaSettings, ConnectionsSettingsModel,
     EndpointHttpHostString, EndpointTemplateSettings, FileSource, GlobalSettings,
-    GoogleAuthSettings, ProxyPassSettings, SshConfigSettings, SslCertificateId,
+    GoogleAuthSettings, HostSettings, SshConfigSettings, SslCertificateId,
     SslCertificatesSettingsModel,
 };
 use rust_extensions::duration_utils::DurationExtensions;
@@ -17,7 +15,7 @@ use serde::*;
 
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
-    pub hosts: HashMap<String, ProxyPassSettings>,
+    pub hosts: HashMap<String, HostSettings>,
 
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
@@ -233,7 +231,7 @@ fn format_mem(size: usize) -> String {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::settings::{EndpointSettings, LocationSettings, ProxyPassSettings};
+    use crate::settings::{EndpointSettings, HostSettings, LocationSettings};
 
     use super::SettingsModel;
 
@@ -243,7 +241,7 @@ mod tests {
 
         hosts.insert(
             "localhost:9000".to_string(),
-            ProxyPassSettings {
+            HostSettings {
                 endpoint: EndpointSettings {
                     endpoint_type: "http1".to_owned(),
                     ssl_certificate: None,

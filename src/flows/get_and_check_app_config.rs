@@ -1,11 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::{
-    app::AppContext,
-    app_configuration::{AppConfiguration, SELF_SIGNED_CERT_NAME},
-    files_cache::FilesCache,
-    ssl::*,
-};
+use crate::{app::AppContext, configurations::*, files_cache::FilesCache, ssl::*};
 
 pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfiguration, String> {
     let settings_model = crate::settings::SettingsModel::load(".my-reverse-proxy").await?;
@@ -25,7 +20,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
 
     for (listen_port, port_config) in listen_ports {
         match port_config {
-            crate::app_configuration::ListenPortConfiguration::Http(port_config) => {
+            crate::configurations::ListenPortConfiguration::Http(port_config) => {
                 if let Some(ssl_certs) = port_config.get_ssl_certificates() {
                     for ssl_cert_id in ssl_certs {
                         if ssl_cert_id.as_str() != SELF_SIGNED_CERT_NAME {
@@ -61,10 +56,10 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
 
                 http_endpoints.insert(listen_port, port_config);
             }
-            crate::app_configuration::ListenPortConfiguration::Tcp(port_config) => {
+            crate::configurations::ListenPortConfiguration::Tcp(port_config) => {
                 tcp_endpoints.insert(listen_port, port_config);
             }
-            crate::app_configuration::ListenPortConfiguration::TcpOverSsh(port_config) => {
+            crate::configurations::ListenPortConfiguration::TcpOverSsh(port_config) => {
                 tcp_over_ssh_endpoints.insert(listen_port, port_config);
             }
         }

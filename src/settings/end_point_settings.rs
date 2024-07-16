@@ -3,13 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use serde::*;
 
 use crate::{
-    app::AppContext,
-    app_configuration::{
-        EndpointType, HttpEndpointInfo, HttpType, ProxyPassLocationConfig, TcpEndpointHostConfig,
-        TcpOverSshEndpointHostConfig,
-    },
-    http_proxy_pass::AllowedUserList,
-    types::WhiteListedIpList,
+    app::AppContext, configurations::*, http_proxy_pass::AllowedUserList, types::WhiteListedIpList,
     variables_reader::VariablesReader,
 };
 

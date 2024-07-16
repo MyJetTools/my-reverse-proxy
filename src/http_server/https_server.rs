@@ -8,7 +8,7 @@ use tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::app::AppContext;
 
-use crate::app_configuration::HttpEndpointInfo;
+use crate::configurations::*;
 use crate::http_proxy_pass::HttpProxyPass;
 use crate::http_server::handle_request::HttpRequestHandler;
 

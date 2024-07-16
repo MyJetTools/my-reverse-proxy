@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use serde::*;
 
-use crate::{app_configuration::HttpType, variables_reader::VariablesReader};
+use crate::{configurations::*, variables_reader::VariablesReader};
 
 use super::{
     LocalFilePath, LocalPathModel, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost,

@@ -9,7 +9,7 @@ use hyper::{
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 use tokio::sync::Mutex;
 
-use crate::{app_configuration::HttpType, settings::ModifyHttpHeadersSettings};
+use crate::{configurations::*, settings::ModifyHttpHeadersSettings};
 
 use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError};
 

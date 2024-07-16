@@ -2,10 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
 
-use crate::{
-    app::AppContext, app_configuration::ProxyPassLocationConfig,
-    http_proxy_pass::HttpProxyPassContentSource,
-};
+use crate::{app::AppContext, configurations::*, http_proxy_pass::HttpProxyPassContentSource};
 
 use super::ProxyPassError;
 
