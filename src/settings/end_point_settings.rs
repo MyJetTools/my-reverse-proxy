@@ -7,11 +7,7 @@ use crate::{
     variables_reader::VariablesReader,
 };
 
-use super::{
-    EndpointHttpHostString, EndpointTemplateSettings, GlobalSettings, GoogleAuthSettings,
-    HttpEndpointModifyHeadersSettings, LocationSettings, ModifyHttpHeadersSettings,
-    SshConfigSettings, SslCertificateId,
-};
+use super::*;
 
 const HTTP1_ENDPOINT_TYPE: &str = "http";
 const HTTP2_ENDPOINT_TYPE: &str = "http2";
@@ -344,7 +340,7 @@ impl EndpointSettings {
                         );
                     }
                     super::ProxyPassTo::Ssh(model) => match model.ssh_config.remote_content {
-                        super::SshContent::RemoteHost(remote_host) => {
+                        SshContent::RemoteHost(remote_host) => {
                             return Ok(EndpointType::TcpOverSsh(
                                 TcpOverSshEndpointHostConfig {
                                     ssh_credentials: model.ssh_config.credentials.clone(),
@@ -355,7 +351,7 @@ impl EndpointSettings {
                                 .into(),
                             ));
                         }
-                        super::SshContent::FilePath(_) => {
+                        SshContent::FilePath(_) => {
                             return Err(
                                 "It is not possible to serve remote ssh path content over tcp endpoint"
                                     .to_string(),

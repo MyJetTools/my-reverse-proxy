@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::settings::SslCertificateId;
-
 use super::SslCertificate;
+
+use crate::configurations::*;
 
 pub struct SslCertificatesCache {
     data: HashMap<String, Arc<SslCertificate>>,

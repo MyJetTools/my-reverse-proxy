@@ -3,7 +3,8 @@ use std::sync::Arc;
 use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError, settings::RemoteHost};
+use crate::configurations::*;
+use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 use super::{Http1Client, Http2Client, HttpClientError};
 

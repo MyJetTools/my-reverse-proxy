@@ -4,7 +4,7 @@ use serde::*;
 
 use crate::variables_reader::VariablesReader;
 
-use super::{FileSource, SshConfigSettings};
+use crate::configurations::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SslCertificatesSettingsModel {

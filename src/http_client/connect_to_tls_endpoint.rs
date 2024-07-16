@@ -7,7 +7,7 @@ use hyper_util::rt::TokioIo;
 use my_tls::ROOT_CERT_STORE;
 use tokio::net::TcpStream;
 
-use crate::settings::RemoteHost;
+use crate::configurations::*;
 
 use super::HttpClientError;
 

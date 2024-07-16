@@ -4,9 +4,9 @@ use my_settings_reader::flurl::FlUrl;
 use my_ssh::SshSession;
 use rust_extensions::StrOrString;
 
-use crate::{files_cache::FilesCache, settings::LocalFilePath, variables_reader::VariablesReader};
+use crate::{files_cache::FilesCache, variables_reader::VariablesReader};
 
-use super::{SshConfigSettings, SshConfiguration};
+use super::*;
 
 pub enum FileSource {
     File(String),
@@ -72,10 +72,10 @@ impl FileSource {
                 result
             }
             FileSource::Ssh(ssh_credentials) => match &ssh_credentials.remote_content {
-                crate::settings::SshContent::RemoteHost(_) => {
+                SshContent::RemoteHost(_) => {
                     panic!("Reading file is not supported from socket yet");
                 }
-                crate::settings::SshContent::FilePath(path) => {
+                SshContent::FilePath(path) => {
                     let ssh_cred_as_string = ssh_credentials.to_string();
 
                     if let Some(value) = cache.get(ssh_cred_as_string.as_str()).await {

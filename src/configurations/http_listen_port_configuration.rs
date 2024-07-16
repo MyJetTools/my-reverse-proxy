@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use crate::settings::SslCertificateId;
-
 use super::*;
 
 pub struct HttpListenPortConfiguration {

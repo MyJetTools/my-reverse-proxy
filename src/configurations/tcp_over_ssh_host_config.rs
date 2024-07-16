@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 
-use crate::settings::{EndpointHttpHostString, RemoteHost};
+use super::*;
 
 pub struct TcpOverSshEndpointHostConfig {
     pub host: EndpointHttpHostString,

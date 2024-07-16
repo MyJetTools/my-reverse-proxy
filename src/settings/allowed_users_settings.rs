@@ -4,16 +4,16 @@ use serde::*;
 
 use crate::{files_cache::FilesCache, http_proxy_pass::AllowedUserList};
 
-use super::FileSource;
+use crate::configurations::*;
 
 #[derive(Debug, Clone)]
-pub struct AllowedUsersSettingsModel {
+pub struct AllowedUsersSettings {
     pub data: Option<HashMap<String, Vec<String>>>,
 }
 
-impl AllowedUsersSettingsModel {
+impl AllowedUsersSettings {
     pub fn new(data: Option<HashMap<String, Vec<String>>>) -> Self {
-        AllowedUsersSettingsModel { data }
+        AllowedUsersSettings { data }
     }
     pub async fn populate_from_file(
         &mut self,

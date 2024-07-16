@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use hyper::Uri;
 
-use crate::{http_proxy_pass::ProxyPassError, settings::LocalFilePath};
+use crate::http_proxy_pass::ProxyPassError;
+
+use crate::configurations::*;
 
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 

@@ -2,10 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use crate::{
     http_proxy_pass::AllowedUserList,
-    settings::{
-        EndpointHttpHostString, GoogleAuthSettings, HttpEndpointModifyHeadersSettings,
-        SslCertificateId,
-    },
+    settings::{GoogleAuthSettings, HttpEndpointModifyHeadersSettings},
 };
 
 use super::*;

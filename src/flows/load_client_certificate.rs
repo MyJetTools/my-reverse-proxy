@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use crate::{
-    files_cache::FilesCache,
-    http_server::ClientCertificateCa,
-    settings::{SettingsModel, SslCertificateId},
-};
+use crate::{files_cache::FilesCache, http_server::ClientCertificateCa, settings::SettingsModel};
+
+use crate::configurations::*;
 
 pub async fn load_client_certificate(
     settings_model: &SettingsModel,

@@ -2,12 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{app::AppContext, configurations::*, files_cache::FilesCache};
 
-use super::{
-    AllowedUsersSettingsModel, ClientCertificateCaSettings, ConnectionsSettingsModel,
-    EndpointHttpHostString, EndpointTemplateSettings, FileSource, GlobalSettings,
-    GoogleAuthSettings, HostSettings, SshConfigSettings, SslCertificateId,
-    SslCertificatesSettingsModel,
-};
+use super::*;
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
 
@@ -66,7 +61,7 @@ impl SettingsModel {
     async fn get_allowed_users_settings(
         &self,
         files_cache: &FilesCache,
-    ) -> Result<AllowedUsersSettingsModel, String> {
+    ) -> Result<AllowedUsersSettings, String> {
         let mut allowed_users = self.allowed_users.clone();
 
         let mut files_to_load = None;
@@ -75,7 +70,7 @@ impl SettingsModel {
             files_to_load = allowed_users.remove("from_file");
         }
 
-        let mut result = AllowedUsersSettingsModel::new(self.allowed_users.clone());
+        let mut result = AllowedUsersSettings::new(self.allowed_users.clone());
 
         if let Some(files_to_load) = files_to_load {
             let variables = (&self.variables).into();
@@ -229,7 +224,10 @@ fn format_mem(size: usize) -> String {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::settings::{EndpointSettings, HostSettings, LocationSettings};
+    use crate::{
+        configurations::SshConfigSettings,
+        settings::{EndpointSettings, HostSettings, LocationSettings},
+    };
 
     use super::SettingsModel;
 
@@ -270,7 +268,7 @@ mod tests {
 
         ssh_configs.insert(
             "root@10.0.0.1".to_string(),
-            crate::settings::SshConfigSettings {
+            SshConfigSettings {
                 password: "my_password".to_string().into(),
                 private_key_file: None,
                 passphrase: None,
@@ -279,7 +277,7 @@ mod tests {
 
         ssh_configs.insert(
             "root@10.0.0.2".to_string(),
-            crate::settings::SshConfigSettings {
+            SshConfigSettings {
                 password: None,
                 private_key_file: Some("~/certs/private_key.ssh".to_string()),
                 passphrase: Some("my_pass_phrase".to_string()),

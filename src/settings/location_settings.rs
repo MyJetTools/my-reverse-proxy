@@ -4,10 +4,7 @@ use serde::*;
 
 use crate::{configurations::*, variables_reader::VariablesReader};
 
-use super::{
-    LocalFilePath, LocalPathModel, ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost,
-    SshConfigSettings, SshConfiguration, SshProxyPassModel, StaticContentModel,
-};
+use super::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocationSettings {
@@ -56,7 +53,7 @@ impl LocationSettings {
             }));
         }
 
-        if proxy_pass_to.as_str().starts_with(super::SSH_PREFIX) {
+        if proxy_pass_to.as_str().starts_with(SSH_PREFIX) {
             return Ok(ProxyPassTo::Ssh(SshProxyPassModel {
                 ssh_config: SshConfiguration::parse(
                     proxy_pass_to.as_str(),

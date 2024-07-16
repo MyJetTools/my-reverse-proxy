@@ -3,7 +3,7 @@ use hyper::{body::Bytes, client::conn::http2::SendRequest};
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::TcpStream;
 
-use crate::settings::RemoteHost;
+use crate::configurations::*;
 
 use super::HttpClientError;
 

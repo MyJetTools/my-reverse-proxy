@@ -5,11 +5,11 @@ use crate::{
         LocalPathContentSrc, PathOverSshContentSource, RemoteHttpContentSource, StaticContentSrc,
     },
     http_proxy_pass::{HttpProxyPassContentSource, HttpProxyPassRemoteEndpoint},
-    settings::{ModifyHttpHeadersSettings, ProxyPassTo, RemoteHost, SshContent},
+    settings::{ModifyHttpHeadersSettings, ProxyPassTo},
     types::WhiteListedIpList,
 };
 
-use super::HttpType;
+use super::*;
 
 pub struct ProxyPassLocationConfig {
     pub path: String,

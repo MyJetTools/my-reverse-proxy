@@ -15,7 +15,7 @@ pub struct HostSettings {
 impl HostSettings {
     pub fn get_allowed_users(
         &self,
-        allowed_users: &AllowedUsersSettingsModel,
+        allowed_users: &AllowedUsersSettings,
         endpoint_template_settings: Option<&EndpointTemplateSettings>,
     ) -> Result<Option<Arc<AllowedUserList>>, String> {
         let mut result = None;

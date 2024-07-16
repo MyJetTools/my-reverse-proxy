@@ -1,4 +1,4 @@
-use super::{LocalFilePath, RemoteHost, SshConfiguration};
+use crate::configurations::*;
 
 pub struct StaticContentModel {
     pub status_code: u16,

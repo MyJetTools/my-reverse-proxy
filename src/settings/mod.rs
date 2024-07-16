@@ -1,7 +1,6 @@
 mod settings;
 pub use settings::*;
-mod ssh_configuration;
-pub use ssh_configuration::*;
+
 mod connections_settings;
 pub use connections_settings::*;
 mod proxy_pass_to;
@@ -9,10 +8,7 @@ pub use proxy_pass_to::*;
 
 mod ssl_certificates_settings;
 pub use ssl_certificates_settings::*;
-mod local_file_path;
-pub use local_file_path::*;
-mod ssl_certificate_id;
-pub use ssl_certificate_id::*;
+
 mod host_settings;
 pub use host_settings::*;
 mod end_point_settings;
@@ -28,17 +24,11 @@ mod modify_http_headers_settings;
 pub use modify_http_headers_settings::*;
 mod http_endpoint_modify_headers_settings;
 pub use http_endpoint_modify_headers_settings::*;
-mod file_source;
-pub use file_source::*;
-mod remote_host;
-pub use remote_host::*;
-mod ssh_config_settings;
-pub use ssh_config_settings::*;
+
 mod google_auth_settings;
 pub use google_auth_settings::*;
 mod endpoint_template_settings;
 pub use endpoint_template_settings::*;
-mod host_str;
-pub use host_str::*;
-mod allowed_users_settings_model;
-pub use allowed_users_settings_model::*;
+
+mod allowed_users_settings;
+pub use allowed_users_settings::*;

@@ -1,4 +1,5 @@
-use crate::{settings::EndpointHttpHostString, types::WhiteListedIpList};
+use super::*;
+use crate::types::WhiteListedIpList;
 
 pub struct TcpEndpointHostConfig {
     pub host: EndpointHttpHostString,

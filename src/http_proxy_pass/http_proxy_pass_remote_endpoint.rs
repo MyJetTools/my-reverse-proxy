@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 
-use crate::settings::RemoteHost;
+use crate::configurations::*;
 
 #[derive(Debug)]
 pub enum HttpProxyPassRemoteEndpoint {

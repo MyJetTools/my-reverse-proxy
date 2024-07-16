@@ -1,6 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{http_server::ClientCertificateCa, settings::SslCertificateId};
+use crate::http_server::ClientCertificateCa;
+
+use crate::configurations::*;
 
 pub struct ClientCertificatesCache {
     data: HashMap<String, Arc<ClientCertificateCa>>,
