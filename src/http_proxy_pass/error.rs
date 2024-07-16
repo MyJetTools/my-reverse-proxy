@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::http_client::HttpClientError;
 
 #[derive(Debug)]

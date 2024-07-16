@@ -55,13 +55,8 @@ impl HttpEndpointInfo {
         self.host_endpoint.as_str()
     }
 
-    pub fn get_listening_port_info(
-        &self,
-        port: u16,
-        socket_addr: SocketAddr,
-    ) -> HttpListenPortInfo {
+    pub fn get_listening_port_info(&self, socket_addr: SocketAddr) -> HttpListenPortInfo {
         HttpListenPortInfo {
-            port,
             http_type: self.http_type,
             socket_addr,
         }

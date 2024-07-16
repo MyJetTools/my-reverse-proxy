@@ -2,8 +2,6 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{app::AppContext, configurations::*, files_cache::FilesCache};
 
-use crate::configurations::*;
-
 use super::{
     AllowedUsersSettingsModel, ClientCertificateCaSettings, ConnectionsSettingsModel,
     EndpointHttpHostString, EndpointTemplateSettings, FileSource, GlobalSettings,

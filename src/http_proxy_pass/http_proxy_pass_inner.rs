@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
@@ -16,7 +16,6 @@ pub enum RetryType {
 }
 
 pub struct HttpProxyPassInner {
-    pub endpoint_info: Arc<HttpEndpointInfo>,
     pub disposed: bool,
     pub identity: HttpProxyPassIdentity,
     pub locations: ProxyPassLocations,
@@ -25,13 +24,11 @@ pub struct HttpProxyPassInner {
 
 impl HttpProxyPassInner {
     pub fn new(
-        endpoint_info: Arc<HttpEndpointInfo>,
         identity: HttpProxyPassIdentity,
         locations: ProxyPassLocations,
         http_listen_port_info: HttpListenPortInfo,
     ) -> Self {
         Self {
-            endpoint_info,
             disposed: false,
             identity,
             locations,

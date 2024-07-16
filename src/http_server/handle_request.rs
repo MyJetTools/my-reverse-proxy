@@ -86,7 +86,7 @@ pub async fn handle_request(
                 match http_endpoint_info {
                     Ok(endpoint_info) => {
                         let listening_port_info =
-                            endpoint_info.get_listening_port_info(*listen_port, *socket_addr);
+                            endpoint_info.get_listening_port_info(*socket_addr);
 
                         let http_proxy_pass = Arc::new(HttpProxyPass::new(
                             endpoint_info,

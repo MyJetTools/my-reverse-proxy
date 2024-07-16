@@ -4,8 +4,6 @@ use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 #[derive(Clone, Debug)]
 pub struct SslCertificate {
-    pub certificates: Vec<CertificateDer<'static>>,
-    pub private_key: Arc<PrivateKeyDer<'static>>,
     pub cert_key: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
 }
 
@@ -17,9 +15,6 @@ impl SslCertificate {
         );
 
         SslCertificate {
-            certificates: super::certificates::load_certs(certificates),
-            private_key: super::certificates::load_private_key(private_key, private_key_file_name)
-                .into(),
             cert_key: Arc::new(cert_key),
         }
     }

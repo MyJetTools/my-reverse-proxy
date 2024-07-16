@@ -33,7 +33,6 @@ impl HttpProxyPass {
         let locations = ProxyPassLocations::new(&endpoint_info, request_timeout);
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
-                endpoint_info.clone(),
                 HttpProxyPassIdentity::new(client_cert_cn),
                 locations,
                 listening_port_info.clone(),

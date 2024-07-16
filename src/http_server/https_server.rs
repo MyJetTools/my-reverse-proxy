@@ -70,23 +70,9 @@ async fn handle_connection(
     let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
 
     if endpoint_info.http_type.is_protocol_http1() {
-        kick_off_https1(
-            app,
-            socket_addr,
-            endpoint_info,
-            tls_stream,
-            cn_user_name,
-            endpoint_port,
-        );
+        kick_off_https1(app, socket_addr, endpoint_info, tls_stream, cn_user_name);
     } else {
-        kick_off_https2(
-            app,
-            socket_addr,
-            endpoint_info,
-            tls_stream,
-            cn_user_name,
-            endpoint_port,
-        );
+        kick_off_https2(app, socket_addr, endpoint_info, tls_stream, cn_user_name);
     }
 }
 
@@ -169,15 +155,13 @@ fn kick_off_https1(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<String>,
-    listening_port: u16,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
     tokio::spawn(async move {
-        let listening_port_info =
-            endpoint_info.get_listening_port_info(listening_port, socket_addr);
+        let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
         let http_proxy_pass = HttpProxyPass::new(
             endpoint_info,
@@ -220,7 +204,6 @@ fn kick_off_https2(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<String>,
-    listening_port: u16,
 ) {
     use hyper::service::service_fn;
     use hyper_util::server::conn::auto::Builder;
@@ -230,8 +213,7 @@ fn kick_off_https2(
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
 
-        let listening_port_info =
-            endpoint_info.get_listening_port_info(listening_port, socket_addr);
+        let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
         let http_proxy_pass = HttpProxyPass::new(
             endpoint_info,

@@ -1,3 +1,4 @@
+#![allow(unused)]
 #[derive(Debug)]
 pub enum HttpClientError {
     InvalidHttp1HandShake(String),
