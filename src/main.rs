@@ -17,6 +17,7 @@ mod http_server;
 mod populate_variable;
 mod self_signed_cert;
 mod settings;
+mod ssh_to_http_port_forward_pool;
 mod ssl;
 mod tcp_port_forward;
 mod types;

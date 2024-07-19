@@ -17,39 +17,6 @@ pub struct AppConfiguration {
 }
 
 impl AppConfiguration {
-    /*
-    pub fn get_http_locations(
-        &self,
-        endpoint_info: &HttpEndpointInfo,
-        req: &HttpRequestBuilder,
-        is_https: bool,
-    ) -> Result<(Vec<ProxyPassLocation>, Option<Arc<AllowedUserList>>), String> {
-        if let Some(endpoint_type) = self
-            .listen_ports
-            .get(&endpoint_info.host_endpoint.get_port())
-        {
-            if let Some((locations, allowed_user_list)) =
-                endpoint_type.get_my_http_locations(req, is_https)
-            {
-                let mut result = Vec::with_capacity(locations.len());
-
-                for location_config in locations {
-                    result.push(ProxyPassLocation::new(location_config.clone()));
-                }
-
-                return Ok((result, allowed_user_list));
-            }
-        }
-
-        let http_type = if is_https { "https" } else { "http" };
-
-        Err(format!(
-            "Can not get http locations for {} endpoint: {}",
-            http_type,
-            endpoint_info.as_str()
-        ))
-    } */
-
     pub async fn get_ssl_certified_key(
         &self,
         listen_port: u16,

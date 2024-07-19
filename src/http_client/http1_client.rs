@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http1::SendRequest};
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::SshCredentials;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
@@ -35,16 +35,16 @@ impl Http1Client {
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
-    ) -> Result<(Self, Arc<SshSession>), ProxyPassError> {
-        let (ssh_session, send_request) =
-            Self::connect_to_http_over_ssh(app, ssh_credentials, remote_host).await?;
+    ) -> Result<Self, ProxyPassError> {
+        let send_request =
+            super::connect_to_http_over_ssh(app, ssh_credentials, remote_host).await?;
 
         let result = Self {
             send_request,
             connected: DateTimeAsMicroseconds::now(),
         };
 
-        Ok((result, ssh_session))
+        Ok(result)
     }
 
     async fn connect_to_http(
@@ -72,15 +72,5 @@ impl Http1Client {
 
             result.unwrap()
         }
-    }
-
-    async fn connect_to_http_over_ssh(
-        app: &AppContext,
-        credentials: &Arc<SshCredentials>,
-        remote_host: &RemoteHost,
-    ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
-        let result = super::connect_to_http_over_ssh(app, credentials, remote_host).await?;
-
-        Ok(result)
     }
 }

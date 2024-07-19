@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::SshCredentials;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::configurations::*;
@@ -86,11 +86,10 @@ impl HttpClient {
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
-    ) -> Result<Arc<SshSession>, ProxyPassError> {
-        let (client, session) =
-            Http1Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
+    ) -> Result<(), ProxyPassError> {
+        let client = Http1Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
         *self = Self::Http(client);
-        Ok(session)
+        Ok(())
     }
 
     pub async fn connect_to_http2(&mut self, uri: &RemoteHost) -> Result<(), HttpClientError> {
@@ -104,11 +103,10 @@ impl HttpClient {
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
-    ) -> Result<Arc<SshSession>, ProxyPassError> {
-        let (client, session) =
-            Http2Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
+    ) -> Result<(), ProxyPassError> {
+        let client = Http2Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
         *self = Self::Http2(client);
-        Ok(session)
+        Ok(())
     }
 
     pub fn get_connected_moment(&self) -> Option<DateTimeAsMicroseconds> {

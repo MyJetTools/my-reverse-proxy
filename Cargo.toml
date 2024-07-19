@@ -21,7 +21,7 @@ my-settings-reader = { tag = "0.3.1", git = "https://github.com/MyJetTools/my-se
 
 my-logger = { tag = "1.1.0", git = "https://github.com/MyJetTools/my-logger.git" }
 
-my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.0" }
+my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.1" }
 
 encryption = { git = "https://github.com/MyJetTools/encryption.git", tag = "0.1.0" }
 

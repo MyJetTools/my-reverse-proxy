@@ -3,19 +3,34 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::client::conn::http1::SendRequest;
-use hyper_util::rt::TokioIo;
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::SshCredentials;
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
 
 use crate::configurations::*;
+
 pub async fn connect_to_http_over_ssh(
     app: &AppContext,
     ssh_credentials: &Arc<SshCredentials>,
     remote_host: &RemoteHost,
-) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
-    let ssh_session = Arc::new(SshSession::new(ssh_credentials.clone()));
+) -> Result<SendRequest<Full<Bytes>>, ProxyPassError> {
+    let tunnel_info = app
+        .ssh_to_http_port_forward_pool
+        .get_or_create_port_forward(
+            ssh_credentials,
+            remote_host.get_host(),
+            remote_host.get_port(),
+            || app.local_port_allocator.next(),
+        )
+        .await;
 
+    let remote_host: RemoteHost = format!("http://127.0.0.1:{}", tunnel_info.listen_port).into();
+
+    let result = super::connect_to_http_endpoint::connect_to_http_endpoint(&remote_host).await?;
+
+    return Ok(result);
+
+    /*
     let ssh_channel = ssh_session
         .connect_to_remote_host(
             remote_host.get_host(),
@@ -49,4 +64,6 @@ pub async fn connect_to_http_over_ssh(
     sender.ready().await?;
 
     Ok((ssh_session, sender))
+
+     */
 }

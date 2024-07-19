@@ -10,7 +10,10 @@ use tokio::sync::RwLock;
 use crate::{
     configurations::*,
     settings::{ConnectionsSettingsModel, SettingsModel},
+    ssh_to_http_port_forward_pool::SshToHttpPortForwardPool,
 };
+
+use super::LocalPortAllocator;
 
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -23,6 +26,9 @@ pub struct AppContext {
     pub token_secret_key: AesKey,
     current_app_configuration: RwLock<Option<Arc<AppConfiguration>>>,
     pub states: Arc<AppStates>,
+    pub local_port_allocator: LocalPortAllocator,
+
+    pub ssh_to_http_port_forward_pool: SshToHttpPortForwardPool,
 }
 
 impl AppContext {
@@ -43,6 +49,8 @@ impl AppContext {
             token_secret_key,
             current_app_configuration: RwLock::new(None),
             states: Arc::new(AppStates::create_initialized()),
+            local_port_allocator: LocalPortAllocator::new(60000, 65535),
+            ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
         }
     }
 

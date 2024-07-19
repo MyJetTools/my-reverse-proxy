@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http2::SendRequest};
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::SshCredentials;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
@@ -60,27 +60,16 @@ impl Http2Client {
         app: &AppContext,
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
-    ) -> Result<(Self, Arc<SshSession>), ProxyPassError> {
-        let (ssh_session, send_request) =
-            Self::connect_to_http_over_ssh(app, ssh_credentials, remote_host).await?;
+    ) -> Result<Self, ProxyPassError> {
+        let send_request =
+            super::connect_to_http2_over_ssh(app, ssh_credentials, remote_host).await?;
 
         let result = Self {
             send_request,
             connected: DateTimeAsMicroseconds::now(),
         };
 
-        Ok((result, ssh_session))
-    }
-
-    async fn connect_to_http_over_ssh(
-        app: &AppContext,
-        ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &RemoteHost,
-    ) -> Result<(Arc<SshSession>, SendRequest<Full<Bytes>>), ProxyPassError> {
-        let (ssh_session, send_request) =
-            super::connect_to_http2_over_ssh(app, ssh_credentials, remote_host).await?;
-
-        Ok((ssh_session, send_request))
+        Ok(result)
     }
 
     /*

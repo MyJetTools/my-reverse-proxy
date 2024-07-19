@@ -1,12 +1,8 @@
-use std::{
-    future::Future,
-    sync::{atomic::AtomicI64, Arc},
-};
+use std::{future::Future, sync::atomic::AtomicI64};
 
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::{body::Incoming, Response};
-use my_ssh::SshSession;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
 use crate::{
@@ -18,7 +14,6 @@ use crate::{
 static CONNECTIONS: AtomicI64 = AtomicI64::new(0);
 
 pub struct RemoteHttpContentSource {
-    ssh_session: Option<Arc<SshSession>>,
     http_client: HttpClient,
     pub remote_endpoint: HttpProxyPassRemoteEndpoint,
     id: i64,
@@ -30,7 +25,6 @@ impl RemoteHttpContentSource {
         CONNECTIONS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self {
             http_client: HttpClient::new(),
-            ssh_session: None,
             remote_endpoint,
             id,
             debug,
@@ -77,12 +71,10 @@ impl RemoteHttpContentSource {
                         ssh_credentials.to_string(),
                     );
                 }
-                let ssh_session = self
-                    .http_client
+                self.http_client
                     .connect_to_http1_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
-                self.ssh_session = Some(ssh_session);
 
                 if debug {
                     println!(
@@ -111,12 +103,10 @@ impl RemoteHttpContentSource {
                         remote_host.to_string()
                     );
                 }
-                let ssh_session = self
-                    .http_client
+                self.http_client
                     .connect_to_http2_over_ssh(app, ssh_credentials, remote_host)
                     .await?;
                 sw.pause();
-                self.ssh_session = Some(ssh_session);
 
                 if debug {
                     println!(
