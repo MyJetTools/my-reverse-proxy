@@ -34,35 +34,50 @@ impl SshToHttpPortForwardPool {
             }
         }
 
-        let listen_port = next_port();
+        loop {
+            let listen_port = next_port();
 
-        println!(
-            "Allocating listen port: {} for http port forward {}->{}:{}",
-            listen_port,
-            ssh_credentials.to_string(),
-            remote_host,
-            remote_port
-        );
+            println!(
+                "Allocating listen port: {} for http port forward {}->{}:{}",
+                listen_port,
+                ssh_credentials.to_string(),
+                remote_host,
+                remote_port
+            );
 
-        let listen_host_port = format!("127.0.0.1:{}", listen_port);
+            let listen_host_port = format!("127.0.0.1:{}", listen_port);
 
-        let ssh_session = SshSession::new(ssh_credentials.clone());
+            let ssh_session = SshSession::new(ssh_credentials.clone());
 
-        let result = ssh_session
-            .start_port_forward(listen_host_port, remote_host.to_string(), remote_port)
-            .await
-            .unwrap();
+            let result = ssh_session
+                .start_port_forward(listen_host_port, remote_host.to_string(), remote_port)
+                .await;
 
-        let configuration = SshToHttpPortForwardConfiguration {
-            listen_port,
-            ssh_credentials: ssh_credentials.clone(),
-            tunnel: result.clone(),
-        };
+            if let Err(err) = result {
+                match err {
+                    my_ssh::RemotePortForwardError::CanNotExtractListenPort(_) => {
+                        panic!("Can not start port forward: {:?}", err);
+                    }
+                    my_ssh::RemotePortForwardError::CanNotBindListenEndpoint(_) => {
+                        println!("Can not bind listen port: {}", listen_port);
+                        continue;
+                    }
+                }
+            }
 
-        let configuration = Arc::new(configuration);
+            let result = result.unwrap();
 
-        access.push(configuration.clone());
+            let configuration = SshToHttpPortForwardConfiguration {
+                listen_port,
+                ssh_credentials: ssh_credentials.clone(),
+                tunnel: result.clone(),
+            };
 
-        configuration
+            let configuration = Arc::new(configuration);
+
+            access.push(configuration.clone());
+
+            return configuration;
+        }
     }
 }
