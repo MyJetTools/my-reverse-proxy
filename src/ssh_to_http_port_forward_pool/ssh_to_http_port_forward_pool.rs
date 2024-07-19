@@ -44,7 +44,7 @@ impl SshToHttpPortForwardPool {
             remote_port
         );
 
-        let listen_host_port = format!("/var/my-reverse-proxy-{}", listen_port);
+        let listen_host_port = super::generate_unix_socket(listen_port);
 
         let ssh_session = SshSession::new(ssh_credentials.clone());
 
@@ -64,5 +64,13 @@ impl SshToHttpPortForwardPool {
         access.push(configuration.clone());
 
         return configuration;
+    }
+
+    pub async fn clean_up(&self) {
+        let mut access = self.items.lock().await;
+        for itm in access.drain(..) {
+            println!("Stopping port forward: {}", itm.tunnel.listen_string);
+            itm.tunnel.stop().await;
+        }
     }
 }

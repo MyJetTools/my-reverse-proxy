@@ -46,4 +46,12 @@ async fn main() {
     crate::http_control::start(&app);
 
     app.states.wait_until_shutdown().await;
+
+    println!("Shutting down...");
+
+    app.ssh_to_http_port_forward_pool.clean_up().await;
+
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
+    println!("Stopped...");
 }

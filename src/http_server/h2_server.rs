@@ -20,6 +20,11 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
     loop {
         let accepted_connection = listener.accept().await;
 
+        if app.states.is_shutting_down() {
+            println!("Shutting down h2 server");
+            break;
+        }
+
         if let Err(err) = &accepted_connection {
             println!(
                 "Error accepting connection {}. Err: {:?}",

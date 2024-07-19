@@ -20,7 +20,23 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
     let request_timeout = app.connection_settings.remote_connect_timeout;
 
     loop {
-        let (stream, socket_addr) = listener.accept().await.unwrap();
+        let accepted_connection = listener.accept().await;
+
+        println!("New connection accepted");
+        if app.states.is_shutting_down() {
+            println!("Shutting down http server");
+            break;
+        }
+
+        if let Err(err) = &accepted_connection {
+            println!(
+                "Error accepting connection {}. Err: {:?}",
+                listening_addr, err
+            );
+            continue;
+        }
+
+        let (stream, socket_addr) = accepted_connection.unwrap();
 
         let io = TokioIo::new(stream);
 

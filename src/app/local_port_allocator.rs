@@ -7,17 +7,11 @@ pub struct LocalPortAllocator {
 }
 
 impl LocalPortAllocator {
-    pub fn new(range_from: u16, range_to: u16) -> Self {
-        if range_from < 1024 {
-            panic!(
-                "range_from must be greater than 1024. Value is {}",
-                range_from
-            );
-        }
+    pub fn new() -> Self {
         Self {
-            next_port: AtomicU16::new(range_from),
-            range_from,
-            range_to,
+            next_port: AtomicU16::new(0),
+            range_from: 0,
+            range_to: 65535,
         }
     }
 

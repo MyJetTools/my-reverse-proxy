@@ -24,9 +24,13 @@ pub async fn connect_to_http2_over_ssh(
         )
         .await;
 
-    let remote_host: RemoteHost = format!("http://127.0.0.1:{}", tunnel_info.listen_port).into();
+    let remote_host = tunnel_info.get_unix_socket_path();
 
-    let result = super::connect_to_http2_endpoint::connect_to_http2_endpoint(&remote_host).await?;
+    let result =
+        super::connect_to_http2_unix_socket_endpoint::connect_to_http2_unix_socket_endpoint(
+            &remote_host,
+        )
+        .await?;
 
     return Ok(result);
 

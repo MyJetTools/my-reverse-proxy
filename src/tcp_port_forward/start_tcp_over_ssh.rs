@@ -44,6 +44,10 @@ async fn tcp_server_accept_loop(
     loop {
         let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
 
+        if app.states.is_shutting_down() {
+            return;
+        }
+
         let ssh_session = SshSession::new(endpoint_info.ssh_credentials.clone());
 
         let ssh_channel = ssh_session

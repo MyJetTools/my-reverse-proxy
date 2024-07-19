@@ -31,8 +31,13 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
 
         let accepted_connection = listener.accept().await;
 
+        if app.states.is_shutting_down() {
+            println!("Shutting down https server");
+            break;
+        }
+
         if let Err(err) = &accepted_connection {
-            eprintln!("Error accepting connection {}. Err: {:?}", addr, err);
+            println!("Error accepting connection {}. Err: {:?}", addr, err);
             continue;
         }
 

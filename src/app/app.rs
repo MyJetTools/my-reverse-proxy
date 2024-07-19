@@ -49,7 +49,7 @@ impl AppContext {
             token_secret_key,
             current_app_configuration: RwLock::new(None),
             states: Arc::new(AppStates::create_initialized()),
-            local_port_allocator: LocalPortAllocator::new(60000, 65535),
+            local_port_allocator: LocalPortAllocator::new(),
             ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
         }
     }

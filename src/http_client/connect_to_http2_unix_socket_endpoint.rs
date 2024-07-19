@@ -1,11 +1,11 @@
 use http_body_util::Full;
-use hyper::{body::Bytes, client::conn::http1::SendRequest};
-use hyper_util::rt::TokioIo;
+use hyper::{body::Bytes, client::conn::http2::SendRequest};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::UnixSocket;
 
 use super::HttpClientError;
 
-pub async fn connect_to_http_unix_socket_endpoint(
+pub async fn connect_to_http2_unix_socket_endpoint(
     unix_socket_path: &str,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
     let unix_socket = UnixSocket::new_stream()?;
@@ -14,12 +14,13 @@ pub async fn connect_to_http_unix_socket_endpoint(
     match connect_result {
         Ok(tcp_stream) => {
             let io = TokioIo::new(tcp_stream);
-            let handshake_result = hyper::client::conn::http1::handshake(io).await;
+            let handshake_result =
+                hyper::client::conn::http2::handshake(TokioExecutor::new(), io).await;
             match handshake_result {
                 Ok((mut sender, conn)) => {
                     let unix_socket_path = unix_socket_path.to_string();
                     tokio::task::spawn(async move {
-                        if let Err(err) = conn.with_upgrades().await {
+                        if let Err(err) = conn.await {
                             println!(
                                 "Http Connection to {} is failed: {:?}",
                                 unix_socket_path, err
