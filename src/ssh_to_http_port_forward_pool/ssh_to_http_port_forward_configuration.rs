@@ -7,3 +7,9 @@ pub struct SshToHttpPortForwardConfiguration {
     pub ssh_credentials: Arc<SshCredentials>,
     pub tunnel: Arc<SshPortForwardTunnel>,
 }
+
+impl SshToHttpPortForwardConfiguration {
+    pub fn get_unix_socket_path(&self) -> String {
+        format!("/var/my-reverse-proxy-{}", self.listen_port)
+    }
+}

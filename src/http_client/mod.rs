@@ -17,5 +17,8 @@ mod http_client;
 pub use http_client::*;
 mod connect_to_http2_over_ssh;
 pub use connect_to_http2_over_ssh::*;
+mod connect_to_http_unix_socket_endpoint;
+pub use connect_to_http_unix_socket_endpoint::*;
 
 pub const HTTP_CLIENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+mod unix_socket_utils;
