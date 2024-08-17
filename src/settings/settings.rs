@@ -15,8 +15,6 @@ pub struct SettingsModel {
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
     pub global_settings: Option<GlobalSettings>,
 
-    pub crl: Option<HashMap<String, String>>,
-
     pub g_auth: Option<HashMap<String, GoogleAuthSettings>>,
 
     pub ssh: Option<HashMap<String, SshConfigSettings>>,
@@ -208,10 +206,20 @@ impl SettingsModel {
     pub fn get_crl(&self) -> Result<HashMap<String, FileSource>, String> {
         let mut result = HashMap::new();
 
-        if let Some(crl_settings) = &self.crl {
-            for (ca, path) in crl_settings {
-                let itm = FileSource::from_src(path.into(), &self.ssh, (&self.variables).into())?;
-                result.insert(ca.to_string(), itm);
+        if let Some(client_certificate_ca) = &self.client_certificate_ca {
+            for itm in client_certificate_ca {
+                if let Some(revocation_list) = &itm.revocation_list {
+                    println!(
+                        "Loading revocation list with id '{}' from '{}'",
+                        itm.id, revocation_list
+                    );
+                    let file_src = FileSource::from_src(
+                        revocation_list.into(),
+                        &self.ssh,
+                        (&self.variables).into(),
+                    )?;
+                    result.insert(itm.id.to_string(), file_src);
+                }
             }
         }
 
@@ -309,7 +317,6 @@ mod tests {
             g_auth: None,
             endpoint_templates: None,
             allowed_users: None,
-            crl: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

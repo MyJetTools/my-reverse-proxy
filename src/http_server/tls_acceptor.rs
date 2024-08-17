@@ -48,6 +48,7 @@ pub async fn create_config(
         let client_cert_cell = Arc::new(ClientCertCell::new());
 
         let client_cert_verifier = Arc::new(MyClientCertVerifier::new(
+            client_cert_ca_id.clone(),
             client_cert_cell.clone(),
             client_cert_ca.unwrap(),
             endpoint_port,

@@ -2,21 +2,26 @@ use std::{fmt::Debug, sync::Arc};
 
 use tokio_rustls::rustls::{server::danger::ClientCertVerifier, SignatureScheme};
 
+use crate::configurations::SslCertificateId;
+
 use super::{client_cert_cell::ClientCertCell, ClientCertificateCa};
 
 pub struct MyClientCertVerifier {
     client_cert_cell: Arc<ClientCertCell>,
     pub ca: Arc<ClientCertificateCa>,
     endpoint_port: u16,
+    ca_id: SslCertificateId,
 }
 
 impl MyClientCertVerifier {
     pub fn new(
+        ca_id: SslCertificateId,
         client_cert_cell: Arc<ClientCertCell>,
         ca: Arc<ClientCertificateCa>,
         endpoint_port: u16,
     ) -> Self {
         Self {
+            ca_id,
             ca,
             client_cert_cell,
             endpoint_port,
@@ -77,11 +82,8 @@ impl ClientCertVerifier for MyClientCertVerifier {
     {
         println!("Verifying Client Cert");
 
-        if let Some(client_certificate) = self.ca.check_certificate(end_entity) {
-            println!(
-                "Accepted certificate with common name: {:?}",
-                client_certificate
-            );
+        if let Some(client_certificate) = self.ca.check_certificate(&self.ca_id, end_entity) {
+            println!("Accepted certificate: {:?}", client_certificate);
 
             self.client_cert_cell.set(client_certificate);
 

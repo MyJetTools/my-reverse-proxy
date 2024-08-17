@@ -1,10 +1,15 @@
 use rustls_pki_types::CertificateDer;
-use x509_parser::{certificate::X509Certificate, der_parser::asn1_rs::FromDer};
+use x509_parser::{
+    certificate::X509Certificate, der_parser::asn1_rs::FromDer, num_bigint::BigUint,
+};
+
+use crate::configurations::SslCertificateId;
 
 #[derive(Debug, Clone)]
 pub struct ClientCertificateData {
+    pub ca_id: SslCertificateId,
     pub cn: String,
-    pub serial: u64,
+    pub serial: BigUint,
 }
 
 pub struct ClientCertificateCa {
@@ -33,6 +38,7 @@ impl ClientCertificateCa {
 
     pub fn check_certificate(
         &self,
+        ca_id: &SslCertificateId,
         certificate_to_check: &rustls_pki_types::CertificateDer,
     ) -> Option<ClientCertificateData> {
         let (_, issuer) = X509Certificate::from_der(self.ca_content.as_ref()).unwrap();
@@ -49,8 +55,9 @@ impl ClientCertificateCa {
 
         for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
             return Some(ClientCertificateData {
+                ca_id: ca_id.clone(),
                 cn: itm.as_str().unwrap().to_string(),
-                serial: cert_to_check.serial.bits(),
+                serial: cert_to_check.serial.clone(),
             });
         }
 

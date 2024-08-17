@@ -10,6 +10,7 @@ use crate::configurations::*;
 pub struct ClientCertificateCaSettings {
     pub id: String,
     pub ca: String,
+    pub revocation_list: Option<String>,
 }
 
 impl ClientCertificateCaSettings {

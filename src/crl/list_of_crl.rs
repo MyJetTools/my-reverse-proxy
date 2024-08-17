@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use my_tls::crl::CrlRecord;
 
-use crate::configurations::FileSource;
+use crate::{configurations::FileSource, http_server::ClientCertificateData};
 
 pub struct ListOfCrl {
     data: HashMap<String, Vec<CrlRecord>>,
@@ -21,8 +21,8 @@ impl ListOfCrl {
         Ok(Self { data })
     }
 
-    pub async fn has_certificate_as_revoked(&self, name: &str, serial_number: u64) -> bool {
-        let crl = self.data.get(name);
+    pub fn has_certificate_as_revoked(&self, client_cert: &ClientCertificateData) -> bool {
+        let crl = self.data.get(client_cert.ca_id.as_str());
 
         if crl.is_none() {
             return false;
@@ -31,7 +31,7 @@ impl ListOfCrl {
         let crl = crl.unwrap();
 
         for record in crl {
-            if record.serial == serial_number {
+            if record.serial == client_cert.serial {
                 return true;
             }
         }

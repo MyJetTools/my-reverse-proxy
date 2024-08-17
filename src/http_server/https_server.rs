@@ -100,7 +100,7 @@ async fn lazy_accept_tcp_stream(
 
         tokio::pin!(lazy_acceptor);
 
-        let (tls_stream, endpoint_info, cn_user_name) = match lazy_acceptor.as_mut().await {
+        let (tls_stream, endpoint_info, client_certificate) = match lazy_acceptor.as_mut().await {
             Ok(start) => {
                 let client_hello = start.client_hello();
                 let server_name = if let Some(server_name) = client_hello.server_name() {
@@ -119,7 +119,7 @@ async fn lazy_accept_tcp_stream(
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
 
-                println!("Created config");
+                //println!("Created config");
 
                 let tls_stream = start.into_stream(config.into()).await;
 
@@ -129,21 +129,34 @@ async fn lazy_accept_tcp_stream(
 
                 let tls_stream = tls_stream.unwrap();
 
-                println!("Applied config");
-                let cn_user_name = if let Some(client_cert_cell) = client_cert_cell {
+                //println!("Applied config");
+                let client_certificate = if let Some(client_cert_cell) = client_cert_cell {
                     client_cert_cell.get()
                 } else {
                     None
                 };
-                println!("Cert common name: {:?}", cn_user_name);
-                (tls_stream, endpoint_info, cn_user_name)
+
+                if let Some(client_certificate) = client_certificate.as_ref() {
+                    let app_config = app.get_current_app_configuration().await;
+
+                    let list_of_crl = app_config.list_of_crl.lock().await;
+                    if list_of_crl.has_certificate_as_revoked(client_certificate) {
+                        return Err(format!(
+                            "Client certificate {:?} is revoked",
+                            client_certificate
+                        ));
+                    }
+                }
+
+                println!("Cert common name: {:?}", client_certificate);
+                (tls_stream, endpoint_info, client_certificate)
             }
             Err(err) => {
                 return Err(format!("failed to perform tls handshake: {err:#}"));
             }
         };
 
-        Ok((tls_stream, endpoint_info, cn_user_name))
+        Ok((tls_stream, endpoint_info, client_certificate))
     })
     .await;
 
