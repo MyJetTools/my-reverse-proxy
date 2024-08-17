@@ -59,6 +59,7 @@ ssl_certificates:
 client_certificate_ca:
   - id: ca_id
     ca: ~/certs/ca.cer  
+    revocation_list: ~/certs/revocation_list.crl
     
 variables:
   my_ssh_config: ssh:user@10.12.13.14:22
