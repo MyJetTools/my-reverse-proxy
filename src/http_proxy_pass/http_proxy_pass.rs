@@ -5,7 +5,10 @@ use http_body_util::{combinators::BoxBody, BodyExt};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
-use crate::{app::AppContext, configurations::*, http_client::HTTP_CLIENT_TIMEOUT};
+use crate::{
+    app::AppContext, configurations::*, http_client::HTTP_CLIENT_TIMEOUT,
+    http_server::ClientCertificateData,
+};
 
 const OLD_CONNECTION_DELAY: Duration = Duration::from_secs(10);
 
@@ -27,13 +30,13 @@ impl HttpProxyPass {
     pub fn new(
         endpoint_info: Arc<HttpEndpointInfo>,
         listening_port_info: HttpListenPortInfo,
-        client_cert_cn: Option<String>,
+        client_cert: Option<ClientCertificateData>,
         request_timeout: Duration,
     ) -> Self {
         let locations = ProxyPassLocations::new(&endpoint_info, request_timeout);
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
-                HttpProxyPassIdentity::new(client_cert_cn),
+                HttpProxyPassIdentity::new(client_cert),
                 locations,
                 listening_port_info.clone(),
             )),

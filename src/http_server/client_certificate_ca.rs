@@ -1,6 +1,12 @@
 use rustls_pki_types::CertificateDer;
 use x509_parser::{certificate::X509Certificate, der_parser::asn1_rs::FromDer};
 
+#[derive(Debug, Clone)]
+pub struct ClientCertificateData {
+    pub cn: String,
+    pub serial: u64,
+}
+
 pub struct ClientCertificateCa {
     ca_content: CertificateDer<'static>,
     names: Vec<tokio_rustls::rustls::DistinguishedName>,
@@ -28,12 +34,11 @@ impl ClientCertificateCa {
     pub fn check_certificate(
         &self,
         certificate_to_check: &rustls_pki_types::CertificateDer,
-    ) -> Option<String> {
+    ) -> Option<ClientCertificateData> {
         let (_, issuer) = X509Certificate::from_der(self.ca_content.as_ref()).unwrap();
 
-        //println!("Here1");
         let (_, cert_to_check) = X509Certificate::from_der(certificate_to_check.as_ref()).unwrap();
-        //println!("Here2");
+
         let result = cert_to_check
             .verify_signature(Some(issuer.public_key()))
             .is_ok();
@@ -43,7 +48,10 @@ impl ClientCertificateCa {
         }
 
         for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
-            return Some(itm.as_str().unwrap().to_string());
+            return Some(ClientCertificateData {
+                cn: itm.as_str().unwrap().to_string(),
+                serial: cert_to_check.serial.bits(),
+            });
         }
 
         return None;

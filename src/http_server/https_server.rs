@@ -12,6 +12,8 @@ use crate::configurations::*;
 use crate::http_proxy_pass::HttpProxyPass;
 use crate::http_server::handle_request::HttpRequestHandler;
 
+use super::ClientCertificateData;
+
 pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>) {
     println!("Listening https://{}", addr);
 
@@ -89,7 +91,7 @@ async fn lazy_accept_tcp_stream(
     (
         tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
         Arc<HttpEndpointInfo>,
-        Option<String>,
+        Option<ClientCertificateData>,
     ),
     String,
 > {
@@ -159,7 +161,7 @@ fn kick_off_https1(
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-    cn_user_name: Option<String>,
+    cn_user_name: Option<ClientCertificateData>,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
     let mut http1 = http1::Builder::new();
@@ -208,7 +210,7 @@ fn kick_off_https2(
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-    cn_user_name: Option<String>,
+    client_certificate: Option<ClientCertificateData>,
 ) {
     use hyper::service::service_fn;
     use hyper_util::server::conn::auto::Builder;
@@ -223,7 +225,7 @@ fn kick_off_https2(
         let http_proxy_pass = HttpProxyPass::new(
             endpoint_info,
             listening_port_info,
-            cn_user_name,
+            client_certificate,
             app.connection_settings.remote_connect_timeout,
         );
 

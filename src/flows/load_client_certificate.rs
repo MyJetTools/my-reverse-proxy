@@ -22,7 +22,7 @@ pub async fn load_client_certificate(
 
     let cert_result = cert_result.unwrap();
 
-    let client_ca = cert_result.load_file_content(files_cache).await;
+    let client_ca = cert_result.load_file_content(Some(files_cache)).await?;
 
     let client_ca: Arc<ClientCertificateCa> = Arc::new(client_ca.into());
     return Ok(client_ca);

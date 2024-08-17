@@ -68,6 +68,11 @@ impl AppContext {
             .clone()
     }
 
+    pub async fn try_get_current_app_configuration(&self) -> Option<Arc<AppConfiguration>> {
+        let result = self.current_app_configuration.read().await;
+        result.clone()
+    }
+
     pub fn get_id(&self) -> i64 {
         self.id.fetch_add(1, Ordering::SeqCst)
     }

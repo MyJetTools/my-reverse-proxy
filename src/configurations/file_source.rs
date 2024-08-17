@@ -48,7 +48,7 @@ impl FileSource {
         }
     }
 
-    pub async fn load_file_content(&self, cache: &FilesCache) -> Vec<u8> {
+    pub async fn load_file_content(&self, cache: Option<&FilesCache>) -> Result<Vec<u8>, String> {
         match self {
             FileSource::File(file_name) => {
                 println!("Loading file {}", file_name);
@@ -56,20 +56,38 @@ impl FileSource {
 
                 let result = tokio::fs::read(file_name.get_value().as_str())
                     .await
-                    .unwrap();
+                    .map_err(|err| {
+                        format!(
+                            "Error reading file: {:?}, error: {:?}",
+                            file_name.get_value().as_str(),
+                            err
+                        )
+                    })?;
 
-                result
+                Ok(result)
             }
             FileSource::Http(url) => {
-                if let Some(value) = cache.get(url).await {
-                    return value;
+                if let Some(cache) = cache {
+                    if let Some(value) = cache.get(url).await {
+                        return Ok(value);
+                    }
                 }
 
-                let response = FlUrl::new(url).get().await.unwrap();
-                let result = response.receive_body().await.unwrap();
+                let response = FlUrl::new(url)
+                    .get()
+                    .await
+                    .map_err(|err| format!("Error loading file from HTTP. Error: {:?}", err))?;
 
-                cache.add(url.to_string(), result.clone()).await;
-                result
+                let result = response
+                    .receive_body()
+                    .await
+                    .map_err(|itm| format!("Error loading file from HTTP. Error: {:?}", itm))?;
+
+                if let Some(cache) = cache {
+                    cache.add(url.to_string(), result.clone()).await;
+                }
+
+                Ok(result)
             }
             FileSource::Ssh(ssh_credentials) => match &ssh_credentials.remote_content {
                 SshContent::RemoteHost(_) => {
@@ -78,8 +96,10 @@ impl FileSource {
                 SshContent::FilePath(path) => {
                     let ssh_cred_as_string = ssh_credentials.to_string();
 
-                    if let Some(value) = cache.get(ssh_cred_as_string.as_str()).await {
-                        return value;
+                    if let Some(cache) = cache {
+                        if let Some(value) = cache.get(ssh_cred_as_string.as_str()).await {
+                            return Ok(value);
+                        }
                     }
 
                     println!(
@@ -130,16 +150,19 @@ impl FileSource {
                             }
                         }
 
-                        panic!(
+                        return Err(format!(
                             "Can not download file from remote resource. Error: {:?}",
                             err
-                        );
+                        ));
                     }
 
                     let result = result.unwrap();
 
-                    cache.add(ssh_cred_as_string, result.clone()).await;
-                    result
+                    if let Some(cache) = cache {
+                        cache.add(ssh_cred_as_string, result.clone()).await;
+                    }
+
+                    Ok(result)
                 }
             },
         }

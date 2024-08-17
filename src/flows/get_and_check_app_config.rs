@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::{app::AppContext, configurations::*, files_cache::FilesCache, ssl::*};
+use tokio::sync::Mutex;
+
+use crate::{app::AppContext, configurations::*, crl::ListOfCrl, files_cache::FilesCache, ssl::*};
 
 pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfiguration, String> {
     let settings_model = crate::settings::SettingsModel::load(".my-reverse-proxy").await?;
@@ -15,6 +17,8 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
     let mut tcp_endpoints = BTreeMap::new();
 
     let mut tcp_over_ssh_endpoints = BTreeMap::new();
+
+    let crl = settings_model.get_crl()?;
 
     let files_cache = FilesCache::new();
 
@@ -65,11 +69,15 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
         }
     }
 
+    let list_of_crl = ListOfCrl::new(&crl).await?;
+
     Ok(AppConfiguration {
         http_endpoints,
         tcp_endpoints,
         tcp_over_ssh_endpoints,
         ssl_certificates_cache,
         client_certificates_cache,
+        crl,
+        list_of_crl: Mutex::new(list_of_crl),
     })
 }

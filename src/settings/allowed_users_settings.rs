@@ -20,7 +20,7 @@ impl AllowedUsersSettings {
         file: FileSource,
         cache: &FilesCache,
     ) -> Result<(), String> {
-        let file_content = file.load_file_content(cache).await;
+        let file_content = file.load_file_content(Some(cache)).await?;
 
         let allowed_users: Result<AllowedUsersRemoteYamlModel, _> =
             serde_yaml::from_slice(file_content.as_slice());

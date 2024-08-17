@@ -77,10 +77,13 @@ impl ClientCertVerifier for MyClientCertVerifier {
     {
         println!("Verifying Client Cert");
 
-        if let Some(common_name) = self.ca.check_certificate(end_entity) {
-            println!("Accepted certificate with common name: {}", common_name);
+        if let Some(client_certificate) = self.ca.check_certificate(end_entity) {
+            println!(
+                "Accepted certificate with common name: {:?}",
+                client_certificate
+            );
 
-            self.client_cert_cell.set(common_name);
+            self.client_cert_cell.set(client_certificate);
 
             return Ok(tokio_rustls::rustls::server::danger::ClientCertVerified::assertion());
         }

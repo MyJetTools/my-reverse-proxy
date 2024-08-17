@@ -19,8 +19,8 @@ pub async fn load_ssl_certificate(
 
     let (cert, key) = cert_result.unwrap();
 
-    let certificates = cert.load_file_content(files_cache).await;
-    let private_key = key.load_file_content(files_cache).await;
+    let certificates = cert.load_file_content(Some(files_cache)).await?;
+    let private_key = key.load_file_content(Some(files_cache)).await?;
 
     let ssl_certificate = SslCertificate::new(certificates, private_key, key.as_str().as_str());
 

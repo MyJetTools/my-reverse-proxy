@@ -14,7 +14,7 @@ pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>) {
 
 async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>) {
     let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
-    let builder = Arc::new(hyper::server::conn::http2::Builder::new(
+    let http2_builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),
     ));
     loop {
@@ -36,7 +36,7 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         let (stream, socket_addr) = accepted_connection.unwrap();
 
         let app = app.clone();
-        let builder = builder.clone();
+        let builder = http2_builder.clone();
 
         tokio::spawn(async move {
             let io = TokioIo::new(stream);

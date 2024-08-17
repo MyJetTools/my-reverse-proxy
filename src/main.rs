@@ -1,12 +1,14 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use app::AppContext;
 use flows::kick_off_endpoints;
+use timers::CrlRefresherTimer;
 
 mod app;
 mod flows;
 //mod http2_executor;
 mod configurations;
+mod crl;
 mod files_cache;
 mod google_auth;
 mod http_client;
@@ -20,6 +22,7 @@ mod settings;
 mod ssh_to_http_port_forward_pool;
 mod ssl;
 mod tcp_port_forward;
+mod timers;
 mod types;
 mod variables_reader;
 
@@ -44,6 +47,12 @@ async fn main() {
     kick_off_endpoints(&app).await;
 
     crate::http_control::start(&app);
+
+    let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(60));
+
+    my_timer.register_timer("CRL Refresh", Arc::new(CrlRefresherTimer::new(app.clone())));
+
+    my_timer.start(app.states.clone(), my_logger::LOGGER.clone());
 
     app.states.wait_until_shutdown().await;
 

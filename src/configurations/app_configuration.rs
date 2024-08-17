@@ -1,8 +1,12 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
+use tokio::sync::Mutex;
 use tokio_rustls::rustls::sign::CertifiedKey;
 
-use crate::ssl::*;
+use crate::{crl::ListOfCrl, ssl::*};
 
 use super::*;
 
@@ -14,6 +18,8 @@ pub struct AppConfiguration {
     pub http_endpoints: BTreeMap<u16, HttpListenPortConfiguration>,
     pub tcp_endpoints: BTreeMap<u16, Arc<TcpEndpointHostConfig>>,
     pub tcp_over_ssh_endpoints: BTreeMap<u16, Arc<TcpOverSshEndpointHostConfig>>,
+    pub crl: HashMap<String, FileSource>,
+    pub list_of_crl: Mutex<ListOfCrl>,
 }
 
 impl AppConfiguration {
