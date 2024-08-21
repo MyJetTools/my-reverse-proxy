@@ -17,7 +17,13 @@ pub async fn connect_to_tls_endpoint(
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
     use tokio_rustls::rustls::pki_types::ServerName;
 
-    let connect_result = TcpStream::connect(remote_host.get_host_port()).await;
+    let host_port = remote_host.get_host_port();
+
+    let connect_result = if host_port.find(":").is_none() {
+        TcpStream::connect(format!("{}:443", remote_host.get_host_port())).await
+    } else {
+        TcpStream::connect(host_port).await
+    };
 
     println!(
         "Connecting to TLS remote host: {}",
