@@ -12,7 +12,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .do_not_reuse_connection()
         .with_header("ContentType", "application/json")
-        .post_json(GetData {
+        .post_json(&GetData {
             code: code.to_string(),
             client_id: settings.client_id.to_string(),
             client_secret: settings.client_secret.clone(),
