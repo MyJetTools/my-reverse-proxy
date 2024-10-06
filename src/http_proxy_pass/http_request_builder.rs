@@ -156,7 +156,12 @@ impl HttpRequestBuilder {
         let host_header = if let Some(port) = parts.uri.port() {
             format!("{}:{}", parts.uri.host().unwrap(), port)
         } else {
-            parts.uri.host().unwrap().to_string()
+            if let Some(uri) = parts.uri.host() {
+                uri.to_string()
+            } else {
+                println!("Parts: {:?}", parts);
+                panic!("No host found in uri: {:?}", parts.uri);
+            }
         };
 
         let mut builder = Request::builder()
