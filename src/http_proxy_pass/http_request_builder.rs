@@ -156,11 +156,15 @@ impl HttpRequestBuilder {
         let host_header = if let Some(port) = parts.uri.port() {
             format!("{}:{}", parts.uri.host().unwrap(), port)
         } else {
-            if let Some(uri) = parts.uri.host() {
-                uri.to_string()
+            if let Some(host) = parts.uri.host() {
+                host.to_string()
             } else {
-                println!("Parts: {:?}", parts);
-                panic!("No host found in uri: {:?}", parts.uri);
+                if let Some(host) = parts.get_headers().get("host") {
+                    host.to_str().unwrap().to_string()
+                } else {
+                    println!("Parts: {:?}", parts);
+                    panic!("No host found in uri: {:?}", parts.uri);
+                }
             }
         };
 
