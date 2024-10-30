@@ -61,7 +61,7 @@ pub async fn create_config(
         let mut server_config =
             tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
                 .with_client_cert_verifier(client_cert_verifier)
-                .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
+                .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key, debug)));
 
         //.with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
@@ -79,7 +79,7 @@ pub async fn create_config(
     let mut server_config =
         tokio_rustls::rustls::ServerConfig::builder_with_protocol_versions(&[&TLS12, &TLS13])
             .with_no_client_auth()
-            .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
+            .with_cert_resolver(Arc::new(MyCertResolver::new(certified_key, debug)));
 
     server_config.alpn_protocols = get_alpn_protocol(!endpoint_info.http_type.is_protocol_http1());
 

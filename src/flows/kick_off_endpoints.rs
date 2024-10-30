@@ -14,9 +14,17 @@ pub async fn kick_off_endpoints(app: &Arc<AppContext>) {
                 port_configuration.debug,
             );
         } else if port_configuration.is_http1() {
-            crate::http_server::start_http_server(listen_end_point, app.clone());
+            crate::http_server::start_http_server(
+                listen_end_point,
+                app.clone(),
+                port_configuration.debug,
+            );
         } else {
-            crate::http_server::start_h2_server(listen_end_point, app.clone());
+            crate::http_server::start_h2_server(
+                listen_end_point,
+                app.clone(),
+                port_configuration.debug,
+            );
         }
     }
 

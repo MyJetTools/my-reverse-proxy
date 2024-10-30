@@ -62,8 +62,9 @@ impl HttpClient {
         &mut self,
         remote_host: &RemoteHost,
         domain_name: &Option<String>,
+        debug: bool,
     ) -> Result<(), HttpClientError> {
-        let connect_result = Http1Client::connect(remote_host, domain_name).await;
+        let connect_result = Http1Client::connect(remote_host, domain_name, debug).await;
 
         match connect_result {
             Ok(client) => {
@@ -71,11 +72,13 @@ impl HttpClient {
                 Ok(())
             }
             Err(err) => {
-                println!(
-                    "Can not connect to remote port: {}. Err:{:?}",
-                    remote_host.get_host_port(),
-                    err
-                );
+                if debug {
+                    println!(
+                        "Can not connect to remote port: {}. Err:{:?}",
+                        remote_host.get_host_port(),
+                        err
+                    );
+                }
                 Err(err)
             }
         }

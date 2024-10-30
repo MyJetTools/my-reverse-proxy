@@ -7,12 +7,12 @@ use crate::app::AppContext;
 
 use super::handle_request::HttpRequestHandler;
 
-pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>) {
+pub fn start_h2_server(addr: SocketAddr, app: Arc<AppContext>, debug: bool) {
     println!("Listening h2 on http://{}", addr);
-    tokio::spawn(start_https2_server_loop(addr, app));
+    tokio::spawn(start_https2_server_loop(addr, app, debug));
 }
 
-async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>) {
+async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>, debug: bool) {
     let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
     let http2_builder = Arc::new(hyper::server::conn::http2::Builder::new(
         TokioExecutor::new(),
@@ -26,10 +26,12 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         }
 
         if let Err(err) = &accepted_connection {
-            println!(
-                "Error accepting connection {}. Err: {:?}",
-                listening_addr, err
-            );
+            if debug {
+                println!(
+                    "Error accepting connection {}. Err: {:?}",
+                    listening_addr, err
+                );
+            }
             continue;
         }
 

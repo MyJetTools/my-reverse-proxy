@@ -16,6 +16,7 @@ use super::HttpClientError;
 pub async fn connect_to_tls_endpoint(
     remote_host: &RemoteHost,
     domain_name: &Option<String>,
+    debug: bool,
 ) -> Result<SendRequest<Full<Bytes>>, HttpClientError> {
     use tokio_rustls::rustls::pki_types::ServerName;
 
@@ -27,10 +28,12 @@ pub async fn connect_to_tls_endpoint(
         TcpStream::connect(host_port).await
     };
 
-    println!(
-        "Connecting to TLS remote host: {}",
-        remote_host.get_host_port(),
-    );
+    if debug {
+        println!(
+            "Connecting to TLS remote host: {}",
+            remote_host.get_host_port(),
+        );
+    }
     match connect_result {
         Ok(tcp_stream) => {
             let config = tokio_rustls::rustls::ClientConfig::builder()
@@ -44,11 +47,15 @@ pub async fn connect_to_tls_endpoint(
                 ServerName::try_from(remote_host.get_host().to_string()).unwrap()
             };
 
-            println!("TLS Domain Name: {:?}", domain);
+            if debug {
+                println!("TLS Domain Name: {:?}", domain);
+            }
 
             let tls_stream = connector
                 .connect_with(domain, tcp_stream, |itm| {
-                    println!("Debugging: {:?}", itm.alpn_protocol());
+                    if debug {
+                        println!("Debugging: {:?}", itm.alpn_protocol());
+                    }
                 })
                 .await?;
 
@@ -60,12 +67,17 @@ pub async fn connect_to_tls_endpoint(
                 Ok((mut sender, conn)) => {
                     let host_port = remote_host.to_string();
                     tokio::task::spawn(async move {
-                        println!("Connected to TLS remote host: {}", host_port,);
+                        if debug {
+                            println!("Connected to TLS remote host: {}", host_port,);
+                        }
+
                         if let Err(err) = conn.await {
-                            println!(
-                                "Https Connection to https://{} is failed: {:?}",
-                                host_port, err
-                            );
+                            if debug {
+                                println!(
+                                    "Https Connection to https://{} is failed: {:?}",
+                                    host_port, err
+                                );
+                            }
                         }
                     });
 

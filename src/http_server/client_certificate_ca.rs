@@ -64,40 +64,6 @@ impl ClientCertificateCa {
         }
 
         return None;
-        //println!("{:?}", result);
-
-        /*
-        for ca in &self.ca_content {
-            if ca.0 == certificate_to_check.0 {
-                return true;
-            }
-        }
-
-
-
-        println!("Serial: {:?}", cert.raw_serial_as_string()); // Serial number of SSL cert
-        println!("Public Key: {:?}", HexSlice(&cert.public_key().raw[..8])); // Serial number of SSL cert
-
-        let issuer = cert.issuer();
-
-        for common_name in issuer.iter_common_name() {
-            println!("CommonName: {}", common_name.as_str().unwrap());
-        }
-
-        for common_name in issuer.iter_email() {
-            println!("Email: {}", common_name.as_str().unwrap());
-        }
-
-        for attr in issuer.iter_attributes() {
-            println!("Attr: {}={}", attr.attr_type(), attr.as_str().unwrap());
-        }
-
-        if let Some(uid) = &cert.issuer_uid {
-            println!("UID: {:?}", uid);
-        }
-
-        false
-         */
     }
 
     pub fn get_names(&self) -> &[rustls::DistinguishedName] {

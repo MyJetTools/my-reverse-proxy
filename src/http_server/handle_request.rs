@@ -129,7 +129,7 @@ async fn handle_requests(
     proxy_pass: &HttpProxyPass,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     let debug = if proxy_pass.endpoint_info.debug {
-        let req_str = format!(
+        let req_str: String = format!(
             "{}: [{}]{:?}",
             proxy_pass.endpoint_info.as_str(),
             req.method(),

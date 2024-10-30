@@ -46,7 +46,9 @@ impl RemoteHttpContentSource {
                 if debug {
                     println!("Connecting to Http remote endpoint: {:?}", uri);
                 }
-                self.http_client.connect_to_http1(uri, domain_name).await?;
+                self.http_client
+                    .connect_to_http1(uri, domain_name, debug)
+                    .await?;
             }
 
             HttpProxyPassRemoteEndpoint::Http2(uri) => {
