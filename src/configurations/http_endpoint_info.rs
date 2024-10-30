@@ -31,6 +31,9 @@ impl HttpEndpointInfo {
         allowed_user_list: Option<Arc<AllowedUserList>>,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
     ) -> Self {
+        if debug {
+            println!("Endpoint {} is in debug mode", host_endpoint.as_str());
+        }
         Self {
             host_endpoint,
             debug,

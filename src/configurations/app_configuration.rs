@@ -73,13 +73,7 @@ impl AppConfiguration {
     ) -> Result<Arc<HttpEndpointInfo>, String> {
         if let Some(listen_port_config) = self.http_endpoints.get(&listen_port) {
             for endpoint_info in &listen_port_config.endpoint_info {
-                if endpoint_info.debug {
-                    println!("Checking. {}: [{}]", endpoint_info.as_str(), server_name);
-                }
                 if endpoint_info.is_my_endpoint(server_name) {
-                    if endpoint_info.debug {
-                        println!("Detected. {}: [{}]", endpoint_info.as_str(), server_name);
-                    }
                     return Ok(endpoint_info.clone());
                 }
             }
