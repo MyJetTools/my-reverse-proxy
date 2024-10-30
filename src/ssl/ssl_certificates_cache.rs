@@ -4,6 +4,8 @@ use super::SslCertificate;
 
 use crate::configurations::*;
 
+use my_tls::tokio_rustls;
+
 pub struct SslCertificatesCache {
     data: HashMap<String, Arc<SslCertificate>>,
 }

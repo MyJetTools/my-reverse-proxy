@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use tokio_rustls::rustls::server::ResolvesServerCert;
+use my_tls::tokio_rustls;
+
+use my_tls::tokio_rustls::rustls::server::ResolvesServerCert;
 
 #[derive(Debug)]
 pub struct MyCertResolver {

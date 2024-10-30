@@ -9,6 +9,8 @@ use tokio::net::TcpStream;
 
 use crate::configurations::*;
 
+use my_tls::tokio_rustls;
+
 use super::HttpClientError;
 
 pub async fn connect_to_tls_endpoint(

@@ -62,8 +62,11 @@ impl HttpProxyPass {
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
+        let mut attempt_no = 0;
         loop {
-            let (future1, future2, build_result, request_executor, dest_http1) = {
+            attempt_no += 1;
+
+            let (future_http1, future_http2, build_result, request_executor, dest_http1) = {
                 let mut inner = self.inner.lock().await;
 
                 match self.handle_auth_with_g_auth(app, &req).await {
@@ -101,7 +104,7 @@ impl HttpProxyPass {
                     .connect_if_require(app, self.endpoint_info.debug)
                     .await?;
 
-                let (future1, future2, request_executor, is_http_1) = {
+                let (future_http1, future_http2, request_executor, is_http_1) = {
                     match &mut proxy_pass_location.content_source {
                         super::HttpProxyPassContentSource::Http(http_content_source) => {
                             if http_content_source.remote_endpoint.is_http1() {
@@ -132,37 +135,65 @@ impl HttpProxyPass {
                     }
                 };
 
-                (future1, future2, build_result, request_executor, is_http_1)
+                (
+                    future_http1,
+                    future_http2,
+                    build_result,
+                    request_executor,
+                    is_http_1,
+                )
             };
 
-            let result = if let Some(future1) = future1 {
-                match future1 {
-                    Ok(result) => {
-                        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, result).await;
+            let result = if let Some(future_http1) = future_http1 {
+                match future_http1 {
+                    Ok(future_http1) => {
+                        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future_http1).await;
 
-                        if result.is_err() {
-                            return Err(ProxyPassError::Timeout);
-                        }
-
-                        match result.unwrap() {
+                        match super::error::handle_error(result, attempt_no).await {
                             Ok(result) => Ok(result),
-                            Err(err) => Err(err.into()),
+                            Err(err) => match err {
+                                super::ExecuteWithTimeoutError::ReconnectAndRetry => {
+                                    let mut inner = self.inner.lock().await;
+
+                                    let proxy_pass_location =
+                                        inner.locations.find_mut(build_result.get_location_index());
+
+                                    proxy_pass_location.disconnect();
+                                    continue;
+                                }
+                                super::ExecuteWithTimeoutError::ProxyPassError(
+                                    proxy_pass_error,
+                                ) => {
+                                    return Err(proxy_pass_error);
+                                }
+                            },
                         }
                     }
                     Err(err) => Err(err),
                 }
-            } else if let Some(future2) = future2 {
-                match future2 {
-                    Ok(result) => {
-                        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, result).await;
+            } else if let Some(future_http2) = future_http2 {
+                match future_http2 {
+                    Ok(future_http2) => {
+                        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, future_http2).await;
 
-                        if result.is_err() {
-                            return Err(ProxyPassError::Timeout);
-                        }
-
-                        match result.unwrap() {
+                        match super::error::handle_error(result, attempt_no).await {
                             Ok(result) => Ok(result),
-                            Err(err) => Err(err.into()),
+                            Err(err) => match err {
+                                super::ExecuteWithTimeoutError::ReconnectAndRetry => {
+                                    let mut inner = self.inner.lock().await;
+
+                                    let proxy_pass_location =
+                                        inner.locations.find_mut(build_result.get_location_index());
+
+                                    proxy_pass_location.disconnect();
+                                    continue;
+                                }
+                                super::ExecuteWithTimeoutError::ProxyPassError(
+                                    proxy_pass_error,
+                                ) => {
+                                    return Err(proxy_pass_error);
+                                }
+                            },
                         }
                     }
                     Err(err) => Err(err),

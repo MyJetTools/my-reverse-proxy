@@ -5,6 +5,8 @@ use x509_parser::{
 
 use crate::configurations::SslCertificateId;
 
+use my_tls::tokio_rustls::rustls;
+
 #[derive(Debug, Clone)]
 pub struct ClientCertificateData {
     pub ca_id: SslCertificateId,
@@ -14,7 +16,7 @@ pub struct ClientCertificateData {
 
 pub struct ClientCertificateCa {
     ca_content: CertificateDer<'static>,
-    names: Vec<tokio_rustls::rustls::DistinguishedName>,
+    names: Vec<rustls::DistinguishedName>,
 }
 
 impl ClientCertificateCa {
@@ -98,7 +100,7 @@ impl ClientCertificateCa {
          */
     }
 
-    pub fn get_names(&self) -> &[tokio_rustls::rustls::DistinguishedName] {
+    pub fn get_names(&self) -> &[rustls::DistinguishedName] {
         &self.names
     }
 }

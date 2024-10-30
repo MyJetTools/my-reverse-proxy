@@ -46,4 +46,15 @@ impl HttpProxyPassContentSource {
             Self::Static(_) => return Ok(()),
         }
     }
+
+    pub fn disconnect(&mut self) {
+        match self {
+            HttpProxyPassContentSource::Http(remote_http_content_source) => {
+                remote_http_content_source.disconnect()
+            }
+            HttpProxyPassContentSource::LocalPath(_) => {}
+            HttpProxyPassContentSource::PathOverSsh(_) => {}
+            HttpProxyPassContentSource::Static(_) => {}
+        }
+    }
 }

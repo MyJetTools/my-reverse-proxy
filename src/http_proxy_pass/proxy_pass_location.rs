@@ -49,4 +49,8 @@ impl ProxyPassLocation {
             .connect_if_require(app, &self.config.domain_name, debug)
             .await
     }
+
+    pub fn disconnect(&mut self) {
+        self.content_source.disconnect();
+    }
 }

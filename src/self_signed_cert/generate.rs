@@ -1,4 +1,6 @@
+use my_tls::tokio_rustls;
 use rustls_pki_types::CertificateDer;
+
 pub fn generate(cn_name: String) -> tokio_rustls::rustls::sign::CertifiedKey {
     let (cert, key_pair) = generate_pk(cn_name);
 

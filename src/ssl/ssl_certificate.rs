@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
+use my_tls::tokio_rustls;
+
 #[derive(Clone, Debug)]
 pub struct SslCertificate {
     pub cert_key: Arc<tokio_rustls::rustls::sign::CertifiedKey>,

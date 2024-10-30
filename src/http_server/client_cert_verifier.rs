@@ -1,6 +1,8 @@
 use std::{fmt::Debug, sync::Arc};
 
-use tokio_rustls::rustls::{server::danger::ClientCertVerifier, SignatureScheme};
+use my_tls::tokio_rustls::rustls;
+
+use rustls::{server::danger::ClientCertVerifier, SignatureScheme};
 
 use crate::configurations::SslCertificateId;
 
@@ -38,7 +40,7 @@ impl Debug for MyClientCertVerifier {
 }
 
 impl ClientCertVerifier for MyClientCertVerifier {
-    fn root_hint_subjects(&self) -> &[tokio_rustls::rustls::DistinguishedName] {
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
         self.ca.get_names()
     }
 
@@ -46,26 +48,23 @@ impl ClientCertVerifier for MyClientCertVerifier {
         &self,
         _message: &[u8],
         _cert: &rustls_pki_types::CertificateDer<'_>,
-        _dss: &tokio_rustls::rustls::DigitallySignedStruct,
-    ) -> Result<
-        tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
-        tokio_rustls::rustls::Error,
-    > {
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         println!("Verifying signature tls12");
-        Ok(tokio_rustls::rustls::client::danger::HandshakeSignatureValid::assertion())
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
     fn verify_tls13_signature(
         &self,
         _message: &[u8],
         _cert: &rustls_pki_types::CertificateDer<'_>,
-        _dss: &tokio_rustls::rustls::DigitallySignedStruct,
+        _dss: &rustls::DigitallySignedStruct,
     ) -> Result<
-        tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
-        tokio_rustls::rustls::Error,
+        my_tls::tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
+        my_tls::tokio_rustls::rustls::Error,
     > {
         println!("Verifying signature tls12");
-        Ok(tokio_rustls::rustls::client::danger::HandshakeSignatureValid::assertion())
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
@@ -78,8 +77,10 @@ impl ClientCertVerifier for MyClientCertVerifier {
         end_entity: &rustls_pki_types::CertificateDer<'_>,
         _intermediates: &[rustls_pki_types::CertificateDer<'_>],
         _now: rustls_pki_types::UnixTime,
-    ) -> Result<tokio_rustls::rustls::server::danger::ClientCertVerified, tokio_rustls::rustls::Error>
-    {
+    ) -> Result<
+        my_tls::tokio_rustls::rustls::server::danger::ClientCertVerified,
+        my_tls::tokio_rustls::rustls::Error,
+    > {
         println!("Verifying Client Cert");
 
         if let Some(client_certificate) = self.ca.check_certificate(&self.ca_id, end_entity) {
@@ -87,10 +88,12 @@ impl ClientCertVerifier for MyClientCertVerifier {
 
             self.client_cert_cell.set(client_certificate);
 
-            return Ok(tokio_rustls::rustls::server::danger::ClientCertVerified::assertion());
+            return Ok(
+                my_tls::tokio_rustls::rustls::server::danger::ClientCertVerified::assertion(),
+            );
         }
 
-        Err(tokio_rustls::rustls::Error::General(
+        Err(my_tls::tokio_rustls::rustls::Error::General(
             "Client certificate is not valid".to_string(),
         ))
     }

@@ -161,6 +161,10 @@ impl RemoteHttpContentSource {
         }
         self.http_client.dispose();
     }
+
+    pub fn disconnect(&mut self) {
+        self.http_client.dispose();
+    }
 }
 
 impl Drop for RemoteHttpContentSource {

@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpStream;
 
-use tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
+use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::app::AppContext;
 
@@ -89,7 +89,7 @@ async fn lazy_accept_tcp_stream(
     tcp_stream: TcpStream,
 ) -> Result<
     (
-        tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+        my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
         Arc<HttpEndpointInfo>,
         Option<ClientCertificateData>,
     ),
@@ -173,7 +173,7 @@ fn kick_off_https1(
     app: Arc<AppContext>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
-    tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+    tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<ClientCertificateData>,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
@@ -222,7 +222,7 @@ fn kick_off_https2(
     app: Arc<AppContext>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
-    tls_stream: tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+    tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     client_certificate: Option<ClientCertificateData>,
 ) {
     use hyper::service::service_fn;
