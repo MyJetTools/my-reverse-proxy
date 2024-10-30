@@ -91,9 +91,7 @@ pub async fn handle_error<TResult>(
         Err(err) => {
             if err.is_canceled() {
                 if attempt_no <= 1 {
-                    return Err(ExecuteWithTimeoutError::ProxyPassError(
-                        ProxyPassError::HyperError(err),
-                    ));
+                    return Err(ExecuteWithTimeoutError::ReconnectAndRetry);
                 }
             }
 
