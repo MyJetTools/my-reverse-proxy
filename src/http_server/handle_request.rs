@@ -85,6 +85,15 @@ pub async fn handle_request(
 
                 match http_endpoint_info {
                     Ok(endpoint_info) => {
+                        if endpoint_info.debug {
+                            println!(
+                                "Detected. {}: [{}]{:?}",
+                                endpoint_info.as_str(),
+                                req.method(),
+                                req.uri()
+                            );
+                        }
+
                         let listening_port_info =
                             endpoint_info.get_listening_port_info(*socket_addr);
 

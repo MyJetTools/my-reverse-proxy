@@ -86,9 +86,23 @@ async fn handle_connection(
     let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
 
     if endpoint_info.http_type.is_protocol_http1() {
-        kick_off_https1(app, socket_addr, endpoint_info, tls_stream, cn_user_name);
+        kick_off_https1(
+            app,
+            socket_addr,
+            endpoint_info,
+            tls_stream,
+            cn_user_name,
+            debug,
+        );
     } else {
-        kick_off_https2(app, socket_addr, endpoint_info, tls_stream, cn_user_name);
+        kick_off_https2(
+            app,
+            socket_addr,
+            endpoint_info,
+            tls_stream,
+            cn_user_name,
+            debug,
+        );
     }
 }
 
@@ -192,6 +206,7 @@ fn kick_off_https1(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<ClientCertificateData>,
+    debug: bool,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
     let mut http1 = http1::Builder::new();
@@ -228,7 +243,9 @@ fn kick_off_https1(
             .with_upgrades()
             .await
         {
-            println!("failed to serve HTTP 1.1 connection: {err:#}");
+            if debug {
+                println!("failed to serve HTTP 1.1 connection: {err:#}");
+            }
         }
 
         http_request_handler_dispose.dispose().await;
@@ -241,6 +258,7 @@ fn kick_off_https2(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     client_certificate: Option<ClientCertificateData>,
+    debug: bool,
 ) {
     use hyper::service::service_fn;
     use hyper_util::server::conn::auto::Builder;
@@ -279,7 +297,9 @@ fn kick_off_https2(
             )
             .await
         {
-            eprintln!("failed to serve Https2 connection: {err:#}");
+            if debug {
+                println!("failed to serve Https2 connection: {err:#}");
+            }
         }
 
         http_request_handler_dispose.dispose().await;
