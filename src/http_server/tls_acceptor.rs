@@ -19,6 +19,7 @@ pub async fn create_config(
     app: Arc<AppContext>,
     server_name: &str,
     endpoint_port: u16,
+    debug: bool,
 ) -> Result<
     (
         ServerConfig,
@@ -54,6 +55,7 @@ pub async fn create_config(
             client_cert_cell.clone(),
             client_cert_ca.unwrap(),
             endpoint_port,
+            debug,
         ));
 
         let mut server_config =

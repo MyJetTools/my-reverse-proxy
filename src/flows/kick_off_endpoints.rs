@@ -8,7 +8,11 @@ pub async fn kick_off_endpoints(app: &Arc<AppContext>) {
         let listen_end_point = std::net::SocketAddr::new([0, 0, 0, 0].into(), *listen_port);
 
         if port_configuration.is_https() {
-            crate::http_server::start_https_server(listen_end_point, app.clone());
+            crate::http_server::start_https_server(
+                listen_end_point,
+                app.clone(),
+                port_configuration.debug,
+            );
         } else if port_configuration.is_http1() {
             crate::http_server::start_http_server(listen_end_point, app.clone());
         } else {

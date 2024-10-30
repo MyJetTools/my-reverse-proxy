@@ -13,6 +13,7 @@ pub struct MyClientCertVerifier {
     pub ca: Arc<ClientCertificateCa>,
     endpoint_port: u16,
     ca_id: SslCertificateId,
+    debug: bool,
 }
 
 impl MyClientCertVerifier {
@@ -21,12 +22,14 @@ impl MyClientCertVerifier {
         client_cert_cell: Arc<ClientCertCell>,
         ca: Arc<ClientCertificateCa>,
         endpoint_port: u16,
+        debug: bool,
     ) -> Self {
         Self {
             ca_id,
             ca,
             client_cert_cell,
             endpoint_port,
+            debug,
         }
     }
 }
@@ -50,7 +53,10 @@ impl ClientCertVerifier for MyClientCertVerifier {
         _cert: &rustls_pki_types::CertificateDer<'_>,
         _dss: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        println!("Verifying signature tls12");
+        if self.debug {
+            println!("Verifying signature tls12");
+        }
+
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
@@ -63,12 +69,18 @@ impl ClientCertVerifier for MyClientCertVerifier {
         my_tls::tokio_rustls::rustls::client::danger::HandshakeSignatureValid,
         my_tls::tokio_rustls::rustls::Error,
     > {
-        println!("Verifying signature tls12");
+        if self.debug {
+            println!("Verifying signature tls12");
+        }
+
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        println!("supported_verify_schemes");
+        if self.debug {
+            println!("supported_verify_schemes");
+        }
+
         vec![SignatureScheme::RSA_PSS_SHA256]
     }
 
@@ -81,10 +93,14 @@ impl ClientCertVerifier for MyClientCertVerifier {
         my_tls::tokio_rustls::rustls::server::danger::ClientCertVerified,
         my_tls::tokio_rustls::rustls::Error,
     > {
-        println!("Verifying Client Cert");
+        if self.debug {
+            println!("Verifying Client Cert");
+        }
 
         if let Some(client_certificate) = self.ca.check_certificate(&self.ca_id, end_entity) {
-            println!("Accepted certificate: {:?}", client_certificate);
+            if self.debug {
+                println!("Accepted certificate: {:?}", client_certificate);
+            }
 
             self.client_cert_cell.set(client_certificate);
 

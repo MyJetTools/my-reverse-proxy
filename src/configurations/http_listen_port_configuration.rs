@@ -4,12 +4,14 @@ use super::*;
 
 pub struct HttpListenPortConfiguration {
     pub endpoint_info: Vec<Arc<HttpEndpointInfo>>,
+    pub debug: bool,
 }
 
 impl HttpListenPortConfiguration {
-    pub fn new(endpoint_info: Arc<HttpEndpointInfo>) -> Self {
+    pub fn new(endpoint_info: Arc<HttpEndpointInfo>, debug: bool) -> Self {
         let result = Self {
             endpoint_info: vec![endpoint_info],
+            debug,
         };
 
         result

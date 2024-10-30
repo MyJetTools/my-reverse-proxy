@@ -14,13 +14,13 @@ use crate::http_server::handle_request::HttpRequestHandler;
 
 use super::ClientCertificateData;
 
-pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>) {
+pub fn start_https_server(addr: SocketAddr, app: Arc<AppContext>, debug: bool) {
     println!("Listening https://{}", addr);
 
-    tokio::spawn(start_https_server_loop(addr, app));
+    tokio::spawn(start_https_server_loop(addr, app, debug));
 }
 
-async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
+async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>, debug: bool) {
     let endpoint_port = addr.port();
     //let endpoint_info = Arc::new(endpoint_info);
 
@@ -29,7 +29,7 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
     // Build TLS configuration.
 
     loop {
-        println!("Waiting to accept new connection");
+        // println!("Waiting to accept new connection");
 
         let accepted_connection = listener.accept().await;
 
@@ -48,7 +48,7 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>) {
         println!("Accepted connection from  {}", socket_addr);
 
         let app = app.clone();
-        handle_connection(app, endpoint_port, tcp_stream, socket_addr).await;
+        handle_connection(app, endpoint_port, tcp_stream, socket_addr, debug).await;
     }
 }
 
@@ -57,8 +57,9 @@ async fn handle_connection(
     endpoint_port: u16,
     tcp_stream: TcpStream,
     socket_addr: SocketAddr,
+    debug: bool,
 ) {
-    let future = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream);
+    let future = lazy_accept_tcp_stream(app.clone(), endpoint_port, tcp_stream, debug);
 
     let result = tokio::time::timeout(Duration::from_secs(10), future).await;
 
@@ -87,6 +88,7 @@ async fn lazy_accept_tcp_stream(
     app: Arc<AppContext>,
     endpoint_port: u16,
     tcp_stream: TcpStream,
+    debug: bool,
 ) -> Result<
     (
         my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
@@ -109,9 +111,13 @@ async fn lazy_accept_tcp_stream(
                     return Err("Unknown server name detecting from client hello".to_string());
                 };
 
-                let config_result =
-                    super::tls_acceptor::create_config(app.clone(), server_name, endpoint_port)
-                        .await;
+                let config_result = super::tls_acceptor::create_config(
+                    app.clone(),
+                    server_name,
+                    endpoint_port,
+                    debug,
+                )
+                .await;
 
                 if let Err(err) = &config_result {
                     return Err(format!("Failed to create tls config. Err: {err:#}"));

@@ -79,10 +79,6 @@ pub async fn handle_error<TResult>(
     attempt_no: usize,
 ) -> Result<TResult, ExecuteWithTimeoutError> {
     if let Err(err) = &result {
-        if attempt_no <= 1 {
-            return Err(ExecuteWithTimeoutError::ReconnectAndRetry);
-        }
-
         return Err(ExecuteWithTimeoutError::ProxyPassError(
             ProxyPassError::Timeout,
         ));

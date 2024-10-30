@@ -122,6 +122,12 @@ impl SettingsModel {
                 app,
             )?;
 
+            let debug = if let Ok(value) = std::env::var("DEBUG") {
+                value == "true" || value == "1"
+            } else {
+                false
+            };
+
             match endpoint_type {
                 EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
                     Some(other_port_configuration) => {
@@ -133,6 +139,7 @@ impl SettingsModel {
                             port,
                             ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
                                 http_endpoint_info.into(),
+                                debug,
                             )),
                         );
                     }
