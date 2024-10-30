@@ -32,6 +32,7 @@ pub fn to_hyper_error(e: std::convert::Infallible) -> String {
 
 #[tokio::main]
 async fn main() {
+    my_tls::install_default_crypto_providers();
     let settings_model = settings::SettingsModel::load(".my-reverse-proxy")
         .await
         .unwrap();
