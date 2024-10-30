@@ -158,7 +158,12 @@ impl HttpProxyPass {
                                     let proxy_pass_location =
                                         inner.locations.find_mut(build_result.get_location_index());
 
-                                    proxy_pass_location.disconnect();
+                                    if let Err(err) = proxy_pass_location
+                                        .reconnect(&app, self.endpoint_info.debug)
+                                        .await
+                                    {
+                                        return Err(err);
+                                    }
                                     continue;
                                 }
                                 super::ExecuteWithTimeoutError::ProxyPassError(
@@ -185,7 +190,12 @@ impl HttpProxyPass {
                                     let proxy_pass_location =
                                         inner.locations.find_mut(build_result.get_location_index());
 
-                                    proxy_pass_location.disconnect();
+                                    if let Err(err) = proxy_pass_location
+                                        .reconnect(&app, self.endpoint_info.debug)
+                                        .await
+                                    {
+                                        return Err(err);
+                                    }
                                     continue;
                                 }
                                 super::ExecuteWithTimeoutError::ProxyPassError(

@@ -50,7 +50,8 @@ impl ProxyPassLocation {
             .await
     }
 
-    pub fn disconnect(&mut self) {
+    pub async fn reconnect(&mut self, app: &AppContext, debug: bool) -> Result<(), ProxyPassError> {
         self.content_source.disconnect();
+        self.connect_if_require(app, debug).await
     }
 }
