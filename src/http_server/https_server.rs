@@ -45,7 +45,9 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>, debug: 
 
         let (tcp_stream, socket_addr) = accepted_connection.unwrap();
 
-        println!("Accepted connection from  {}", socket_addr);
+        if debug {
+            println!("Accepted connection from  {}", socket_addr);
+        }
 
         let app = app.clone();
         handle_connection(app, endpoint_port, tcp_stream, socket_addr, debug).await;
@@ -64,14 +66,20 @@ async fn handle_connection(
     let result = tokio::time::timeout(Duration::from_secs(10), future).await;
 
     if result.is_err() {
-        println!("Timeout waiting for tls handshake from {}", socket_addr);
+        if debug {
+            println!("Timeout waiting for tls handshake from {}", socket_addr);
+        }
+
         return;
     }
 
     let result = result.unwrap();
 
     if let Err(err) = &result {
-        eprintln!("failed to perform tls handshake: {err:#}");
+        if debug {
+            println!("failed to perform tls handshake: {err:#}");
+        }
+
         return;
     }
 
@@ -154,7 +162,10 @@ async fn lazy_accept_tcp_stream(
                     }
                 }
 
-                println!("Cert common name: {:?}", client_certificate);
+                if debug {
+                    println!("Cert common name: {:?}", client_certificate);
+                }
+
                 (tls_stream, endpoint_info, client_certificate)
             }
             Err(err) => {
