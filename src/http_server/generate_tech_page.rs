@@ -8,12 +8,12 @@ use crate::http_proxy_pass::ProxyPassError;
 pub fn generate_tech_page(err: ProxyPassError) -> hyper::Response<BoxBody<Bytes, String>> {
     match err {
         ProxyPassError::Timeout => {
-            let body: Bytes = generate_layout(408, "Timeout", None).into();
+            let body: Bytes = generate_layout(504, "Timeout", None).into();
             let body = Full::new(body)
                 .map_err(|e| crate::to_hyper_error(e))
                 .boxed();
             return hyper::Response::builder()
-                .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)
+                .status(hyper::StatusCode::GATEWAY_TIMEOUT)
                 .body(body)
                 .unwrap();
         }
