@@ -1,4 +1,7 @@
-use std::{io::Write, sync::Arc};
+use std::{
+    io::{Read, Write},
+    sync::Arc,
+};
 
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
@@ -360,7 +363,14 @@ fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
     if debug {
         println!("Body Len: {}", src.len());
     }
-    Full::new(Bytes::from(src))
+
+    if src.len() < 4096 {
+        return http_body_util::Full::new(src);
+    }
+
+    let vec = src.to_vec();
+
+    Full::new(Bytes::from(vec))
 }
 fn handle_headers(
     proxy_pass: &HttpProxyPass,
