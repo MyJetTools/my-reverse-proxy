@@ -22,13 +22,15 @@ pub async fn connect_to_http_over_ssh_with_tunnel(
     ),
     ProxyPassError,
 > {
-    let tunnel_info = crate::ssh_to_http_port_forward::create_port_forward(
-        ssh_credentials,
-        remote_host.get_host(),
-        remote_host.get_port(),
-        || app.local_port_allocator.next(),
-    )
-    .await;
+    let tunnel_info = app
+        .ssh_to_http_port_forward_pool
+        .get_or_create_port_forward(
+            ssh_credentials,
+            remote_host.get_host(),
+            remote_host.get_port(),
+            || app.local_port_allocator.next(),
+        )
+        .await;
 
     let remote_host = tunnel_info.get_unix_socket_path();
 

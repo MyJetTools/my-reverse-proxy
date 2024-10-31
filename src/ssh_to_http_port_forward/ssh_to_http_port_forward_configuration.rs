@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use my_ssh::{SshPortForwardTunnel, SshSession};
+use my_ssh::{SshCredentials, SshPortForwardTunnel, SshSession};
 
 pub struct SshToHttpPortForwardConfiguration {
     pub listen_port: u64,
     pub _ssh_session: SshSession,
+    pub ssh_credentials: Arc<SshCredentials>,
     pub tunnel: Arc<SshPortForwardTunnel>,
 }
 
