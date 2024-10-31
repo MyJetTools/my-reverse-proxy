@@ -1,7 +1,4 @@
-use std::{
-    io::{Read, Write},
-    sync::Arc,
-};
+use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
@@ -117,6 +114,11 @@ impl HttpRequestBuilder {
                 }
 
                 let result = hyper::Request::from_parts(parts, body);
+
+                if proxy_pass.endpoint_info.debug {
+                    println!("After Conversion Request: {:?}. Body: ", result.headers());
+                }
+
                 self.prepared_request = Some(result);
                 self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
                 return Ok(BuildResult::HttpRequest(location_index));
@@ -124,6 +126,7 @@ impl HttpRequestBuilder {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
+
                 let body = into_full_bytes(
                     &mut parts,
                     incoming,
@@ -133,6 +136,10 @@ impl HttpRequestBuilder {
                 .await?;
 
                 let request = hyper::Request::from_parts(parts, body);
+
+                if proxy_pass.endpoint_info.debug {
+                    println!("After Conversion Request: {:?}. Body: ", request.headers());
+                }
 
                 self.prepared_request = Some(request);
 
@@ -156,7 +163,13 @@ impl HttpRequestBuilder {
                 )
                 .await?;
 
-                self.prepared_request = Some(hyper::Request::from_parts(parts, body));
+                let result = hyper::Request::from_parts(parts, body);
+
+                if proxy_pass.endpoint_info.debug {
+                    println!("After Conversion Request: {:?}. Body: ", result.headers());
+                }
+
+                self.prepared_request = Some(result);
 
                 self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
                 Ok(BuildResult::HttpRequest(location_index))
@@ -226,6 +239,10 @@ impl HttpRequestBuilder {
             });
         }
         let result = builder.body(body).unwrap();
+
+        if debug {
+            println!("After Conversion Request: {:?}. Body: ", result.headers());
+        }
         self.prepared_request = Some(result);
         self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
         return Ok(BuildResult::HttpRequest(location_index));
