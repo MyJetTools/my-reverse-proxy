@@ -137,6 +137,15 @@ async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
+    let uri = req.uri().clone();
+    if uri.path().ends_with("/dashboards/db/") {
+        println!("Req: {}", req.uri());
+    }
+
+    let mut sw = StopWatch::new();
+
+    sw.start();
+
     let debug = if proxy_pass.endpoint_info.debug {
         let req_str: String = format!(
             "{}: [{}]{:?}",
@@ -156,6 +165,11 @@ async fn handle_requests(
         Ok(response) => {
             match response.as_ref() {
                 Ok(response) => {
+                    sw.pause();
+                    if uri.path().ends_with("/dashboards/db/") {
+                        println!("Ok Response: {} in {}", uri, sw.duration_as_string());
+                    }
+
                     if let Some((req_str, mut sw)) = debug {
                         sw.pause();
                         println!(
@@ -167,6 +181,15 @@ async fn handle_requests(
                     }
                 }
                 Err(err) => {
+                    sw.pause();
+                    if uri.path().ends_with("/dashboards/db/") {
+                        println!(
+                            "Err Response: {} in {}. Err: {}",
+                            uri,
+                            sw.duration_as_string(),
+                            err
+                        );
+                    }
                     if let Some((req_str, mut sw)) = debug {
                         sw.pause();
                         println!("Res: {}->{} {}", req_str, err, sw.duration_as_string());
@@ -177,6 +200,15 @@ async fn handle_requests(
             return response;
         }
         Err(err) => {
+            sw.pause();
+            if uri.path().ends_with("/dashboards/db/") {
+                println!(
+                    "Tech Err Response: {} in {}. Err: {:?}",
+                    uri,
+                    sw.duration_as_string(),
+                    err
+                );
+            }
             return Ok(super::generate_tech_page(err));
         }
     }
