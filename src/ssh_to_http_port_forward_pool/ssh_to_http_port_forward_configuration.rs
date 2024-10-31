@@ -9,8 +9,12 @@ pub struct SshToHttpPortForwardConfiguration {
 }
 
 impl SshToHttpPortForwardConfiguration {
-    pub fn get_unix_socket_path(&self) -> String {
-        generate_unix_socket(self.listen_port)
+    //pub fn get_unix_socket_path(&self) -> String {
+    //    generate_unix_socket(self.listen_port)
+    // }
+
+    pub fn get_listen_host_port(&self) -> String {
+        format!("127.0.0.1:{}", self.listen_port)
     }
 }
 

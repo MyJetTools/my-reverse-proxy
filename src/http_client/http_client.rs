@@ -90,7 +90,9 @@ impl HttpClient {
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
     ) -> Result<(), ProxyPassError> {
-        let client = Http1Client::connect_over_ssh(app, ssh_credentials, remote_host).await?;
+        let client =
+            Http1Client::connect_over_ssh_with_tunnel(app, ssh_credentials, remote_host).await?;
+        //let client = Http1Client::connect_over_ssh(ssh_credentials, remote_host).await?;
         *self = Self::Http(client);
         Ok(())
     }

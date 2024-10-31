@@ -6,6 +6,7 @@ pub enum HttpClientError {
     HyperError(hyper::Error),
     IoError(std::io::Error),
     TimeOut,
+    Other(String),
 }
 
 impl From<hyper::Error> for HttpClientError {

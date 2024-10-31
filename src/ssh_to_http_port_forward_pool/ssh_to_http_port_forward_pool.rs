@@ -44,7 +44,8 @@ impl SshToHttpPortForwardPool {
             remote_port
         );
 
-        let listen_host_port = super::generate_unix_socket(listen_port);
+        let listen_host_port = format!("127.0.0.1:{}", listen_port);
+        //let listen_host_port = super::generate_unix_socket(listen_port);
 
         let ssh_session = SshSession::new(ssh_credentials.clone());
 
