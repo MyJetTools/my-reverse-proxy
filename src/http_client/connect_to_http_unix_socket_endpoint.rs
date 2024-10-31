@@ -1,5 +1,8 @@
 use http_body_util::Full;
-use hyper::{body::Bytes, client::conn::http1::SendRequest};
+use hyper::{
+    body::Bytes,
+    client::conn::http1::{Builder, SendRequest},
+};
 use hyper_util::rt::TokioIo;
 use tokio::net::UnixSocket;
 
@@ -14,7 +17,10 @@ pub async fn connect_to_http_unix_socket_endpoint(
     match connect_result {
         Ok(tcp_stream) => {
             let io = TokioIo::new(tcp_stream);
-            let handshake_result = hyper::client::conn::http1::handshake(io).await;
+            let handshake_result = Builder::new()
+                .max_buf_size(1024 * 1024 * 5)
+                .handshake(io)
+                .await;
             match handshake_result {
                 Ok((mut sender, conn)) => {
                     let unix_socket_path = unix_socket_path.to_string();
