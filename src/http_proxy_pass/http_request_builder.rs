@@ -4,7 +4,7 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http_body_util::Full;
 use hyper::{
-    header::{HeaderName, HeaderValue, CONTENT_ENCODING, CONTENT_TYPE},
+    header::{HeaderName, HeaderValue, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE},
     HeaderMap, Request, Uri,
 };
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
@@ -254,7 +254,7 @@ impl HttpRequestBuilder {
 
         if debug {
             println!(
-                "[{}]. After Conversion Request: {:?}. Body: ",
+                "[{}]. After Conversion Request: {:?}. ",
                 result.uri(),
                 result.headers()
             );
@@ -371,12 +371,14 @@ pub async fn into_full_bytes(
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&bytes)?;
         let compressed_data = encoder.finish()?;
-        println!(
-            "Compressed: {} -> {}",
-            before_compress,
-            compressed_data.len()
-        );
+        let compressed_data_len = compressed_data.len();
 
+        if debug {
+            println!("Compressed: {} -> {}", before_compress, compressed_data_len);
+        }
+
+        headers.headers.remove(CONTENT_ENCODING);
+        headers.headers.remove(CONTENT_TYPE);
         headers
             .headers
             .append(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
@@ -384,6 +386,14 @@ pub async fn into_full_bytes(
             CONTENT_TYPE,
             HeaderValue::from_static("application/octet-stream"),
         );
+
+        headers.headers.remove(CONTENT_LENGTH);
+
+        headers.headers.append(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(compressed_data_len.to_string().as_str()).unwrap(),
+        );
+
         http_body_util::Full::new(compressed_data.into())
     } else {
         into_full_body(bytes, debug)
