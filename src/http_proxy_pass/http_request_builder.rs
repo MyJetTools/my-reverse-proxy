@@ -358,14 +358,9 @@ pub async fn into_full_bytes(
 
 fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
     if debug {
-        println!("Body Len before convertion {}", src.len());
+        println!("Body Len: {}", src.len());
     }
-    let bytes: Vec<u8> = src.into();
-
-    if debug {
-        println!("Body Len after convertion {}", bytes.len());
-    }
-    Full::new(Bytes::from(bytes))
+    Full::new(Bytes::from(src))
 }
 fn handle_headers(
     proxy_pass: &HttpProxyPass,
