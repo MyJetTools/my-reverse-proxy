@@ -116,7 +116,11 @@ impl HttpRequestBuilder {
                 let result = hyper::Request::from_parts(parts, body);
 
                 if proxy_pass.endpoint_info.debug {
-                    println!("After Conversion Request: {:?}. Body: ", result.headers());
+                    println!(
+                        "[{}]. After Conversion Request: {:?}. Body: ",
+                        result.uri(),
+                        result.headers()
+                    );
                 }
 
                 self.prepared_request = Some(result);
@@ -138,7 +142,11 @@ impl HttpRequestBuilder {
                 let request = hyper::Request::from_parts(parts, body);
 
                 if proxy_pass.endpoint_info.debug {
-                    println!("After Conversion Request: {:?}. Body: ", request.headers());
+                    println!(
+                        "[{}]. After Conversion Request: {:?}. Body: ",
+                        request.uri(),
+                        request.headers()
+                    );
                 }
 
                 self.prepared_request = Some(request);
@@ -166,7 +174,11 @@ impl HttpRequestBuilder {
                 let result = hyper::Request::from_parts(parts, body);
 
                 if proxy_pass.endpoint_info.debug {
-                    println!("After Conversion Request: {:?}. Body: ", result.headers());
+                    println!(
+                        "[{}] After Conversion Request Headers: {:?}.",
+                        result.uri(),
+                        result.headers()
+                    );
                 }
 
                 self.prepared_request = Some(result);
@@ -241,7 +253,11 @@ impl HttpRequestBuilder {
         let result = builder.body(body).unwrap();
 
         if debug {
-            println!("After Conversion Request: {:?}. Body: ", result.headers());
+            println!(
+                "[{}]. After Conversion Request: {:?}. Body: ",
+                result.uri(),
+                result.headers()
+            );
         }
         self.prepared_request = Some(result);
         self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
