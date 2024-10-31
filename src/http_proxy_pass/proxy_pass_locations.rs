@@ -24,6 +24,7 @@ impl ProxyPassLocations {
                 location.clone(),
                 endpoint_info.debug,
                 request_timeout,
+                location.compress,
             ))
         }
 

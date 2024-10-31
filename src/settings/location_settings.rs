@@ -19,6 +19,7 @@ pub struct LocationSettings {
     pub content_type: Option<String>,
     pub body: Option<String>,
     pub whitelisted_ip: Option<String>,
+    pub compress: Option<bool>,
 }
 
 impl LocationSettings {
@@ -102,6 +103,13 @@ impl LocationSettings {
                 _ => HttpType::Http1,
             },
             None => HttpType::Http1,
+        }
+    }
+
+    pub fn get_compress(&self) -> bool {
+        match self.compress {
+            Some(compress) => compress,
+            None => false,
         }
     }
 

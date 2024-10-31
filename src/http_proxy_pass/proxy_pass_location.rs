@@ -10,6 +10,7 @@ pub struct ProxyPassLocation {
     pub content_source: HttpProxyPassContentSource,
     pub config: Arc<ProxyPassLocationConfig>,
     pub is_http1: Option<bool>,
+    pub compress: bool,
 }
 
 impl ProxyPassLocation {
@@ -17,6 +18,7 @@ impl ProxyPassLocation {
         config: Arc<ProxyPassLocationConfig>,
         debug: bool,
         request_timeout: Duration,
+        compress: bool,
     ) -> Self {
         let content_source = config.create_content_source(debug, request_timeout);
         let is_http1 = content_source.is_http1();
@@ -24,6 +26,7 @@ impl ProxyPassLocation {
             content_source: content_source,
             config,
             is_http1,
+            compress,
         }
     }
 

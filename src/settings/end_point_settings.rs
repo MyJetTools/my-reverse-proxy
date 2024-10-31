@@ -415,6 +415,7 @@ fn convert_to_http_locations(
                 location_settings.get_proxy_pass(host.as_str(), variables, ssh_configs)?,
                 location_settings.domain_name.clone(),
                 location_settings.get_type(),
+                location_settings.get_compress(),
             )
             .into(),
         );

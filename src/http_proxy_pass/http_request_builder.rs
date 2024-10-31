@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::{io::Write, sync::Arc};
 
 use bytes::Bytes;
+use flate2::{write::GzEncoder, Compression};
 use http_body_util::Full;
 use hyper::{
     header::{HeaderName, HeaderValue},
@@ -61,7 +62,11 @@ impl HttpRequestBuilder {
             return Ok(last_result.clone());
         }
 
-        let dest_http1 = inner.locations.find(&location_index).is_http1();
+        let (compress, dest_http1) = {
+            let item = inner.locations.find(&location_index);
+
+            (item.compress, item.is_http1())
+        };
 
         if dest_http1.is_none() {
             return Ok(BuildResult::HttpRequest(location_index));
@@ -78,7 +83,7 @@ impl HttpRequestBuilder {
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
 
-                let body = into_full_bytes(incoming).await?;
+                let body = into_full_bytes(incoming, compress).await?;
 
                 if websocket_update {
                     if proxy_pass.endpoint_info.debug {
@@ -110,7 +115,7 @@ impl HttpRequestBuilder {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
-                let body = into_full_bytes(incoming).await?;
+                let body = into_full_bytes(incoming, compress).await?;
 
                 let request = hyper::Request::from_parts(parts, body);
 
@@ -122,13 +127,13 @@ impl HttpRequestBuilder {
         } else {
             if dest_http1 {
                 return self
-                    .http2_to_http1(location_index, proxy_pass.endpoint_info.debug)
+                    .http2_to_http1(location_index, proxy_pass.endpoint_info.debug, compress)
                     .await;
             } else {
                 // src_http2 && dest_http2
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
-                let body = into_full_bytes(incoming).await?;
+                let body = into_full_bytes(incoming, compress).await?;
 
                 self.prepared_request = Some(hyper::Request::from_parts(parts, body));
 
@@ -142,6 +147,7 @@ impl HttpRequestBuilder {
         &mut self,
         location_index: LocationIndex,
         debug: bool,
+        compress: bool,
     ) -> Result<BuildResult, ProxyPassError> {
         let (parts, incoming) = self.src.take().unwrap().into_parts();
 
@@ -177,7 +183,7 @@ impl HttpRequestBuilder {
             builder = builder.header(header.0, header.1);
         }
 
-        let body = into_full_bytes(incoming).await?;
+        let body = into_full_bytes(incoming, compress).await?;
 
         if parts.headers.get("sec-websocket-key").is_some() {
             if debug {
@@ -296,13 +302,23 @@ impl HttpRequestBuilder {
 
 pub async fn into_full_bytes(
     incoming: impl hyper::body::Body<Data = hyper::body::Bytes, Error = hyper::Error>,
+    compress: bool,
 ) -> Result<Full<Bytes>, ProxyPassError> {
     use http_body_util::BodyExt;
 
     let collected = incoming.collect().await?;
     let bytes = collected.to_bytes();
 
-    let body = http_body_util::Full::new(bytes);
+    let body = if compress {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(&bytes)?;
+        let compressed_data = encoder.finish()?;
+
+        http_body_util::Full::new(compressed_data.into())
+    } else {
+        http_body_util::Full::new(bytes)
+    };
+
     Ok(body)
 }
 

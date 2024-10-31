@@ -290,6 +290,7 @@ mod tests {
                     content_type: None,
                     whitelisted_ip: None,
                     domain_name: None,
+                    compress: None,
                 }],
             },
         );

@@ -19,6 +19,7 @@ pub struct ProxyPassLocationConfig {
     pub remote_type: HttpType,
     pub domain_name: Option<String>,
     proxy_pass_to: ProxyPassTo,
+    pub compress: bool,
 }
 
 impl ProxyPassLocationConfig {
@@ -30,6 +31,7 @@ impl ProxyPassLocationConfig {
         proxy_pass_to: ProxyPassTo,
         domain_name: Option<String>,
         remote_type: HttpType,
+        compress: bool,
     ) -> Self {
         Self {
             path,
@@ -39,6 +41,7 @@ impl ProxyPassLocationConfig {
             proxy_pass_to,
             remote_type,
             domain_name,
+            compress,
         }
     }
     pub fn get_proxy_pass_to_as_string(&self) -> String {
