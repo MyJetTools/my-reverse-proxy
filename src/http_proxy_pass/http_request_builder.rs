@@ -4,7 +4,7 @@ use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http_body_util::Full;
 use hyper::{
-    header::{HeaderName, HeaderValue},
+    header::{HeaderName, HeaderValue, CONTENT_ENCODING, CONTENT_TYPE},
     HeaderMap, Request, Uri,
 };
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
@@ -83,7 +83,7 @@ impl HttpRequestBuilder {
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
 
-                let body = into_full_bytes(incoming, compress).await?;
+                let body = into_full_bytes(&mut parts, incoming, compress).await?;
 
                 if websocket_update {
                     if proxy_pass.endpoint_info.debug {
@@ -115,7 +115,7 @@ impl HttpRequestBuilder {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
-                let body = into_full_bytes(incoming, compress).await?;
+                let body = into_full_bytes(&mut parts, incoming, compress).await?;
 
                 let request = hyper::Request::from_parts(parts, body);
 
@@ -133,7 +133,7 @@ impl HttpRequestBuilder {
                 // src_http2 && dest_http2
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
-                let body = into_full_bytes(incoming, compress).await?;
+                let body = into_full_bytes(&mut parts, incoming, compress).await?;
 
                 self.prepared_request = Some(hyper::Request::from_parts(parts, body));
 
@@ -149,7 +149,7 @@ impl HttpRequestBuilder {
         debug: bool,
         compress: bool,
     ) -> Result<BuildResult, ProxyPassError> {
-        let (parts, incoming) = self.src.take().unwrap().into_parts();
+        let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
         let path_and_query = if let Some(path_and_query) = parts.uri.path_and_query() {
             path_and_query.as_str()
@@ -183,7 +183,7 @@ impl HttpRequestBuilder {
             builder = builder.header(header.0, header.1);
         }
 
-        let body = into_full_bytes(incoming, compress).await?;
+        let body = into_full_bytes(&mut parts, incoming, compress).await?;
 
         if parts.headers.get("sec-websocket-key").is_some() {
             if debug {
@@ -301,6 +301,7 @@ impl HttpRequestBuilder {
 }
 
 pub async fn into_full_bytes(
+    headers: &mut Parts,
     incoming: impl hyper::body::Body<Data = hyper::body::Bytes, Error = hyper::Error>,
     compress: bool,
 ) -> Result<Full<Bytes>, ProxyPassError> {
@@ -309,19 +310,37 @@ pub async fn into_full_bytes(
     let collected = incoming.collect().await?;
     let bytes = collected.to_bytes();
 
-    let body = if compress {
+    let before_compress = bytes.len();
+
+    let body = if compress && before_compress >= 2048 {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&bytes)?;
         let compressed_data = encoder.finish()?;
+        println!(
+            "Compressed: {} -> {}",
+            before_compress,
+            compressed_data.len()
+        );
 
+        headers
+            .headers
+            .append(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+        headers.headers.append(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/octet-stream"),
+        );
         http_body_util::Full::new(compressed_data.into())
     } else {
-        http_body_util::Full::new(bytes)
+        into_full_body(bytes)
     };
 
     Ok(body)
 }
 
+fn into_full_body(src: Bytes) -> Full<Bytes> {
+    let bytes: Vec<u8> = src.into();
+    Full::new(Bytes::from(bytes))
+}
 fn handle_headers(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,

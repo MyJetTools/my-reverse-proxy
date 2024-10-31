@@ -462,3 +462,21 @@ allowed_users:
 
 In this case - allowed_users configuration with id='list_id' must be located inside of one of remote files specified in yaml.
 
+
+
+### Compressing the http body
+Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to compress http body
+
+```yaml
+
+
+  8005:
+    endpoint:
+      type: http2  
+
+    locations:       
+    - path: /service1
+      type: http2  
+      compress: true
+
+```
