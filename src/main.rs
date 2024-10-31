@@ -19,7 +19,7 @@ mod http_server;
 mod populate_variable;
 mod self_signed_cert;
 mod settings;
-mod ssh_to_http_port_forward_pool;
+mod ssh_to_http_port_forward;
 mod ssl;
 mod tcp_port_forward;
 mod timers;
@@ -58,8 +58,6 @@ async fn main() {
     app.states.wait_until_shutdown().await;
 
     println!("Shutting down...");
-
-    app.ssh_to_http_port_forward_pool.clean_up().await;
 
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 

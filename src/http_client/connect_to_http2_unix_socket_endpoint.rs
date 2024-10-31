@@ -1,5 +1,3 @@
-use std::net::TcpStream;
-
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http2::SendRequest};
 use hyper_util::rt::{TokioExecutor, TokioIo};
