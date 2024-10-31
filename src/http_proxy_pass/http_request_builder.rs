@@ -117,7 +117,7 @@ impl HttpRequestBuilder {
 
                 if proxy_pass.endpoint_info.debug {
                     println!(
-                        "[{}]. After Conversion Request: {:?}. Body: ",
+                        "[{}]. After Conversion Request: {:?}.",
                         result.uri(),
                         result.headers()
                     );
@@ -143,7 +143,7 @@ impl HttpRequestBuilder {
 
                 if proxy_pass.endpoint_info.debug {
                     println!(
-                        "[{}]. After Conversion Request: {:?}. Body: ",
+                        "[{}]. After Conversion Request: {:?}.",
                         request.uri(),
                         request.headers()
                     );
@@ -322,36 +322,6 @@ impl HttpRequestBuilder {
     pub fn get(&self) -> hyper::Request<Full<Bytes>> {
         self.prepared_request.as_ref().unwrap().clone()
     }
-
-    /*
-    pub fn is_mine(&self, host_str: &str, is_https: bool) -> bool {
-        let mut parts = host_str.split(":");
-
-        let left = parts.next().unwrap();
-
-        let req_port = if let Some(port) = self.get_port() {
-            port
-        } else {
-            if is_https {
-                443
-            } else {
-                80
-            }
-        };
-
-        if let Some(right_part) = parts.next() {
-            let port = right_part.parse::<u16>().unwrap();
-            if let Some(req_host) = self.get_host() {
-                return port == req_port && req_host == left;
-            }
-
-            return false;
-        }
-
-        let port = left.parse::<u16>().unwrap();
-        return req_port == port;
-    }
-     */
 }
 
 pub async fn into_full_bytes(
@@ -407,13 +377,7 @@ fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
         println!("Body Len: {}", src.len());
     }
 
-    if src.len() < 4096 {
-        return http_body_util::Full::new(src);
-    }
-
-    let vec = src.to_vec();
-
-    Full::new(Bytes::from(vec))
+    http_body_util::Full::new(src)
 }
 fn handle_headers(
     proxy_pass: &HttpProxyPass,
