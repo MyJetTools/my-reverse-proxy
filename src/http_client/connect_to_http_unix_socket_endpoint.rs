@@ -19,6 +19,10 @@ pub async fn connect_to_http_unix_socket_endpoint(
             let io = TokioIo::new(tcp_stream);
             let handshake_result = Builder::new()
                 .max_buf_size(1024 * 1024 * 5)
+                .allow_obsolete_multiline_headers_in_responses(true)
+                .allow_spaces_after_header_name_in_responses(true)
+                .ignore_invalid_headers_in_responses(true)
+                .writev(true)
                 .handshake(io)
                 .await;
             match handshake_result {
