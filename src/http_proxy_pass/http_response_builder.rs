@@ -1,15 +1,13 @@
-use bytes::Bytes;
-use http_body_util::{combinators::BoxBody, BodyExt};
 use hyper::{
-    body::Incoming,
     header::{self, HeaderName, HeaderValue},
     HeaderMap,
 };
 
-use crate::{http_content_source::WebContentType, settings::ModifyHttpHeadersSettings};
+use crate::settings::ModifyHttpHeadersSettings;
 
-use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError};
+use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex};
 
+/*
 pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
@@ -20,16 +18,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
 ) -> Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError> {
     let (mut parts, incoming) = response.into_parts();
 
-    if dest_http1 && !proxy_pass.listening_port_info.http_type.is_protocol_http1() {
-        parts.headers.remove(header::TRANSFER_ENCODING);
-        parts.headers.remove(header::CONNECTION);
-        parts.headers.remove(header::UPGRADE);
-        parts.headers.remove("keep-alive");
-        parts.headers.remove("proxy-connection");
-        parts.headers.remove("connection");
-    }
-
-    modify_req_headers(
+    modify_resp_headers(
         proxy_pass,
         inner,
         req_host_port,
@@ -43,7 +32,7 @@ pub async fn build_http_response<THostPort: HostPort + Send + Sync + 'static>(
         incoming.map_err(|e| e.to_string()).boxed(),
     ))
 }
-
+ */
 /*
 pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
@@ -104,6 +93,7 @@ pub async fn build_chunked_http_response<THostPort: HostPort + Send + Sync + 'st
 }
     */
 
+/*
 pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
     http_proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
@@ -134,14 +124,27 @@ pub fn build_response_from_content<THostPort: HostPort + Send + Sync + 'static>(
         .body(full_body.map_err(|e| crate::to_hyper_error(e)).boxed())
         .unwrap()
 }
-
-fn modify_req_headers<THostPort: HostPort + Send + Sync + 'static>(
+ */
+pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
     req_host_port: &THostPort,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
+    let proxy_pass_location = inner.locations.find(location_index);
+
+    if let Some(dest_http1) = proxy_pass_location.is_http1() {
+        if dest_http1 && !proxy_pass.listening_port_info.http_type.is_protocol_http1() {
+            headers.remove(header::TRANSFER_ENCODING);
+            headers.remove(header::CONNECTION);
+            headers.remove(header::UPGRADE);
+            headers.remove("keep-alive");
+            headers.remove("proxy-connection");
+            headers.remove("connection");
+        }
+    }
+
     if let Some(modify_headers_settings) = proxy_pass
         .endpoint_info
         .modify_headers_settings
@@ -159,8 +162,6 @@ fn modify_req_headers<THostPort: HostPort + Send + Sync + 'static>(
     {
         modify_headers(inner, req_host_port, headers, modify_headers_settings);
     }
-
-    let proxy_pass_location = inner.locations.find(location_index);
 
     if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
         modify_headers(inner, req_host_port, headers, modify_headers_settings);

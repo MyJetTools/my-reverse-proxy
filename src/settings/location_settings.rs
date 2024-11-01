@@ -72,7 +72,7 @@ impl LocationSettings {
                     proxy_pass_to.to_string(),
                 )));
             } else {
-                return Ok(ProxyPassTo::Http(RemoteHost::new(
+                return Ok(ProxyPassTo::Http1(RemoteHost::new(
                     proxy_pass_to.to_string(),
                 )));
             }

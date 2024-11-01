@@ -16,6 +16,7 @@ mod http_content_source;
 mod http_control;
 mod http_proxy_pass;
 mod http_server;
+mod my_http_client;
 mod populate_variable;
 mod self_signed_cert;
 mod settings;
@@ -24,6 +25,7 @@ mod ssl;
 mod tcp_port_forward;
 mod timers;
 mod types;
+mod utils;
 mod variables_reader;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {

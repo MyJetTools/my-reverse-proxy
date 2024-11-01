@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use hyper::Uri;
 
 use crate::configurations::*;
@@ -17,13 +15,12 @@ pub struct ProxyPassLocations {
 }
 
 impl ProxyPassLocations {
-    pub fn new(endpoint_info: &HttpEndpointInfo, request_timeout: Duration) -> Self {
+    pub fn new(endpoint_info: &HttpEndpointInfo) -> Self {
         let mut data = Vec::with_capacity(endpoint_info.locations.len());
         for location in &endpoint_info.locations {
             data.push(ProxyPassLocation::new(
                 location.clone(),
                 endpoint_info.debug,
-                request_timeout,
                 location.compress,
             ))
         }

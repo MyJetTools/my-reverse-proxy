@@ -2,23 +2,23 @@ use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
 };
-use hyper::upgrade::Upgraded;
 use hyper_tungstenite::{
     tungstenite::Message, HyperWebsocket, HyperWebsocketStream, WebSocketStream,
 };
-use hyper_util::rt::TokioIo;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub async fn web_socket_loop(
+pub async fn web_socket_loop<
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+>(
     server_web_socket: HyperWebsocket,
-    to_remote_upgraded: Upgraded,
+    to_remote_stream: TStream,
     debug: bool,
 ) {
     let ws_stream = server_web_socket.await;
 
     let to_remote = WebSocketStream::from_raw_socket(
-        TokioIo::new(to_remote_upgraded),
+        to_remote_stream,
         hyper_tungstenite::tungstenite::protocol::Role::Client,
         None,
     )
@@ -52,9 +52,11 @@ pub async fn web_socket_loop(
     }
 }
 
-async fn serve_from_server_to_client(
+async fn serve_from_server_to_client<
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+>(
     mut websocket: SplitStream<HyperWebsocketStream>,
-    mut to_remote_write: SplitSink<WebSocketStream<TokioIo<Upgraded>>, Message>,
+    mut to_remote_write: SplitSink<WebSocketStream<TStream>, Message>,
 ) -> Result<(), Error> {
     while let Some(message) = websocket.next().await {
         let msg: Message = message?;

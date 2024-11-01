@@ -1,10 +1,12 @@
 use std::time::Duration;
 
+use tokio::sync::Mutex;
+
 use crate::{
-    http_content_source::{
-        LocalPathContentSrc, PathOverSshContentSource, RemoteHttpContentSource, StaticContentSrc,
-    },
-    http_proxy_pass::{HttpProxyPassContentSource, HttpProxyPassRemoteEndpoint},
+    app::AppContext,
+    http_client::{Http1Client, Http1OverSshClient, Http2Client},
+    http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
+    http_proxy_pass::{HttpProxyPassContentSource, ProxyPassError},
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
     types::WhiteListedIpList,
 };
@@ -59,12 +61,13 @@ impl ProxyPassLocationConfig {
     }
      */
 
-    pub fn create_content_source(
+    pub async fn create_and_connect(
         &self,
+        app: &AppContext,
         debug: bool,
         timeout: Duration,
-    ) -> HttpProxyPassContentSource {
-        match &self.proxy_pass_to {
+    ) -> Result<HttpProxyPassContentSource, ProxyPassError> {
+        let result = match &self.proxy_pass_to {
             ProxyPassTo::Static(static_content_model) => {
                 HttpProxyPassContentSource::Static(StaticContentSrc::new(
                     static_content_model.status_code,
@@ -72,20 +75,15 @@ impl ProxyPassLocationConfig {
                     static_content_model.body.clone(),
                 ))
             }
-            ProxyPassTo::Http(remote_host) => {
-                HttpProxyPassContentSource::Http(RemoteHttpContentSource::new(
-                    self.id,
-                    HttpProxyPassRemoteEndpoint::Http(RemoteHost::new(remote_host.to_string())),
-                    debug,
-                ))
+            ProxyPassTo::Http1(remote_host) => {
+                let http_client =
+                    Http1Client::connect(remote_host, &self.domain_name, debug).await?;
+                HttpProxyPassContentSource::Http1(http_client)
             }
 
             ProxyPassTo::Http2(remote_host) => {
-                HttpProxyPassContentSource::Http(RemoteHttpContentSource::new(
-                    self.id,
-                    HttpProxyPassRemoteEndpoint::Http2(RemoteHost::new(remote_host.to_string())),
-                    debug,
-                ))
+                let http_client = Http2Client::connect(remote_host).await?;
+                HttpProxyPassContentSource::Http2(Mutex::new(http_client))
             }
             ProxyPassTo::LocalPath(model) => HttpProxyPassContentSource::LocalPath(
                 LocalPathContentSrc::new(&model.local_path, model.default_file.clone()),
@@ -93,37 +91,50 @@ impl ProxyPassLocationConfig {
             ProxyPassTo::Ssh(model) => match &model.ssh_config.remote_content {
                 SshContent::RemoteHost(remote_host) => {
                     if model.http2 {
-                        HttpProxyPassContentSource::Http(RemoteHttpContentSource::new(
-                            self.id,
-                            HttpProxyPassRemoteEndpoint::Http2OverSsh {
-                                ssh_credentials: model.ssh_config.credentials.clone(),
-                                remote_host: remote_host.clone(),
-                            },
-                            debug,
-                        ))
+                        let http_client = Http2Client::connect_over_ssh(
+                            app,
+                            &model.ssh_config.credentials,
+                            remote_host,
+                        )
+                        .await?;
+                        HttpProxyPassContentSource::Http2(Mutex::new(http_client))
                     } else {
-                        HttpProxyPassContentSource::Http(RemoteHttpContentSource::new(
-                            self.id,
-                            HttpProxyPassRemoteEndpoint::Http1OverSsh {
-                                ssh_credentials: model.ssh_config.credentials.clone(),
-                                remote_host: remote_host.clone(),
-                            },
-                            debug,
-                        ))
+                        let http_client =
+                            Http1OverSshClient::connect(&model.ssh_config.credentials, remote_host)
+                                .await?;
+
+                        HttpProxyPassContentSource::Http1OverSsh(http_client)
                     }
                 }
                 SshContent::FilePath(file_path) => {
-                    HttpProxyPassContentSource::PathOverSsh(PathOverSshContentSource::new(
+                    let mut src = PathOverSshContentSource::new(
                         model.ssh_config.credentials.clone(),
                         file_path.clone(),
                         model.default_file.clone(),
                         timeout,
-                    ))
+                    );
+
+                    src.connect_if_require(app).await?;
+                    HttpProxyPassContentSource::PathOverSsh(src)
                 }
             },
             ProxyPassTo::Tcp(_) => {
                 panic!("Should not be here.")
             }
+        };
+
+        Ok(result)
+    }
+
+    pub fn is_http1(&self) -> Option<bool> {
+        match &self.proxy_pass_to {
+            ProxyPassTo::Http1(_) => Some(true),
+            ProxyPassTo::Http2(_) => Some(false),
+            ProxyPassTo::Ssh(model) => match &model.ssh_config.remote_content {
+                SshContent::RemoteHost(_) => Some(!model.http2),
+                SshContent::FilePath(_) => None,
+            },
+            _ => None,
         }
     }
 }

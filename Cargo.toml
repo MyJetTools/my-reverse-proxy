@@ -36,6 +36,8 @@ lazy_static = "*"
 pem = "*"
 serde = { version = "*", features = ["derive"] }
 futures = "*"
+tokio-util = { version = "*", features = ["compat"] }
+futures-util = { version = "*", features = ["compat"] }
 serde_yaml = "*"
 http2parse = "*"
 rustls-pki-types = "*"
@@ -52,3 +54,4 @@ prost-types = "*"
 serde_json = "*"
 rcgen = "*"
 flate2 = "*"
+http = "*"

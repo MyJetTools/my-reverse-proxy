@@ -19,7 +19,9 @@ pub enum ProxyPassError {
     Unauthorized,
     UserIsForbidden,
     IpRestricted(String),
+    Disconnected,
     Timeout,
+    ReconnectAndRetry,
 }
 
 impl ProxyPassError {
@@ -33,6 +35,13 @@ impl ProxyPassError {
     pub fn is_hyper_canceled(&self) -> bool {
         match self {
             ProxyPassError::HyperError(err) => err.is_canceled(),
+            _ => false,
+        }
+    }
+
+    pub fn is_reconnect_and_retry(&self) -> bool {
+        match self {
+            ProxyPassError::ReconnectAndRetry => true,
             _ => false,
         }
     }
@@ -74,30 +83,32 @@ pub enum ExecuteWithTimeoutError {
     ProxyPassError(ProxyPassError),
 }
 
-pub async fn handle_error<TResult>(
-    result: Result<Result<TResult, hyper::Error>, tokio::time::error::Elapsed>,
-    attempt_no: usize,
-) -> Result<TResult, ExecuteWithTimeoutError> {
-    if let Err(err) = &result {
-        return Err(ExecuteWithTimeoutError::ProxyPassError(
-            ProxyPassError::Timeout,
-        ));
+impl From<ProxyPassError> for ExecuteWithTimeoutError {
+    fn from(src: ProxyPassError) -> Self {
+        Self::ProxyPassError(src)
     }
+}
 
-    let result = result.unwrap();
+impl From<hyper::Error> for ExecuteWithTimeoutError {
+    fn from(src: hyper::Error) -> Self {
+        Self::ProxyPassError(src.into())
+    }
+}
 
+pub async fn handle_error<TResult>(
+    result: Result<TResult, ProxyPassError>,
+    attempt_no: usize,
+) -> Result<TResult, ProxyPassError> {
     match result {
         Ok(result) => Ok(result),
         Err(err) => {
-            if err.is_canceled() {
+            if err.is_hyper_canceled() {
                 if attempt_no <= 1 {
-                    return Err(ExecuteWithTimeoutError::ReconnectAndRetry);
+                    return Err(ProxyPassError::ReconnectAndRetry);
                 }
             }
 
-            Err(ExecuteWithTimeoutError::ProxyPassError(
-                ProxyPassError::HyperError(err),
-            ))
+            Err(err)
         }
     }
 }

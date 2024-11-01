@@ -17,8 +17,6 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
-    let request_timeout = app.connection_settings.remote_connect_timeout;
-
     loop {
         let accepted_connection = listener.accept().await;
 
@@ -56,11 +54,7 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
             .serve_connection(
                 io,
                 service_fn(move |req| {
-                    super::handle_request::handle_request(
-                        http_request_handler.clone(),
-                        req,
-                        request_timeout,
-                    )
+                    super::handle_request::handle_request(http_request_handler.clone(), req)
                 }),
             )
             .with_upgrades();

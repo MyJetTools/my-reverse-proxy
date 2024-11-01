@@ -3,7 +3,6 @@ use std::sync::Arc;
 use http_body_util::Full;
 use hyper::{body::Bytes, client::conn::http2::SendRequest};
 use my_ssh::SshCredentials;
-use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::ssh_to_http_port_forward::SshToHttpPortForwardConfiguration;
 use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
@@ -13,7 +12,6 @@ use crate::configurations::*;
 use super::{HttpClientError, HTTP_CLIENT_TIMEOUT};
 
 pub struct Http2Client {
-    pub connected: DateTimeAsMicroseconds,
     pub send_request: SendRequest<Full<Bytes>>,
     pub _port_forward: Option<Arc<SshToHttpPortForwardConfiguration>>,
 }
@@ -52,7 +50,6 @@ impl Http2Client {
 
         let result = Self {
             send_request,
-            connected: DateTimeAsMicroseconds::now(),
             _port_forward: None,
         };
 
@@ -69,7 +66,6 @@ impl Http2Client {
 
         let result = Self {
             send_request,
-            connected: DateTimeAsMicroseconds::now(),
             _port_forward: Some(port_forward),
         };
 

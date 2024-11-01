@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
 use crate::{
@@ -8,12 +6,6 @@ use crate::{
 };
 
 use super::{HostPort, HttpProxyPassIdentity, ProxyPassLocations};
-
-#[derive(Debug)]
-pub enum RetryType {
-    Retry(Option<Duration>),
-    NoRetry,
-}
 
 pub struct HttpProxyPassInner {
     pub disposed: bool,

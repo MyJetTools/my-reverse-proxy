@@ -63,7 +63,6 @@ impl HttpRequestHandler {
 pub async fn handle_request(
     handler: Arc<HttpRequestHandler>,
     req: hyper::Request<hyper::body::Incoming>,
-    request_timeout: std::time::Duration,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     match handler.as_ref() {
         HttpRequestHandler::LazyInit {
@@ -97,12 +96,8 @@ pub async fn handle_request(
                         let listening_port_info =
                             endpoint_info.get_listening_port_info(*socket_addr);
 
-                        let http_proxy_pass = Arc::new(HttpProxyPass::new(
-                            endpoint_info,
-                            listening_port_info,
-                            None,
-                            request_timeout,
-                        ));
+                        let http_proxy_pass =
+                            Arc::new(HttpProxyPass::new(endpoint_info, listening_port_info, None));
 
                         proxy_pass_result = Some(http_proxy_pass);
                         *proxy_pass.lock().await = proxy_pass_result.clone();

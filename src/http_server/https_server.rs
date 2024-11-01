@@ -215,12 +215,7 @@ fn kick_off_https1(
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
-        let http_proxy_pass = HttpProxyPass::new(
-            endpoint_info,
-            listening_port_info,
-            cn_user_name,
-            app.connection_settings.remote_connect_timeout,
-        );
+        let http_proxy_pass = HttpProxyPass::new(endpoint_info, listening_port_info, cn_user_name);
 
         let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
 
@@ -233,11 +228,7 @@ fn kick_off_https1(
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::handle_request::handle_request(
-                        http_request_handler.clone(),
-                        req,
-                        app.connection_settings.remote_connect_timeout,
-                    )
+                    super::handle_request::handle_request(http_request_handler.clone(), req)
                 }),
             )
             .with_upgrades()
@@ -270,12 +261,8 @@ fn kick_off_https2(
 
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
-        let http_proxy_pass = HttpProxyPass::new(
-            endpoint_info,
-            listening_port_info,
-            client_certificate,
-            app.connection_settings.remote_connect_timeout,
-        );
+        let http_proxy_pass =
+            HttpProxyPass::new(endpoint_info, listening_port_info, client_certificate);
 
         let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
 
@@ -288,11 +275,7 @@ fn kick_off_https2(
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::handle_request::handle_request(
-                        http_request_handler.clone(),
-                        req,
-                        app.connection_settings.remote_connect_timeout,
-                    )
+                    super::handle_request::handle_request(http_request_handler.clone(), req)
                 }),
             )
             .await

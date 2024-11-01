@@ -41,7 +41,7 @@ impl SshProxyPassModel {
 }
 
 pub enum ProxyPassTo {
-    Http(RemoteHost),
+    Http1(RemoteHost),
     Http2(RemoteHost),
     LocalPath(LocalPathModel),
     Ssh(SshProxyPassModel),
@@ -52,7 +52,7 @@ pub enum ProxyPassTo {
 impl ProxyPassTo {
     pub fn to_string(&self) -> String {
         match self {
-            ProxyPassTo::Http(remote_host) => remote_host.to_string(),
+            ProxyPassTo::Http1(remote_host) => remote_host.to_string(),
             ProxyPassTo::Http2(remote_host) => remote_host.to_string(),
             ProxyPassTo::LocalPath(model) => model.to_string(),
             ProxyPassTo::Ssh(model) => model.to_string(),

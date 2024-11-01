@@ -314,7 +314,7 @@ impl EndpointSettings {
                 let location_settings = locations.get(0).unwrap();
 
                 match location_settings.get_proxy_pass(host.as_str(), variables, ssh_configs)? {
-                    super::ProxyPassTo::Http(_) => {
+                    super::ProxyPassTo::Http1(_) => {
                         return Err(
                             "It is not possible to serve remote http content over tcp endpoint"
                                 .to_string(),

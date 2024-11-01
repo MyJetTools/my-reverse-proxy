@@ -53,11 +53,7 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
                 .serve_connection(
                     io,
                     service_fn(move |req| {
-                        super::handle_request::handle_request(
-                            http_request_handler.clone(),
-                            req,
-                            app.connection_settings.remote_connect_timeout,
-                        )
+                        super::handle_request::handle_request(http_request_handler.clone(), req)
                     }),
                 )
                 .await;

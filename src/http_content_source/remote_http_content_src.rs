@@ -1,13 +1,13 @@
-use std::{future::Future, sync::atomic::AtomicI64};
+use std::sync::atomic::AtomicI64;
 
 use bytes::Bytes;
-use http_body_util::Full;
+use http_body_util::{combinators::BoxBody, Full};
 use hyper::{body::Incoming, Response};
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StopWatch};
 
 use crate::{
     app::AppContext,
-    http_client::HttpClient,
+    http_client::HTTP_CLIENT_TIMEOUT,
     http_proxy_pass::{HttpProxyPassRemoteEndpoint, ProxyPassError},
 };
 
@@ -125,32 +125,60 @@ impl RemoteHttpContentSource {
         Ok(())
     }
 
-    pub fn send_http1_request(
+    pub async fn send_http1_request(
         &mut self,
         req: hyper::Request<Full<Bytes>>,
-    ) -> Result<impl Future<Output = Result<Response<Incoming>, hyper::Error>>, ProxyPassError>
-    {
-        let result = self
-            .http_client
-            .unwrap_as_http1_mut(self.id)?
-            .send_request
-            .send_request(req.clone());
+    ) -> Result<Result<Response<Incoming>, hyper::Error>, ProxyPassError> {
+        let client = self.http_client.unwrap_as_http1(self.id)?;
 
-        Ok(result)
+        let feature = {
+            let mut write_access = client.lock().await;
+            write_access.send_request.send_request(req)
+        };
+
+        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, feature).await;
+
+        if result.is_err() {
+            return Err(ProxyPassError::Timeout);
+        }
+
+        Ok(result.unwrap())
     }
 
-    pub fn send_http2_request(
+    pub async fn send_http1_over_ssh_request(
+        &self,
+        req: hyper::Request<Full<Bytes>>,
+    ) -> Result<Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError>, ProxyPassError>
+    {
+        let client = self.http_client.unwrap_as_http1_over_ssh(self.id)?;
+
+        let feature = client.http_client.send(req);
+
+        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, feature).await;
+        if result.is_err() {
+            return Err(ProxyPassError::Timeout);
+        }
+
+        Ok(result.unwrap())
+    }
+
+    pub async fn send_http2_request(
         &mut self,
         req: hyper::Request<Full<Bytes>>,
-    ) -> Result<impl Future<Output = Result<Response<Incoming>, hyper::Error>>, ProxyPassError>
-    {
-        let result = self
-            .http_client
-            .unwrap_as_http2_mut(self.id)?
-            .send_request
-            .send_request(req.clone());
+    ) -> Result<Result<Response<Incoming>, hyper::Error>, ProxyPassError> {
+        let http2_client = self.http_client.unwrap_as_http2(self.id)?;
 
-        Ok(result)
+        let feature = {
+            let mut write_access = http2_client.lock().await;
+            write_access.send_request.send_request(req.clone())
+        };
+
+        let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, feature).await;
+        if result.is_err() {
+            return Err(ProxyPassError::Timeout);
+        }
+
+        Ok(result.unwrap())
     }
 
     pub fn get_connected_moment(&self) -> Option<DateTimeAsMicroseconds> {
