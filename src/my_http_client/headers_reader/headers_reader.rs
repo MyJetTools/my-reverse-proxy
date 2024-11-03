@@ -1,6 +1,6 @@
 use crate::my_http_client::{
-    BodyReader, BodyReaderChunked, BodyReaderLengthBased, DetectedBodySize, HttpParseError,
-    TcpBuffer,
+    BodyReader, BodyReaderChunked, DetectedBodySize, FullBodyReader, HttpParseError, TcpBuffer,
+    WebSocketUpgradeBuilder,
 };
 
 pub struct HeadersReader {
@@ -56,12 +56,11 @@ impl HeadersReader {
 
         match self.detected_body_size {
             DetectedBodySize::Unknown => {
-                let body_reader = BodyReaderLengthBased::new(self.builder.take().unwrap(), 0);
+                let body_reader = FullBodyReader::new(self.builder.take().unwrap(), 0);
                 return Ok(BodyReader::LengthBased(body_reader));
             }
             DetectedBodySize::Known(body_size) => {
-                let body_reader =
-                    BodyReaderLengthBased::new(self.builder.take().unwrap(), body_size);
+                let body_reader = FullBodyReader::new(self.builder.take().unwrap(), body_size);
                 return Ok(BodyReader::LengthBased(body_reader));
             }
             DetectedBodySize::Chunked => {
@@ -69,7 +68,9 @@ impl HeadersReader {
                 return Ok(BodyReader::Chunked(body_reader));
             }
             DetectedBodySize::WebSocketUpgrade => {
-                return Ok(BodyReader::WebSocketUpgrade(self.builder.take()));
+                return Ok(BodyReader::WebSocketUpgrade(WebSocketUpgradeBuilder::new(
+                    self.builder.take().unwrap(),
+                )));
             }
         }
     }

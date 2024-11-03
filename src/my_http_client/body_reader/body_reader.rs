@@ -1,18 +1,40 @@
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 
-use crate::my_http_client::{HttpParseError, TcpBuffer};
-
 use super::*;
 
 #[derive(Debug)]
 pub enum BodyReader {
-    LengthBased(BodyReaderLengthBased),
+    LengthBased(FullBodyReader),
     Chunked(BodyReaderChunked),
-    WebSocketUpgrade(Option<http::response::Builder>),
+    WebSocketUpgrade(WebSocketUpgradeBuilder),
 }
 
+#[derive(Debug)]
+pub struct WebSocketUpgradeBuilder {
+    builder: Option<http::response::Builder>,
+}
+
+impl WebSocketUpgradeBuilder {
+    pub fn new(builder: http::response::Builder) -> Self {
+        Self {
+            builder: Some(builder),
+        }
+    }
+
+    pub fn take_upgrade_response(&mut self) -> http::Response<BoxBody<Bytes, String>> {
+        let builder = self.builder.take();
+        if builder.is_none() {
+            panic!("WebSocket upgrade response is already taken");
+        }
+
+        crate::utils::into_empty_body(builder.unwrap())
+    }
+}
+
+/*
 impl BodyReader {
+
     pub fn try_extract_response(
         &mut self,
         tcp_buffer: &mut TcpBuffer,
@@ -25,7 +47,9 @@ impl BodyReader {
             }
         }
     }
+     */
 
+/*
     pub fn try_into_web_socket_upgrade(
         &mut self,
     ) -> Option<http::Response<BoxBody<Bytes, String>>> {
@@ -37,4 +61,6 @@ impl BodyReader {
             _ => None,
         }
     }
+
 }
+     */

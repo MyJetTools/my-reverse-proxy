@@ -1,9 +1,9 @@
 use bytes::Bytes;
-use http_body_util::combinators::BoxBody;
+use futures::SinkExt;
+use http::Response;
+use http_body_util::{combinators::BoxBody, BodyExt, StreamBody};
 
 use crate::my_http_client::{HttpParseError, TcpBuffer};
-
-use super::BodyReaderInner;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ChunksReadingMode {
@@ -15,24 +15,41 @@ pub enum ChunksReadingMode {
 
 #[derive(Debug)]
 pub struct BodyReaderChunked {
-    pub inner: Option<BodyReaderInner>,
-
     pub reading_mode: ChunksReadingMode,
+    sender: futures::channel::mpsc::Sender<Result<hyper::body::Frame<Bytes>, hyper::Error>>,
+    pub current_chunk: Option<Vec<u8>>,
+    pub chunked_body_response: Option<Response<BoxBody<Bytes, String>>>,
 }
 
 impl BodyReaderChunked {
     pub fn new(builder: http::response::Builder) -> Self {
-        let body = Vec::new();
+        let (sender, receiver) = futures::channel::mpsc::channel(1024);
+
+        //   let chunk = hyper::body::Frame::data(vec![0u8].into());
+        //   let send_result = sender.send(Ok(chunk)).await;
+
+        let stream_body = StreamBody::new(receiver);
+
+        let boxed_body = stream_body.map_err(|e: hyper::Error| e.to_string()).boxed();
+
+        let chunked_body_response = builder.body(boxed_body).unwrap();
+
         Self {
-            inner: Some(BodyReaderInner { builder, body }),
             reading_mode: ChunksReadingMode::WaitingFroChunkSize,
+            sender,
+            current_chunk: None,
+            chunked_body_response: chunked_body_response.into(),
         }
     }
 
-    pub fn try_extract_response(
+    pub fn get_chunked_body_response(&mut self) -> Option<Response<BoxBody<Bytes, String>>> {
+        self.chunked_body_response.take()
+    }
+
+    pub async fn populate_and_detect_last_body_chunk(
         &mut self,
         read_buffer: &mut TcpBuffer,
-    ) -> Result<http::Response<BoxBody<Bytes, String>>, HttpParseError> {
+    ) -> Result<(), HttpParseError> {
         loop {
             match self.reading_mode {
                 ChunksReadingMode::WaitingFroChunkSize => {
@@ -43,6 +60,7 @@ impl BodyReaderChunked {
                             if chunk_size == 0 {
                                 self.reading_mode = ChunksReadingMode::WaitingForEnd;
                             } else {
+                                self.current_chunk = Vec::with_capacity(chunk_size).into();
                                 self.reading_mode = ChunksReadingMode::ReadingChunk(chunk_size);
                             }
                         }
@@ -57,11 +75,17 @@ impl BodyReaderChunked {
                 ChunksReadingMode::ReadingChunk(chunk_size) => {
                     let buf = read_buffer.get_as_much_as_possible(chunk_size)?;
 
-                    self.inner.as_mut().unwrap().body.extend_from_slice(buf);
+                    self.current_chunk.as_mut().unwrap().extend_from_slice(buf);
 
                     let remains_to_read = chunk_size - buf.len();
 
                     if remains_to_read == 0 {
+                        let chunk = self.current_chunk.take().unwrap();
+
+                        let _ = self
+                            .sender
+                            .send(Ok(hyper::body::Frame::data(chunk.into())))
+                            .await;
                         self.reading_mode = ChunksReadingMode::WaitingForSeparator;
                     } else {
                         self.reading_mode = ChunksReadingMode::ReadingChunk(remains_to_read);
@@ -74,9 +98,7 @@ impl BodyReaderChunked {
                 ChunksReadingMode::WaitingForEnd => {
                     read_buffer.skip_exactly(2)?;
 
-                    let inner = self.inner.take().unwrap();
-
-                    return Ok(inner.into_body(true));
+                    return Ok(());
                 }
             }
         }

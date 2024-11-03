@@ -5,23 +5,23 @@ use super::*;
 use crate::my_http_client::{HttpParseError, TcpBuffer};
 
 #[derive(Debug)]
-pub struct BodyReaderLengthBased {
-    inner: Option<BodyReaderInner>,
+pub struct FullBodyReader {
+    inner: Option<FullBodyReaderInner>,
     pub body_size: usize,
 }
 
-impl BodyReaderLengthBased {
+impl FullBodyReader {
     pub fn new(builder: http::response::Builder, body_size: usize) -> Self {
         let body = Vec::with_capacity(body_size);
         Self {
-            inner: Some(BodyReaderInner { builder, body }),
+            inner: Some(FullBodyReaderInner { builder, body }),
             body_size,
         }
     }
 
     pub fn try_extract_response(
         &mut self,
-        read_buffer: &mut TcpBuffer,
+        tcp_buffer: &mut TcpBuffer,
     ) -> Result<http::Response<BoxBody<Bytes, String>>, HttpParseError> {
         let inner = self.inner.take();
 
@@ -32,13 +32,13 @@ impl BodyReaderLengthBased {
         let mut inner = inner.unwrap();
 
         if inner.body.len() == self.body_size {
-            let response = inner.into_body(false);
+            let response = inner.into_body();
             return Ok(response);
         }
 
         let remain_to_read = self.body_size - inner.body.len();
 
-        let content = read_buffer.get_as_much_as_possible(remain_to_read);
+        let content = tcp_buffer.get_as_much_as_possible(remain_to_read);
 
         let content = match content {
             Ok(result) => result,
@@ -51,7 +51,7 @@ impl BodyReaderLengthBased {
         inner.body.extend_from_slice(content);
 
         if inner.body.len() == self.body_size {
-            let response = inner.into_body(false);
+            let response = inner.into_body();
             return Ok(response);
         }
 

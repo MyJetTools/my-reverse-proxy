@@ -29,10 +29,15 @@ impl Http1OverSshClient {
 pub struct Ssh1Connector {
     pub ssh_credentials: Arc<SshCredentials>,
     pub remote_host: RemoteHost,
+    pub debug: bool,
 }
 
 #[async_trait::async_trait]
 impl MyHttpClientConnector<SshAsyncChannel> for Ssh1Connector {
+    fn is_debug(&self) -> bool {
+        self.debug
+    }
+
     fn get_remote_host(&self) -> StrOrString {
         format!(
             "ssh:{}@{}->{}",

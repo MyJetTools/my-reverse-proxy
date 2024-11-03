@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use encryption::aes::AesKey;
-use rust_extensions::AppStates;
+use rust_extensions::{AppStates, UnsafeValue};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -27,6 +27,7 @@ pub struct AppContext {
     current_app_configuration: RwLock<Option<Arc<AppConfiguration>>>,
     pub states: Arc<AppStates>,
     pub local_port_allocator: LocalPortAllocator,
+    pub show_error_description: UnsafeValue<bool>,
 }
 
 impl AppContext {
@@ -49,6 +50,9 @@ impl AppContext {
             states: Arc::new(AppStates::create_initialized()),
             local_port_allocator: LocalPortAllocator::new(),
             ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
+            show_error_description: UnsafeValue::new(
+                settings_model.get_show_error_description_on_error_page(),
+            ),
         }
     }
 

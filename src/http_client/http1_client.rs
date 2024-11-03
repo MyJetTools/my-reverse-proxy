@@ -24,19 +24,24 @@ impl Http1Client {
             return Http1Client::Https(MyHttpClient::new(tls_stream));
         }
 
-        let http1_connector = Http1Connector { remote_host };
+        let http1_connector = Http1Connector { remote_host, debug };
         return Http1Client::Http(MyHttpClient::new(http1_connector));
     }
 }
 
 pub struct Http1Connector {
     remote_host: RemoteHost,
+    debug: bool,
 }
 
 #[async_trait::async_trait]
 impl MyHttpClientConnector<TcpStream> for Http1Connector {
     fn get_remote_host(&self) -> StrOrString {
         self.remote_host.as_str().into()
+    }
+
+    fn is_debug(&self) -> bool {
+        self.debug
     }
 
     async fn connect(&self) -> Result<TcpStream, MyHttpClientError> {
@@ -64,6 +69,11 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for Http1TlsConnector {
     fn get_remote_host(&self) -> StrOrString {
         self.remote_host.as_str().into()
     }
+
+    fn is_debug(&self) -> bool {
+        self.debug
+    }
+
     async fn connect(
         &self,
     ) -> Result<TlsStream<TcpStream>, crate::my_http_client::MyHttpClientError> {

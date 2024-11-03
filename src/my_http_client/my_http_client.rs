@@ -50,9 +50,11 @@ impl<
             .new_connection(current_connection_id, writer)
             .await;
 
+        let debug = self.connector.is_debug();
+
         let writer_cloned = self.inner.clone();
         tokio::spawn(async move {
-            super::read_loop::read_loop(reader, current_connection_id, writer_cloned).await;
+            super::read_loop::read_loop(reader, current_connection_id, writer_cloned, debug).await;
         });
 
         Ok(())

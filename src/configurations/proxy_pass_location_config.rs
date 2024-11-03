@@ -103,6 +103,7 @@ impl ProxyPassLocationConfig {
                         let connector = Ssh1Connector {
                             ssh_credentials: model.ssh_config.credentials.clone(),
                             remote_host: remote_host.clone(),
+                            debug,
                         };
 
                         let http_client = MyHttpClient::new(connector);

@@ -6,6 +6,7 @@ use super::{ConnectionsSettings, ModifyHttpHeadersSettings};
 pub struct GlobalSettings {
     pub connection_settings: Option<ConnectionsSettings>,
     pub all_http_endpoints: Option<AllHttpEndpointsGlobalSettings>,
+    pub show_error_description_on_error_page: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

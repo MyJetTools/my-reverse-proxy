@@ -25,6 +25,17 @@ pub struct SettingsModel {
 }
 
 impl SettingsModel {
+    pub fn get_show_error_description_on_error_page(&self) -> bool {
+        if let Some(global_settings) = self.global_settings.as_ref() {
+            if let Some(show_error_description_on_error_page) =
+                global_settings.show_error_description_on_error_page
+            {
+                return show_error_description_on_error_page;
+            }
+        }
+
+        false
+    }
     pub fn get_connections_settings(&self) -> ConnectionsSettingsModel {
         let result = if let Some(global_settings) = self.global_settings.as_ref() {
             match global_settings.connection_settings.as_ref() {

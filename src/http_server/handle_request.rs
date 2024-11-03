@@ -185,7 +185,10 @@ async fn handle_requests(
                     sw.duration_as_string()
                 );
             }
-            return Ok(super::generate_tech_page(err));
+            return Ok(super::generate_tech_page(
+                err,
+                app.show_error_description.get_value(),
+            ));
         }
     }
 }

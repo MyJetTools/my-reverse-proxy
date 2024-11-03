@@ -1,9 +1,9 @@
 mod body_reader;
 pub use body_reader::*;
-mod body_reader_length_based;
-pub use body_reader_length_based::*;
+mod full_body_reader;
+pub use full_body_reader::*;
 mod body_reader_chunked;
 pub use body_reader_chunked::*;
 
-mod body_reader_inner;
-pub use body_reader_inner::*;
+mod full_body_reader_inner;
+pub use full_body_reader_inner::*;
