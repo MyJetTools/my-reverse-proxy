@@ -9,10 +9,10 @@ use tokio::sync::Mutex;
 use crate::{
     http_client::{Http1Client, Http2Client, Ssh1Connector, HTTP_CLIENT_TIMEOUT},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
-    my_http_client::MyHttpClient,
 };
 
 use super::ProxyPassError;
+use my_http_client::MyHttpClient;
 
 pub enum HttpProxyPassContentSource {
     Http1(Http1Client),

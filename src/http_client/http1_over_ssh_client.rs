@@ -3,10 +3,9 @@ use std::sync::Arc;
 use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
 use rust_extensions::StrOrString;
 
-use crate::{
-    configurations::RemoteHost,
-    my_http_client::{MyHttpClientConnector, MyHttpClientError},
-};
+use crate::configurations::RemoteHost;
+
+use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 
 use super::HTTP_CLIENT_TIMEOUT;
 

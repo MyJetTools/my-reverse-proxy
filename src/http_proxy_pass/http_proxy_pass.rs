@@ -137,7 +137,7 @@ impl HttpProxyPass {
                     }
                 }
 
-                let response = crate::utils::into_full_body_response(upgrade_response);
+                let response = my_http_client::utils::into_full_body_response(upgrade_response);
                 (location_index, response)
             }
         };

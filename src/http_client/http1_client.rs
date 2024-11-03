@@ -4,7 +4,7 @@ use my_tls::tokio_rustls::client::TlsStream;
 use rust_extensions::StrOrString;
 use tokio::net::TcpStream;
 
-use crate::my_http_client::{MyHttpClient, MyHttpClientConnector, MyHttpClientError};
+use my_http_client::{MyHttpClient, MyHttpClientConnector, MyHttpClientError};
 
 use crate::configurations::*;
 
@@ -48,7 +48,7 @@ impl MyHttpClientConnector<TcpStream> for Http1Connector {
         match TcpStream::connect(self.remote_host.get_host_port()).await {
             Ok(tcp_stream) => Ok(tcp_stream),
             Err(err) => Err(
-                crate::my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
                     "{}. Err:{}",
                     self.remote_host.as_str(),
                     err
@@ -74,9 +74,7 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for Http1TlsConnector {
         self.debug
     }
 
-    async fn connect(
-        &self,
-    ) -> Result<TlsStream<TcpStream>, crate::my_http_client::MyHttpClientError> {
+    async fn connect(&self) -> Result<TlsStream<TcpStream>, my_http_client::MyHttpClientError> {
         use my_tls::tokio_rustls::rustls::pki_types::ServerName;
 
         let host_port = self.remote_host.get_host_port();
@@ -86,9 +84,10 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for Http1TlsConnector {
                 Ok(tcp_stream) => tcp_stream,
                 Err(err) => {
                     return Err(
-                        crate::my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(
-                            format!("{}", err),
-                        ),
+                        my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                            "{}",
+                            err
+                        )),
                     )
                 }
             }
@@ -97,9 +96,10 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for Http1TlsConnector {
                 Ok(tcp_stream) => tcp_stream,
                 Err(err) => {
                     return Err(
-                        crate::my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(
-                            format!("{}", err),
-                        ),
+                        my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                            "{}",
+                            err
+                        )),
                     )
                 }
             }
@@ -139,7 +139,7 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for Http1TlsConnector {
             Ok(tls_stream) => tls_stream,
             Err(err) => {
                 return Err(
-                    crate::my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                    my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
                         "{}",
                         err
                     )),

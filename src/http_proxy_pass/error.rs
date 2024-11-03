@@ -14,7 +14,7 @@ pub enum ProxyPassError {
     IoError(tokio::io::Error),
     SshSessionError(my_ssh::SshSessionError),
     WebSocketProtocolError(hyper_tungstenite::tungstenite::error::ProtocolError),
-    MyHttpClientError(crate::my_http_client::MyHttpClientError),
+    MyHttpClientError(my_http_client::MyHttpClientError),
     NoLocationFound,
     ConnectionIsDisposed,
     Unauthorized,
@@ -70,8 +70,8 @@ impl From<hyper_tungstenite::tungstenite::error::ProtocolError> for ProxyPassErr
     }
 }
 
-impl From<crate::my_http_client::MyHttpClientError> for ProxyPassError {
-    fn from(src: crate::my_http_client::MyHttpClientError) -> Self {
+impl From<my_http_client::MyHttpClientError> for ProxyPassError {
+    fn from(src: my_http_client::MyHttpClientError) -> Self {
         Self::MyHttpClientError(src)
     }
 }

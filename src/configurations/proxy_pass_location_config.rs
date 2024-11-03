@@ -7,12 +7,12 @@ use crate::{
     http_client::{Http1Client, Http2Client, Ssh1Connector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::{HttpProxyPassContentSource, ProxyPassError},
-    my_http_client::MyHttpClient,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
     types::WhiteListedIpList,
 };
 
 use super::*;
+use my_http_client::MyHttpClient;
 
 pub struct ProxyPassLocationConfig {
     pub path: String,
