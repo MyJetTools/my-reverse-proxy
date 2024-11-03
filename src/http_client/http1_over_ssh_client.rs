@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
 use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::StrOrString;
 
 use crate::{
-    configurations::RemoteHost, http_proxy_pass::ProxyPassError, my_http_client::MyHttpClient,
+    configurations::RemoteHost,
+    my_http_client::{MyHttpClientConnector, MyHttpClientError},
 };
 
 use super::HTTP_CLIENT_TIMEOUT;
 
+/*
 pub struct Http1OverSshClient {
     pub http_client: MyHttpClient<SshAsyncChannel>,
     pub _ssh_credentials: Arc<SshCredentials>,
@@ -21,15 +23,50 @@ impl Http1OverSshClient {
         ssh_credentials: &Arc<SshCredentials>,
         remote_host: &RemoteHost,
     ) -> Result<Self, ProxyPassError> {
-        let ssh_session = SshSession::new(ssh_credentials.clone());
+    }
+}
+ */
+pub struct Ssh1Connector {
+    pub ssh_credentials: Arc<SshCredentials>,
+    pub remote_host: RemoteHost,
+}
+
+#[async_trait::async_trait]
+impl MyHttpClientConnector<SshAsyncChannel> for Ssh1Connector {
+    fn get_remote_host(&self) -> StrOrString {
+        format!(
+            "ssh:{}@{}->{}",
+            self.ssh_credentials.get_user_name(),
+            self.ssh_credentials.get_host_port_as_string(),
+            self.remote_host.as_str()
+        )
+        .into()
+    }
+    async fn connect(&self) -> Result<SshAsyncChannel, MyHttpClientError> {
+        let ssh_session = SshSession::new(self.ssh_credentials.clone());
 
         let tcp_stream = ssh_session
             .connect_to_remote_host(
-                remote_host.get_host(),
-                remote_host.get_port(),
+                self.remote_host.get_host(),
+                self.remote_host.get_port(),
                 HTTP_CLIENT_TIMEOUT,
             )
-            .await?;
+            .await;
+
+        let tcp_stream = match tcp_stream {
+            Ok(tcp_stream) => tcp_stream,
+            Err(err) => {
+                return Err(MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                    "{}. Err: {:?}",
+                    self.get_remote_host().as_str(),
+                    err
+                )))
+            }
+        };
+
+        Ok(tcp_stream)
+
+        /*
 
         let http_client = MyHttpClient::new(tcp_stream);
 
@@ -41,5 +78,6 @@ impl Http1OverSshClient {
         };
 
         Ok(result)
+         */
     }
 }

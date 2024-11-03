@@ -4,9 +4,10 @@ use tokio::sync::Mutex;
 
 use crate::{
     app::AppContext,
-    http_client::{Http1Client, Http1OverSshClient, Http2Client},
+    http_client::{Http1Client, Http2Client, Ssh1Connector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::{HttpProxyPassContentSource, ProxyPassError},
+    my_http_client::MyHttpClient,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
     types::WhiteListedIpList,
 };
@@ -77,7 +78,7 @@ impl ProxyPassLocationConfig {
             }
             ProxyPassTo::Http1(remote_host) => {
                 let http_client =
-                    Http1Client::connect(remote_host, &self.domain_name, debug).await?;
+                    Http1Client::create(remote_host.clone(), self.domain_name.clone(), debug);
                 HttpProxyPassContentSource::Http1(http_client)
             }
 
@@ -99,9 +100,12 @@ impl ProxyPassLocationConfig {
                         .await?;
                         HttpProxyPassContentSource::Http2(Mutex::new(http_client))
                     } else {
-                        let http_client =
-                            Http1OverSshClient::connect(&model.ssh_config.credentials, remote_host)
-                                .await?;
+                        let connector = Ssh1Connector {
+                            ssh_credentials: model.ssh_config.credentials.clone(),
+                            remote_host: remote_host.clone(),
+                        };
+
+                        let http_client = MyHttpClient::new(connector);
 
                         HttpProxyPassContentSource::Http1OverSsh(http_client)
                     }

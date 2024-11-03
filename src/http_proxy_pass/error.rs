@@ -14,6 +14,7 @@ pub enum ProxyPassError {
     IoError(tokio::io::Error),
     SshSessionError(my_ssh::SshSessionError),
     WebSocketProtocolError(hyper_tungstenite::tungstenite::error::ProtocolError),
+    MyHttpClientError(crate::my_http_client::MyHttpClientError),
     NoLocationFound,
     ConnectionIsDisposed,
     Unauthorized,
@@ -21,7 +22,6 @@ pub enum ProxyPassError {
     IpRestricted(String),
     Disconnected,
     Timeout,
-    ReconnectAndRetry,
 }
 
 impl ProxyPassError {
@@ -35,13 +35,6 @@ impl ProxyPassError {
     pub fn is_hyper_canceled(&self) -> bool {
         match self {
             ProxyPassError::HyperError(err) => err.is_canceled(),
-            _ => false,
-        }
-    }
-
-    pub fn is_reconnect_and_retry(&self) -> bool {
-        match self {
-            ProxyPassError::ReconnectAndRetry => true,
             _ => false,
         }
     }
@@ -77,6 +70,12 @@ impl From<hyper_tungstenite::tungstenite::error::ProtocolError> for ProxyPassErr
     }
 }
 
+impl From<crate::my_http_client::MyHttpClientError> for ProxyPassError {
+    fn from(src: crate::my_http_client::MyHttpClientError) -> Self {
+        Self::MyHttpClientError(src)
+    }
+}
+
 #[derive(Debug)]
 pub enum ExecuteWithTimeoutError {
     ReconnectAndRetry,
@@ -92,23 +91,5 @@ impl From<ProxyPassError> for ExecuteWithTimeoutError {
 impl From<hyper::Error> for ExecuteWithTimeoutError {
     fn from(src: hyper::Error) -> Self {
         Self::ProxyPassError(src.into())
-    }
-}
-
-pub async fn handle_error<TResult>(
-    result: Result<TResult, ProxyPassError>,
-    attempt_no: usize,
-) -> Result<TResult, ProxyPassError> {
-    match result {
-        Ok(result) => Ok(result),
-        Err(err) => {
-            if err.is_hyper_canceled() {
-                if attempt_no <= 1 {
-                    return Err(ProxyPassError::ReconnectAndRetry);
-                }
-            }
-
-            Err(err)
-        }
     }
 }

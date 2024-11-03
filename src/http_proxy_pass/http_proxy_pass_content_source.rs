@@ -7,8 +7,9 @@ use my_ssh::SshAsyncChannel;
 use tokio::sync::Mutex;
 
 use crate::{
-    http_client::{Http1Client, Http1OverSshClient, Http2Client, HTTP_CLIENT_TIMEOUT},
+    http_client::{Http1Client, Http2Client, Ssh1Connector, HTTP_CLIENT_TIMEOUT},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
+    my_http_client::MyHttpClient,
 };
 
 use super::ProxyPassError;
@@ -18,38 +19,13 @@ pub enum HttpProxyPassContentSource {
 
     Http2(Mutex<Http2Client>),
 
-    Http1OverSsh(Http1OverSshClient),
+    Http1OverSsh(MyHttpClient<SshAsyncChannel, Ssh1Connector>),
     LocalPath(LocalPathContentSrc),
     PathOverSsh(PathOverSshContentSource),
     Static(StaticContentSrc),
 }
 
 impl HttpProxyPassContentSource {
-    /*
-       pub fn is_http1(&self) -> Option<bool> {
-           match self {
-               Self::Http1 { .. } => Some(true),
-               Self::Http2 { .. } => Some(false),
-               Self::Http1OverSsh { .. } => Some(true),
-               Self::LocalPath(_) => None,
-               Self::PathOverSsh(_) => None,
-               Self::Static(_) => None,
-           }
-       }
-    */
-    /*
-    pub fn disconnect(&mut self) {
-        match self {
-            HttpProxyPassContentSource::Http1(remote_http_content_source) => {
-                remote_http_content_source.disconnect()
-            }
-            HttpProxyPassContentSource::LocalPath(_) => {}
-            HttpProxyPassContentSource::PathOverSsh(_) => {}
-            HttpProxyPassContentSource::Static(_) => {}
-        }
-    }
-     */
-
     pub async fn upgrade_websocket(
         &self,
         req: hyper::Request<Full<Bytes>>,
@@ -79,7 +55,6 @@ impl HttpProxyPassContentSource {
             },
             HttpProxyPassContentSource::Http1OverSsh(client) => {
                 let result = client
-                    .http_client
                     .upgrade_to_web_socket(req, |read, write| read.unsplit(write))
                     .await?;
 
@@ -128,15 +103,15 @@ impl HttpProxyPassContentSource {
                 return Ok(from_incoming_body(response));
             }
             HttpProxyPassContentSource::Http1OverSsh(client) => {
-                let feature = client.http_client.send(req);
+                let feature = client.send(req);
                 let result = tokio::time::timeout(HTTP_CLIENT_TIMEOUT, feature).await;
 
                 if result.is_err() {
                     return Err(ProxyPassError::Timeout);
                 }
-                let result = result.unwrap();
+                let result = result.unwrap()?;
 
-                return result;
+                return Ok(result);
             }
             HttpProxyPassContentSource::LocalPath(src) => {
                 let request_executor = src.get_request_executor(&req.uri())?;

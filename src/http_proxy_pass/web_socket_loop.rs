@@ -33,9 +33,17 @@ pub async fn web_socket_loop<
             tokio::spawn(serve_from_server_to_client(ws_receiver, to_remote_write));
 
             while let Some(message) = from_remote_read.next().await {
-                let message = message.unwrap();
+                let message = message;
 
-                if let Err(err) = ws_sender.send(message).await {
+                if message.is_err() {
+                    if debug {
+                        println!("Error in websocket connection: {:?}", message);
+                    }
+
+                    return;
+                }
+
+                if let Err(err) = ws_sender.send(message.unwrap()).await {
                     if debug {
                         println!("ws_sender.send error: {:?}", err);
                     }
