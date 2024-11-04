@@ -7,32 +7,14 @@ use crate::configurations::RemoteHost;
 
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 
-use super::HTTP_CLIENT_TIMEOUT;
-
-/*
-pub struct Http1OverSshClient {
-    pub http_client: MyHttpClient<SshAsyncChannel>,
-    pub _ssh_credentials: Arc<SshCredentials>,
-    pub _ssh_session: Arc<SshSession>,
-    pub _connected: DateTimeAsMicroseconds,
-}
-
-impl Http1OverSshClient {
-    pub async fn connect(
-        ssh_credentials: &Arc<SshCredentials>,
-        remote_host: &RemoteHost,
-    ) -> Result<Self, ProxyPassError> {
-    }
-}
- */
-pub struct Ssh1Connector {
+pub struct SshConnector {
     pub ssh_credentials: Arc<SshCredentials>,
     pub remote_host: RemoteHost,
     pub debug: bool,
 }
 
 #[async_trait::async_trait]
-impl MyHttpClientConnector<SshAsyncChannel> for Ssh1Connector {
+impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
     fn is_debug(&self) -> bool {
         self.debug
     }
@@ -53,7 +35,7 @@ impl MyHttpClientConnector<SshAsyncChannel> for Ssh1Connector {
             .connect_to_remote_host(
                 self.remote_host.get_host(),
                 self.remote_host.get_port(),
-                HTTP_CLIENT_TIMEOUT,
+                crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
             )
             .await;
 

@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use hyper::Uri;
 
-use crate::{
-    app::AppContext, configurations::*, http_client::HTTP_CLIENT_TIMEOUT,
-    http_proxy_pass::HttpProxyPassContentSource,
-};
+use crate::{app::AppContext, configurations::*, http_proxy_pass::HttpProxyPassContentSource};
 
 use super::ProxyPassError;
 
@@ -51,7 +48,7 @@ impl ProxyPassLocation {
 
         let client_source = self
             .config
-            .create_and_connect(app, self.debug, HTTP_CLIENT_TIMEOUT)
+            .create_and_connect(app, self.debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
             .await?;
 
         //let content_source = HttpProxyPassContentSource::connect(app, &self.config).await?;

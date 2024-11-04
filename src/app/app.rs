@@ -10,10 +10,7 @@ use tokio::sync::RwLock;
 use crate::{
     configurations::*,
     settings::{ConnectionsSettingsModel, SettingsModel},
-    ssh_to_http_port_forward::SshToHttpPortForwardPool,
 };
-
-use super::LocalPortAllocator;
 
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -22,11 +19,11 @@ pub struct AppContext {
     pub http_connections: AtomicIsize,
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
-    pub ssh_to_http_port_forward_pool: SshToHttpPortForwardPool,
+    //pub ssh_to_http_port_forward_pool: SshToHttpPortForwardPool,
     pub token_secret_key: AesKey,
     current_app_configuration: RwLock<Option<Arc<AppConfiguration>>>,
     pub states: Arc<AppStates>,
-    pub local_port_allocator: LocalPortAllocator,
+    //    pub local_port_allocator: LocalPortAllocator,
     pub show_error_description: UnsafeValue<bool>,
 }
 
@@ -48,8 +45,8 @@ impl AppContext {
             token_secret_key,
             current_app_configuration: RwLock::new(None),
             states: Arc::new(AppStates::create_initialized()),
-            local_port_allocator: LocalPortAllocator::new(),
-            ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
+            //local_port_allocator: LocalPortAllocator::new(),
+            //ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
             show_error_description: UnsafeValue::new(
                 settings_model.get_show_error_description_on_error_page(),
             ),

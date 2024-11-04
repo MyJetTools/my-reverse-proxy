@@ -94,9 +94,12 @@ impl HttpProxyPass {
         let request = req.get();
 
         let (location_index, mut response) = match build_result {
-            super::BuildResult::HttpRequest(location_index) => {
-                (location_index, content_source.send_request(request).await?)
-            }
+            super::BuildResult::HttpRequest(location_index) => (
+                location_index,
+                content_source
+                    .send_request(request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
+                    .await?,
+            ),
             super::BuildResult::WebSocketUpgrade {
                 location_index,
                 upgrade_response,
@@ -106,7 +109,9 @@ impl HttpProxyPass {
                     println!("Doing web_socket upgrade");
                 }
 
-                let (channel, _) = content_source.upgrade_websocket(request.clone()).await?;
+                let (channel, _) = content_source
+                    .upgrade_websocket(request.clone(), crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
+                    .await?;
 
                 // let upgraded = hyper::upgrade::on(request).await?;
 

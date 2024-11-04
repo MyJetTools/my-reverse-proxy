@@ -1,10 +1,8 @@
 use std::time::Duration;
 
-use tokio::sync::Mutex;
-
 use crate::{
     app::AppContext,
-    http_client::{Http1Client, Http2Client, Ssh1Connector},
+    http_client::{Http1Client, Http2Client, SshConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::{HttpProxyPassContentSource, ProxyPassError},
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
@@ -12,7 +10,7 @@ use crate::{
 };
 
 use super::*;
-use my_http_client::MyHttpClient;
+use my_http_client::{http1::MyHttpClient, http2::MyHttp2Client};
 
 pub struct ProxyPassLocationConfig {
     pub path: String,
@@ -83,8 +81,9 @@ impl ProxyPassLocationConfig {
             }
 
             ProxyPassTo::Http2(remote_host) => {
-                let http_client = Http2Client::connect(remote_host).await?;
-                HttpProxyPassContentSource::Http2(Mutex::new(http_client))
+                let http_client =
+                    Http2Client::create(remote_host.clone(), self.domain_name.clone(), debug);
+                HttpProxyPassContentSource::Http2(http_client)
             }
             ProxyPassTo::LocalPath(model) => HttpProxyPassContentSource::LocalPath(
                 LocalPathContentSrc::new(&model.local_path, model.default_file.clone()),
@@ -92,15 +91,17 @@ impl ProxyPassLocationConfig {
             ProxyPassTo::Ssh(model) => match &model.ssh_config.remote_content {
                 SshContent::RemoteHost(remote_host) => {
                     if model.http2 {
-                        let http_client = Http2Client::connect_over_ssh(
-                            app,
-                            &model.ssh_config.credentials,
-                            remote_host,
-                        )
-                        .await?;
-                        HttpProxyPassContentSource::Http2(Mutex::new(http_client))
+                        let connector = SshConnector {
+                            ssh_credentials: model.ssh_config.credentials.clone(),
+                            remote_host: remote_host.clone(),
+                            debug,
+                        };
+
+                        let http_client = MyHttp2Client::new(connector);
+
+                        HttpProxyPassContentSource::Http2OverSsh(http_client)
                     } else {
-                        let connector = Ssh1Connector {
+                        let connector = SshConnector {
                             ssh_credentials: model.ssh_config.credentials.clone(),
                             remote_host: remote_host.clone(),
                             debug,
