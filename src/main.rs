@@ -31,6 +31,9 @@ pub fn to_hyper_error(e: std::convert::Infallible) -> String {
     e.to_string()
 }
 
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
 #[tokio::main]
 async fn main() {
     my_tls::install_default_crypto_providers();
