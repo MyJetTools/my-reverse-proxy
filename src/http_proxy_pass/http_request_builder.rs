@@ -15,28 +15,6 @@ use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPas
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
-/*
-#[derive(Clone)]
-pub enum BuildResult {
-    HttpRequest(LocationIndex),
-    WebSocketUpgrade {
-        location_index: LocationIndex,
-        upgrade_response: hyper::Response<Full<Bytes>>,
-        web_socket: Arc<Mutex<Option<HyperWebsocket>>>,
-    },
-}
-
-
-impl BuildResult {
-    pub fn get_location_index(&self) -> &LocationIndex {
-        match self {
-            BuildResult::HttpRequest(location_index) => location_index,
-            BuildResult::WebSocketUpgrade { location_index, .. } => location_index,
-        }
-    }
-}
-
-*/
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
