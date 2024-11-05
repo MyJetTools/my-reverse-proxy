@@ -1,4 +1,4 @@
-use std::{io::Write, sync::Arc};
+use std::io::Write;
 
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
@@ -8,7 +8,6 @@ use hyper::{
     HeaderMap, Request, Uri,
 };
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
-use tokio::sync::Mutex;
 
 use crate::{configurations::*, settings::ModifyHttpHeadersSettings};
 
@@ -16,6 +15,7 @@ use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPas
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
+/*
 #[derive(Clone)]
 pub enum BuildResult {
     HttpRequest(LocationIndex),
@@ -26,6 +26,7 @@ pub enum BuildResult {
     },
 }
 
+
 impl BuildResult {
     pub fn get_location_index(&self) -> &LocationIndex {
         match self {
@@ -35,11 +36,12 @@ impl BuildResult {
     }
 }
 
+*/
 pub struct HttpRequestBuilder {
     src: Option<hyper::Request<hyper::body::Incoming>>,
     prepared_request: Option<hyper::Request<Full<Bytes>>>,
     src_http_type: HttpType,
-    last_result: Option<BuildResult>,
+    pub web_socket_update_response: Option<(hyper::Response<Full<Bytes>>, HyperWebsocket)>,
 }
 
 impl HttpRequestBuilder {
@@ -48,7 +50,7 @@ impl HttpRequestBuilder {
             src: Some(src),
             prepared_request: None,
             src_http_type,
-            last_result: None,
+            web_socket_update_response: None,
         }
     }
 
@@ -56,11 +58,8 @@ impl HttpRequestBuilder {
         &mut self,
         proxy_pass: &HttpProxyPass,
         inner: &HttpProxyPassInner,
-    ) -> Result<BuildResult, ProxyPassError> {
+    ) -> Result<LocationIndex, ProxyPassError> {
         let location_index = inner.locations.find_location_index(self.uri())?;
-        if let Some(last_result) = &self.last_result {
-            return Ok(last_result.clone());
-        }
 
         let (compress, dest_http1) = {
             let item = inner.locations.find(&location_index);
@@ -69,7 +68,7 @@ impl HttpRequestBuilder {
         };
 
         if dest_http1.is_none() {
-            return Ok(BuildResult::HttpRequest(location_index));
+            return Ok(location_index);
         }
 
         let dest_http1 = dest_http1.unwrap();
@@ -79,7 +78,7 @@ impl HttpRequestBuilder {
                 // src_http1 && dest_http1
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
-                let websocket_update = parts.headers.get("sec-websocket-key").is_some();
+                // let ;
 
                 handle_headers(proxy_pass, inner, &mut parts, &location_index);
 
@@ -91,26 +90,18 @@ impl HttpRequestBuilder {
                 )
                 .await?;
 
-                if websocket_update {
+                if parts.headers.get("sec-websocket-key").is_some() {
                     if proxy_pass.endpoint_info.debug {
                         println!("Detected Upgrade http1->http1");
                     }
 
                     let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
-                    let (response, web_socket) = hyper_tungstenite::upgrade(upgrade_req, None)?;
+                    let upgrade_response = hyper_tungstenite::upgrade(upgrade_req, None)?;
+
+                    self.web_socket_update_response = Some(upgrade_response);
                     //tokio::spawn(super::web_socket_loop(web_socket));
-
-                    let request = hyper::Request::from_parts(parts, body);
-
-                    self.prepared_request = Some(request);
-
-                    self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-
-                    return Ok(BuildResult::WebSocketUpgrade {
-                        location_index,
-                        upgrade_response: response,
-                        web_socket: Arc::new(Mutex::new(Some(web_socket))),
-                    });
+                    //let request = hyper::Request::from_parts(parts, body);
+                    //self.prepared_request = Some(request);
                 }
 
                 let result = hyper::Request::from_parts(parts, body);
@@ -124,8 +115,8 @@ impl HttpRequestBuilder {
                 }
 
                 self.prepared_request = Some(result);
-                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-                return Ok(BuildResult::HttpRequest(location_index));
+
+                return Ok(location_index);
             } else {
                 let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
@@ -151,8 +142,7 @@ impl HttpRequestBuilder {
 
                 self.prepared_request = Some(request);
 
-                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-                Ok(BuildResult::HttpRequest(location_index))
+                Ok(location_index)
             }
         } else {
             if dest_http1 {
@@ -183,8 +173,7 @@ impl HttpRequestBuilder {
 
                 self.prepared_request = Some(result);
 
-                self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-                Ok(BuildResult::HttpRequest(location_index))
+                Ok(location_index)
             }
         }
     }
@@ -194,7 +183,7 @@ impl HttpRequestBuilder {
         location_index: LocationIndex,
         compress: bool,
         debug: bool,
-    ) -> Result<BuildResult, ProxyPassError> {
+    ) -> Result<LocationIndex, ProxyPassError> {
         let (mut parts, incoming) = self.src.take().unwrap().into_parts();
 
         let path_and_query = if let Some(path_and_query) = parts.uri.path_and_query() {
@@ -231,25 +220,6 @@ impl HttpRequestBuilder {
 
         let body = into_full_bytes(&mut parts, incoming, compress, debug).await?;
 
-        if parts.headers.get("sec-websocket-key").is_some() {
-            if debug {
-                println!("Detected Upgrade");
-            }
-            let req = hyper::Request::from_parts(parts, body.clone());
-            let (response, web_socket) = hyper_tungstenite::upgrade(req, None)?;
-            //tokio::spawn(super::web_socket_loop(web_socket));
-            let request = builder.body(body).unwrap();
-
-            self.prepared_request = Some(request);
-
-            self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-
-            return Ok(BuildResult::WebSocketUpgrade {
-                location_index,
-                upgrade_response: response,
-                web_socket: Arc::new(Mutex::new(Some(web_socket))),
-            });
-        }
         let result = builder.body(body).unwrap();
 
         if debug {
@@ -260,8 +230,7 @@ impl HttpRequestBuilder {
             );
         }
         self.prepared_request = Some(result);
-        self.last_result = Some(BuildResult::HttpRequest(location_index.clone()));
-        return Ok(BuildResult::HttpRequest(location_index));
+        return Ok(location_index);
     }
 
     pub fn uri(&self) -> &Uri {

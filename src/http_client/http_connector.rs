@@ -1,6 +1,9 @@
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 use rust_extensions::StrOrString;
-use tokio::net::TcpStream;
+use tokio::{
+    io::{ReadHalf, WriteHalf},
+    net::TcpStream,
+};
 
 use crate::configurations::RemoteHost;
 
@@ -30,5 +33,9 @@ impl MyHttpClientConnector<TcpStream> for HttpConnector {
                 )),
             ),
         }
+    }
+
+    fn reunite(read: ReadHalf<TcpStream>, write: WriteHalf<TcpStream>) -> TcpStream {
+        read.unsplit(write)
     }
 }

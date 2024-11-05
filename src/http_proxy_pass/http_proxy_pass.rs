@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
+use my_http_client::utils::into_full_body_response;
 use tokio::sync::Mutex;
 
 use crate::{app::AppContext, configurations::*, http_server::ClientCertificateData};
@@ -52,7 +53,7 @@ impl HttpProxyPass {
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
-        let (build_result, content_source) = {
+        let (location_index, content_source) = {
             let mut inner = self.inner.lock().await;
 
             match self.handle_auth_with_g_auth(app, &req).await {
@@ -71,9 +72,9 @@ impl HttpProxyPass {
                 }
             }
 
-            let build_result = req.populate_and_build(self, &inner).await?;
+            let location_index = req.populate_and_build(self, &inner).await?;
 
-            let proxy_pass_location = inner.locations.find_mut(build_result.get_location_index());
+            let proxy_pass_location = inner.locations.find_mut(&location_index);
 
             if !proxy_pass_location
                 .config
@@ -86,20 +87,83 @@ impl HttpProxyPass {
             }
 
             (
-                build_result,
+                location_index,
                 proxy_pass_location.connect_if_require(app).await?,
             )
         };
 
         let request = req.get();
 
+        let result = content_source
+            .send_request(request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
+            .await?;
+
+        let mut response = match result {
+            super::HttpResponse::Response(response) => response,
+            super::HttpResponse::WebSocketUpgrade {
+                stream,
+                response,
+                disconnection,
+            } => match stream {
+                super::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
+                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                        tokio::spawn(super::start_web_socket_loop(
+                            web_socket,
+                            tcp_stream,
+                            self.endpoint_info.debug,
+                            disconnection,
+                        ));
+
+                        into_full_body_response(response)
+                    } else {
+                        response
+                    }
+                }
+                super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
+                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                        tokio::spawn(super::start_web_socket_loop(
+                            web_socket,
+                            tls_stream,
+                            self.endpoint_info.debug,
+                            disconnection,
+                        ));
+
+                        into_full_body_response(response)
+                    } else {
+                        response
+                    }
+                }
+                super::WebSocketUpgradeStream::SshChannel(async_channel) => {
+                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                        tokio::spawn(super::start_web_socket_loop(
+                            web_socket,
+                            async_channel,
+                            self.endpoint_info.debug,
+                            disconnection,
+                        ));
+
+                        into_full_body_response(response)
+                    } else {
+                        response
+                    }
+                }
+            },
+        };
+
+        let inner = self.inner.lock().await;
+        super::http_response_builder::modify_resp_headers(
+            self,
+            &inner,
+            &req,
+            response.headers_mut(),
+            &location_index,
+        );
+
+        return Ok(Ok(response));
+
+        /*
         let (location_index, mut response) = match build_result {
-            super::BuildResult::HttpRequest(location_index) => (
-                location_index,
-                content_source
-                    .send_request(request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
-                    .await?,
-            ),
+            super::BuildResult::HttpRequest(location_index) => (location_index,),
             super::BuildResult::WebSocketUpgrade {
                 location_index,
                 upgrade_response,
@@ -150,6 +214,7 @@ impl HttpProxyPass {
             }
         };
 
+
         let inner = self.inner.lock().await;
         super::http_response_builder::modify_resp_headers(
             self,
@@ -160,6 +225,7 @@ impl HttpProxyPass {
         );
 
         return Ok(Ok(response));
+            */
     }
 
     pub async fn dispose(&self) {

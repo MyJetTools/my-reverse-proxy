@@ -3,7 +3,10 @@ use std::sync::Arc;
 use my_http_client::MyHttpClientConnector;
 use my_tls::tokio_rustls::client::TlsStream;
 use rust_extensions::StrOrString;
-use tokio::net::TcpStream;
+use tokio::{
+    io::{ReadHalf, WriteHalf},
+    net::TcpStream,
+};
 
 use crate::configurations::RemoteHost;
 
@@ -97,5 +100,12 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
         };
 
         return Ok(tls_stream);
+    }
+
+    fn reunite(
+        read: ReadHalf<TlsStream<TcpStream>>,
+        write: WriteHalf<TlsStream<TcpStream>>,
+    ) -> TlsStream<TcpStream> {
+        read.unsplit(write)
     }
 }

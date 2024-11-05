@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
 use rust_extensions::StrOrString;
+use tokio::io::{ReadHalf, WriteHalf};
 
 use crate::configurations::RemoteHost;
 
@@ -27,6 +28,13 @@ impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
             self.remote_host.as_str()
         )
         .into()
+    }
+
+    fn reunite(
+        read: ReadHalf<SshAsyncChannel>,
+        write: WriteHalf<SshAsyncChannel>,
+    ) -> SshAsyncChannel {
+        read.unsplit(write)
     }
     async fn connect(&self) -> Result<SshAsyncChannel, MyHttpClientError> {
         let ssh_session = SshSession::new(self.ssh_credentials.clone());

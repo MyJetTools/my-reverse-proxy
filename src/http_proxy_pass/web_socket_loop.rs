@@ -11,7 +11,7 @@ use my_http_client::MyHttpClientDisconnect;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-pub async fn web_socket_loop<
+pub async fn start_web_socket_loop<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
 >(
     server_web_socket: HyperWebsocket,

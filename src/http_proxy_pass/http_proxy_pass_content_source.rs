@@ -10,7 +10,11 @@ use crate::{
 };
 
 use super::ProxyPassError;
-use my_http_client::{http1::MyHttpClient, http2::MyHttp2Client, MyHttpClientDisconnect};
+use my_http_client::{
+    http1::{MyHttpClient, MyHttpResponse},
+    http2::MyHttp2Client,
+    MyHttpClientDisconnect,
+};
 
 pub enum HttpProxyPassContentSource {
     Http1(Http1Client),
@@ -23,113 +27,165 @@ pub enum HttpProxyPassContentSource {
 }
 
 impl HttpProxyPassContentSource {
-    pub async fn upgrade_websocket(
-        &self,
-        req: hyper::Request<Full<Bytes>>,
-        request_timeout: std::time::Duration,
-    ) -> Result<
-        (
-            WebSocketUpgradeStream,
-            hyper::Response<BoxBody<Bytes, String>>,
-            Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
-        ),
-        ProxyPassError,
-    > {
-        match self {
-            HttpProxyPassContentSource::Http1(client) => match client {
-                Http1Client::Http(client) => {
-                    let result = client
-                        .upgrade_to_web_socket(req, request_timeout, |read, write| {
-                            read.unsplit(write)
-                        })
-                        .await?;
+    /*
+       pub async fn upgrade_websocket(
+           &self,
+           req: hyper::Request<Full<Bytes>>,
+           request_timeout: std::time::Duration,
+       ) -> Result<
+           (
+               WebSocketUpgradeStream,
+               hyper::Response<BoxBody<Bytes, String>>,
+               Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+           ),
+           ProxyPassError,
+       > {
+           match self {
+               HttpProxyPassContentSource::Http1(client) => match client {
+                   Http1Client::Http(client) => {
+                       let result = client
+                           .upgrade_to_web_socket(req, request_timeout, |read, write| {
+                               read.unsplit(write)
+                           })
+                           .await?;
 
-                    Ok((
-                        WebSocketUpgradeStream::TcpStream(result.0),
-                        result.1,
-                        Arc::new(result.2),
-                    ))
-                }
-                Http1Client::Https(client) => {
-                    let result = client
-                        .upgrade_to_web_socket(req, request_timeout, |read, write| {
-                            read.unsplit(write)
-                        })
-                        .await?;
+                       Ok((
+                           WebSocketUpgradeStream::TcpStream(result.0),
+                           result.1,
+                           Arc::new(result.2),
+                       ))
+                   }
+                   Http1Client::Https(client) => {
+                       let result = client
+                           .upgrade_to_web_socket(req, request_timeout, |read, write| {
+                               read.unsplit(write)
+                           })
+                           .await?;
 
-                    Ok((
-                        WebSocketUpgradeStream::TlsStream(result.0),
-                        result.1,
-                        Arc::new(result.2),
-                    ))
-                }
-            },
-            HttpProxyPassContentSource::Http1OverSsh(client) => {
-                let result = client
-                    .upgrade_to_web_socket(req, request_timeout, |read, write| read.unsplit(write))
-                    .await?;
+                       Ok((
+                           WebSocketUpgradeStream::TlsStream(result.0),
+                           result.1,
+                           Arc::new(result.2),
+                       ))
+                   }
+               },
+               HttpProxyPassContentSource::Http1OverSsh(client) => {
+                   let result = client
+                       .upgrade_to_web_socket(req, request_timeout, |read, write| read.unsplit(write))
+                       .await?;
 
-                Ok((
-                    WebSocketUpgradeStream::SshChannel(result.0),
-                    result.1,
-                    Arc::new(result.2),
-                ))
-            }
-            _ => panic!("Not implemented"),
-        }
-    }
-
+                   Ok((
+                       WebSocketUpgradeStream::SshChannel(result.0),
+                       result.1,
+                       Arc::new(result.2),
+                   ))
+               }
+               _ => panic!("Not implemented"),
+           }
+       }
+    */
     pub async fn send_request(
         &self,
         req: hyper::Request<Full<Bytes>>,
         request_timeout: std::time::Duration,
-    ) -> Result<hyper::Response<BoxBody<Bytes, String>>, ProxyPassError> {
+    ) -> Result<HttpResponse, ProxyPassError> {
         match self {
             HttpProxyPassContentSource::Http1(client) => match client {
                 Http1Client::Http(my_http_client) => {
-                    let result = my_http_client.send(req, request_timeout).await?;
-                    return Ok(result);
+                    match my_http_client.do_request(req, request_timeout).await? {
+                        MyHttpResponse::Response(response) => {
+                            return Ok(HttpResponse::Response(response));
+                        }
+                        MyHttpResponse::WebSocketUpgrade {
+                            stream,
+                            response,
+                            disconnection,
+                        } => {
+                            return Ok(HttpResponse::WebSocketUpgrade {
+                                stream: WebSocketUpgradeStream::TcpStream(stream),
+                                response: response,
+                                disconnection,
+                            })
+                        }
+                    }
                 }
                 Http1Client::Https(my_http_client) => {
-                    let result = my_http_client.send(req, request_timeout).await?;
-                    return Ok(result);
+                    match my_http_client.do_request(req, request_timeout).await? {
+                        MyHttpResponse::Response(response) => {
+                            return Ok(HttpResponse::Response(response));
+                        }
+                        MyHttpResponse::WebSocketUpgrade {
+                            stream,
+                            response,
+                            disconnection,
+                        } => {
+                            return Ok(HttpResponse::WebSocketUpgrade {
+                                stream: WebSocketUpgradeStream::TlsStream(stream),
+                                response: response,
+                                disconnection,
+                            })
+                        }
+                    }
                 }
             },
             HttpProxyPassContentSource::Http2(client) => match client {
                 Http2Client::Http(my_http_client) => {
-                    let result = my_http_client.send(req, request_timeout).await?;
-                    return Ok(result);
+                    let response = my_http_client.do_request(req, request_timeout).await?;
+                    return Ok(HttpResponse::Response(response));
                 }
                 Http2Client::Https(my_http_client) => {
-                    let result = my_http_client.send(req, request_timeout).await?;
-                    return Ok(result);
+                    let response = my_http_client.do_request(req, request_timeout).await?;
+                    return Ok(HttpResponse::Response(response));
                 }
             },
             HttpProxyPassContentSource::Http1OverSsh(client) => {
-                let result = client.send(req, request_timeout).await?;
-                return Ok(result);
+                match client.do_request(req, request_timeout).await? {
+                    MyHttpResponse::Response(response) => {
+                        return Ok(HttpResponse::Response(response));
+                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => {
+                        return Ok(HttpResponse::WebSocketUpgrade {
+                            stream: WebSocketUpgradeStream::SshChannel(stream),
+                            response: response,
+                            disconnection,
+                        })
+                    }
+                }
             }
             HttpProxyPassContentSource::Http2OverSsh(client) => {
-                let result = client.send(req, request_timeout).await?;
-                return Ok(result);
+                let result = client.do_request(req, request_timeout).await?;
+                return Ok(HttpResponse::Response(result.into()));
             }
             HttpProxyPassContentSource::LocalPath(src) => {
                 let request_executor = src.get_request_executor(&req.uri())?;
                 let result = request_executor.execute_request().await?;
-                Ok(result.into())
+                Ok(HttpResponse::Response(result.into()))
             }
             HttpProxyPassContentSource::PathOverSsh(src) => {
                 let request_executor = src.get_request_executor(&req.uri())?;
                 let result = request_executor.execute_request().await?;
-                Ok(result.into())
+                Ok(HttpResponse::Response(result.into()))
             }
             HttpProxyPassContentSource::Static(src) => {
                 let request_executor = src.get_request_executor()?;
                 let result = request_executor.execute_request().await?;
-                Ok(result.into())
+                Ok(HttpResponse::Response(result.into()))
             }
         }
     }
+}
+
+pub enum HttpResponse {
+    Response(hyper::Response<BoxBody<Bytes, String>>),
+    WebSocketUpgrade {
+        stream: WebSocketUpgradeStream,
+        response: hyper::Response<BoxBody<Bytes, String>>,
+        disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+    },
 }
 
 pub enum WebSocketUpgradeStream {
