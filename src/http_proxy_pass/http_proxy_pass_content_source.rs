@@ -103,7 +103,7 @@ impl HttpProxyPassContentSource {
                         } => {
                             return Ok(HttpResponse::WebSocketUpgrade {
                                 stream: WebSocketUpgradeStream::TcpStream(stream),
-                                response: response,
+                                response,
                                 disconnection,
                             })
                         }

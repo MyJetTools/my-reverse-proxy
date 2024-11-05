@@ -19,6 +19,20 @@ pub async fn start_web_socket_loop<
     debug: bool,
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
 ) {
+    let _ = tokio::spawn(async move {
+        web_socket_loop(server_web_socket, to_remote_stream, debug).await;
+    })
+    .await;
+    disconnect.disconnect();
+}
+
+async fn web_socket_loop<
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+>(
+    server_web_socket: HyperWebsocket,
+    to_remote_stream: TStream,
+    debug: bool,
+) {
     let ws_stream = server_web_socket.await;
 
     let to_remote = WebSocketStream::from_raw_socket(
@@ -62,8 +76,6 @@ pub async fn start_web_socket_loop<
             }
         }
     }
-
-    disconnect.disconnect();
 }
 
 async fn serve_from_server_to_client<
