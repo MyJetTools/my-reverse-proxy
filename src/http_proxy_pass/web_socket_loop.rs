@@ -48,7 +48,11 @@ async fn web_socket_loop<
         Ok(ws_stream) => {
             let (mut ws_sender, ws_receiver) = ws_stream.split();
 
-            tokio::spawn(serve_from_server_to_client(ws_receiver, to_remote_write));
+            tokio::spawn(serve_from_server_to_client(
+                ws_receiver,
+                to_remote_write,
+                debug,
+            ));
 
             while let Some(message) = from_remote_read.next().await {
                 let message = message;
@@ -83,11 +87,18 @@ async fn serve_from_server_to_client<
 >(
     mut websocket: SplitStream<HyperWebsocketStream>,
     mut to_remote_write: SplitSink<WebSocketStream<TStream>, Message>,
+    debug: bool,
 ) -> Result<(), Error> {
     while let Some(message) = websocket.next().await {
         let msg: Message = message?;
 
-        to_remote_write.send(msg).await.unwrap();
+        let err = to_remote_write.send(msg).await;
+        if let Err(err) = err {
+            if debug {
+                println!("Error in websocket server_to_client loop: {:?}", err);
+            }
+            break;
+        }
     }
 
     Ok(())
