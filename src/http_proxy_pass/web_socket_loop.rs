@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use futures::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt,
@@ -5,6 +7,7 @@ use futures::{
 use hyper_tungstenite::{
     tungstenite::Message, HyperWebsocket, HyperWebsocketStream, WebSocketStream,
 };
+use my_http_client::MyHttpClientDisconnect;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -14,6 +17,7 @@ pub async fn web_socket_loop<
     server_web_socket: HyperWebsocket,
     to_remote_stream: TStream,
     debug: bool,
+    disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
 ) {
     let ws_stream = server_web_socket.await;
 
@@ -40,7 +44,7 @@ pub async fn web_socket_loop<
                         println!("Error in websocket connection: {:?}", message);
                     }
 
-                    return;
+                    break;
                 }
 
                 if let Err(err) = ws_sender.send(message.unwrap()).await {
@@ -48,7 +52,7 @@ pub async fn web_socket_loop<
                         println!("ws_sender.send error: {:?}", err);
                     }
 
-                    return;
+                    break;
                 }
             }
         }
@@ -58,6 +62,8 @@ pub async fn web_socket_loop<
             }
         }
     }
+
+    disconnect.disconnect();
 }
 
 async fn serve_from_server_to_client<

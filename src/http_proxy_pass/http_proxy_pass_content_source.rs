@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
 use my_ssh::SshAsyncChannel;
@@ -8,7 +10,7 @@ use crate::{
 };
 
 use super::ProxyPassError;
-use my_http_client::{http1::MyHttpClient, http2::MyHttp2Client};
+use my_http_client::{http1::MyHttpClient, http2::MyHttp2Client, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
     Http1(Http1Client),
@@ -29,6 +31,7 @@ impl HttpProxyPassContentSource {
         (
             WebSocketUpgradeStream,
             hyper::Response<BoxBody<Bytes, String>>,
+            Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
         ),
         ProxyPassError,
     > {
@@ -41,7 +44,11 @@ impl HttpProxyPassContentSource {
                         })
                         .await?;
 
-                    Ok((WebSocketUpgradeStream::TcpStream(result.0), result.1))
+                    Ok((
+                        WebSocketUpgradeStream::TcpStream(result.0),
+                        result.1,
+                        Arc::new(result.2),
+                    ))
                 }
                 Http1Client::Https(client) => {
                     let result = client
@@ -50,7 +57,11 @@ impl HttpProxyPassContentSource {
                         })
                         .await?;
 
-                    Ok((WebSocketUpgradeStream::TlsStream(result.0), result.1))
+                    Ok((
+                        WebSocketUpgradeStream::TlsStream(result.0),
+                        result.1,
+                        Arc::new(result.2),
+                    ))
                 }
             },
             HttpProxyPassContentSource::Http1OverSsh(client) => {
@@ -58,7 +69,11 @@ impl HttpProxyPassContentSource {
                     .upgrade_to_web_socket(req, request_timeout, |read, write| read.unsplit(write))
                     .await?;
 
-                Ok((WebSocketUpgradeStream::SshChannel(result.0), result.1))
+                Ok((
+                    WebSocketUpgradeStream::SshChannel(result.0),
+                    result.1,
+                    Arc::new(result.2),
+                ))
             }
             _ => panic!("Not implemented"),
         }

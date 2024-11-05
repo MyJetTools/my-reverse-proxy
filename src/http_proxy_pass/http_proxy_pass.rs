@@ -109,7 +109,7 @@ impl HttpProxyPass {
                     println!("Doing web_socket upgrade");
                 }
 
-                let (channel, _) = content_source
+                let (channel, _, my_http_client_disconnect) = content_source
                     .upgrade_websocket(request.clone(), crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
                     .await?;
 
@@ -122,6 +122,7 @@ impl HttpProxyPass {
                                 web_socket,
                                 tcp_stream,
                                 self.endpoint_info.debug,
+                                my_http_client_disconnect,
                             ));
                         }
 
@@ -130,6 +131,7 @@ impl HttpProxyPass {
                                 web_socket,
                                 tcp_stream,
                                 self.endpoint_info.debug,
+                                my_http_client_disconnect,
                             ));
                         }
                         super::WebSocketUpgradeStream::SshChannel(async_channel) => {
@@ -137,6 +139,7 @@ impl HttpProxyPass {
                                 web_socket,
                                 async_channel,
                                 self.endpoint_info.debug,
+                                my_http_client_disconnect,
                             ));
                         }
                     }
