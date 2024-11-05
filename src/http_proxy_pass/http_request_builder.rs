@@ -162,7 +162,12 @@ impl HttpRequestBuilder {
         compress: bool,
         debug: bool,
     ) -> Result<LocationIndex, ProxyPassError> {
-        let (mut parts, incoming) = self.src.take().unwrap().into_parts();
+        let request = self.src.take();
+        if request.is_none() {
+            panic!("Somehow request is none while converting from http2 to http1");
+        }
+
+        let (mut parts, incoming) = request.unwrap().into_parts();
 
         let path_and_query = if let Some(path_and_query) = parts.uri.path_and_query() {
             path_and_query.as_str()
