@@ -23,5 +23,9 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
         super::controllers::configuration::GetCurrentConfigAction::new(app.clone()),
     ));
 
+    result.register_get_action(Arc::new(
+        super::controllers::prometheus::GetMetricsAction::new(app.clone()),
+    ));
+
     result
 }

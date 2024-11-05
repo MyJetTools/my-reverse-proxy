@@ -75,8 +75,12 @@ impl ProxyPassLocationConfig {
                 ))
             }
             ProxyPassTo::Http1(remote_host) => {
-                let http_client =
-                    Http1Client::create(remote_host.clone(), self.domain_name.clone(), debug);
+                let http_client = Http1Client::create(
+                    app.prometheus.clone(),
+                    remote_host.clone(),
+                    self.domain_name.clone(),
+                    debug,
+                );
                 HttpProxyPassContentSource::Http1(http_client)
             }
 
@@ -107,7 +111,7 @@ impl ProxyPassLocationConfig {
                             debug,
                         };
 
-                        let http_client = MyHttpClient::new(connector);
+                        let http_client = MyHttpClient::new(connector, app.prometheus.clone());
 
                         HttpProxyPassContentSource::Http1OverSsh(http_client)
                     }
