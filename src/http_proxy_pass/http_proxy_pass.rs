@@ -53,7 +53,7 @@ impl HttpProxyPass {
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
-        let (location_index, content_source) = {
+        let (location_index, request, content_source) = {
             let mut inner = self.inner.lock().await;
 
             match self.handle_auth_with_g_auth(app, &req).await {
@@ -72,7 +72,7 @@ impl HttpProxyPass {
                 }
             }
 
-            let location_index = req.populate_and_build(self, &inner).await?;
+            let (location_index, request) = req.populate_and_build(self, &inner).await?;
 
             let proxy_pass_location = inner.locations.find_mut(&location_index);
 
@@ -88,11 +88,10 @@ impl HttpProxyPass {
 
             (
                 location_index,
+                request,
                 proxy_pass_location.connect_if_require(app).await?,
             )
         };
-
-        let request = req.get();
 
         let result = content_source
             .send_request(request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)

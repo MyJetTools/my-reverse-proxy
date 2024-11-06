@@ -2,8 +2,9 @@ use std::io::Write;
 
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::{
+    body::Incoming,
     header::{HeaderName, HeaderValue, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE},
     HeaderMap, Request, Uri,
 };
@@ -16,17 +17,18 @@ use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPas
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
 pub struct HttpRequestBuilder {
-    src: Option<hyper::Request<hyper::body::Incoming>>,
-    prepared_request: Option<hyper::Request<Full<Bytes>>>,
+    body: Option<Incoming>,
+    parts: Parts,
     src_http_type: HttpType,
     pub web_socket_update_response: Option<(hyper::Response<Full<Bytes>>, HyperWebsocket)>,
 }
 
 impl HttpRequestBuilder {
     pub fn new(src_http_type: HttpType, src: hyper::Request<hyper::body::Incoming>) -> Self {
+        let (parts, body) = src.into_parts();
         Self {
-            src: Some(src),
-            prepared_request: None,
+            parts,
+            body: Some(body),
             src_http_type,
             web_socket_update_response: None,
         }
@@ -36,140 +38,51 @@ impl HttpRequestBuilder {
         &mut self,
         proxy_pass: &HttpProxyPass,
         inner: &HttpProxyPassInner,
-    ) -> Result<LocationIndex, ProxyPassError> {
+    ) -> Result<(LocationIndex, hyper::Request<Full<Bytes>>), ProxyPassError> {
         let location_index = inner.locations.find_location_index(self.uri())?;
 
-        let (compress, dest_http1) = {
+        let (compress, dest_http1, debug) = {
             let item = inner.locations.find(&location_index);
 
-            (item.compress, item.is_http1())
+            (item.compress, item.is_http1(), item.debug)
         };
 
         if dest_http1.is_none() {
-            return Ok(location_index);
+            let (parts, body) = self.build_request(compress, debug).await?;
+
+            return Ok((location_index, Request::from_parts(parts, body)));
         }
 
         let dest_http1 = dest_http1.unwrap();
 
-        if self.src_http_type.is_protocol_http1() {
-            if dest_http1 {
-                // src_http1 && dest_http1
-                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
-
-                // let ;
-
-                handle_headers(proxy_pass, inner, &mut parts, &location_index);
-
-                let body = into_full_bytes(
-                    &mut parts,
-                    incoming,
-                    compress,
-                    proxy_pass.endpoint_info.debug,
-                )
-                .await?;
-
-                if parts.headers.get("sec-websocket-key").is_some() {
-                    if proxy_pass.endpoint_info.debug {
-                        println!("Detected Upgrade http1->http1");
-                    }
-
-                    let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
-                    let upgrade_response = hyper_tungstenite::upgrade(upgrade_req, None)?;
-
-                    self.web_socket_update_response = Some(upgrade_response);
-                    //tokio::spawn(super::web_socket_loop(web_socket));
-                    //let request = hyper::Request::from_parts(parts, body);
-                    //self.prepared_request = Some(request);
-                }
-
-                let result = hyper::Request::from_parts(parts, body);
-
-                if proxy_pass.endpoint_info.debug {
-                    println!(
-                        "[{}]. After Conversion Request: {:?}.",
-                        result.uri(),
-                        result.headers()
-                    );
-                }
-
-                self.prepared_request = Some(result);
-
-                return Ok(location_index);
-            } else {
-                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
-
-                handle_headers(proxy_pass, inner, &mut parts, &location_index);
-
-                let body = into_full_bytes(
-                    &mut parts,
-                    incoming,
-                    compress,
-                    proxy_pass.endpoint_info.debug,
-                )
-                .await?;
-
-                let request = hyper::Request::from_parts(parts, body);
-
-                if proxy_pass.endpoint_info.debug {
-                    println!(
-                        "[{}]. After Conversion Request: {:?}.",
-                        request.uri(),
-                        request.headers()
-                    );
-                }
-
-                self.prepared_request = Some(request);
-
-                Ok(location_index)
-            }
-        } else {
-            if dest_http1 {
-                return self
-                    .http2_to_http1(location_index, compress, proxy_pass.endpoint_info.debug)
-                    .await;
-            } else {
-                // src_http2 && dest_http2
-                let (mut parts, incoming) = self.src.take().unwrap().into_parts();
-                handle_headers(proxy_pass, inner, &mut parts, &location_index);
-                let body = into_full_bytes(
-                    &mut parts,
-                    incoming,
-                    compress,
-                    proxy_pass.endpoint_info.debug,
-                )
-                .await?;
-
-                let result = hyper::Request::from_parts(parts, body);
-
-                if proxy_pass.endpoint_info.debug {
-                    println!(
-                        "[{}] After Conversion Request Headers: {:?}.",
-                        result.uri(),
-                        result.headers()
-                    );
-                }
-
-                self.prepared_request = Some(result);
-
-                Ok(location_index)
-            }
+        if !self.src_http_type.is_protocol_http1() && dest_http1 {
+            return self.http2_to_http1(location_index, debug).await;
         }
+
+        self.handle_headers(proxy_pass, inner, &location_index);
+
+        let (parts, body) = self.build_request(compress, debug).await?;
+
+        if self.parts.headers.get("sec-websocket-key").is_some() {
+            if proxy_pass.endpoint_info.debug {
+                println!("Detected Upgrade http1->http1");
+            }
+
+            let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
+            let upgrade_response = hyper_tungstenite::upgrade(upgrade_req, None)?;
+
+            self.web_socket_update_response = Some(upgrade_response);
+        }
+
+        return Ok((location_index, Request::from_parts(parts, body)));
     }
 
     async fn http2_to_http1(
         &mut self,
         location_index: LocationIndex,
-        compress: bool,
         debug: bool,
-    ) -> Result<LocationIndex, ProxyPassError> {
-        let request = self.src.take();
-        if request.is_none() {
-            panic!("Somehow request is none while converting from http2 to http1");
-        }
-
-        let (mut parts, incoming) = request.unwrap().into_parts();
-
-        let path_and_query = if let Some(path_and_query) = parts.uri.path_and_query() {
+    ) -> Result<(LocationIndex, hyper::Request<Full<Bytes>>), ProxyPassError> {
+        let path_and_query = if let Some(path_and_query) = self.parts.uri.path_and_query() {
             path_and_query.as_str()
         } else {
             "/"
@@ -177,51 +90,49 @@ impl HttpRequestBuilder {
 
         let uri: Uri = path_and_query.parse().unwrap();
 
-        let host_header = if let Some(port) = parts.uri.port() {
-            format!("{}:{}", parts.uri.host().unwrap(), port)
+        let host_header = if let Some(port) = self.parts.uri.port() {
+            format!("{}:{}", self.parts.uri.host().unwrap(), port)
         } else {
-            if let Some(host) = parts.uri.host() {
+            if let Some(host) = self.parts.uri.host() {
                 host.to_string()
             } else {
-                if let Some(host) = parts.get_headers().get("host") {
+                if let Some(host) = self.parts.get_headers().get("host") {
                     host.to_str().unwrap().to_string()
                 } else {
-                    println!("Parts: {:?}", parts);
-                    panic!("No host found in uri: {:?}", parts.uri);
+                    println!("Parts: {:?}", self.parts);
+                    panic!("No host found in uri: {:?}", self.parts.uri);
                 }
             }
         };
 
         let mut builder = Request::builder()
             .uri(uri)
-            .method(parts.method.clone())
+            .method(self.parts.method.clone())
             .header("host", host_header);
 
-        for header in parts.headers.iter() {
+        for header in self.parts.headers.iter() {
             builder = builder.header(header.0, header.1);
         }
 
-        let body = into_full_bytes(&mut parts, incoming, compress, debug).await?;
+        let collected = self.body.take().unwrap().collect().await?;
+        let bytes = collected.to_bytes();
+        let body = into_full_body(bytes, debug);
 
-        let result = builder.body(body).unwrap();
+        let response = builder.body(body).unwrap();
 
         if debug {
             println!(
                 "[{}]. After Conversion Request: {:?}. ",
-                result.uri(),
-                result.headers()
+                response.uri(),
+                response.headers()
             );
         }
-        self.prepared_request = Some(result);
-        return Ok(location_index);
+
+        return Ok((location_index, response));
     }
 
     pub fn uri(&self) -> &Uri {
-        if let Some(src) = self.src.as_ref() {
-            return src.uri();
-        }
-
-        self.prepared_request.as_ref().unwrap().uri()
+        &self.parts.uri
     }
 
     pub fn get_from_query(&self, param: &str) -> Option<String> {
@@ -271,57 +182,91 @@ impl HttpRequestBuilder {
         result
     }
 
-    pub fn get(&self) -> hyper::Request<Full<Bytes>> {
-        self.prepared_request.as_ref().unwrap().clone()
-    }
-}
+    async fn build_request(
+        &mut self,
+        compress: bool,
+        debug: bool,
+    ) -> Result<(Parts, Full<Bytes>), ProxyPassError> {
+        use http_body_util::BodyExt;
 
-pub async fn into_full_bytes(
-    headers: &mut Parts,
-    incoming: impl hyper::body::Body<Data = hyper::body::Bytes, Error = hyper::Error>,
-    compress: bool,
-    debug: bool,
-) -> Result<Full<Bytes>, ProxyPassError> {
-    use http_body_util::BodyExt;
+        let mut parts = self.parts.clone();
 
-    let collected = incoming.collect().await?;
-    let bytes = collected.to_bytes();
+        let collected = self.body.take().unwrap().collect().await?;
+        let bytes = collected.to_bytes();
 
-    let before_compress = bytes.len();
+        let before_compress = bytes.len();
 
-    let body = if compress && before_compress >= 2048 {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&bytes)?;
-        let compressed_data = encoder.finish()?;
-        let compressed_data_len = compressed_data.len();
+        let body = if compress && before_compress >= 2048 {
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder.write_all(&bytes)?;
+            let compressed_data = encoder.finish()?;
+            let compressed_data_len = compressed_data.len();
+
+            if debug {
+                println!("Compressed: {} -> {}", before_compress, compressed_data_len);
+            }
+
+            parts.headers.remove(CONTENT_ENCODING);
+            parts.headers.remove(CONTENT_TYPE);
+            parts
+                .headers
+                .append(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+            parts.headers.append(
+                CONTENT_TYPE,
+                HeaderValue::from_static("application/octet-stream"),
+            );
+
+            parts.headers.remove(CONTENT_LENGTH);
+
+            parts.headers.append(
+                CONTENT_LENGTH,
+                HeaderValue::from_str(compressed_data_len.to_string().as_str()).unwrap(),
+            );
+
+            http_body_util::Full::new(compressed_data.into())
+        } else {
+            into_full_body(bytes, debug)
+        };
 
         if debug {
-            println!("Compressed: {} -> {}", before_compress, compressed_data_len);
+            println!(
+                "[{}]. After Conversion Request: {:?}.",
+                parts.uri, parts.headers
+            );
+        }
+        Ok((parts, body))
+    }
+
+    fn handle_headers(
+        &mut self,
+        proxy_pass: &HttpProxyPass,
+        inner: &HttpProxyPassInner,
+        location_index: &LocationIndex,
+    ) {
+        if let Some(modify_headers_settings) = proxy_pass
+            .endpoint_info
+            .modify_headers_settings
+            .global_modify_headers_settings
+            .as_ref()
+        {
+            modify_headers(inner, &mut self.parts, modify_headers_settings);
         }
 
-        headers.headers.remove(CONTENT_ENCODING);
-        headers.headers.remove(CONTENT_TYPE);
-        headers
-            .headers
-            .append(CONTENT_ENCODING, HeaderValue::from_static("gzip"));
-        headers.headers.append(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/octet-stream"),
-        );
+        if let Some(modify_headers_settings) = proxy_pass
+            .endpoint_info
+            .modify_headers_settings
+            .endpoint_modify_headers_settings
+            .as_ref()
+        {
+            modify_headers(inner, &mut self.parts, modify_headers_settings);
+        }
 
-        headers.headers.remove(CONTENT_LENGTH);
+        let proxy_pass_location = inner.locations.find(location_index);
 
-        headers.headers.append(
-            CONTENT_LENGTH,
-            HeaderValue::from_str(compressed_data_len.to_string().as_str()).unwrap(),
-        );
-
-        http_body_util::Full::new(compressed_data.into())
-    } else {
-        into_full_body(bytes, debug)
-    };
-
-    Ok(body)
+        if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
+            modify_headers(inner, &mut self.parts, modify_headers_settings);
+        }
+    }
 }
 
 fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
@@ -330,36 +275,6 @@ fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
     }
 
     http_body_util::Full::new(src)
-}
-fn handle_headers(
-    proxy_pass: &HttpProxyPass,
-    inner: &HttpProxyPassInner,
-    parts: &mut Parts,
-    location_index: &LocationIndex,
-) {
-    if let Some(modify_headers_settings) = proxy_pass
-        .endpoint_info
-        .modify_headers_settings
-        .global_modify_headers_settings
-        .as_ref()
-    {
-        modify_headers(inner, parts, modify_headers_settings);
-    }
-
-    if let Some(modify_headers_settings) = proxy_pass
-        .endpoint_info
-        .modify_headers_settings
-        .endpoint_modify_headers_settings
-        .as_ref()
-    {
-        modify_headers(inner, parts, modify_headers_settings);
-    }
-
-    let proxy_pass_location = inner.locations.find(location_index);
-
-    if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
-        modify_headers(inner, parts, modify_headers_settings);
-    }
 }
 
 fn modify_headers<'s>(
@@ -394,18 +309,10 @@ fn modify_headers<'s>(
 
 impl HostPort for HttpRequestBuilder {
     fn get_uri(&self) -> &Uri {
-        if let Some(src) = self.src.as_ref() {
-            return src.uri();
-        }
-
-        self.prepared_request.as_ref().unwrap().uri()
+        &self.parts.uri
     }
 
     fn get_headers(&self) -> &HeaderMap<HeaderValue> {
-        if let Some(src) = self.src.as_ref() {
-            return src.headers();
-        }
-
-        self.prepared_request.as_ref().unwrap().headers()
+        &self.parts.headers
     }
 }
