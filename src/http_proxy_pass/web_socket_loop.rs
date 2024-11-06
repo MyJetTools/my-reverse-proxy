@@ -23,7 +23,7 @@ pub async fn start_web_socket_loop<
         web_socket_loop(server_web_socket, to_remote_stream, debug).await;
     })
     .await;
-    disconnect.disconnect();
+    disconnect.web_socket_disconnect();
 }
 
 async fn web_socket_loop<
