@@ -68,7 +68,6 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
                 .await;
 
             prometheus.dec_http2_server_connections(listening_addr_str.as_str());
-
             http_request_handler_to_dispose.dispose().await;
         });
     }
