@@ -212,6 +212,9 @@ fn kick_off_https1(
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
+    app.prometheus
+        .inc_http1_server_connections(socket_addr.to_string().as_str());
+
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
@@ -239,6 +242,9 @@ fn kick_off_https1(
             }
         }
 
+        app.prometheus
+            .dec_http1_server_connections(socket_addr.to_string().as_str());
+
         http_request_handler_dispose.dispose().await;
     });
 }
@@ -255,6 +261,11 @@ fn kick_off_https2(
     use hyper_util::server::conn::auto::Builder;
 
     use hyper_util::rt::TokioExecutor;
+
+    app.prometheus
+        .inc_http2_server_connections(socket_addr.to_string().as_str());
+
+    let prometheus = app.prometheus.clone();
 
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
@@ -284,6 +295,8 @@ fn kick_off_https2(
                 println!("failed to serve Https2 connection: {err:#}");
             }
         }
+
+        prometheus.dec_http2_server_connections(socket_addr.to_string().as_str());
 
         http_request_handler_dispose.dispose().await;
     });
