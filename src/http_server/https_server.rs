@@ -85,9 +85,14 @@ async fn handle_connection(
 
     let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
 
+    let endpoint_name = format!("https://{}", socket_addr);
+
+    let endpoint_name = Arc::new(endpoint_name);
+
     if endpoint_info.http_type.is_protocol_http1() {
         kick_off_https1(
             app,
+            endpoint_name.clone(),
             socket_addr,
             endpoint_info,
             tls_stream,
@@ -97,6 +102,7 @@ async fn handle_connection(
     } else {
         kick_off_https2(
             app,
+            endpoint_name.clone(),
             socket_addr,
             endpoint_info,
             tls_stream,
@@ -202,6 +208,7 @@ async fn lazy_accept_tcp_stream(
 
 fn kick_off_https1(
     app: Arc<AppContext>,
+    endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
@@ -213,7 +220,7 @@ fn kick_off_https1(
     http1.keep_alive(true);
 
     app.prometheus
-        .inc_http1_server_connections(socket_addr.to_string().as_str());
+        .inc_http1_server_connections(endpoint_name.as_str());
 
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
@@ -243,7 +250,7 @@ fn kick_off_https1(
         }
 
         app.prometheus
-            .dec_http1_server_connections(socket_addr.to_string().as_str());
+            .dec_http1_server_connections(endpoint_name.as_str());
 
         http_request_handler_dispose.dispose().await;
     });
@@ -251,6 +258,7 @@ fn kick_off_https1(
 
 fn kick_off_https2(
     app: Arc<AppContext>,
+    endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
@@ -263,7 +271,7 @@ fn kick_off_https2(
     use hyper_util::rt::TokioExecutor;
 
     app.prometheus
-        .inc_http2_server_connections(socket_addr.to_string().as_str());
+        .inc_http2_server_connections(endpoint_name.as_str());
 
     let prometheus = app.prometheus.clone();
 
@@ -296,7 +304,7 @@ fn kick_off_https2(
             }
         }
 
-        prometheus.dec_http2_server_connections(socket_addr.to_string().as_str());
+        prometheus.dec_http2_server_connections(endpoint_name.as_str());
 
         http_request_handler_dispose.dispose().await;
     });
