@@ -166,7 +166,7 @@ impl HttpProxyPassContentSource {
                 Ok(HttpResponse::Response(result.into()))
             }
             HttpProxyPassContentSource::PathOverSsh(src) => {
-                let request_executor = src.get_request_executor(&req.uri())?;
+                let request_executor = src.get_request_executor(&req.uri()).await?;
                 let result = request_executor.execute_request().await?;
                 Ok(HttpResponse::Response(result.into()))
             }

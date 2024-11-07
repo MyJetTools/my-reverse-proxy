@@ -12,7 +12,7 @@ use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 
 use crate::{configurations::*, settings::ModifyHttpHeadersSettings};
 
-use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPassError};
+use super::{HostPort, HttpProxyPass, HttpProxyPassInner, ProxyPassError, ProxyPassLocation};
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
@@ -24,7 +24,6 @@ pub struct WebSocketUpgrade {
 pub struct TransformedRequest {
     pub request: hyper::Request<Full<Bytes>>,
     pub req_parts: Parts,
-    pub location_index: LocationIndex,
     pub web_socket_upgrade: Option<WebSocketUpgrade>,
 }
 
@@ -45,38 +44,36 @@ impl HttpRequestBuilder {
     }
 
     pub async fn into_response(
-        mut self,
+        self,
         proxy_pass: &HttpProxyPass,
-        inner: &HttpProxyPassInner,
+        location: &ProxyPassLocation,
     ) -> Result<TransformedRequest, ProxyPassError> {
-        let location_index = inner.locations.find_location_index(self.uri())?;
+        //let location_index = inner.locations.find_location_index(self.uri())?;
 
-        let (compress, dest_http1, debug) = {
-            let item = inner.locations.find(&location_index);
-
-            (item.compress, item.is_http1(), item.debug)
-        };
+        let dest_http1 = location.is_http1();
+        //let (compress, dest_http1, debug) = { (item.compress, item.is_http1(), item.debug) };
 
         if dest_http1.is_none() {
-            let (parts, body) = self.build_request(compress, debug).await?;
+            let (parts, body) = self
+                .build_request(location.compress, location.debug)
+                .await?;
 
             return Ok(TransformedRequest {
                 req_parts: parts.clone(),
                 request: Request::from_parts(parts, body),
                 web_socket_upgrade: None,
-                location_index,
             });
         }
 
         let dest_http1 = dest_http1.unwrap();
 
         if !self.src_http_type.is_protocol_http1() && dest_http1 {
-            return self.http2_to_http1(location_index, debug).await;
+            return self.http2_to_http1(location).await;
         }
 
-        self.handle_headers(proxy_pass, inner, &location_index);
-
-        let (parts, body) = self.build_request(compress, debug).await?;
+        let (parts, body) = self
+            .build_request(location.compress, location.debug)
+            .await?;
 
         let mut web_socket_upgrade = None;
         if parts.headers.get("sec-websocket-key").is_some() {
@@ -96,7 +93,7 @@ impl HttpRequestBuilder {
         return Ok(TransformedRequest {
             req_parts: parts.clone(),
             request: Request::from_parts(parts, body),
-            location_index,
+
             web_socket_upgrade,
         });
         //return Ok((location_index, ));
@@ -104,8 +101,7 @@ impl HttpRequestBuilder {
 
     async fn http2_to_http1(
         self,
-        location_index: LocationIndex,
-        debug: bool,
+        location: &ProxyPassLocation,
     ) -> Result<TransformedRequest, ProxyPassError> {
         let path_and_query = if let Some(path_and_query) = self.parts.uri.path_and_query() {
             path_and_query.as_str()
@@ -144,11 +140,11 @@ impl HttpRequestBuilder {
 
         let req_parts = self.parts.clone();
 
-        let body = into_full_body(bytes, debug);
+        let body = into_full_body(bytes, location.debug);
 
         let request = builder.body(body).unwrap();
 
-        if debug {
+        if location.debug {
             println!(
                 "[{}]. After Conversion Request: {:?}. ",
                 request.uri(),
@@ -160,7 +156,6 @@ impl HttpRequestBuilder {
             req_parts,
             request,
             web_socket_upgrade: None,
-            location_index,
         });
     }
 
@@ -270,11 +265,11 @@ impl HttpRequestBuilder {
         Ok((parts, body))
     }
 
-    fn handle_headers(
+    pub fn process_headers<'s>(
         &mut self,
         proxy_pass: &HttpProxyPass,
-        inner: &HttpProxyPassInner,
-        location_index: &LocationIndex,
+        inner: &'s HttpProxyPassInner,
+        location: &ProxyPassLocation,
     ) {
         if let Some(modify_headers_settings) = proxy_pass
             .endpoint_info
@@ -294,9 +289,7 @@ impl HttpRequestBuilder {
             modify_headers(inner, &mut self.parts, modify_headers_settings);
         }
 
-        let proxy_pass_location = inner.locations.find(location_index);
-
-        if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
+        if let Some(modify_headers_settings) = location.config.modify_headers.as_ref() {
             modify_headers(inner, &mut self.parts, modify_headers_settings);
         }
     }

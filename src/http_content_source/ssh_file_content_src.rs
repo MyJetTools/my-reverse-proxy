@@ -4,12 +4,12 @@ use hyper::Uri;
 use my_ssh::{SshCredentials, SshSession};
 use tokio::sync::Mutex;
 
-use crate::{app::AppContext, http_proxy_pass::ProxyPassError};
+use crate::http_proxy_pass::ProxyPassError;
 
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct PathOverSshContentSource {
-    ssh_session: Option<Arc<SshSession>>,
+    ssh_session: Mutex<Option<Arc<SshSession>>>,
     ssh_credentials: Arc<SshCredentials>,
     home_value: Arc<Mutex<Option<String>>>,
     default_file: Option<String>,
@@ -25,37 +25,38 @@ impl PathOverSshContentSource {
         execute_timeout: Duration,
     ) -> Self {
         Self {
-            ssh_session: None,
-            file_path,
+            ssh_session: Mutex::new(None),
             ssh_credentials,
+            file_path,
             home_value: Arc::new(Mutex::new(None)),
             default_file,
             execute_timeout,
         }
     }
-    pub async fn connect_if_require(&mut self, app: &AppContext) -> Result<(), ProxyPassError> {
-        if self.ssh_session.is_some() {
-            return Ok(());
+    pub async fn get_or_connect_to_session(&self) -> Arc<SshSession> {
+        let mut ssh_session_access = self.ssh_session.lock().await;
+
+        if let Some(ssh_session) = ssh_session_access.clone() {
+            return ssh_session;
         }
 
-        let ssh_session = Arc::new(SshSession::new(self.ssh_credentials.clone()));
+        let ssh_session = SshSession::new(self.ssh_credentials.clone());
+        let ssh_session = Arc::new(ssh_session);
 
-        let (host, port) = self.ssh_credentials.get_host_port();
+        //let (host, port) = self.ssh_credentials.get_host_port();
+        //let result = ssh_session
+        //    .connect_to_remote_host(host, port, app.connection_settings.remote_connect_timeout)
+        //    .await?;
+
+        *ssh_session_access = Some(ssh_session.clone());
         ssh_session
-            .connect_to_remote_host(host, port, app.connection_settings.remote_connect_timeout)
-            .await?;
-
-        self.ssh_session = Some(ssh_session);
-        Ok(())
     }
 
-    pub fn get_request_executor(
+    pub async fn get_request_executor(
         &self,
         uri: &Uri,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
-        if self.ssh_session.is_none() {
-            return Err(ProxyPassError::ConnectionIsDisposed);
-        }
+        let ssh_session = self.get_or_connect_to_session().await;
 
         let file_path = if uri.path() == "/" {
             if let Some(default_file) = self.default_file.as_ref() {
@@ -69,7 +70,7 @@ impl PathOverSshContentSource {
 
         let result = FileOverSshRequestExecutor {
             file_path,
-            session: self.ssh_session.as_ref().unwrap().clone(),
+            ssh_session,
             home_value: self.home_value.clone(),
             execute_timeout: self.execute_timeout,
         };
@@ -78,7 +79,7 @@ impl PathOverSshContentSource {
 }
 
 pub struct FileOverSshRequestExecutor {
-    session: Arc<SshSession>,
+    ssh_session: Arc<SshSession>,
     file_path: String,
     home_value: Arc<Mutex<Option<String>>>,
     execute_timeout: Duration,
@@ -92,7 +93,7 @@ impl RequestExecutor for FileOverSshRequestExecutor {
 
             if home_value.is_none() {
                 let (home, _) = self
-                    .session
+                    .ssh_session
                     .execute_command("echo $HOME", self.execute_timeout)
                     .await?;
                 home_value.replace(home.trim().to_string());
@@ -105,7 +106,7 @@ impl RequestExecutor for FileOverSshRequestExecutor {
         };
 
         let result = self
-            .session
+            .ssh_session
             .download_remote_file(&file_path, self.execute_timeout)
             .await;
 

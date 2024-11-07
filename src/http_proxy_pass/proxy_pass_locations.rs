@@ -1,6 +1,6 @@
 use hyper::Uri;
 
-use crate::configurations::*;
+use crate::{app::AppContext, configurations::*};
 
 use super::{ProxyPassError, ProxyPassLocation};
 
@@ -15,14 +15,16 @@ pub struct ProxyPassLocations {
 }
 
 impl ProxyPassLocations {
-    pub fn new(endpoint_info: &HttpEndpointInfo) -> Self {
+    pub fn new(app: &AppContext, endpoint_info: &HttpEndpointInfo) -> Self {
         let mut data = Vec::with_capacity(endpoint_info.locations.len());
         for location in &endpoint_info.locations {
-            data.push(ProxyPassLocation::new(
+            let location = ProxyPassLocation::new(
+                app,
                 location.clone(),
                 endpoint_info.debug,
                 location.compress,
-            ))
+            );
+            data.push(location)
         }
 
         Self { data }
@@ -52,6 +54,7 @@ impl ProxyPassLocations {
         );
     }
 
+    /*
     pub fn find_mut(&mut self, location_index: &LocationIndex) -> &mut ProxyPassLocation {
         if let Some(location) = self.data.get_mut(location_index.index) {
             return location;
@@ -62,4 +65,5 @@ impl ProxyPassLocations {
             location_index.id, location_index.index
         );
     }
+     */
 }

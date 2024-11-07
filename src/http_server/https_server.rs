@@ -233,7 +233,8 @@ fn kick_off_https1(
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
-        let http_proxy_pass = HttpProxyPass::new(endpoint_info, listening_port_info, cn_user_name);
+        let http_proxy_pass =
+            HttpProxyPass::new(&app, endpoint_info, listening_port_info, cn_user_name);
 
         let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
 
@@ -289,7 +290,7 @@ fn kick_off_https2(
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
         let http_proxy_pass =
-            HttpProxyPass::new(endpoint_info, listening_port_info, client_certificate);
+            HttpProxyPass::new(&app, endpoint_info, listening_port_info, client_certificate);
 
         let http_request_handler = HttpRequestHandler::new(http_proxy_pass, app.clone());
 

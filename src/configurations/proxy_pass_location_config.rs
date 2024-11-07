@@ -4,7 +4,7 @@ use crate::{
     app::AppContext,
     http_client::{Http1Client, Http2Client, SshConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
-    http_proxy_pass::{HttpProxyPassContentSource, ProxyPassError},
+    http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
     types::WhiteListedIpList,
 };
@@ -60,12 +60,12 @@ impl ProxyPassLocationConfig {
     }
      */
 
-    pub async fn create_and_connect(
+    pub fn create_data_source(
         &self,
         app: &AppContext,
         debug: bool,
         timeout: Duration,
-    ) -> Result<HttpProxyPassContentSource, ProxyPassError> {
+    ) -> HttpProxyPassContentSource {
         let result = match &self.proxy_pass_to {
             ProxyPassTo::Static(static_content_model) => {
                 HttpProxyPassContentSource::Static(StaticContentSrc::new(
@@ -117,14 +117,13 @@ impl ProxyPassLocationConfig {
                     }
                 }
                 SshContent::FilePath(file_path) => {
-                    let mut src = PathOverSshContentSource::new(
+                    let src = PathOverSshContentSource::new(
                         model.ssh_config.credentials.clone(),
                         file_path.clone(),
                         model.default_file.clone(),
                         timeout,
                     );
 
-                    src.connect_if_require(app).await?;
                     HttpProxyPassContentSource::PathOverSsh(src)
                 }
             },
@@ -133,7 +132,7 @@ impl ProxyPassLocationConfig {
             }
         };
 
-        Ok(result)
+        result
     }
 
     pub fn is_http1(&self) -> Option<bool> {

@@ -23,11 +23,12 @@ pub struct HttpProxyPass {
 
 impl HttpProxyPass {
     pub fn new(
+        app: &Arc<AppContext>,
         endpoint_info: Arc<HttpEndpointInfo>,
         listening_port_info: HttpListenPortInfo,
         client_cert: Option<ClientCertificateData>,
     ) -> Self {
-        let locations = ProxyPassLocations::new(&endpoint_info);
+        let locations = ProxyPassLocations::new(app, &endpoint_info);
         Self {
             inner: Mutex::new(HttpProxyPassInner::new(
                 HttpProxyPassIdentity::new(client_cert),
@@ -54,9 +55,9 @@ impl HttpProxyPass {
             );
         }
 
-        let req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
+        let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
-        let (request, content_source) = {
+        let (request, content_source, location_index) = {
             let mut inner = self.inner.lock().await;
 
             match self.handle_auth_with_g_auth(app, &req).await {
@@ -67,8 +68,6 @@ impl HttpProxyPass {
                 }
             }
 
-            let request = req.into_response(self, &inner).await?;
-
             if let Some(allowed_users) = self.endpoint_info.allowed_user_list.as_ref() {
                 if let Some(identity) = inner.identity.get_identity() {
                     if !allowed_users.is_allowed(identity) {
@@ -77,7 +76,13 @@ impl HttpProxyPass {
                 }
             }
 
-            let proxy_pass_location = inner.locations.find_mut(&request.location_index);
+            let location_index = inner.locations.find_location_index(req.uri())?;
+
+            let proxy_pass_location = inner.locations.find(&location_index);
+
+            req.process_headers(self, &inner, proxy_pass_location);
+
+            let request = req.into_response(self, proxy_pass_location).await?;
 
             if !proxy_pass_location
                 .config
@@ -89,7 +94,11 @@ impl HttpProxyPass {
                 ));
             }
 
-            (request, proxy_pass_location.connect_if_require(app).await?)
+            (
+                request,
+                proxy_pass_location.content_source.clone(),
+                location_index,
+            )
         };
 
         let result = content_source
@@ -157,7 +166,7 @@ impl HttpProxyPass {
             &inner,
             &request.req_parts,
             response.headers_mut(),
-            &request.location_index,
+            &location_index,
         );
 
         return Ok(Ok(response));

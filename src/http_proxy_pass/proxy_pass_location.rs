@@ -4,25 +4,33 @@ use hyper::Uri;
 
 use crate::{app::AppContext, configurations::*, http_proxy_pass::HttpProxyPassContentSource};
 
-use super::ProxyPassError;
-
 pub struct ProxyPassLocation {
-    pub content_source: Option<Arc<HttpProxyPassContentSource>>,
+    pub content_source: Arc<HttpProxyPassContentSource>,
     pub config: Arc<ProxyPassLocationConfig>,
     pub compress: bool,
     pub debug: bool,
 }
 
 impl ProxyPassLocation {
-    pub fn new(config: Arc<ProxyPassLocationConfig>, debug: bool, compress: bool) -> Self {
+    pub fn new(
+        app: &AppContext,
+        config: Arc<ProxyPassLocationConfig>,
+        debug: bool,
+        compress: bool,
+    ) -> Self {
         //let content_source = config.create_content_source(debug, request_timeout);
         //let is_http1 = content_source.is_http1();
-        Self {
-            content_source: None,
+
+        let content_source =
+            config.create_data_source(app, debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT);
+        let result = Self {
+            content_source: Arc::new(content_source),
             config,
             compress,
             debug,
-        }
+        };
+
+        result
     }
 
     pub fn is_my_uri(&self, uri: &Uri) -> bool {
@@ -38,6 +46,7 @@ impl ProxyPassLocation {
         self.config.is_http1()
     }
 
+    /*
     pub async fn connect_if_require(
         &mut self,
         app: &AppContext,
@@ -46,11 +55,6 @@ impl ProxyPassLocation {
             return Ok(content_source.clone());
         }
 
-        let client_source = self
-            .config
-            .create_and_connect(app, self.debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
-            .await?;
-
         //let content_source = HttpProxyPassContentSource::connect(app, &self.config).await?;
 
         let result = Arc::new(client_source);
@@ -58,4 +62,5 @@ impl ProxyPassLocation {
 
         Ok(result)
     }
+     */
 }
