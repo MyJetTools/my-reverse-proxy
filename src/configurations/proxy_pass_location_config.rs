@@ -86,7 +86,7 @@ impl ProxyPassLocationConfig {
 
             ProxyPassTo::Http2(remote_host) => {
                 let http_client =
-                    Http2Client::create(remote_host.clone(), self.domain_name.clone(), debug);
+                    Http2Client::create(app, remote_host.clone(), self.domain_name.clone(), debug);
                 HttpProxyPassContentSource::Http2(http_client)
             }
             ProxyPassTo::LocalPath(model) => HttpProxyPassContentSource::LocalPath(
@@ -101,7 +101,7 @@ impl ProxyPassLocationConfig {
                             debug,
                         };
 
-                        let http_client = MyHttp2Client::new(connector);
+                        let http_client = MyHttp2Client::new(connector, app.prometheus.clone());
 
                         HttpProxyPassContentSource::Http2OverSsh(http_client)
                     } else {

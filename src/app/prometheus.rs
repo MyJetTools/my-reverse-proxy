@@ -7,6 +7,8 @@ pub struct Prometheus {
     pub http1_client_instances: IntGaugeVec,
     pub http1_client_web_sockets: IntGaugeVec,
 
+    pub http2_client_instances: IntGaugeVec,
+    pub http2_client_tcp_connects: IntGaugeVec,
     registry: Registry,
 }
 
@@ -43,12 +45,26 @@ impl Prometheus {
             "Http1 Client Web Sockets",
         );
 
+        let http2_client_instances = create_gauge_vec(
+            &registry,
+            "http2_client_instances",
+            "Http2 Client Instances",
+        );
+
+        let http2_client_tcp_connects = create_gauge_vec(
+            &registry,
+            "http2_client_remote_tcp_connects",
+            "Http2 TCP connects",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
             http1_client_tcp_write_threads,
             http1_client_web_sockets,
             http1_client_instances,
+            http2_client_instances,
+            http2_client_tcp_connects,
             registry,
         };
 
@@ -128,6 +144,28 @@ impl my_http_client::http1::MyHttpClientMetrics for Prometheus {
 
     fn websocket_is_disconnected(&self, name: &str) {
         self.http1_client_web_sockets
+            .with_label_values(&[name])
+            .dec();
+    }
+}
+
+impl my_http_client::http2::MyHttp2ClientMetrics for Prometheus {
+    fn instance_created(&self, name: &str) {
+        self.http2_client_instances.with_label_values(&[name]).inc();
+    }
+
+    fn instance_disposed(&self, name: &str) {
+        self.http2_client_instances.with_label_values(&[name]).dec();
+    }
+
+    fn connected(&self, name: &str) {
+        self.http2_client_tcp_connects
+            .with_label_values(&[name])
+            .inc();
+    }
+
+    fn disconnected(&self, name: &str) {
+        self.http2_client_tcp_connects
             .with_label_values(&[name])
             .dec();
     }
