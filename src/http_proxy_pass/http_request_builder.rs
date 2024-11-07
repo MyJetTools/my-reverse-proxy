@@ -16,11 +16,22 @@ use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex, ProxyPas
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
 
+pub struct WebSocketUpgrade {
+    pub upgrade_response: hyper::Response<Full<Bytes>>,
+    pub server_web_socket: HyperWebsocket,
+}
+
+pub struct TransformedRequest {
+    pub request: hyper::Request<Full<Bytes>>,
+    pub req_parts: Parts,
+    pub location_index: LocationIndex,
+    pub web_socket_upgrade: Option<WebSocketUpgrade>,
+}
+
 pub struct HttpRequestBuilder {
-    body: Option<Incoming>,
     parts: Parts,
+    body: Incoming,
     src_http_type: HttpType,
-    pub web_socket_update_response: Option<(hyper::Response<Full<Bytes>>, HyperWebsocket)>,
 }
 
 impl HttpRequestBuilder {
@@ -28,17 +39,16 @@ impl HttpRequestBuilder {
         let (parts, body) = src.into_parts();
         Self {
             parts,
-            body: Some(body),
+            body,
             src_http_type,
-            web_socket_update_response: None,
         }
     }
 
-    pub async fn populate_and_build(
-        &mut self,
+    pub async fn into_response(
+        mut self,
         proxy_pass: &HttpProxyPass,
         inner: &HttpProxyPassInner,
-    ) -> Result<(LocationIndex, hyper::Request<Full<Bytes>>), ProxyPassError> {
+    ) -> Result<TransformedRequest, ProxyPassError> {
         let location_index = inner.locations.find_location_index(self.uri())?;
 
         let (compress, dest_http1, debug) = {
@@ -50,7 +60,12 @@ impl HttpRequestBuilder {
         if dest_http1.is_none() {
             let (parts, body) = self.build_request(compress, debug).await?;
 
-            return Ok((location_index, Request::from_parts(parts, body)));
+            return Ok(TransformedRequest {
+                req_parts: parts.clone(),
+                request: Request::from_parts(parts, body),
+                web_socket_upgrade: None,
+                location_index,
+            });
         }
 
         let dest_http1 = dest_http1.unwrap();
@@ -63,7 +78,8 @@ impl HttpRequestBuilder {
 
         let (parts, body) = self.build_request(compress, debug).await?;
 
-        if self.parts.headers.get("sec-websocket-key").is_some() {
+        let mut web_socket_upgrade = None;
+        if parts.headers.get("sec-websocket-key").is_some() {
             if proxy_pass.endpoint_info.debug {
                 println!("Detected Upgrade http1->http1");
             }
@@ -71,17 +87,26 @@ impl HttpRequestBuilder {
             let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
             let upgrade_response = hyper_tungstenite::upgrade(upgrade_req, None)?;
 
-            self.web_socket_update_response = Some(upgrade_response);
+            web_socket_upgrade = Some(WebSocketUpgrade {
+                upgrade_response: upgrade_response.0,
+                server_web_socket: upgrade_response.1,
+            });
         }
 
-        return Ok((location_index, Request::from_parts(parts, body)));
+        return Ok(TransformedRequest {
+            req_parts: parts.clone(),
+            request: Request::from_parts(parts, body),
+            location_index,
+            web_socket_upgrade,
+        });
+        //return Ok((location_index, ));
     }
 
     async fn http2_to_http1(
-        &mut self,
+        self,
         location_index: LocationIndex,
         debug: bool,
-    ) -> Result<(LocationIndex, hyper::Request<Full<Bytes>>), ProxyPassError> {
+    ) -> Result<TransformedRequest, ProxyPassError> {
         let path_and_query = if let Some(path_and_query) = self.parts.uri.path_and_query() {
             path_and_query.as_str()
         } else {
@@ -114,21 +139,29 @@ impl HttpRequestBuilder {
             builder = builder.header(header.0, header.1);
         }
 
-        let collected = self.body.take().unwrap().collect().await?;
+        let collected = self.body.collect().await?;
         let bytes = collected.to_bytes();
+
+        let req_parts = self.parts.clone();
+
         let body = into_full_body(bytes, debug);
 
-        let response = builder.body(body).unwrap();
+        let request = builder.body(body).unwrap();
 
         if debug {
             println!(
                 "[{}]. After Conversion Request: {:?}. ",
-                response.uri(),
-                response.headers()
+                request.uri(),
+                request.headers()
             );
         }
 
-        return Ok((location_index, response));
+        return Ok(TransformedRequest {
+            req_parts,
+            request,
+            web_socket_upgrade: None,
+            location_index,
+        });
     }
 
     pub fn uri(&self) -> &Uri {
@@ -183,7 +216,7 @@ impl HttpRequestBuilder {
     }
 
     async fn build_request(
-        &mut self,
+        self,
         compress: bool,
         debug: bool,
     ) -> Result<(Parts, Full<Bytes>), ProxyPassError> {
@@ -191,7 +224,7 @@ impl HttpRequestBuilder {
 
         let mut parts = self.parts.clone();
 
-        let collected = self.body.take().unwrap().collect().await?;
+        let collected = self.body.collect().await?;
         let bytes = collected.to_bytes();
 
         let before_compress = bytes.len();

@@ -51,9 +51,9 @@ impl HttpProxyPass {
             );
         }
 
-        let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
+        let req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
 
-        let (location_index, request, content_source) = {
+        let (request, content_source) = {
             let mut inner = self.inner.lock().await;
 
             match self.handle_auth_with_g_auth(app, &req).await {
@@ -64,6 +64,8 @@ impl HttpProxyPass {
                 }
             }
 
+            let request = req.into_response(self, &inner).await?;
+
             if let Some(allowed_users) = self.endpoint_info.allowed_user_list.as_ref() {
                 if let Some(identity) = inner.identity.get_identity() {
                     if !allowed_users.is_allowed(identity) {
@@ -72,9 +74,7 @@ impl HttpProxyPass {
                 }
             }
 
-            let (location_index, request) = req.populate_and_build(self, &inner).await?;
-
-            let proxy_pass_location = inner.locations.find_mut(&location_index);
+            let proxy_pass_location = inner.locations.find_mut(&request.location_index);
 
             if !proxy_pass_location
                 .config
@@ -86,15 +86,11 @@ impl HttpProxyPass {
                 ));
             }
 
-            (
-                location_index,
-                request,
-                proxy_pass_location.connect_if_require(app).await?,
-            )
+            (request, proxy_pass_location.connect_if_require(app).await?)
         };
 
         let result = content_source
-            .send_request(request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
+            .send_request(request.request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
             .await?;
 
         let mut response = match result {
@@ -105,43 +101,46 @@ impl HttpProxyPass {
                 disconnection,
             } => match stream {
                 super::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
-                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                        let server_web_socket = web_socket_upgrade.server_web_socket;
                         tokio::spawn(super::start_web_socket_loop(
-                            web_socket,
+                            server_web_socket,
                             tcp_stream,
                             self.endpoint_info.debug,
                             disconnection,
                         ));
 
-                        into_full_body_response(response)
+                        into_full_body_response(web_socket_upgrade.upgrade_response)
                     } else {
                         response
                     }
                 }
                 super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
-                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                        let server_web_socket = web_socket_upgrade.server_web_socket;
                         tokio::spawn(super::start_web_socket_loop(
-                            web_socket,
+                            server_web_socket,
                             tls_stream,
                             self.endpoint_info.debug,
                             disconnection,
                         ));
 
-                        into_full_body_response(response)
+                        into_full_body_response(web_socket_upgrade.upgrade_response)
                     } else {
                         response
                     }
                 }
                 super::WebSocketUpgradeStream::SshChannel(async_channel) => {
-                    if let Some((response, web_socket)) = req.web_socket_update_response.take() {
+                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                        let server_web_socket = web_socket_upgrade.server_web_socket;
                         tokio::spawn(super::start_web_socket_loop(
-                            web_socket,
+                            server_web_socket,
                             async_channel,
                             self.endpoint_info.debug,
                             disconnection,
                         ));
 
-                        into_full_body_response(response)
+                        into_full_body_response(web_socket_upgrade.upgrade_response)
                     } else {
                         response
                     }
@@ -153,9 +152,9 @@ impl HttpProxyPass {
         super::http_response_builder::modify_resp_headers(
             self,
             &inner,
-            &req,
+            &request.req_parts,
             response.headers_mut(),
-            &location_index,
+            &request.location_index,
         );
 
         return Ok(Ok(response));
