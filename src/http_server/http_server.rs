@@ -16,7 +16,8 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
     let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
-
+    let listening_addr_str = format!("http://{}", listening_addr);
+    let listening_addr_str = Arc::new(listening_addr_str);
     loop {
         let accepted_connection = listener.accept().await;
 
@@ -60,12 +61,13 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
             .with_upgrades();
 
         app.prometheus
-            .inc_http1_server_connections(listening_addr.to_string().as_str());
+            .inc_http1_server_connections(listening_addr_str.as_str());
 
         let prometheus = app.prometheus.clone();
+        let listening_addr_str = listening_addr_str.clone();
         tokio::task::spawn(async move {
             if let Err(err) = connection.await {
-                prometheus.dec_http1_server_connections(listening_addr.to_string().as_str());
+                prometheus.dec_http1_server_connections(listening_addr_str.as_str());
                 if debug {
                     println!(
                         "{}. Error serving connection: {:?}",
