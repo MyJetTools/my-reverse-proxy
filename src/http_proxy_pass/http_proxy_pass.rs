@@ -16,7 +16,7 @@ use super::{
 };
 
 pub struct HttpProxyPass {
-    pub inner: Mutex<HttpProxyPassInner>,
+    pub inner: Mutex<Option<HttpProxyPassInner>>,
     pub listening_port_info: HttpListenPortInfo,
     pub endpoint_info: Arc<HttpEndpointInfo>,
 }
@@ -30,11 +30,14 @@ impl HttpProxyPass {
     ) -> Self {
         let locations = ProxyPassLocations::new(app, &endpoint_info);
         Self {
-            inner: Mutex::new(HttpProxyPassInner::new(
-                HttpProxyPassIdentity::new(client_cert),
-                locations,
-                listening_port_info.clone(),
-            )),
+            inner: Mutex::new(
+                HttpProxyPassInner::new(
+                    HttpProxyPassIdentity::new(client_cert),
+                    locations,
+                    listening_port_info.clone(),
+                )
+                .into(),
+            ),
 
             listening_port_info,
             endpoint_info,
@@ -59,7 +62,11 @@ impl HttpProxyPass {
 
         let (request, content_source, location_index) = {
             let mut inner = self.inner.lock().await;
+            if inner.is_none() {
+                return Err(ProxyPassError::Disposed);
+            }
 
+            let inner = inner.as_mut().unwrap();
             match self.handle_auth_with_g_auth(app, &req).await {
                 GoogleAuthResult::Passed(user) => inner.identity.ga_user = user,
                 GoogleAuthResult::Content(content) => return Ok(content),
@@ -161,9 +168,14 @@ impl HttpProxyPass {
         };
 
         let inner = self.inner.lock().await;
+
+        if inner.is_none() {
+            return Err(ProxyPassError::Disposed);
+        }
+
         super::http_response_builder::modify_resp_headers(
             self,
-            &inner,
+            inner.as_ref().unwrap(),
             &request.req_parts,
             response.headers_mut(),
             &location_index,
@@ -174,6 +186,6 @@ impl HttpProxyPass {
 
     pub async fn dispose(&self) {
         let mut inner = self.inner.lock().await;
-        inner.disposed = true;
+        *inner = None
     }
 }

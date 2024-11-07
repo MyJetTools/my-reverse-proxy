@@ -22,6 +22,7 @@ pub enum ProxyPassError {
     IpRestricted(String),
     Disconnected,
     Timeout,
+    Disposed,
 }
 
 impl ProxyPassError {

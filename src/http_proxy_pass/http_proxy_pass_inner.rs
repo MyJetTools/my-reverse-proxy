@@ -8,7 +8,6 @@ use crate::{
 use super::{HostPort, HttpProxyPassIdentity, ProxyPassLocations};
 
 pub struct HttpProxyPassInner {
-    pub disposed: bool,
     pub identity: HttpProxyPassIdentity,
     pub locations: ProxyPassLocations,
     pub http_listen_port_info: HttpListenPortInfo,
@@ -21,7 +20,6 @@ impl HttpProxyPassInner {
         http_listen_port_info: HttpListenPortInfo,
     ) -> Self {
         Self {
-            disposed: false,
             identity,
             locations,
             http_listen_port_info,

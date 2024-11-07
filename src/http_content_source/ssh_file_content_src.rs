@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::{SshCredentials, SshSession, SshSessionsPool};
 use tokio::sync::Mutex;
 
 use crate::http_proxy_pass::ProxyPassError;
@@ -9,7 +9,7 @@ use crate::http_proxy_pass::ProxyPassError;
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct PathOverSshContentSource {
-    ssh_session: Mutex<Option<Arc<SshSession>>>,
+    pool: Arc<SshSessionsPool>,
     ssh_credentials: Arc<SshCredentials>,
     home_value: Arc<Mutex<Option<String>>>,
     default_file: Option<String>,
@@ -19,13 +19,14 @@ pub struct PathOverSshContentSource {
 
 impl PathOverSshContentSource {
     pub fn new(
+        pool: Arc<SshSessionsPool>,
         ssh_credentials: Arc<SshCredentials>,
         file_path: String,
         default_file: Option<String>,
         execute_timeout: Duration,
     ) -> Self {
         Self {
-            ssh_session: Mutex::new(None),
+            pool,
             ssh_credentials,
             file_path,
             home_value: Arc::new(Mutex::new(None)),
@@ -33,30 +34,12 @@ impl PathOverSshContentSource {
             execute_timeout,
         }
     }
-    pub async fn get_or_connect_to_session(&self) -> Arc<SshSession> {
-        let mut ssh_session_access = self.ssh_session.lock().await;
-
-        if let Some(ssh_session) = ssh_session_access.clone() {
-            return ssh_session;
-        }
-
-        let ssh_session = SshSession::new(self.ssh_credentials.clone());
-        let ssh_session = Arc::new(ssh_session);
-
-        //let (host, port) = self.ssh_credentials.get_host_port();
-        //let result = ssh_session
-        //    .connect_to_remote_host(host, port, app.connection_settings.remote_connect_timeout)
-        //    .await?;
-
-        *ssh_session_access = Some(ssh_session.clone());
-        ssh_session
-    }
 
     pub async fn get_request_executor(
         &self,
         uri: &Uri,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
-        let ssh_session = self.get_or_connect_to_session().await;
+        let ssh_session = self.pool.get_or_create(&self.ssh_credentials).await;
 
         let file_path = if uri.path() == "/" {
             if let Some(default_file) = self.default_file.as_ref() {
