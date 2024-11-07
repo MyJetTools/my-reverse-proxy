@@ -7,9 +7,6 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, configurations::*, http_server::ClientCertificateData};
 
-#[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
-
 use super::{
     GoogleAuthResult, HttpProxyPassIdentity, HttpProxyPassInner, HttpRequestBuilder,
     ProxyPassError, ProxyPassLocations,
