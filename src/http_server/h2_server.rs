@@ -40,6 +40,12 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         let app = app.clone();
         let builder = http2_builder.clone();
 
+        app.prometheus
+            .inc_http1_server_connections(listening_addr.to_string().as_str());
+
+        let prometheus = app.prometheus.clone();
+
+        prometheus.inc_http2_server_connections(listening_addr.to_string().as_str());
         tokio::spawn(async move {
             let io = TokioIo::new(stream);
 
@@ -57,6 +63,8 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
                     }),
                 )
                 .await;
+
+            prometheus.dec_http2_server_connections(listening_addr.to_string().as_str());
 
             http_request_handler_to_dispose.dispose().await;
         });

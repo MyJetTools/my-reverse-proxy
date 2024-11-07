@@ -59,8 +59,13 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
             )
             .with_upgrades();
 
+        app.prometheus
+            .inc_http1_server_connections(listening_addr.to_string().as_str());
+
+        let prometheus = app.prometheus.clone();
         tokio::task::spawn(async move {
             if let Err(err) = connection.await {
+                prometheus.dec_http1_server_connections(listening_addr.to_string().as_str());
                 if debug {
                     println!(
                         "{}. Error serving connection: {:?}",

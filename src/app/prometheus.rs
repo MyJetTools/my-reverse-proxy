@@ -9,6 +9,9 @@ pub struct Prometheus {
 
     pub http2_client_instances: IntGaugeVec,
     pub http2_client_tcp_connects: IntGaugeVec,
+
+    pub http1_server_connections: IntGaugeVec,
+    pub http2_server_connections: IntGaugeVec,
     registry: Registry,
 }
 
@@ -57,6 +60,18 @@ impl Prometheus {
             "Http2 TCP connects",
         );
 
+        let http1_server_connections = create_server_gauge_vec(
+            &registry,
+            "http1_server_connections",
+            "Http1 Server Connections",
+        );
+
+        let http2_server_connections = create_server_gauge_vec(
+            &registry,
+            "http2_server_connections",
+            "Http2 Server Connections",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -65,10 +80,36 @@ impl Prometheus {
             http1_client_instances,
             http2_client_instances,
             http2_client_tcp_connects,
+            http1_server_connections,
+            http2_server_connections,
             registry,
         };
 
         result
+    }
+
+    pub fn inc_http1_server_connections(&self, endpoint: &str) {
+        self.http1_server_connections
+            .with_label_values(&[endpoint])
+            .inc();
+    }
+
+    pub fn dec_http1_server_connections(&self, endpoint: &str) {
+        self.http1_server_connections
+            .with_label_values(&[endpoint])
+            .dec();
+    }
+
+    pub fn inc_http2_server_connections(&self, endpoint: &str) {
+        self.http2_server_connections
+            .with_label_values(&[endpoint])
+            .inc();
+    }
+
+    pub fn dec_http2_server_connections(&self, endpoint: &str) {
+        self.http2_server_connections
+            .with_label_values(&[endpoint])
+            .dec();
     }
 
     pub fn build(&self) -> Vec<u8> {
@@ -84,6 +125,16 @@ impl Prometheus {
 fn create_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description);
     let labels = &["remote_host"];
+    let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
+
+    registry.register(Box::new(result.clone())).unwrap();
+
+    result
+}
+
+fn create_server_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description);
+    let labels = &["endpoint"];
     let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
 
     registry.register(Box::new(result.clone())).unwrap();
