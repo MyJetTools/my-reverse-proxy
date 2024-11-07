@@ -26,6 +26,9 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>, debug: 
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
+    let endpoint_name = format!("https://{}", addr);
+    let endpoint_name = Arc::new(endpoint_name);
+
     // Build TLS configuration.
 
     loop {
@@ -50,12 +53,21 @@ async fn start_https_server_loop(addr: SocketAddr, app: Arc<AppContext>, debug: 
         }
 
         let app = app.clone();
-        handle_connection(app, endpoint_port, tcp_stream, socket_addr, debug).await;
+        handle_connection(
+            app,
+            endpoint_name.clone(),
+            endpoint_port,
+            tcp_stream,
+            socket_addr,
+            debug,
+        )
+        .await;
     }
 }
 
 async fn handle_connection(
     app: Arc<AppContext>,
+    endpoint_name: Arc<String>,
     endpoint_port: u16,
     tcp_stream: TcpStream,
     socket_addr: SocketAddr,
@@ -84,10 +96,6 @@ async fn handle_connection(
     }
 
     let (tls_stream, endpoint_info, cn_user_name) = result.unwrap();
-
-    let endpoint_name = format!("https://{}", socket_addr);
-
-    let endpoint_name = Arc::new(endpoint_name);
 
     if endpoint_info.http_type.is_protocol_http1() {
         kick_off_https1(
