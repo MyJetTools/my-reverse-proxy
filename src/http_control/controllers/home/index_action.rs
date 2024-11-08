@@ -136,7 +136,7 @@ async fn create_html_content(app: &AppContext, app_config: &AppConfiguration) ->
                 &http_endpoint.client_certificate_id
             {
                 format!(
-                    "<span class='badge text-bg-success'>GA: {}</span>",
+                    "<span class='badge text-bg-success'>CS: {}</span>",
                     client_ssl_cert.as_str()
                 )
                 .into()
