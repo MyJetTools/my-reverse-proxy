@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
+use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use rust_extensions::StopWatch;
 use tokio::sync::Mutex;
@@ -77,10 +78,24 @@ pub async fn handle_request(
             };
 
             if proxy_pass_result.is_none() {
+                let host = req.get_host();
+
+                if host.is_none() {
+                    println!(
+                        "Can not detect host. Uri:{}. Headers: {:?}",
+                        req.uri(),
+                        req.headers()
+                    );
+                    return create_err_response(
+                        StatusCode::BAD_REQUEST,
+                        "Unknown host".to_string().into_bytes(),
+                    );
+                }
+
                 let http_endpoint_info = app
                     .get_current_app_configuration()
                     .await
-                    .get_http_endpoint_info(*listen_port, req.get_host().unwrap());
+                    .get_http_endpoint_info(*listen_port, host.unwrap());
 
                 match http_endpoint_info {
                     Ok(endpoint_info) => {
@@ -108,15 +123,7 @@ pub async fn handle_request(
                     }
                     Err(err) => {
                         let content = super::generate_layout(400, err.as_str(), None);
-
-                        return Ok(hyper::Response::builder()
-                            .status(hyper::StatusCode::BAD_REQUEST)
-                            .body(
-                                Full::new(content)
-                                    .map_err(|e| crate::to_hyper_error(e))
-                                    .boxed(),
-                            )
-                            .unwrap());
+                        return create_err_response(StatusCode::BAD_REQUEST, content);
                     }
                 }
             }
@@ -200,4 +207,20 @@ async fn handle_requests(
             ));
         }
     }
+}
+
+fn create_err_response(
+    status_code: StatusCode,
+    content: impl Into<Bytes>,
+) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
+    let result = hyper::Response::builder()
+        .status(status_code)
+        .body(
+            Full::new(content.into())
+                .map_err(|e| crate::to_hyper_error(e))
+                .boxed(),
+        )
+        .unwrap();
+
+    Ok(result)
 }

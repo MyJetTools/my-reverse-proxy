@@ -101,7 +101,7 @@ pub fn generate_tech_page(
     }
 }
 
-pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Bytes {
+pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {
     let second_line = if let Some(second_line) = second_line {
         format!("<h4>{}</h4>", second_line.as_str())
     } else {
@@ -119,5 +119,4 @@ pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrSt
         "#
     )
     .into_bytes()
-    .into()
 }
