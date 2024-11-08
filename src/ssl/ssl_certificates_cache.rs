@@ -37,6 +37,10 @@ impl SslCertificatesCache {
             .map(|ssl_cert| ssl_cert.get_certified_key())
     }
 
+    pub fn get(&self, cert_id: &str) -> Option<Arc<SslCertificate>> {
+        self.data.get(cert_id).map(|ssl_cert| ssl_cert.clone())
+    }
+
     pub fn get_list(&self) -> BTreeMap<String, Arc<SslCertificate>> {
         let mut result = BTreeMap::new();
 

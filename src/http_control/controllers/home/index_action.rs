@@ -3,6 +3,7 @@ use std::sync::Arc;
 use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
 };
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, configurations::*};
 
@@ -30,14 +31,14 @@ async fn handle_request(
     HttpOutput::Content {
         headers: None,
         content_type: WebContentType::Html.into(),
-        content: create_html_content(config.as_ref()).into_bytes(),
+        content: create_html_content(config.as_ref()).await.into_bytes(),
     }
     .into_ok_result(false)
 }
 
-fn create_html_content(config: &AppConfiguration) -> String {
+async fn create_html_content(app_config: &AppConfiguration) -> String {
     let mut table_lines = String::new();
-    for (port, config) in &config.http_endpoints {
+    for (port, config) in &app_config.http_endpoints {
         let mut draw_port = port.to_string();
 
         for http_endpoint in &config.endpoint_info {
@@ -85,12 +86,35 @@ fn create_html_content(config: &AppConfiguration) -> String {
                 ""
             };
 
+            let now = DateTimeAsMicroseconds::now();
+
             let ssl_cert = if let Some(ssl_cert) = &http_endpoint.ssl_certificate_id {
                 let ssl_cert = ssl_cert.as_str();
                 if ssl_cert == SELF_SIGNED_CERT_NAME {
                     format!(r##"<span class="badge text-bg-warning">{ssl_cert}</span>"##)
                 } else {
-                    format!(r##"<span class="badge text-bg-success">{ssl_cert}</span>"##)
+                    let cert = app_config.ssl_certificates_cache.get(ssl_cert);
+
+                    match cert {
+                        Some(cert) => {
+                            let cert_info = cert.get_cert_info().await;
+
+                            let expires = cert_info.expires.duration_since(now);
+                            let badge_type = match expires {
+                                rust_extensions::date_time::DateTimeDuration::Positive(_) => {
+                                    "text-bg-success"
+                                }
+                                _ => "text-bg-danger",
+                            };
+                            format!(
+                                r##"<span class="badge {badge_type}">{ssl_cert} expires: {:?}</span>"##,
+                                expires
+                            )
+                        }
+                        None => {
+                            format!(r##"<span class="badge text-bg-danger">{ssl_cert}</span>"##)
+                        }
+                    }
                 }
             } else {
                 "-".to_string()
