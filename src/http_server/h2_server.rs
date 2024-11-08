@@ -48,7 +48,7 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         let prometheus = app.prometheus.clone();
         let listening_addr_str = listening_addr_str.clone();
 
-        prometheus.inc_http2_server_connections(listening_addr.to_string().as_str());
+        prometheus.inc_http2_server_connections(listening_addr_str.as_str());
         tokio::spawn(async move {
             let io = TokioIo::new(stream);
 

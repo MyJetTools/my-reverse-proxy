@@ -25,6 +25,14 @@ pub struct SettingsModel {
 }
 
 impl SettingsModel {
+    pub fn get_http_control_port(&self) -> Option<u16> {
+        if let Some(global_settings) = self.global_settings.as_ref() {
+            return global_settings.http_control_port;
+        }
+
+        None
+    }
+
     pub fn get_show_error_description_on_error_page(&self) -> bool {
         if let Some(global_settings) = self.global_settings.as_ref() {
             if let Some(show_error_description_on_error_page) =

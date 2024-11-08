@@ -162,7 +162,7 @@ async fn handle_requests(
                     if let Some((req_str, mut sw)) = debug {
                         sw.pause();
                         println!(
-                            "Res: {}->{} {}",
+                            "Response: {}->{} {}",
                             req_str,
                             response.status(),
                             sw.duration_as_string()
@@ -172,7 +172,12 @@ async fn handle_requests(
                 Err(err) => {
                     if let Some((req_str, mut sw)) = debug {
                         sw.pause();
-                        println!("Resp: {}->{} {}", req_str, err, sw.duration_as_string());
+                        println!(
+                            "Response Error: {}->{} {}",
+                            req_str,
+                            err,
+                            sw.duration_as_string()
+                        );
                     }
                 }
             }

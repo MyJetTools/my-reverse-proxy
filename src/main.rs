@@ -39,6 +39,8 @@ async fn main() {
         .await
         .unwrap();
 
+    let control_port = settings_model.get_http_control_port();
+
     let app = AppContext::new(settings_model);
 
     let app = Arc::new(app);
@@ -49,7 +51,7 @@ async fn main() {
 
     kick_off_endpoints(&app).await;
 
-    crate::http_control::start(&app);
+    crate::http_control::start(&app, control_port);
 
     let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(60));
 

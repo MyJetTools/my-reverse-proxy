@@ -7,6 +7,7 @@ pub struct GlobalSettings {
     pub connection_settings: Option<ConnectionsSettings>,
     pub all_http_endpoints: Option<AllHttpEndpointsGlobalSettings>,
     pub show_error_description_on_error_page: Option<bool>,
+    pub http_control_port: Option<u16>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
