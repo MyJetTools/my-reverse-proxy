@@ -54,7 +54,12 @@ impl SslCertificate {
             for attr in cert.subject().iter_attributes() {
                 // OID for Common Name
                 if let Ok(cn) = attr.as_str() {
-                    found_cn = Some(cn.to_string());
+                    let name = match found_cn {
+                        Some(found_cn) => format!("{}/", found_cn),
+                        _ => cn.to_string(),
+                    };
+
+                    found_cn = Some(name);
                 }
             }
         }
