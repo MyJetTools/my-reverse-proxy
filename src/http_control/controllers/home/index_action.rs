@@ -130,11 +130,15 @@ async fn create_html_content(app: &AppContext, app_config: &AppConfiguration) ->
             let auth: StrOrString = if let Some(client_ssl_cert) =
                 &http_endpoint.client_certificate_id
             {
-                client_ssl_cert.as_str().into()
+                format!(
+                    "<span class='badge text-bg-success'>GA: {}</span>",
+                    client_ssl_cert.as_str()
+                )
+                .into()
             } else {
                 if let Some(ga) = &http_endpoint.g_auth {
                     let wl_domains = ga.whitelisted_domains.as_str();
-                    format!("<span class='badge text-bg-warning'>GA: {wl_domains}</span>").into()
+                    format!("<span class='badge text-bg-success'>GA: {wl_domains}</span>").into()
                 } else {
                     "-".into()
                 }
