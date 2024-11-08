@@ -235,7 +235,7 @@ async fn kick_off_https1(
     app.metrics
         .update(|itm| itm.connection_by_port.inc(&socket_addr.port()))
         .await;
-
+    println!("New https connection from {}", socket_addr);
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
@@ -247,8 +247,6 @@ async fn kick_off_https1(
         let http_request_handler = Arc::new(http_request_handler);
 
         let http_request_handler_dispose = http_request_handler.clone();
-
-        println!("New https connection from {}", socket_addr);
 
         if let Err(err) = http1
             .clone()
