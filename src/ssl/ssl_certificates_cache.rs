@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use super::SslCertificate;
 
@@ -34,6 +37,14 @@ impl SslCertificatesCache {
             .map(|ssl_cert| ssl_cert.get_certified_key())
     }
 
+    pub fn get_list(&self) -> BTreeMap<String, Arc<SslCertificate>> {
+        let mut result = BTreeMap::new();
+
+        for itm in self.data.iter() {
+            result.insert(itm.0.clone(), itm.1.clone());
+        }
+        result
+    }
     /*
     pub fn get_ssl_key(&self, cert_id: &SslCertificateId) -> Option<Arc<SslCertificate>> {
         self.data

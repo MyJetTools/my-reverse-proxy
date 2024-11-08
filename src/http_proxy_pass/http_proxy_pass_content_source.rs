@@ -27,63 +27,6 @@ pub enum HttpProxyPassContentSource {
 }
 
 impl HttpProxyPassContentSource {
-    /*
-       pub async fn upgrade_websocket(
-           &self,
-           req: hyper::Request<Full<Bytes>>,
-           request_timeout: std::time::Duration,
-       ) -> Result<
-           (
-               WebSocketUpgradeStream,
-               hyper::Response<BoxBody<Bytes, String>>,
-               Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
-           ),
-           ProxyPassError,
-       > {
-           match self {
-               HttpProxyPassContentSource::Http1(client) => match client {
-                   Http1Client::Http(client) => {
-                       let result = client
-                           .upgrade_to_web_socket(req, request_timeout, |read, write| {
-                               read.unsplit(write)
-                           })
-                           .await?;
-
-                       Ok((
-                           WebSocketUpgradeStream::TcpStream(result.0),
-                           result.1,
-                           Arc::new(result.2),
-                       ))
-                   }
-                   Http1Client::Https(client) => {
-                       let result = client
-                           .upgrade_to_web_socket(req, request_timeout, |read, write| {
-                               read.unsplit(write)
-                           })
-                           .await?;
-
-                       Ok((
-                           WebSocketUpgradeStream::TlsStream(result.0),
-                           result.1,
-                           Arc::new(result.2),
-                       ))
-                   }
-               },
-               HttpProxyPassContentSource::Http1OverSsh(client) => {
-                   let result = client
-                       .upgrade_to_web_socket(req, request_timeout, |read, write| read.unsplit(write))
-                       .await?;
-
-                   Ok((
-                       WebSocketUpgradeStream::SshChannel(result.0),
-                       result.1,
-                       Arc::new(result.2),
-                   ))
-               }
-               _ => panic!("Not implemented"),
-           }
-       }
-    */
     pub async fn send_request(
         &self,
         req: hyper::Request<Full<Bytes>>,

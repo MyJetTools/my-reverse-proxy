@@ -27,5 +27,9 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
         super::controllers::prometheus::GetMetricsAction::new(app.clone()),
     ));
 
+    result.register_get_action(Arc::new(
+        super::controllers::ssl_certificates::GetCurrentSslCertificatesAction::new(app.clone()),
+    ));
+
     result
 }
