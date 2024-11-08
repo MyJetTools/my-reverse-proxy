@@ -45,8 +45,13 @@ async fn create_html_content(app: &AppContext, app_config: &AppConfiguration) ->
             .metrics
             .get(|itm| itm.connection_by_port.get(port))
             .await;
-        let mut draw_port =
-            format!("<span class='badge text-bg-secondary'>[{connections}]{port}</span>");
+
+        let class = if connections > 0 {
+            "text-bg-success"
+        } else {
+            "text-bg-secondary"
+        };
+        let mut draw_port = format!("<span class='badge {class}' style='border-radius: 5px 0 0 5px;'>{connections}</span><span class='badge text-bg-secondary'  style='border-radius: 0 5px 5px 0;'>{port}</span>");
 
         for http_endpoint in &config.endpoint_info {
             let allowed_users_html = if let Some(allowed_user_list) =

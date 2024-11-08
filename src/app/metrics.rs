@@ -71,7 +71,7 @@ impl Metrics {
     }
 
     pub async fn get<TResult>(&self, access: impl Fn(&MetricsInner) -> TResult) -> TResult {
-        let mut inner = self.inner.lock().await;
-        access(&mut inner)
+        let inner = self.inner.lock().await;
+        access(&inner)
     }
 }
