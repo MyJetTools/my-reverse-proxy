@@ -47,9 +47,17 @@ impl SslCertificate {
         for cert_der in self.cert_key.cert.iter() {
             let (_, cert) = X509Certificate::from_der(cert_der).unwrap();
 
-            let expiration = cert.validity().not_after.to_datetime().unix_timestamp();
-
-            expires = Some(DateTimeAsMicroseconds::from(expiration));
+            let expires_from_cer = cert.validity().not_after.to_datetime().unix_timestamp();
+            match expires {
+                Some(expires_value) => {
+                    if expires_from_cer < expires_value {
+                        expires = Some(expires_from_cer);
+                    }
+                }
+                None => {
+                    expires = Some(expires_from_cer);
+                }
+            }
 
             for attr in cert.subject().iter_attributes() {
                 // OID for Common Name
@@ -68,7 +76,7 @@ impl SslCertificate {
 
         let result = SslCertInfo {
             cn: found_cn.unwrap_or_else(|| "Unknown".to_string()),
-            expires: expires.unwrap(),
+            expires: DateTimeAsMicroseconds::from(expires.unwrap()),
         };
 
         if cert_info.is_some() {
