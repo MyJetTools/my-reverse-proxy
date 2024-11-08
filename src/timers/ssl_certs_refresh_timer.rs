@@ -71,7 +71,7 @@ async fn try_renew_cert(
 
     let certificates_content = certificates_content.unwrap();
 
-    let private_key_content = ssl_holder.cert_src.load_file_content(None).await;
+    let private_key_content = ssl_holder.private_key_src.load_file_content(None).await;
 
     if let Err(err) = &private_key_content {
         println!(
