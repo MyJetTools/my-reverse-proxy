@@ -105,6 +105,7 @@ async fn handle_connection(
             endpoint_info,
             tls_stream,
             cn_user_name,
+            endpoint_port,
             debug,
         )
         .await;
@@ -116,6 +117,7 @@ async fn handle_connection(
             endpoint_info,
             tls_stream,
             cn_user_name,
+            endpoint_port,
             debug,
         )
         .await;
@@ -223,6 +225,7 @@ async fn kick_off_https1(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<ClientCertificateData>,
+    endpoint_port: u16,
     debug: bool,
 ) {
     use hyper::{server::conn::http1, service::service_fn};
@@ -233,9 +236,9 @@ async fn kick_off_https1(
         .inc_http1_server_connections(endpoint_name.as_str());
 
     app.metrics
-        .update(|itm| itm.connection_by_port.inc(&socket_addr.port()))
+        .update(|itm| itm.connection_by_port.inc(&endpoint_port))
         .await;
-    println!("New https connection from {}", socket_addr);
+
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
 
@@ -268,10 +271,8 @@ async fn kick_off_https1(
             .dec_http1_server_connections(endpoint_name.as_str());
 
         app.metrics
-            .update(|itm| itm.connection_by_port.dec(&socket_addr.port()))
+            .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
-
-        println!("Gone https connection from {}", socket_addr);
 
         http_request_handler_dispose.dispose().await;
     });
@@ -284,6 +285,7 @@ async fn kick_off_https2(
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     client_certificate: Option<ClientCertificateData>,
+    endpoint_port: u16,
     debug: bool,
 ) {
     use hyper::service::service_fn;
@@ -295,10 +297,8 @@ async fn kick_off_https2(
         .inc_http2_server_connections(endpoint_name.as_str());
 
     app.metrics
-        .update(|itm| itm.connection_by_port.inc(&socket_addr.port()))
+        .update(|itm| itm.connection_by_port.inc(&endpoint_port))
         .await;
-
-    println!("New Https2 connection from {}", socket_addr);
 
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
@@ -333,7 +333,7 @@ async fn kick_off_https2(
             .dec_http2_server_connections(endpoint_name.as_str());
 
         app.metrics
-            .update(|itm| itm.connection_by_port.dec(&socket_addr.port()))
+            .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
 
         println!("Http2 connection is gone {}", socket_addr);
