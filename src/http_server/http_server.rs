@@ -60,10 +60,15 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
             )
             .with_upgrades();
 
+        let app = app.clone();
+
         app.prometheus
             .inc_http1_server_connections(listening_addr_str.as_str());
 
-        let prometheus = app.prometheus.clone();
+        app.metrics
+            .update(|itm| itm.connection_by_port.inc(&listening_addr.port()))
+            .await;
+
         let listening_addr_str = listening_addr_str.clone();
         tokio::task::spawn(async move {
             if let Err(err) = connection.await {
@@ -76,7 +81,12 @@ async fn start_http_server_loop(listening_addr: SocketAddr, app: Arc<AppContext>
                 }
             }
 
-            prometheus.dec_http1_server_connections(listening_addr_str.as_str());
+            app.prometheus
+                .dec_http1_server_connections(listening_addr_str.as_str());
+
+            app.metrics
+                .update(|itm| itm.connection_by_port.dec(&listening_addr.port()))
+                .await;
             http_request_handler_disposed.dispose().await;
         });
     }

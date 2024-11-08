@@ -106,7 +106,8 @@ async fn handle_connection(
             tls_stream,
             cn_user_name,
             debug,
-        );
+        )
+        .await;
     } else {
         kick_off_https2(
             app,
@@ -116,7 +117,8 @@ async fn handle_connection(
             tls_stream,
             cn_user_name,
             debug,
-        );
+        )
+        .await;
     }
 }
 
@@ -214,7 +216,7 @@ async fn lazy_accept_tcp_stream(
     result
 }
 
-fn kick_off_https1(
+async fn kick_off_https1(
     app: Arc<AppContext>,
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
@@ -229,6 +231,10 @@ fn kick_off_https1(
 
     app.prometheus
         .inc_http1_server_connections(endpoint_name.as_str());
+
+    app.metrics
+        .update(|itm| itm.connection_by_port.inc(&socket_addr.port()))
+        .await;
 
     tokio::spawn(async move {
         let listening_port_info = endpoint_info.get_listening_port_info(socket_addr);
@@ -261,11 +267,15 @@ fn kick_off_https1(
         app.prometheus
             .dec_http1_server_connections(endpoint_name.as_str());
 
+        app.metrics
+            .update(|itm| itm.connection_by_port.dec(&socket_addr.port()))
+            .await;
+
         http_request_handler_dispose.dispose().await;
     });
 }
 
-fn kick_off_https2(
+async fn kick_off_https2(
     app: Arc<AppContext>,
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
@@ -282,7 +292,9 @@ fn kick_off_https2(
     app.prometheus
         .inc_http2_server_connections(endpoint_name.as_str());
 
-    let prometheus = app.prometheus.clone();
+    app.metrics
+        .update(|itm| itm.connection_by_port.inc(&socket_addr.port()))
+        .await;
 
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
@@ -313,7 +325,12 @@ fn kick_off_https2(
             }
         }
 
-        prometheus.dec_http2_server_connections(endpoint_name.as_str());
+        app.prometheus
+            .dec_http2_server_connections(endpoint_name.as_str());
+
+        app.metrics
+            .update(|itm| itm.connection_by_port.dec(&socket_addr.port()))
+            .await;
 
         http_request_handler_dispose.dispose().await;
     });

@@ -13,7 +13,7 @@ use crate::{
     settings::{ConnectionsSettingsModel, SettingsModel},
 };
 
-use super::Prometheus;
+use super::{Metrics, Prometheus};
 
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -30,6 +30,7 @@ pub struct AppContext {
     pub show_error_description: UnsafeValue<bool>,
     pub ssh_sessions_pool: Arc<SshSessionsPool>,
     pub prometheus: Arc<Prometheus>,
+    pub metrics: Metrics,
 }
 
 impl AppContext {
@@ -57,6 +58,7 @@ impl AppContext {
                 settings_model.get_show_error_description_on_error_page(),
             ),
             ssh_sessions_pool: Arc::new(SshSessionsPool::new()),
+            metrics: Metrics::new(),
         }
     }
 

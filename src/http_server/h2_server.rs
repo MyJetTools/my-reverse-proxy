@@ -45,10 +45,14 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
         app.prometheus
             .inc_http1_server_connections(listening_addr_str.as_str());
 
-        let prometheus = app.prometheus.clone();
+        app.metrics
+            .update(|itm| itm.connection_by_port.inc(&listening_addr.port()))
+            .await;
+
         let listening_addr_str = listening_addr_str.clone();
 
-        prometheus.inc_http2_server_connections(listening_addr_str.as_str());
+        app.prometheus
+            .inc_http2_server_connections(listening_addr_str.as_str());
         tokio::spawn(async move {
             let io = TokioIo::new(stream);
 
@@ -67,7 +71,12 @@ async fn start_https2_server_loop(listening_addr: SocketAddr, app: Arc<AppContex
                 )
                 .await;
 
-            prometheus.dec_http2_server_connections(listening_addr_str.as_str());
+            app.metrics
+                .update(|itm| itm.connection_by_port.dec(&listening_addr.port()))
+                .await;
+
+            app.prometheus
+                .dec_http2_server_connections(listening_addr_str.as_str());
             http_request_handler_to_dispose.dispose().await;
         });
     }

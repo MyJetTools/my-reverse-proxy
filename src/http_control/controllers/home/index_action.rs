@@ -3,7 +3,7 @@ use std::sync::Arc;
 use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
 };
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, StrOrString};
 
 use crate::{app::AppContext, configurations::*};
 
@@ -31,15 +31,22 @@ async fn handle_request(
     HttpOutput::Content {
         headers: None,
         content_type: WebContentType::Html.into(),
-        content: create_html_content(config.as_ref()).await.into_bytes(),
+        content: create_html_content(&action.app, config.as_ref())
+            .await
+            .into_bytes(),
     }
     .into_ok_result(false)
 }
 
-async fn create_html_content(app_config: &AppConfiguration) -> String {
+async fn create_html_content(app: &AppContext, app_config: &AppConfiguration) -> String {
     let mut table_lines = String::new();
     for (port, config) in &app_config.http_endpoints {
-        let mut draw_port = port.to_string();
+        let connections = app
+            .metrics
+            .get(|itm| itm.connection_by_port.get(port))
+            .await;
+        let mut draw_port =
+            format!("<span class='badge text-bg-secondary'>[{connections}]{port}</span>");
 
         for http_endpoint in &config.endpoint_info {
             let allowed_users_html = if let Some(allowed_user_list) =
@@ -120,16 +127,24 @@ async fn create_html_content(app_config: &AppConfiguration) -> String {
                 "-".to_string()
             };
 
-            let client_ssl_cert =
-                if let Some(client_ssl_cert) = &http_endpoint.client_certificate_id {
-                    client_ssl_cert.as_str()
+            let auth: StrOrString = if let Some(client_ssl_cert) =
+                &http_endpoint.client_certificate_id
+            {
+                client_ssl_cert.as_str().into()
+            } else {
+                if let Some(ga) = &http_endpoint.g_auth {
+                    let wl_domains = ga.whitelisted_domains.as_str();
+                    format!("<span class='badge text-bg-warning'>GA: {wl_domains}</span>").into()
                 } else {
-                    "-"
-                };
+                    "-".into()
+                }
+            };
+
+            let auth = auth.as_str();
 
             table_lines.push_str(
                 format!(
-                    r##"<tr><td>{draw_port}</td><td>{host_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span> {debug} {allowed_users_html}</td><td>{ssl_cert}</td><td>{client_ssl_cert}</td><td>{locations_html}</td></tr>"##,
+                    r##"<tr><td>{draw_port}</td><td>{host_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span> {debug} {allowed_users_html}</td><td>{ssl_cert}</td><td>{auth}</td><td>{locations_html}</td></tr>"##,
                 )
                 .as_str(),
             );
@@ -154,7 +169,7 @@ async fn create_html_content(app_config: &AppConfiguration) -> String {
             <th>Port</th>
             <th>Host</th>
             <th>Ssl cert</th>
-            <th>Client Ssl</th>
+            <th>Auth</th>
             <th>Location</th>
         </tr>
         {table_lines}
