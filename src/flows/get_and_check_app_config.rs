@@ -8,7 +8,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
     let settings_model = crate::settings::SettingsModel::load(".my-reverse-proxy").await?;
     let listen_ports = settings_model.get_listen_ports(app).await?;
 
-    let mut ssl_certificates_cache = SslCertificatesCache::new();
+    let ssl_certificates_cache = SslCertificatesCache::new();
 
     let mut client_certificates_cache = ClientCertificatesCache::new();
 
@@ -28,7 +28,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                 if let Some(ssl_certs) = port_config.get_ssl_certificates() {
                     for ssl_cert_id in ssl_certs {
                         if ssl_cert_id.as_str() != SELF_SIGNED_CERT_NAME {
-                            if !ssl_certificates_cache.has_certificate(ssl_cert_id) {
+                            if !ssl_certificates_cache.has_certificate(ssl_cert_id).await {
                                 let ssl_certificate = crate::flows::load_ssl_certificate(
                                     &settings_model,
                                     ssl_cert_id,
@@ -36,7 +36,14 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                                     &files_cache,
                                 )
                                 .await?;
-                                ssl_certificates_cache.add(ssl_cert_id, ssl_certificate);
+                                ssl_certificates_cache
+                                    .add_or_update(
+                                        ssl_cert_id,
+                                        ssl_certificate.cert,
+                                        ssl_certificate.private_key_src,
+                                        ssl_certificate.cert_src,
+                                    )
+                                    .await;
                             }
                         }
                     }

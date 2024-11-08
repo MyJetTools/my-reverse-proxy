@@ -19,16 +19,22 @@ pub fn load_certs(src: Vec<u8>) -> Vec<CertificateDer<'static>> {
 }
 
 // Load private key from file.
-pub fn load_private_key(src: Vec<u8>, file_name: &str) -> PrivateKeyDer<'static> {
+pub fn load_private_key(src: Vec<u8>) -> Result<PrivateKeyDer<'static>, String> {
     let mut reader = std::io::BufReader::new(src.as_slice());
 
-    let private_key = rustls_pemfile::private_key(&mut reader).unwrap();
+    let private_key = rustls_pemfile::private_key(&mut reader);
 
-    if private_key.is_none() {
-        panic!("No private key found in file {}", file_name);
+    if let Err(err) = &private_key {
+        return Err(format!("Error loading private key: {:?}", err));
     }
 
-    private_key.unwrap()
+    let private_key = private_key.unwrap();
+
+    if private_key.is_none() {
+        return Err(format!("No private key found in file"));
+    }
+
+    Ok(private_key.unwrap())
 
     //  Ok(private_key.into())
 }

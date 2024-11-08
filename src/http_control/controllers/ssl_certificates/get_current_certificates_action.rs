@@ -33,9 +33,9 @@ async fn handle_request(
 ) -> Result<HttpOkResult, HttpFailResult> {
     let config = action.app.get_current_app_configuration().await;
 
-    let mut result = Vec::new();
-    for (key, cert) in config.ssl_certificates_cache.get_list() {
-        let cert_info = cert.get_cert_info().await;
+    let mut result: Vec<CurrentSslCertificateHttpModel> = Vec::new();
+    for (key, holder) in config.ssl_certificates_cache.get_list().await {
+        let cert_info = holder.ssl_cert.get_cert_info().await;
         let cert = CurrentSslCertificateHttpModel {
             id: key,
             cn: cert_info.cn.to_string(),

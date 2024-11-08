@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use app::AppContext;
 use flows::kick_off_endpoints;
-use timers::CrlRefresherTimer;
+use timers::{CrlRefresherTimer, SslCertsRefreshTimer};
 
 mod app;
 mod flows;
@@ -53,9 +53,14 @@ async fn main() {
 
     crate::http_control::start(&app, control_port);
 
-    let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(60));
+    let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
 
     my_timer.register_timer("CRL Refresh", Arc::new(CrlRefresherTimer::new(app.clone())));
+
+    my_timer.register_timer(
+        "SSL Certs Refresh",
+        Arc::new(SslCertsRefreshTimer::new(app.clone())),
+    );
 
     my_timer.start(app.states.clone(), my_logger::LOGGER.clone());
 

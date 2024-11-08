@@ -1,12 +1,18 @@
 use crate::configurations::*;
 use crate::{files_cache::FilesCache, settings::SettingsModel, ssl::SslCertificate};
 
+pub struct SslCertificateResult {
+    pub cert_src: FileSource,
+    pub private_key_src: FileSource,
+    pub cert: SslCertificate,
+}
+
 pub async fn load_ssl_certificate(
     settings_model: &SettingsModel,
     ssl_id: &SslCertificateId,
     listen_port: u16,
     files_cache: &FilesCache,
-) -> Result<SslCertificate, String> {
+) -> Result<SslCertificateResult, String> {
     let cert_result = settings_model.get_ssl_certificate(ssl_id)?;
 
     if cert_result.is_none() {
@@ -17,12 +23,16 @@ pub async fn load_ssl_certificate(
         ));
     }
 
-    let (cert, key) = cert_result.unwrap();
+    let (cert_src, private_key_src) = cert_result.unwrap();
 
-    let certificates = cert.load_file_content(Some(files_cache)).await?;
-    let private_key = key.load_file_content(Some(files_cache)).await?;
+    let certificates = cert_src.load_file_content(Some(files_cache)).await?;
+    let private_key = private_key_src.load_file_content(Some(files_cache)).await?;
 
-    let ssl_certificate = SslCertificate::new(certificates, private_key, key.as_str().as_str());
+    let result = SslCertificateResult {
+        cert_src,
+        private_key_src,
+        cert: SslCertificate::new(private_key, certificates)?,
+    };
 
-    Ok(ssl_certificate)
+    Ok(result)
 }

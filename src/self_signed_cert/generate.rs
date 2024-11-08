@@ -1,13 +1,12 @@
 use my_tls::tokio_rustls;
 use rustls_pki_types::CertificateDer;
 
-pub fn generate(cn_name: String) -> tokio_rustls::rustls::sign::CertifiedKey {
+pub fn generate(cn_name: String) -> Result<tokio_rustls::rustls::sign::CertifiedKey, String> {
     let (cert, key_pair) = generate_pk(cn_name);
 
-    let private_key =
-        crate::ssl::certificates::load_private_key(key_pair.as_bytes().to_vec(), "private_key.pem");
+    let private_key = crate::ssl::certificates::load_private_key(key_pair.as_bytes().to_vec())?;
 
-    crate::ssl::calc_cert_key(&private_key, vec![cert])
+    Ok(crate::ssl::calc_cert_key(&private_key, vec![cert]))
 }
 
 fn generate_pk(cn_name: String) -> (CertificateDer<'static>, String) {

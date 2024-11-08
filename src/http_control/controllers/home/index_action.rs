@@ -105,11 +105,11 @@ async fn create_html_content(app: &AppContext, app_config: &AppConfiguration) ->
                 if ssl_cert == SELF_SIGNED_CERT_NAME {
                     format!(r##"<span class="badge text-bg-warning">{ssl_cert}</span>"##)
                 } else {
-                    let cert = app_config.ssl_certificates_cache.get(ssl_cert);
+                    let cert = app_config.ssl_certificates_cache.get(ssl_cert).await;
 
                     match cert {
-                        Some(cert) => {
-                            let cert_info = cert.get_cert_info().await;
+                        Some(holder) => {
+                            let cert_info = holder.ssl_cert.get_cert_info().await;
 
                             let expires = cert_info.expires.duration_since(now);
                             let badge_type = match expires {

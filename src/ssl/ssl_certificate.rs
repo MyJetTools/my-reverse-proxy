@@ -19,16 +19,18 @@ pub struct SslCertificate {
 }
 
 impl SslCertificate {
-    pub fn new(certificates: Vec<u8>, private_key: Vec<u8>, private_key_file_name: &str) -> Self {
-        let cert_key = calc_cert_key(
-            &super::certificates::load_private_key(private_key.clone(), private_key_file_name),
-            super::certificates::load_certs(certificates.clone()),
-        );
+    pub fn new(private_key: Vec<u8>, certificates_content: Vec<u8>) -> Result<Self, String> {
+        let private_key = super::certificates::load_private_key(private_key)?;
 
-        SslCertificate {
+        let certs = super::certificates::load_certs(certificates_content);
+        let cert_key = calc_cert_key(&private_key, certs);
+
+        let result = SslCertificate {
             cert_key: Arc::new(cert_key),
             cert_info: Arc::new(Mutex::new(None)),
-        }
+        };
+
+        Ok(result)
     }
 
     pub async fn get_cert_info(&self) -> SslCertInfo {

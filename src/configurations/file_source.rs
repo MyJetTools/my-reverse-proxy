@@ -8,6 +8,7 @@ use crate::{files_cache::FilesCache, variables_reader::VariablesReader};
 
 use super::*;
 
+#[derive(Debug, Clone)]
 pub enum FileSource {
     File(String),
     Http(String),

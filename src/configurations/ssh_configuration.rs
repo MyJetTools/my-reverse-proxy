@@ -8,7 +8,7 @@ use super::{LocalFilePath, RemoteHost, SshConfigSettings};
 
 pub const SSH_PREFIX: &str = "ssh:";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SshContent {
     RemoteHost(RemoteHost),
     FilePath(String),
@@ -42,7 +42,7 @@ impl SshContent {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SshConfiguration {
     pub credentials: Arc<SshCredentials>,
     pub remote_content: SshContent,

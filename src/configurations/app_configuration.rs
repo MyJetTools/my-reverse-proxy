@@ -44,12 +44,13 @@ impl AppConfiguration {
             if ssl_certificate_id.as_str() == SELF_SIGNED_CERT_NAME {
                 return Ok(Arc::new(crate::self_signed_cert::generate(
                     server_name.to_string(),
-                )));
+                )?));
             }
 
             if let Some(key) = self
                 .ssl_certificates_cache
                 .get_certified_key(&ssl_certificate_id)
+                .await
             {
                 return Ok(key);
             } else {
