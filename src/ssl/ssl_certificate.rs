@@ -64,7 +64,7 @@ impl SslCertificate {
                 if let Ok(cn) = attr.as_str() {
                     let value = match &found_cn {
                         Some(found_cn) => {
-                            format!("{}/{}", found_cn, cn)
+                            format!("{};{}", found_cn, cn)
                         }
                         None => cn.to_string(),
                     };
