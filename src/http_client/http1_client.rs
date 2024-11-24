@@ -27,10 +27,10 @@ impl Http1Client {
                 domain_name,
                 debug,
             };
-            return Self::Https(MyHttpClient::new(tls_stream, prometheus));
+            return Self::Https(MyHttpClient::new_with_metrics(tls_stream, prometheus));
         }
 
         let http_connector = HttpConnector { remote_host, debug };
-        return Self::Http(MyHttpClient::new(http_connector, prometheus));
+        return Self::Http(MyHttpClient::new_with_metrics(http_connector, prometheus));
     }
 }

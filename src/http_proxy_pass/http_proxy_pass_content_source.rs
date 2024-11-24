@@ -10,11 +10,7 @@ use crate::{
 };
 
 use super::ProxyPassError;
-use my_http_client::{
-    http1::{MyHttpClient, MyHttpResponse},
-    http2::MyHttp2Client,
-    MyHttpClientDisconnect,
-};
+use my_http_client::{http1::*, http2::MyHttp2Client, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
     Http1(Http1Client),
@@ -35,7 +31,9 @@ impl HttpProxyPassContentSource {
         match self {
             HttpProxyPassContentSource::Http1(client) => match client {
                 Http1Client::Http(my_http_client) => {
-                    match my_http_client.do_request(req, request_timeout).await? {
+                    let req = MyHttpRequest::from_hyper_request(req).await;
+
+                    match my_http_client.do_request(&req, request_timeout).await? {
                         MyHttpResponse::Response(response) => {
                             return Ok(HttpResponse::Response(response));
                         }
@@ -53,7 +51,9 @@ impl HttpProxyPassContentSource {
                     }
                 }
                 Http1Client::Https(my_http_client) => {
-                    match my_http_client.do_request(req, request_timeout).await? {
+                    let req = MyHttpRequest::from_hyper_request(req).await;
+
+                    match my_http_client.do_request(&req, request_timeout).await? {
                         MyHttpResponse::Response(response) => {
                             return Ok(HttpResponse::Response(response));
                         }
@@ -82,7 +82,8 @@ impl HttpProxyPassContentSource {
                 }
             },
             HttpProxyPassContentSource::Http1OverSsh(client) => {
-                match client.do_request(req, request_timeout).await? {
+                let req = MyHttpRequest::from_hyper_request(req).await;
+                match client.do_request(&req, request_timeout).await? {
                     MyHttpResponse::Response(response) => {
                         return Ok(HttpResponse::Response(response));
                     }

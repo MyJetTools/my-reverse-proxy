@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 
 use tokio::sync::Mutex;
 
@@ -42,14 +42,12 @@ impl<TKey: Clone + std::cmp::Eq + std::hash::Hash> MetricsValues<TKey> {
 
 pub struct MetricsInner {
     pub connection_by_port: MetricsValues<u16>,
-    pub server_connections: MetricsValues<SocketAddr>,
 }
 
 impl MetricsInner {
     pub fn new() -> Self {
         Self {
             connection_by_port: MetricsValues::new(),
-            server_connections: MetricsValues::new(),
         }
     }
 }

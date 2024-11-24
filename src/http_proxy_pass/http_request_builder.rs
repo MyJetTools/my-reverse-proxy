@@ -174,7 +174,8 @@ impl HttpRequestBuilder {
             if let Some(right) = parts.next() {
                 if left == param {
                     return Some(
-                        my_settings_reader::flurl::url_utils::decode_from_url_string(right.trim()),
+                        my_settings_reader::flurl::url_utils::decode_from_url_string(right.trim())
+                            .to_string(),
                     );
                 }
             }

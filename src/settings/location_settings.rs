@@ -88,9 +88,19 @@ impl LocationSettings {
             }));
         }
 
-        Ok(ProxyPassTo::Tcp(
-            std::net::SocketAddr::from_str(proxy_pass_to.as_str()).unwrap(),
-        ))
+        match std::net::SocketAddr::from_str(proxy_pass_to.as_str()) {
+            Ok(addr) => {
+                return Ok(ProxyPassTo::Tcp(addr));
+            }
+            Err(err) => {
+                return Err(format!(
+                    "Endpoint: {}. Unknown proxy pass to {}. Error: {}",
+                    endpoint_str,
+                    proxy_pass_to.as_str(),
+                    err
+                ));
+            }
+        }
     }
 
     pub fn get_type(&self) -> HttpType {

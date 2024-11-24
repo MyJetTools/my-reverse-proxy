@@ -113,7 +113,8 @@ impl ProxyPassLocationConfig {
                             debug,
                         };
 
-                        let http_client = MyHttpClient::new(connector, app.prometheus.clone());
+                        let http_client =
+                            MyHttpClient::new_with_metrics(connector, app.prometheus.clone());
 
                         HttpProxyPassContentSource::Http1OverSsh(http_client)
                     }
