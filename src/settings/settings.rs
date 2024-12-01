@@ -213,6 +213,9 @@ impl SettingsModel {
         &self,
         id: &SslCertificateId,
     ) -> Result<Option<(FileSource, FileSource)>, String> {
+        println!("Trying to file Ssl certificate with id '{}'", id.as_str());
+
+        println!("Available certificates: {:?}", self.ssl_certificates);
         if let Some(certs) = &self.ssl_certificates {
             for cert in certs {
                 if cert.id != id.as_str() {
