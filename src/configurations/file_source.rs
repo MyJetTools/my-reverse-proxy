@@ -148,13 +148,18 @@ async fn loading_file_from_ssh(
         ssh_remote_port,
         ssh_user_name,
         private_key,
-        passphrase: _,
+        passphrase,
     } = ssh_credentials.as_ref()
     {
-        let ssh_pass_phrase_id =
-            format!("{}@{}:{}", ssh_user_name, ssh_remote_host, ssh_remote_port);
+        let passphrase = match passphrase {
+            Some(pass) => Some(pass.to_string()),
+            None => {
+                let ssh_pass_phrase_id =
+                    format!("{}@{}:{}", ssh_user_name, ssh_remote_host, ssh_remote_port);
+                crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await
+            }
+        };
 
-        let passphrase = crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await;
         let result = SshCredentials::PrivateKey {
             ssh_remote_host: ssh_remote_host.to_string(),
             ssh_remote_port: *ssh_remote_port,
