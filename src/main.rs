@@ -45,6 +45,8 @@ async fn main() {
 
     let app = Arc::new(app);
 
+    crate::http_server_control::start(&app, control_port);
+
     let app_configuration = crate::flows::get_and_check_app_config(&app, true)
         .await
         .unwrap();
@@ -52,8 +54,6 @@ async fn main() {
     app.set_current_app_configuration(app_configuration).await;
 
     kick_off_endpoints(&app).await;
-
-    crate::http_server_control::start(&app, control_port);
 
     let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
 
