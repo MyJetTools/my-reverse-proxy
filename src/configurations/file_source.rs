@@ -151,11 +151,22 @@ async fn loading_file_from_ssh(
         passphrase,
     } = ssh_credentials.as_ref()
     {
+        let ssh_pass_phrase_id =
+            format!("{}@{}:{}", ssh_user_name, ssh_remote_host, ssh_remote_port);
+
         let passphrase = match passphrase {
-            Some(pass) => Some(pass.to_string()),
+            Some(pass) => {
+                println!(
+                    "Passphrase is provided for SSH key for endpoint: {}",
+                    ssh_pass_phrase_id
+                );
+                Some(pass.to_string())
+            }
             None => {
-                let ssh_pass_phrase_id =
-                    format!("{}@{}:{}", ssh_user_name, ssh_remote_host, ssh_remote_port);
+                println!(
+                    "Passphrase IS NOT provided for SSH key for endpoint: {}",
+                    ssh_pass_phrase_id
+                );
                 crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await
             }
         };
