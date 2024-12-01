@@ -9,6 +9,7 @@ pub async fn load_client_certificate(
     cert_id: &SslCertificateId,
     listen_port: u16,
     files_cache: &FilesCache,
+    init_on_start: bool,
 ) -> Result<Arc<ClientCertificateCa>, String> {
     let cert_result = settings_model.get_client_certificate_ca(cert_id.as_str())?;
 
@@ -22,7 +23,9 @@ pub async fn load_client_certificate(
 
     let cert_result = cert_result.unwrap();
 
-    let client_ca = cert_result.load_file_content(Some(files_cache)).await?;
+    let client_ca = cert_result
+        .load_file_content(Some(files_cache), init_on_start)
+        .await?;
 
     let client_ca: Arc<ClientCertificateCa> = Arc::new(client_ca.into());
     return Ok(client_ca);

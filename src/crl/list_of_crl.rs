@@ -9,11 +9,14 @@ pub struct ListOfCrl {
 }
 
 impl ListOfCrl {
-    pub async fn new(src: &HashMap<String, FileSource>) -> Result<Self, String> {
+    pub async fn new(
+        src: &HashMap<String, FileSource>,
+        init_on_start: bool,
+    ) -> Result<Self, String> {
         let mut data = HashMap::new();
 
         for (name, file_source) in src {
-            let content = file_source.load_file_content(None).await?;
+            let content = file_source.load_file_content(None, init_on_start).await?;
             let crl = my_tls::crl::read(&content)?;
             data.insert(name.clone(), crl);
         }

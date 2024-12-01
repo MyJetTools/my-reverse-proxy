@@ -31,5 +31,7 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
         super::controllers::ssl_certificates::GetCurrentSslCertificatesAction::new(app.clone()),
     ));
 
+    result.register_post_action(Arc::new(super::controllers::ssh::InitPassKeyAction));
+
     result
 }

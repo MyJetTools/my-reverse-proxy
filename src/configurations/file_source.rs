@@ -1,7 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use my_settings_reader::flurl::FlUrl;
-use my_ssh::SshSession;
+use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::StrOrString;
 
 use crate::{files_cache::FilesCache, variables_reader::VariablesReader};
@@ -49,7 +49,11 @@ impl FileSource {
         }
     }
 
-    pub async fn load_file_content(&self, cache: Option<&FilesCache>) -> Result<Vec<u8>, String> {
+    pub async fn load_file_content(
+        &self,
+        cache: Option<&FilesCache>,
+        init_on_start: bool,
+    ) -> Result<Vec<u8>, String> {
         match self {
             FileSource::File(file_name) => {
                 println!("Loading file {}", file_name);
@@ -90,12 +94,12 @@ impl FileSource {
 
                 Ok(result)
             }
-            FileSource::Ssh(ssh_credentials) => match &ssh_credentials.remote_content {
+            FileSource::Ssh(ssh_configuration) => match &ssh_configuration.remote_content {
                 SshContent::RemoteHost(_) => {
                     panic!("Reading file is not supported from socket yet");
                 }
                 SshContent::FilePath(path) => {
-                    let ssh_cred_as_string = ssh_credentials.to_string();
+                    let ssh_cred_as_string = ssh_configuration.to_string();
 
                     if let Some(cache) = cache {
                         if let Some(value) = cache.get(ssh_cred_as_string.as_str()).await {
@@ -103,69 +107,116 @@ impl FileSource {
                         }
                     }
 
-                    println!(
-                        "Loading file from remove resource using SSH. {}->{}",
-                        ssh_credentials.credentials.to_string(),
-                        path
-                    );
-                    let ssh_session = SshSession::new(ssh_credentials.credentials.clone().into());
+                    loop {
+                        match loading_file_from_ssh(ssh_configuration, path).await {
+                            Ok(result) => {
+                                if let Some(cache) = cache {
+                                    cache.add(ssh_cred_as_string, result.clone()).await;
+                                }
 
-                    let result = ssh_session
-                        .download_remote_file(&path, Duration::from_secs(5))
-                        .await;
+                                return Ok(result);
+                            }
+                            Err(err) => {
+                                if !init_on_start {
+                                    return Err(err);
+                                }
 
-                    if let Err(err) = result {
-                        match ssh_credentials.credentials.as_ref() {
-                            my_ssh::SshCredentials::SshAgent {
-                                ssh_remote_host,
-                                ssh_remote_port,
-                                ssh_user_name,
-                            } => {
-                                println!(
-                                    "SSH Agent: {}:{}@{}",
-                                    ssh_user_name, ssh_remote_port, ssh_remote_host
-                                )
-                            }
-                            my_ssh::SshCredentials::UserNameAndPassword {
-                                ssh_remote_host,
-                                ssh_remote_port,
-                                ssh_user_name,
-                                password: _,
-                            } => {
-                                println!(
-                                    "SSH User: {}:{}@{}",
-                                    ssh_user_name, ssh_remote_port, ssh_remote_host
-                                )
-                            }
-                            my_ssh::SshCredentials::PrivateKey {
-                                ssh_remote_host,
-                                ssh_remote_port,
-                                ssh_user_name,
-                                private_key: _,
-                                passphrase: _,
-                            } => {
-                                println!(
-                                    "SSH Private Key: {}:{}@{}",
-                                    ssh_user_name, ssh_remote_port, ssh_remote_host
-                                )
+                                tokio::time::sleep(Duration::from_secs(3)).await;
                             }
                         }
-
-                        return Err(format!(
-                            "Can not download file from remote resource. Error: {:?}",
-                            err
-                        ));
                     }
-
-                    let result = result.unwrap();
-
-                    if let Some(cache) = cache {
-                        cache.add(ssh_cred_as_string, result.clone()).await;
-                    }
-
-                    Ok(result)
                 }
             },
         }
     }
+}
+
+async fn loading_file_from_ssh(
+    ssh_configuration: &SshConfiguration,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    println!(
+        "Loading file from remove resource using SSH. {}->{}",
+        ssh_configuration.credentials.to_string(),
+        path
+    );
+
+    let ssh_credentials = ssh_configuration.credentials.clone();
+
+    let ssh_credentials = if let SshCredentials::PrivateKey {
+        ssh_remote_host,
+        ssh_remote_port,
+        ssh_user_name,
+        private_key,
+        passphrase: _,
+    } = ssh_credentials.as_ref()
+    {
+        let ssh_pass_phrase_id =
+            format!("{}@{}:{}", ssh_user_name, ssh_remote_host, ssh_remote_port);
+
+        let passphrase = crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await;
+        let result = SshCredentials::PrivateKey {
+            ssh_remote_host: ssh_remote_host.to_string(),
+            ssh_remote_port: *ssh_remote_port,
+            ssh_user_name: ssh_user_name.to_string(),
+            private_key: private_key.to_string(),
+            passphrase,
+        };
+        Arc::new(result)
+    } else {
+        ssh_credentials
+    };
+
+    let ssh_session = SshSession::new(ssh_credentials);
+
+    let result = ssh_session
+        .download_remote_file(&path, Duration::from_secs(5))
+        .await;
+
+    if let Err(err) = result {
+        match ssh_configuration.credentials.as_ref() {
+            my_ssh::SshCredentials::SshAgent {
+                ssh_remote_host,
+                ssh_remote_port,
+                ssh_user_name,
+            } => {
+                println!(
+                    "SSH Agent: {}:{}@{}",
+                    ssh_user_name, ssh_remote_port, ssh_remote_host
+                )
+            }
+            my_ssh::SshCredentials::UserNameAndPassword {
+                ssh_remote_host,
+                ssh_remote_port,
+                ssh_user_name,
+                password: _,
+            } => {
+                println!(
+                    "SSH User: {}:{}@{}",
+                    ssh_user_name, ssh_remote_port, ssh_remote_host
+                )
+            }
+            my_ssh::SshCredentials::PrivateKey {
+                ssh_remote_host,
+                ssh_remote_port,
+                ssh_user_name,
+                private_key: _,
+                passphrase: _,
+            } => {
+                println!(
+                    "SSH Private Key: {}:{}@{}",
+                    ssh_user_name, ssh_remote_port, ssh_remote_host
+                )
+            }
+        }
+
+        return Err(format!(
+            "Can not download file from remote resource. Error: {:?}",
+            err
+        ));
+    }
+
+    let result = result.unwrap();
+
+    Ok(result)
 }

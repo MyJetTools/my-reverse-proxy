@@ -4,9 +4,12 @@ use tokio::sync::Mutex;
 
 use crate::{app::AppContext, configurations::*, crl::ListOfCrl, files_cache::FilesCache, ssl::*};
 
-pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfiguration, String> {
+pub async fn get_and_check_app_config(
+    app: &AppContext,
+    init_on_start: bool,
+) -> Result<AppConfiguration, String> {
     let settings_model = crate::settings::SettingsModel::load(".my-reverse-proxy").await?;
-    let listen_ports = settings_model.get_listen_ports(app).await?;
+    let listen_ports = settings_model.get_listen_ports(app, init_on_start).await?;
 
     let ssl_certificates_cache = SslCertificatesCache::new();
 
@@ -34,6 +37,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                                     ssl_cert_id,
                                     listen_port,
                                     &files_cache,
+                                    init_on_start,
                                 )
                                 .await?;
                                 ssl_certificates_cache
@@ -57,6 +61,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
                                 client_cert_id,
                                 listen_port,
                                 &files_cache,
+                                init_on_start,
                             )
                             .await?;
 
@@ -76,7 +81,7 @@ pub async fn get_and_check_app_config(app: &AppContext) -> Result<AppConfigurati
         }
     }
 
-    let list_of_crl = ListOfCrl::new(&crl).await?;
+    let list_of_crl = ListOfCrl::new(&crl, init_on_start).await?;
 
     Ok(AppConfiguration {
         http_endpoints,

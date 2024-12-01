@@ -19,8 +19,9 @@ impl AllowedUsersSettings {
         &mut self,
         file: FileSource,
         cache: &FilesCache,
+        init_on_start: bool,
     ) -> Result<(), String> {
-        let file_content = file.load_file_content(Some(cache)).await?;
+        let file_content = file.load_file_content(Some(cache), init_on_start).await?;
 
         let allowed_users: Result<AllowedUsersRemoteYamlModel, _> =
             serde_yaml::from_slice(file_content.as_slice());

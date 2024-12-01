@@ -80,6 +80,7 @@ impl SettingsModel {
     async fn get_allowed_users_settings(
         &self,
         files_cache: &FilesCache,
+        init_on_start: bool,
     ) -> Result<AllowedUsersSettings, String> {
         let mut allowed_users = self.allowed_users.clone();
 
@@ -98,7 +99,9 @@ impl SettingsModel {
                     crate::populate_variable::populate_variable(&file_to_load, variables);
 
                 let file_src = FileSource::from_src(file_to_load.into(), &self.ssh, variables)?;
-                result.populate_from_file(file_src, files_cache).await?;
+                result
+                    .populate_from_file(file_src, files_cache, init_on_start)
+                    .await?;
             }
         }
 
@@ -108,6 +111,7 @@ impl SettingsModel {
     pub async fn get_listen_ports(
         &self,
         app: &AppContext,
+        init_on_start: bool,
     ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
         let files_cache = FilesCache::new();
         let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
@@ -123,7 +127,9 @@ impl SettingsModel {
                 .endpoint
                 .get_endpoint_template(&self.endpoint_templates)?;
 
-            let allowed_users_settings = self.get_allowed_users_settings(&files_cache).await?;
+            let allowed_users_settings = self
+                .get_allowed_users_settings(&files_cache, init_on_start)
+                .await?;
 
             let allowed_users = proxy_pass
                 .get_allowed_users(&allowed_users_settings, endpoint_template_settings)?;

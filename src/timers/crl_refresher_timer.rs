@@ -25,7 +25,7 @@ impl MyTimerTick for CrlRefresherTimer {
 
         let app_config = app_config.unwrap();
 
-        let list_of_crl = ListOfCrl::new(&app_config.crl).await.unwrap();
+        let list_of_crl = ListOfCrl::new(&app_config.crl, false).await.unwrap();
 
         let mut list_of_crl_access = app_config.list_of_crl.lock().await;
         *list_of_crl_access = list_of_crl;

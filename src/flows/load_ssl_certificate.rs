@@ -12,6 +12,7 @@ pub async fn load_ssl_certificate(
     ssl_id: &SslCertificateId,
     listen_port: u16,
     files_cache: &FilesCache,
+    init_on_start: bool,
 ) -> Result<SslCertificateResult, String> {
     let cert_result = settings_model.get_ssl_certificate(ssl_id)?;
 
@@ -25,8 +26,12 @@ pub async fn load_ssl_certificate(
 
     let (cert_src, private_key_src) = cert_result.unwrap();
 
-    let certificates = cert_src.load_file_content(Some(files_cache)).await?;
-    let private_key = private_key_src.load_file_content(Some(files_cache)).await?;
+    let certificates = cert_src
+        .load_file_content(Some(files_cache), init_on_start)
+        .await?;
+    let private_key = private_key_src
+        .load_file_content(Some(files_cache), init_on_start)
+        .await?;
 
     let result = SslCertificateResult {
         cert_src,

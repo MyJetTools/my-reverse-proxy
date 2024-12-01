@@ -14,9 +14,9 @@ mod files_cache;
 mod google_auth;
 mod http_client;
 mod http_content_source;
-mod http_control;
 mod http_proxy_pass;
 mod http_server;
+mod http_server_control;
 mod populate_variable;
 mod self_signed_cert;
 mod settings;
@@ -45,13 +45,15 @@ async fn main() {
 
     let app = Arc::new(app);
 
-    let app_configuration = crate::flows::get_and_check_app_config(&app).await.unwrap();
+    let app_configuration = crate::flows::get_and_check_app_config(&app, true)
+        .await
+        .unwrap();
 
     app.set_current_app_configuration(app_configuration).await;
 
     kick_off_endpoints(&app).await;
 
-    crate::http_control::start(&app, control_port);
+    crate::http_server_control::start(&app, control_port);
 
     let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
 
