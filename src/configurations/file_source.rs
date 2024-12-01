@@ -121,6 +121,7 @@ impl FileSource {
                                     return Err(err);
                                 }
 
+                                println!("Can not load file from SSH. Error: {}. Retrying...", err);
                                 tokio::time::sleep(Duration::from_secs(3)).await;
                             }
                         }
@@ -167,7 +168,15 @@ async fn loading_file_from_ssh(
                     "Passphrase IS NOT provided for SSH key for endpoint: {}",
                     ssh_pass_phrase_id
                 );
-                crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await
+                let passkey = crate::app::CERT_PASS_KEYS.get(&ssh_pass_phrase_id).await;
+
+                println!(
+                    "There is a passkey for endpoint: '{}'. Result: {}",
+                    ssh_pass_phrase_id,
+                    passkey.is_some()
+                );
+
+                passkey
             }
         };
 
