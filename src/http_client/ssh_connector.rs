@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use my_ssh::{SshAsyncChannel, SshCredentials, SshSessionsPool};
+use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
 use rust_extensions::StrOrString;
 use tokio::io::{ReadHalf, WriteHalf};
 
@@ -10,9 +10,9 @@ use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 
 pub struct SshConnector {
     pub ssh_credentials: Arc<SshCredentials>,
-    pub pool: Arc<SshSessionsPool>,
     pub remote_host: RemoteHost,
     pub debug: bool,
+    pub use_connection_pool: bool,
 }
 
 #[async_trait::async_trait]
@@ -38,7 +38,14 @@ impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
         read.unsplit(write)
     }
     async fn connect(&self) -> Result<SshAsyncChannel, MyHttpClientError> {
-        let ssh_session = self.pool.get_or_create(&self.ssh_credentials).await;
+        let ssh_session = if self.use_connection_pool {
+            my_ssh::SSH_SESSIONS_POOL
+                .get_or_create(&self.ssh_credentials)
+                .await
+        } else {
+            Arc::new(SshSession::new(self.ssh_credentials.clone()))
+        };
+
         let tcp_stream = ssh_session
             .connect_to_remote_host(
                 self.remote_host.get_host(),

@@ -96,7 +96,7 @@ impl ProxyPassLocationConfig {
                 SshContent::RemoteHost(remote_host) => {
                     if model.http2 {
                         let connector = SshConnector {
-                            pool: app.ssh_sessions_pool.clone(),
+                            use_connection_pool: true,
                             ssh_credentials: model.ssh_config.credentials.clone(),
                             remote_host: remote_host.clone(),
                             debug,
@@ -107,7 +107,7 @@ impl ProxyPassLocationConfig {
                         HttpProxyPassContentSource::Http2OverSsh(http_client)
                     } else {
                         let connector = SshConnector {
-                            pool: app.ssh_sessions_pool.clone(),
+                            use_connection_pool: true,
                             ssh_credentials: model.ssh_config.credentials.clone(),
                             remote_host: remote_host.clone(),
                             debug,
@@ -121,7 +121,7 @@ impl ProxyPassLocationConfig {
                 }
                 SshContent::FilePath(file_path) => {
                     let src = PathOverSshContentSource::new(
-                        app.ssh_sessions_pool.clone(),
+                        true,
                         model.ssh_config.credentials.clone(),
                         file_path.clone(),
                         model.default_file.clone(),

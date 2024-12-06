@@ -4,7 +4,6 @@ use std::sync::{
 };
 
 use encryption::aes::AesKey;
-use my_ssh::SshSessionsPool;
 use rust_extensions::{AppStates, UnsafeValue};
 use tokio::sync::RwLock;
 
@@ -28,7 +27,6 @@ pub struct AppContext {
     pub states: Arc<AppStates>,
     //    pub local_port_allocator: LocalPortAllocator,
     pub show_error_description: UnsafeValue<bool>,
-    pub ssh_sessions_pool: Arc<SshSessionsPool>,
     pub prometheus: Arc<Prometheus>,
     pub metrics: Metrics,
 }
@@ -57,7 +55,6 @@ impl AppContext {
             show_error_description: UnsafeValue::new(
                 settings_model.get_show_error_description_on_error_page(),
             ),
-            ssh_sessions_pool: Arc::new(SshSessionsPool::new()),
             metrics: Metrics::new(),
         }
     }

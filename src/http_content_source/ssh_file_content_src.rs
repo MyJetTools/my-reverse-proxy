@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
-use my_ssh::{SshCredentials, SshSession, SshSessionsPool};
+use my_ssh::{SshCredentials, SshSession};
 use tokio::sync::Mutex;
 
 use crate::http_proxy_pass::ProxyPassError;
@@ -9,7 +9,7 @@ use crate::http_proxy_pass::ProxyPassError;
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct PathOverSshContentSource {
-    pool: Arc<SshSessionsPool>,
+    use_connection_pool: bool,
     ssh_credentials: Arc<SshCredentials>,
     home_value: Arc<Mutex<Option<String>>>,
     default_file: Option<String>,
@@ -19,14 +19,14 @@ pub struct PathOverSshContentSource {
 
 impl PathOverSshContentSource {
     pub fn new(
-        pool: Arc<SshSessionsPool>,
+        use_connection_pool: bool,
         ssh_credentials: Arc<SshCredentials>,
         file_path: String,
         default_file: Option<String>,
         execute_timeout: Duration,
     ) -> Self {
         Self {
-            pool,
+            use_connection_pool,
             ssh_credentials,
             file_path,
             home_value: Arc::new(Mutex::new(None)),
@@ -39,7 +39,13 @@ impl PathOverSshContentSource {
         &self,
         uri: &Uri,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
-        let ssh_session = self.pool.get_or_create(&self.ssh_credentials).await;
+        let ssh_session = if self.use_connection_pool {
+            my_ssh::SSH_SESSIONS_POOL
+                .get_or_create(&self.ssh_credentials)
+                .await
+        } else {
+            Arc::new(SshSession::new(self.ssh_credentials.clone()))
+        };
 
         let file_path = if uri.path() == "/" {
             if let Some(default_file) = self.default_file.as_ref() {
