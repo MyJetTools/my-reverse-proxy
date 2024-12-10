@@ -30,11 +30,14 @@ pub struct TransformedRequest {
 pub struct HttpRequestBuilder {
     parts: Parts,
     body: Incoming,
-    src_http_type: HttpType,
+    src_http_type: ListenHttpEndpointType,
 }
 
 impl HttpRequestBuilder {
-    pub fn new(src_http_type: HttpType, src: hyper::Request<hyper::body::Incoming>) -> Self {
+    pub fn new(
+        src_http_type: ListenHttpEndpointType,
+        src: hyper::Request<hyper::body::Incoming>,
+    ) -> Self {
         let (parts, body) = src.into_parts();
         Self {
             parts,
@@ -67,7 +70,7 @@ impl HttpRequestBuilder {
 
         let dest_http1 = dest_http1.unwrap();
 
-        if !self.src_http_type.is_protocol_http1() && dest_http1 {
+        if !self.src_http_type.is_http1() && dest_http1 {
             return self.http2_to_http1(location).await;
         }
 

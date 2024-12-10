@@ -1,11 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
-
 use serde::*;
-
-use crate::{
-    app::AppContext, configurations::*, http_proxy_pass::AllowedUserList, types::WhiteListedIpList,
-    variables_reader::VariablesReader,
-};
 
 use super::*;
 
@@ -36,6 +29,7 @@ impl EndpointSettings {
         self.debug.unwrap_or(false)
     }
 
+    /*
     pub fn get_http_endpoint_modify_headers_settings(
         &self,
         global_settings: &Option<GlobalSettings>,
@@ -73,112 +67,35 @@ impl EndpointSettings {
         None
     }
 
-    pub fn get_white_listed_ip(
-        &self,
-        endpoint_template_settings: Option<&EndpointTemplateSettings>,
-    ) -> Option<String> {
-        if let Some(whitelisted_ip) = self.whitelisted_ip.as_ref() {
-            return Some(whitelisted_ip.to_string());
-        }
 
-        let endpoint_template_settings = endpoint_template_settings?;
+       pub fn get_white_listed_ip(
+           &self,
+           endpoint_template_settings: Option<&EndpointTemplateSettings>,
+       ) -> Option<String> {
+           if let Some(whitelisted_ip) = self.whitelisted_ip.as_ref() {
+               return Some(whitelisted_ip.to_string());
+           }
 
-        endpoint_template_settings.whitelisted_ip.clone()
+           let endpoint_template_settings = endpoint_template_settings?;
+
+           endpoint_template_settings.whitelisted_ip.clone()
+       }
+    */
+    pub fn get_endpoint_type(&self) -> Result<EndpointTypeSettings, String> {
+        let result = match self.endpoint_type.as_str() {
+            HTTP1_ENDPOINT_TYPE => EndpointTypeSettings::Http1,
+            HTTP2_ENDPOINT_TYPE => EndpointTypeSettings::Http2,
+            HTTPS1_ENDPOINT_TYPE => EndpointTypeSettings::Https1,
+            "http1" => EndpointTypeSettings::Https1,
+            HTTPS2_ENDPOINT_TYPE => EndpointTypeSettings::Https2,
+            TCP_ENDPOINT_TYPE => EndpointTypeSettings::Tcp,
+            _ => return Err(format!("Unknown endpoint type: '{}'", self.endpoint_type)),
+        };
+
+        Ok(result)
     }
 
-    pub fn get_google_auth_settings(
-        &self,
-        endpoint_template: Option<&EndpointTemplateSettings>,
-        g_auth_settings: &Option<HashMap<String, GoogleAuthSettings>>,
-        var: VariablesReader,
-    ) -> Result<Option<GoogleAuthSettings>, String> {
-        let mut g_auth_id = self.google_auth.as_ref();
-
-        if g_auth_id.is_none() {
-            if let Some(endpoint_template) = endpoint_template {
-                g_auth_id = endpoint_template.google_auth.as_ref();
-            }
-        }
-
-        if g_auth_id.is_none() {
-            return Ok(None);
-        }
-
-        let g_auth_id = g_auth_id.unwrap();
-
-        if let Some(g_auth_settings) = g_auth_settings {
-            if let Some(result) = g_auth_settings.get(g_auth_id) {
-                return Ok(Some(result.clone_an_populate(var)));
-            }
-        }
-
-        Err(format!(
-            "Can not find google_auth with id '{}' for endpoint",
-            g_auth_id
-        ))
-    }
-
-    pub fn get_ssl_id(
-        &self,
-        endpoint_template: Option<&EndpointTemplateSettings>,
-    ) -> Option<SslCertificateId> {
-        if let Some(ssl_certificate) = &self.ssl_certificate {
-            return Some(SslCertificateId::new(ssl_certificate.to_string()));
-        }
-
-        let endpoint_template = endpoint_template?;
-
-        if let Some(ssl_certificate) = endpoint_template.ssl_certificate.as_ref() {
-            return Some(SslCertificateId::new(ssl_certificate.clone()));
-        }
-
-        None
-    }
-
-    pub fn get_client_certificate_id(
-        &self,
-        endpoint_template: Option<&EndpointTemplateSettings>,
-    ) -> Option<SslCertificateId> {
-        if let Some(client_certificate_ca) = &self.client_certificate_ca {
-            return Some(SslCertificateId::new(client_certificate_ca.to_string()));
-        }
-
-        let endpoint_template = endpoint_template?;
-
-        if let Some(client_certificate_ca) = endpoint_template.client_certificate_ca.as_ref() {
-            return Some(SslCertificateId::new(client_certificate_ca.clone()));
-        }
-
-        None
-    }
-
-    pub fn get_endpoint_template<'s>(
-        &'s self,
-        endpoint_templates: &'s Option<HashMap<String, EndpointTemplateSettings>>,
-    ) -> Result<Option<&'s EndpointTemplateSettings>, String> {
-        if let Some(template_id) = self.template_id.as_ref() {
-            match endpoint_templates {
-                Some(endpoint_templates) => match endpoint_templates.get(template_id) {
-                    Some(template) => return Ok(Some(template)),
-                    None => {
-                        return Err(format!(
-                            "Can not find template with id '{}' for endpoint",
-                            template_id
-                        ));
-                    }
-                },
-                None => {
-                    return Err(format!(
-                        "Can not find template with id '{}' for google_auth",
-                        template_id
-                    ));
-                }
-            }
-        } else {
-            return Ok(None);
-        }
-    }
-
+    /*
     pub fn get_type(
         &self,
         host: EndpointHttpHostString,
@@ -378,8 +295,10 @@ impl EndpointSettings {
             _ => panic!("Unknown location type: '{}'", self.endpoint_type),
         }
     }
+     */
 }
 
+/*
 fn convert_to_http_locations(
     host: &EndpointHttpHostString,
     src: &[LocationSettings],
@@ -423,3 +342,4 @@ fn convert_to_http_locations(
 
     Ok(result)
 }
+ */

@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
+use my_ssh::ssh_settings::OverSshConnectionSettings;
+
 use super::*;
-use crate::types::WhiteListedIpList;
 
 pub struct TcpEndpointHostConfig {
-    pub host: EndpointHttpHostString,
-    pub remote_addr: std::net::SocketAddr,
+    pub host_endpoint: EndpointHttpHostString,
+    pub remote_host: Arc<OverSshConnectionSettings>,
     pub debug: bool,
-    pub whitelisted_ip: WhiteListedIpList,
+    pub ip_white_list_id: Option<String>,
 }

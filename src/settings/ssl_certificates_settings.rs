@@ -1,10 +1,4 @@
-use std::collections::HashMap;
-
 use serde::*;
-
-use crate::variables_reader::VariablesReader;
-
-use crate::configurations::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SslCertificatesSettingsModel {
@@ -13,6 +7,7 @@ pub struct SslCertificatesSettingsModel {
     pub private_key: String,
 }
 
+/*
 impl SslCertificatesSettingsModel {
     pub fn get_certificate(
         &self,
@@ -32,3 +27,4 @@ impl SslCertificatesSettingsModel {
         FileSource::from_src(src, ssh_config, variables)
     }
 }
+ */

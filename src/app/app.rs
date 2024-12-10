@@ -5,14 +5,15 @@ use std::sync::{
 
 use encryption::aes::AesKey;
 use rust_extensions::{AppStates, UnsafeValue};
-use tokio::sync::RwLock;
+use tokio::sync::Mutex;
 
 use crate::{
     configurations::*,
     settings::{ConnectionsSettingsModel, SettingsModel},
+    ssl::CertificatesCache,
 };
 
-use super::{Metrics, Prometheus};
+use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
 
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -21,14 +22,23 @@ pub struct AppContext {
     pub http_connections: AtomicIsize,
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
-    //pub ssh_to_http_port_forward_pool: SshToHttpPortForwardPool,
+
     pub token_secret_key: AesKey,
-    current_app_configuration: RwLock<Option<Arc<AppConfiguration>>>,
+    pub current_configuration: AppConfiguration,
     pub states: Arc<AppStates>,
-    //    pub local_port_allocator: LocalPortAllocator,
+
     pub show_error_description: UnsafeValue<bool>,
     pub prometheus: Arc<Prometheus>,
     pub metrics: Metrics,
+    pub active_listen_ports: Mutex<ActiveListenPorts>,
+
+    pub ssh_config_list: SshConfigList,
+
+    pub allowed_users_list: AllowedUsersList,
+
+    pub ssl_certificates_cache: CertificatesCache,
+
+    pub ssh_cert_pass_keys: CertPassKeys,
 }
 
 impl AppContext {
@@ -47,40 +57,47 @@ impl AppContext {
             connection_settings,
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
-            current_app_configuration: RwLock::new(None),
+            current_configuration: AppConfiguration::new(),
             states: Arc::new(AppStates::create_initialized()),
             prometheus: Arc::new(Prometheus::new()),
+            ssl_certificates_cache: CertificatesCache::new(),
             //local_port_allocator: LocalPortAllocator::new(),
             //ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),
             show_error_description: UnsafeValue::new(
                 settings_model.get_show_error_description_on_error_page(),
             ),
             metrics: Metrics::new(),
+            active_listen_ports: Mutex::new(ActiveListenPorts::new()),
+            ssh_config_list: SshConfigList::new(),
+            allowed_users_list: AllowedUsersList::new(),
+            ssh_cert_pass_keys: CertPassKeys::new(),
         }
     }
 
-    pub async fn set_current_app_configuration(&self, app_config: AppConfiguration) {
-        let mut current_app_configuration = self.current_app_configuration.write().await;
-        *current_app_configuration = Some(Arc::new(app_config));
-    }
-
-    pub async fn get_current_app_configuration(&self) -> Arc<AppConfiguration> {
-        self.current_app_configuration
-            .read()
-            .await
-            .as_ref()
-            .unwrap()
-            .clone()
-    }
-
-    pub async fn try_get_current_app_configuration(&self) -> Option<Arc<AppConfiguration>> {
-        let result = self.current_app_configuration.read().await;
-        result.clone()
-    }
-
-    pub fn get_id(&self) -> i64 {
+    pub fn get_next_id(&self) -> i64 {
         self.id.fetch_add(1, Ordering::SeqCst)
     }
+
+    /*
+       pub async fn set_current_app_configuration(&self, app_config: AppConfiguration) {
+           let mut current_app_configuration = self.current_app_configuration.write().await;
+           *current_app_configuration = Some(Arc::new(app_config));
+       }
+
+       pub async fn get_current_app_configuration(&self) -> Arc<AppConfiguration> {
+           self.current_app_configuration
+               .read()
+               .await
+               .as_ref()
+               .unwrap()
+               .clone()
+       }
+
+       pub async fn try_get_current_app_configuration(&self) -> Option<Arc<AppConfiguration>> {
+           let result = self.current_app_configuration.read().await;
+           result.clone()
+       }
+    */
 }
 
 fn generate_random_token_secret_key() -> Vec<u8> {

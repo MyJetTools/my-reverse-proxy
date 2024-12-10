@@ -135,7 +135,7 @@ pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
     let proxy_pass_location = inner.locations.find(location_index);
 
     if let Some(dest_http1) = proxy_pass_location.is_http1() {
-        if dest_http1 && !proxy_pass.listening_port_info.http_type.is_protocol_http1() {
+        if dest_http1 && !proxy_pass.listening_port_info.endpoint_type.is_http1() {
             headers.remove(header::TRANSFER_ENCODING);
             headers.remove(header::CONNECTION);
             headers.remove(header::UPGRADE);

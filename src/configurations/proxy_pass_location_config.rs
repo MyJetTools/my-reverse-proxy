@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     app::AppContext,
@@ -6,7 +6,6 @@ use crate::{
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
-    types::WhiteListedIpList,
 };
 
 use super::*;
@@ -16,10 +15,9 @@ pub struct ProxyPassLocationConfig {
     pub path: String,
     pub id: i64,
     pub modify_headers: Option<ModifyHttpHeadersSettings>,
-    pub whitelisted_ip: WhiteListedIpList,
-    pub remote_type: HttpType,
+    pub ip_white_list_id: Option<String>,
     pub domain_name: Option<String>,
-    proxy_pass_to: ProxyPassTo,
+    pub proxy_pass_to: ProxyPassTo,
     pub compress: bool,
 }
 
@@ -28,19 +26,17 @@ impl ProxyPassLocationConfig {
         id: i64,
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
-        whitelisted_ip: WhiteListedIpList,
+        ip_white_list_id: Option<String>,
         proxy_pass_to: ProxyPassTo,
         domain_name: Option<String>,
-        remote_type: HttpType,
         compress: bool,
     ) -> Self {
         Self {
             path,
             id,
             modify_headers,
-            whitelisted_ip,
+            ip_white_list_id,
             proxy_pass_to,
-            remote_type,
             domain_name,
             compress,
         }
@@ -60,9 +56,9 @@ impl ProxyPassLocationConfig {
     }
      */
 
-    pub fn create_data_source(
+    pub async fn create_data_source(
         &self,
-        app: &AppContext,
+        app: &Arc<AppContext>,
         debug: bool,
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
@@ -74,79 +70,88 @@ impl ProxyPassLocationConfig {
                     static_content_model.body.clone(),
                 ))
             }
-            ProxyPassTo::Http1(remote_host) => {
-                let http_client = Http1Client::create(
-                    app.prometheus.clone(),
-                    remote_host.clone(),
-                    self.domain_name.clone(),
-                    debug,
-                );
-                HttpProxyPassContentSource::Http1(http_client)
+            ProxyPassTo::Http1(remote_content) => {
+                if let Some(ssh_credentials) = remote_content.ssh_credentials.as_ref() {
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                        .await
+                        .unwrap();
+                    let connector = SshConnector {
+                        ssh_session,
+                        remote_endpoint: remote_content.get_remote_endpoint().to_owned(),
+                        debug,
+                    };
+
+                    let http_client =
+                        MyHttpClient::new_with_metrics(connector, app.prometheus.clone());
+
+                    HttpProxyPassContentSource::Http1OverSsh(http_client)
+                } else {
+                    let http_client = Http1Client::create(
+                        app.prometheus.clone(),
+                        remote_content.get_remote_endpoint().to_owned(),
+                        self.domain_name.clone(),
+                        debug,
+                    );
+                    HttpProxyPassContentSource::Http1(http_client)
+                }
             }
 
             ProxyPassTo::Http2(remote_host) => {
-                let http_client =
-                    Http2Client::create(app, remote_host.clone(), self.domain_name.clone(), debug);
-                HttpProxyPassContentSource::Http2(http_client)
-            }
-            ProxyPassTo::LocalPath(model) => HttpProxyPassContentSource::LocalPath(
-                LocalPathContentSrc::new(&model.local_path, model.default_file.clone()),
-            ),
-            ProxyPassTo::Ssh(model) => match &model.ssh_config.remote_content {
-                SshContent::RemoteHost(remote_host) => {
-                    if model.http2 {
-                        let connector = SshConnector {
-                            use_connection_pool: true,
-                            ssh_credentials: model.ssh_config.credentials.clone(),
-                            remote_host: remote_host.clone(),
-                            debug,
-                        };
+                if let Some(ssh_credentials) = remote_host.ssh_credentials.as_ref() {
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                        .await
+                        .unwrap();
 
-                        let http_client = MyHttp2Client::new(connector, app.prometheus.clone());
+                    let connector = SshConnector {
+                        ssh_session,
+                        remote_endpoint: remote_host.get_remote_endpoint().to_owned(),
+                        debug,
+                    };
 
-                        HttpProxyPassContentSource::Http2OverSsh(http_client)
-                    } else {
-                        let connector = SshConnector {
-                            use_connection_pool: true,
-                            ssh_credentials: model.ssh_config.credentials.clone(),
-                            remote_host: remote_host.clone(),
-                            debug,
-                        };
+                    let http_client = MyHttp2Client::new(connector, app.prometheus.clone());
 
-                        let http_client =
-                            MyHttpClient::new_with_metrics(connector, app.prometheus.clone());
-
-                        HttpProxyPassContentSource::Http1OverSsh(http_client)
-                    }
+                    HttpProxyPassContentSource::Http2OverSsh(http_client)
+                } else {
+                    let http_client = Http2Client::create(
+                        app,
+                        remote_host.get_remote_endpoint().to_owned(),
+                        self.domain_name.clone(),
+                        debug,
+                    );
+                    HttpProxyPassContentSource::Http2(http_client)
                 }
-                SshContent::FilePath(file_path) => {
+            }
+            ProxyPassTo::FilesPath(model) => {
+                if let Some(ssh_credentials) = model.files_path.ssh_credentials.as_ref() {
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                        .await
+                        .unwrap();
                     let src = PathOverSshContentSource::new(
-                        true,
-                        model.ssh_config.credentials.clone(),
-                        file_path.clone(),
+                        ssh_session,
+                        model.files_path.remote_resource_string.to_string(),
                         model.default_file.clone(),
                         timeout,
                     );
 
-                    HttpProxyPassContentSource::PathOverSsh(src)
+                    return HttpProxyPassContentSource::PathOverSsh(src);
                 }
-            },
-            ProxyPassTo::Tcp(_) => {
-                panic!("Should not be here.")
+
+                let local_file_path =
+                    LocalFilePath::new(model.files_path.remote_resource_string.to_string());
+                HttpProxyPassContentSource::LocalPath(LocalPathContentSrc::new(
+                    &local_file_path,
+                    model.default_file.clone(),
+                ))
             }
         };
 
         result
     }
 
-    pub fn is_http1(&self) -> Option<bool> {
+    pub fn is_remote_content_http1(&self) -> Option<bool> {
         match &self.proxy_pass_to {
             ProxyPassTo::Http1(_) => Some(true),
             ProxyPassTo::Http2(_) => Some(false),
-            ProxyPassTo::Ssh(model) => match &model.ssh_config.remote_content {
-                SshContent::RemoteHost(_) => Some(!model.http2),
-                SshContent::FilePath(_) => None,
-            },
             _ => None,
         }
     }

@@ -17,3 +17,9 @@ impl LocalFilePath {
         self.0.replace("~", home_value.as_str()).into()
     }
 }
+
+impl Into<LocalFilePath> for String {
+    fn into(self) -> LocalFilePath {
+        LocalFilePath::new(self)
+    }
+}

@@ -1,12 +1,14 @@
-use crate::{http_server::ClientCertificateData, types::Email};
+use std::sync::Arc;
+
+use crate::{tcp_listener::https::ClientCertificateData, types::Email};
 
 pub struct HttpProxyPassIdentity {
-    pub client_cert_cn: Option<ClientCertificateData>,
+    pub client_cert_cn: Option<Arc<ClientCertificateData>>,
     pub ga_user: Option<Email>,
 }
 
 impl HttpProxyPassIdentity {
-    pub fn new(client_cert_cn: Option<ClientCertificateData>) -> Self {
+    pub fn new(client_cert_cn: Option<Arc<ClientCertificateData>>) -> Self {
         Self {
             client_cert_cn,
             ga_user: None,

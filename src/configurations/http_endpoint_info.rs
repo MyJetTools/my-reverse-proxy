@@ -1,34 +1,33 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
-use crate::{
-    http_proxy_pass::AllowedUserList,
-    settings::{GoogleAuthSettings, HttpEndpointModifyHeadersSettings},
-};
+use crate::settings::HttpEndpointModifyHeadersSettings;
 
 use super::*;
 
 pub struct HttpEndpointInfo {
     pub host_endpoint: EndpointHttpHostString,
     pub debug: bool,
-    pub http_type: HttpType,
-    pub g_auth: Option<GoogleAuthSettings>,
+    pub listen_endpoint_type: ListenHttpEndpointType,
+    pub g_auth: Option<String>,
     pub ssl_certificate_id: Option<SslCertificateId>,
     pub client_certificate_id: Option<SslCertificateId>,
     pub locations: Vec<Arc<ProxyPassLocationConfig>>,
-    pub allowed_user_list: Option<Arc<AllowedUserList>>,
+    pub allowed_user_list_id: Option<String>,
     pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
+    pub whitelisted_ip_list_id: Option<String>,
 }
 
 impl HttpEndpointInfo {
     pub fn new(
         host_endpoint: EndpointHttpHostString,
-        http_type: HttpType,
+        listen_endpoint_type: ListenHttpEndpointType,
         debug: bool,
-        g_auth: Option<GoogleAuthSettings>,
+        g_auth: Option<String>,
         ssl_certificate_id: Option<SslCertificateId>,
         client_certificate_id: Option<SslCertificateId>,
+        whitelisted_ip_list_id: Option<String>,
         locations: Vec<Arc<ProxyPassLocationConfig>>,
-        allowed_user_list: Option<Arc<AllowedUserList>>,
+        allowed_user_list_id: Option<String>,
         modify_headers_settings: HttpEndpointModifyHeadersSettings,
     ) -> Self {
         if debug {
@@ -37,13 +36,14 @@ impl HttpEndpointInfo {
         Self {
             host_endpoint,
             debug,
-            http_type,
+            listen_endpoint_type,
             g_auth,
             client_certificate_id,
             locations,
-            allowed_user_list,
+            allowed_user_list_id,
             modify_headers_settings,
             ssl_certificate_id,
+            whitelisted_ip_list_id,
         }
     }
 
@@ -53,12 +53,5 @@ impl HttpEndpointInfo {
 
     pub fn as_str(&self) -> &str {
         self.host_endpoint.as_str()
-    }
-
-    pub fn get_listening_port_info(&self, socket_addr: SocketAddr) -> HttpListenPortInfo {
-        HttpListenPortInfo {
-            http_type: self.http_type,
-            socket_addr,
-        }
     }
 }

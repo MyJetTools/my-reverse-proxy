@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
-use crate::{app::AppContext, configurations::*, files_cache::FilesCache};
+use crate::configurations::EndpointHttpHostString;
 
 use super::*;
 use rust_extensions::duration_utils::DurationExtensions;
@@ -9,19 +9,15 @@ use serde::*;
 #[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, HostSettings>,
-
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
     pub global_settings: Option<GlobalSettings>,
-
     pub g_auth: Option<HashMap<String, GoogleAuthSettings>>,
-
     pub ssh: Option<HashMap<String, SshConfigSettings>>,
-
     pub endpoint_templates: Option<HashMap<String, EndpointTemplateSettings>>,
-
-    allowed_users: Option<HashMap<String, Vec<String>>>,
+    pub allowed_users: Option<HashMap<String, Vec<String>>>,
+    pub ip_white_lists: Option<HashMap<String, Vec<String>>>,
 }
 
 impl SettingsModel {
@@ -77,189 +73,12 @@ impl SettingsModel {
         None
     }
 
-    async fn get_allowed_users_settings(
+    pub fn get_endpoint_host_string(
         &self,
-        files_cache: &FilesCache,
-        init_on_start: bool,
-    ) -> Result<AllowedUsersSettings, String> {
-        let mut allowed_users = self.allowed_users.clone();
-
-        let mut files_to_load = None;
-
-        if let Some(allowed_users) = allowed_users.as_mut() {
-            files_to_load = allowed_users.remove("from_file");
-        }
-
-        let mut result = AllowedUsersSettings::new(self.allowed_users.clone());
-
-        if let Some(files_to_load) = files_to_load {
-            let variables = (&self.variables).into();
-            for file_to_load in files_to_load {
-                let file_to_load =
-                    crate::populate_variable::populate_variable(&file_to_load, variables);
-
-                let file_src = FileSource::from_src(file_to_load.into(), &self.ssh, variables)?;
-                result
-                    .populate_from_file(file_src, files_cache, init_on_start)
-                    .await?;
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub async fn get_listen_ports(
-        &self,
-        app: &AppContext,
-        init_on_start: bool,
-    ) -> Result<BTreeMap<u16, ListenPortConfiguration>, String> {
-        let files_cache = FilesCache::new();
-        let mut result: BTreeMap<u16, ListenPortConfiguration> = BTreeMap::new();
-
-        for (host, proxy_pass) in &self.hosts {
-            let host = crate::populate_variable::populate_variable(host, (&self.variables).into());
-
-            let end_point = EndpointHttpHostString::new(host.as_str().to_string())?;
-
-            let port = end_point.get_port();
-
-            let endpoint_template_settings = proxy_pass
-                .endpoint
-                .get_endpoint_template(&self.endpoint_templates)?;
-
-            let allowed_users_settings = self
-                .get_allowed_users_settings(&files_cache, init_on_start)
-                .await?;
-
-            let allowed_users = proxy_pass
-                .get_allowed_users(&allowed_users_settings, endpoint_template_settings)?;
-
-            let endpoint_type = proxy_pass.endpoint.get_type(
-                end_point,
-                &proxy_pass.endpoint,
-                proxy_pass.locations.as_slice(),
-                endpoint_template_settings,
-                (&self.variables).into(),
-                &self.ssh,
-                &self.g_auth,
-                allowed_users,
-                &self.global_settings,
-                app,
-            )?;
-
-            let debug = if let Ok(value) = std::env::var("DEBUG") {
-                value == "true" || value == "1"
-            } else {
-                false
-            };
-
-            match endpoint_type {
-                EndpointType::Http(http_endpoint_info) => match result.get_mut(&port) {
-                    Some(other_port_configuration) => {
-                        other_port_configuration
-                            .add_http_endpoint_info(host.as_str(), http_endpoint_info)?;
-                    }
-                    None => {
-                        result.insert(
-                            port,
-                            ListenPortConfiguration::Http(HttpListenPortConfiguration::new(
-                                http_endpoint_info.into(),
-                                debug,
-                            )),
-                        );
-                    }
-                },
-                EndpointType::Tcp(endpoint_info) => match result.get(&port) {
-                    Some(other_end_point_type) => {
-                        return Err(format!(
-                            "Port {} is used twice by host configurations {} and {}",
-                            port,
-                            host.as_str(),
-                            other_end_point_type.get_endpoint_host_as_str()
-                        ));
-                    }
-                    None => {
-                        result.insert(port, ListenPortConfiguration::Tcp(endpoint_info));
-                    }
-                },
-                EndpointType::TcpOverSsh(endpoint_info) => match result.get(&port) {
-                    Some(other_end_point_type) => {
-                        return Err(format!(
-                            "Port {} is used twice by host configurations {} and {}",
-                            port,
-                            host.as_str(),
-                            other_end_point_type.get_endpoint_host_as_str()
-                        ));
-                    }
-                    None => {
-                        result.insert(port, ListenPortConfiguration::TcpOverSsh(endpoint_info));
-                    }
-                },
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub fn get_client_certificate_ca(&self, id: &str) -> Result<Option<FileSource>, String> {
-        if let Some(certs) = &self.client_certificate_ca {
-            for ca in certs {
-                if ca.id != id {
-                    continue;
-                }
-
-                return Ok(Some(ca.get_ca((&self.variables).into(), &self.ssh)?));
-            }
-        }
-
-        Ok(None)
-    }
-
-    pub fn get_ssl_certificate(
-        &self,
-        id: &SslCertificateId,
-    ) -> Result<Option<(FileSource, FileSource)>, String> {
-        println!("Trying to file Ssl certificate with id '{}'", id.as_str());
-
-        if let Some(certs) = &self.ssl_certificates {
-            for cert in certs {
-                if cert.id != id.as_str() {
-                    continue;
-                }
-
-                return Ok(Some((
-                    cert.get_certificate((&self.variables).into(), &self.ssh)?,
-                    cert.get_private_key((&self.variables).into(), &self.ssh)?,
-                )));
-            }
-        }
-
-        println!("No available certificates at all in the configuration");
-
-        Ok(None)
-    }
-
-    pub fn get_crl(&self) -> Result<HashMap<String, FileSource>, String> {
-        let mut result = HashMap::new();
-
-        if let Some(client_certificate_ca) = &self.client_certificate_ca {
-            for itm in client_certificate_ca {
-                if let Some(revocation_list) = &itm.revocation_list {
-                    println!(
-                        "Loading revocation list with id '{}' from '{}'",
-                        itm.id, revocation_list
-                    );
-                    let file_src = FileSource::from_src(
-                        revocation_list.into(),
-                        &self.ssh,
-                        (&self.variables).into(),
-                    )?;
-                    result.insert(itm.id.to_string(), file_src);
-                }
-            }
-        }
-
-        Ok(result)
+        host_id: &str,
+    ) -> Result<EndpointHttpHostString, String> {
+        let host_id = crate::scripts::apply_variables(self, host_id)?;
+        EndpointHttpHostString::new(host_id.to_string())
     }
 }
 
@@ -283,10 +102,7 @@ fn format_mem(size: usize) -> String {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::{
-        configurations::SshConfigSettings,
-        settings::{EndpointSettings, HostSettings, LocationSettings},
-    };
+    use super::*;
 
     use super::SettingsModel;
 
@@ -310,7 +126,7 @@ mod tests {
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
-                    proxy_pass_to: "https://www.google.com".to_owned(),
+                    proxy_pass_to: "https://www.google.com".to_owned().into(),
                     location_type: Some("http".to_owned()),
                     modify_http_headers: None,
                     default_file: None,
@@ -354,6 +170,7 @@ mod tests {
             g_auth: None,
             endpoint_templates: None,
             allowed_users: None,
+            ip_white_lists: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

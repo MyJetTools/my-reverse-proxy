@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use rust_extensions::MyTimerTick;
 
-use crate::{app::AppContext, crl::ListOfCrl};
+use crate::app::AppContext;
 
 pub struct CrlRefresherTimer {
     app: Arc<AppContext>,
@@ -17,17 +17,18 @@ impl CrlRefresherTimer {
 #[async_trait::async_trait]
 impl MyTimerTick for CrlRefresherTimer {
     async fn tick(&self) {
-        let app_config = self.app.try_get_current_app_configuration().await;
+        let list_of_crl = self
+            .app
+            .ssl_certificates_cache
+            .read(|config| config.client_ca.get_list_of_crl())
+            .await;
 
-        if app_config.is_none() {
+        if list_of_crl.len() == 0 {
             return;
         }
 
-        let app_config = app_config.unwrap();
-
-        let list_of_crl = ListOfCrl::new(&app_config.crl, false).await.unwrap();
-
-        let mut list_of_crl_access = app_config.list_of_crl.lock().await;
-        *list_of_crl_access = list_of_crl;
+        for (id, crl_file_source) in list_of_crl {
+            crate::scripts::update_crl(&self.app, id, &crl_file_source).await;
+        }
     }
 }

@@ -27,6 +27,17 @@ impl HttpProxyPass {
 
         let g_auth_settings = self.endpoint_info.g_auth.as_ref().unwrap();
 
+        let google_auth_credentials = app
+            .current_configuration
+            .get(|config| config.google_auth_credentials.get(g_auth_settings))
+            .await;
+
+        if google_auth_credentials.is_none() {
+            panic!("Google Auth Credentials not found");
+        }
+
+        let google_auth_credentials = google_auth_credentials.unwrap();
+
         if req.uri().path() == LOGOUT_PATH {
             let body = Full::from(Bytes::from(
                 crate::google_auth::generate_logout_page(req, "You have successfully logged out!")
@@ -44,7 +55,7 @@ impl HttpProxyPass {
         if req.uri().path() == AUTHORIZED_PATH {
             if let Some(token) = req.get_authorization_token() {
                 if let Some(email) = crate::google_auth::token::resolve(app, token) {
-                    if !g_auth_settings.domain_is_allowed(&email) {
+                    if !google_auth_credentials.domain_is_allowed(&email) {
                         let body = Full::from(Bytes::from(
                             crate::google_auth::generate_logout_page(
                                 req,
@@ -76,7 +87,7 @@ impl HttpProxyPass {
             let email = match crate::google_auth::resolve_email(
                 req,
                 code.as_str(),
-                g_auth_settings,
+                &google_auth_credentials,
                 self.endpoint_info.debug,
             )
             .await
@@ -92,7 +103,7 @@ impl HttpProxyPass {
                 }
             };
 
-            if !g_auth_settings.domain_is_allowed(&email) {
+            if !google_auth_credentials.domain_is_allowed(&email) {
                 let body = Full::from(Bytes::from(
                     crate::google_auth::generate_logout_page(req, "Unauthorized email domain")
                         .into_bytes(),
@@ -122,14 +133,14 @@ impl HttpProxyPass {
 
         if let Some(token) = req.get_authorization_token() {
             if let Some(email) = crate::google_auth::token::resolve(app, token) {
-                if !g_auth_settings.domain_is_allowed(&email) {
+                if !google_auth_credentials.domain_is_allowed(&email) {
                     return GoogleAuthResult::DomainIsNotAuthorized;
                 }
                 return GoogleAuthResult::Passed(Some(email));
             }
         }
 
-        let body = crate::google_auth::generate_login_page(req, g_auth_settings);
+        let body = crate::google_auth::generate_login_page(req, &google_auth_credentials);
 
         let body = Full::from(Bytes::from(body.into_bytes()));
 

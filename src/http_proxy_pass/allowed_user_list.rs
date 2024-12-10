@@ -14,4 +14,8 @@ impl AllowedUserList {
     pub fn get_list(&self) -> &[String] {
         &self.users
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.users.is_empty()
+    }
 }

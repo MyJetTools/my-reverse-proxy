@@ -1,32 +1,31 @@
 use std::{sync::Arc, time::Duration};
 
 use app::AppContext;
-use flows::kick_off_endpoints;
+
 use timers::{CrlRefresherTimer, SslCertsRefreshTimer};
 
 mod app;
 mod flows;
 //mod http2_executor;
+
 mod configurations;
 mod consts;
-mod crl;
-mod files_cache;
+//mod crl;
 mod google_auth;
 mod http_client;
 mod http_content_source;
 mod http_proxy_pass;
 mod http_server;
-mod http_server_control;
-mod populate_variable;
 mod self_signed_cert;
 mod settings;
+mod tcp_listener;
 //mod ssh_to_http_port_forward;
 
+mod scripts;
+
 mod ssl;
-mod tcp_port_forward;
 mod timers;
 mod types;
-mod variables_reader;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {
     e.to_string()
@@ -45,15 +44,9 @@ async fn main() {
 
     let app = Arc::new(app);
 
-    crate::http_server_control::start(&app, control_port);
+    crate::http_server::start(&app, control_port);
 
-    let app_configuration = crate::flows::get_and_check_app_config(&app, true)
-        .await
-        .unwrap();
-
-    app.set_current_app_configuration(app_configuration).await;
-
-    kick_off_endpoints(&app).await;
+    crate::flows::load_everything_from_settings(&app).await;
 
     let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
 

@@ -30,5 +30,9 @@ pub use google_auth_settings::*;
 mod endpoint_template_settings;
 pub use endpoint_template_settings::*;
 
-mod allowed_users_settings;
-pub use allowed_users_settings::*;
+//mod allowed_users_settings;
+//pub use allowed_users_settings::*;
+mod endpoint_type_settings;
+pub use endpoint_type_settings::*;
+mod ssh_config_settings;
+pub use ssh_config_settings::*;

@@ -1,11 +1,6 @@
 use rust_extensions::{placeholders::PlaceholdersIterator, StrOrString};
 
-use crate::{
-    configurations::*,
-    populate_variable::{PLACEHOLDER_CLOSE_TOKEN, PLACEHOLDER_OPEN_TOKEN},
-};
-
-use super::{HostPort, HttpProxyPassIdentity, ProxyPassLocations};
+use super::{HostPort, HttpListenPortInfo, HttpProxyPassIdentity, ProxyPassLocations};
 
 pub struct HttpProxyPassInner {
     pub identity: HttpProxyPassIdentity,
@@ -31,15 +26,13 @@ impl HttpProxyPassInner {
         value: &'s str,
         req_host_port: &THostPort,
     ) -> StrOrString<'s> {
-        if !value.contains(PLACEHOLDER_OPEN_TOKEN) {
+        if !value.contains("${") {
             return value.into();
         }
 
         let mut result = String::new();
 
-        for token in
-            PlaceholdersIterator::new(value, PLACEHOLDER_OPEN_TOKEN, PLACEHOLDER_CLOSE_TOKEN)
-        {
+        for token in PlaceholdersIterator::new(value, "${", "}") {
             match token {
                 rust_extensions::placeholders::ContentToken::Text(text) => result.push_str(text),
                 rust_extensions::placeholders::ContentToken::Placeholder(placeholder) => {
@@ -78,7 +71,7 @@ impl HttpProxyPassInner {
                         }
 
                         "ENDPOINT_SCHEMA" => {
-                            if self.http_listen_port_info.http_type.is_https() {
+                            if self.http_listen_port_info.endpoint_type.is_https() {
                                 result.push_str("https");
                             } else {
                                 result.push_str("http");

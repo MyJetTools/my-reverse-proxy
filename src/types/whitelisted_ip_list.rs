@@ -5,16 +5,9 @@ pub struct WhiteListedIpList {
 }
 
 impl WhiteListedIpList {
-    pub fn new() -> Self {
-        Self { items: Vec::new() }
-    }
-
-    pub fn apply(&mut self, src: Option<&str>) {
-        if src.is_none() {
-            return;
-        }
-
-        for itm in src.unwrap().split(";") {
+    pub fn new(src: &[String]) -> Self {
+        let mut items = Vec::new();
+        for itm in src {
             let mut parts = itm.split("-");
 
             let left = parts.next().unwrap();
@@ -23,12 +16,13 @@ impl WhiteListedIpList {
                 let ip_from = left.get_ip_value();
                 let ip_to = right.get_ip_value();
 
-                self.items.push(WhitelistedIp::Range { ip_from, ip_to });
+                items.push(WhitelistedIp::Range { ip_from, ip_to });
             } else {
-                self.items
-                    .push(WhitelistedIp::SingleIp(left.get_ip_value()));
+                items.push(WhitelistedIp::SingleIp(left.get_ip_value()));
             }
         }
+
+        Self { items }
     }
 
     pub fn is_whitelisted(&self, ip: &impl IntoIp) -> bool {
@@ -51,8 +45,9 @@ mod tests {
 
     #[test]
     fn test_range() {
-        let mut list = super::WhiteListedIpList::new();
-        list.apply(Some("127.0.0.5-127.0.0.10"));
+        let list = vec!["127.0.0.5-127.0.0.10".to_string()];
+
+        let list = super::WhiteListedIpList::new(list.as_slice());
 
         assert!(list.is_whitelisted(&"127.0.0.5"));
 

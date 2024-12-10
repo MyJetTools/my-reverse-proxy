@@ -2,16 +2,14 @@ use std::sync::Arc;
 
 use my_http_client::MyHttpClientConnector;
 use my_tls::tokio_rustls::client::TlsStream;
-use rust_extensions::StrOrString;
+use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
 use tokio::{
     io::{ReadHalf, WriteHalf},
     net::TcpStream,
 };
 
-use crate::configurations::RemoteHost;
-
 pub struct HttpTlsConnector {
-    pub remote_host: RemoteHost,
+    pub remote_endpoint: RemoteEndpointOwned,
     pub domain_name: Option<String>,
     pub debug: bool,
 }
@@ -19,7 +17,7 @@ pub struct HttpTlsConnector {
 #[async_trait::async_trait]
 impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
     fn get_remote_host(&self) -> StrOrString {
-        self.remote_host.as_str().into()
+        self.remote_endpoint.as_str().into()
     }
 
     fn is_debug(&self) -> bool {
@@ -29,38 +27,24 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
     async fn connect(&self) -> Result<TlsStream<TcpStream>, my_http_client::MyHttpClientError> {
         use my_tls::tokio_rustls::rustls::pki_types::ServerName;
 
-        let host_port = self.remote_host.get_host_port();
+        let host_port = self.remote_endpoint.get_host_port(Some(443));
 
-        let tcp_stream = if host_port.find(":").is_none() {
-            match TcpStream::connect(format!("{}:443", self.remote_host.get_host_port())).await {
-                Ok(tcp_stream) => tcp_stream,
-                Err(err) => {
-                    return Err(
-                        my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
-                            "{}",
-                            err
-                        )),
-                    )
-                }
-            }
-        } else {
-            match TcpStream::connect(host_port).await {
-                Ok(tcp_stream) => tcp_stream,
-                Err(err) => {
-                    return Err(
-                        my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
-                            "{}",
-                            err
-                        )),
-                    )
-                }
+        let tcp_stream = match TcpStream::connect(host_port.as_str()).await {
+            Ok(tcp_stream) => tcp_stream,
+            Err(err) => {
+                return Err(
+                    my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!(
+                        "{}",
+                        err
+                    )),
+                )
             }
         };
 
         if self.debug {
             println!(
                 "Connecting to TLS remote host: {}",
-                self.remote_host.get_host_port(),
+                self.remote_endpoint.as_str(),
             );
         }
 
@@ -72,7 +56,7 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
         let domain = if let Some(domain_name) = self.domain_name.as_ref() {
             ServerName::try_from(domain_name.to_string()).unwrap()
         } else {
-            ServerName::try_from(self.remote_host.get_host().to_string()).unwrap()
+            ServerName::try_from(self.remote_endpoint.get_host().to_string()).unwrap()
         };
 
         if self.debug {

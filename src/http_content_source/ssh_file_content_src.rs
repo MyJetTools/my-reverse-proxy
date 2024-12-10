@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
-use my_ssh::{SshCredentials, SshSession};
+use my_ssh::SshSession;
 use tokio::sync::Mutex;
 
 use crate::http_proxy_pass::ProxyPassError;
@@ -9,8 +9,7 @@ use crate::http_proxy_pass::ProxyPassError;
 use super::{RequestExecutor, RequestExecutorResult, WebContentType};
 
 pub struct PathOverSshContentSource {
-    use_connection_pool: bool,
-    ssh_credentials: Arc<SshCredentials>,
+    ssh_session: Arc<SshSession>,
     home_value: Arc<Mutex<Option<String>>>,
     default_file: Option<String>,
     pub file_path: String,
@@ -19,15 +18,13 @@ pub struct PathOverSshContentSource {
 
 impl PathOverSshContentSource {
     pub fn new(
-        use_connection_pool: bool,
-        ssh_credentials: Arc<SshCredentials>,
+        ssh_session: Arc<SshSession>,
         file_path: String,
         default_file: Option<String>,
         execute_timeout: Duration,
     ) -> Self {
         Self {
-            use_connection_pool,
-            ssh_credentials,
+            ssh_session,
             file_path,
             home_value: Arc::new(Mutex::new(None)),
             default_file,
@@ -39,14 +36,6 @@ impl PathOverSshContentSource {
         &self,
         uri: &Uri,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
-        let ssh_session = if self.use_connection_pool {
-            my_ssh::SSH_SESSIONS_POOL
-                .get_or_create(&self.ssh_credentials)
-                .await
-        } else {
-            Arc::new(SshSession::new(self.ssh_credentials.clone()))
-        };
-
         let file_path = if uri.path() == "/" {
             if let Some(default_file) = self.default_file.as_ref() {
                 format!("{}/{}", self.file_path, default_file)
@@ -59,7 +48,7 @@ impl PathOverSshContentSource {
 
         let result = FileOverSshRequestExecutor {
             file_path,
-            ssh_session,
+            ssh_session: self.ssh_session.clone(),
             home_value: self.home_value.clone(),
             execute_timeout: self.execute_timeout,
         };

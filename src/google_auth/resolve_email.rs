@@ -1,12 +1,12 @@
 use my_settings_reader::flurl::FlUrl;
 use serde::*;
 
-use crate::{http_proxy_pass::HostPort, settings::GoogleAuthSettings, types::Email};
+use crate::{configurations::GoogleAuthCredentials, http_proxy_pass::HostPort, types::Email};
 
 pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     req: &THostPort,
     code: &str,
-    settings: &GoogleAuthSettings,
+    settings: &GoogleAuthCredentials,
     debug: bool,
 ) -> Result<Email, String> {
     let response = FlUrl::new("https://oauth2.googleapis.com/token")

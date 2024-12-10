@@ -1,15 +1,47 @@
-use std::{collections::HashMap, str::FromStr};
-
 use serde::*;
 
-use crate::{configurations::*, variables_reader::VariablesReader};
-
 use super::*;
+
+pub enum LocationType {
+    Http,
+    Http2,
+    Https1,
+    Https2,
+    Files,
+    StaticContent,
+}
+
+impl LocationType {
+    pub fn detect_from_proxy_pass_to(src: Option<&str>) -> Result<Self, String> {
+        match src {
+            Some(src) => {
+                let mut splitted = src.split("->");
+
+                let mut left_part = splitted.next().unwrap();
+
+                if let Some(right_part) = splitted.next() {
+                    left_part = right_part;
+                }
+
+                if left_part.starts_with("https") {
+                    return Ok(Self::Https1);
+                };
+
+                if left_part.starts_with("http") {
+                    return Ok(Self::Http);
+                };
+
+                Ok(Self::Files)
+            }
+            None => Ok(Self::StaticContent),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocationSettings {
     pub path: Option<String>,
-    pub proxy_pass_to: String,
+    pub proxy_pass_to: Option<String>,
     #[serde(rename = "type")]
     pub location_type: Option<String>,
     pub domain_name: Option<String>,
@@ -23,117 +55,19 @@ pub struct LocationSettings {
 }
 
 impl LocationSettings {
-    fn get_status_code(&self, endpoint_str: &str) -> Result<u16, String> {
-        match self.status_code {
-            Some(status_code) => Ok(status_code),
-            None => Err(format!(
-                "status_code is required for static content for endpoint {}",
-                endpoint_str
-            )),
-        }
-    }
-
-    pub fn get_proxy_pass(
-        &self,
-        endpoint_str: &str,
-        variables: VariablesReader,
-        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
-    ) -> Result<ProxyPassTo, String> {
-        let proxy_pass_to =
-            crate::populate_variable::populate_variable(self.proxy_pass_to.trim(), variables);
-
-        if proxy_pass_to.as_str().trim() == "static" {
-            return Ok(ProxyPassTo::Static(StaticContentModel {
-                status_code: self.get_status_code(endpoint_str)?,
-                content_type: self.content_type.clone(),
-                body: if let Some(body) = self.body.as_ref() {
-                    body.as_bytes().to_vec()
-                } else {
-                    vec![]
-                },
-            }));
-        }
-
-        if proxy_pass_to.as_str().starts_with(SSH_PREFIX) {
-            return Ok(ProxyPassTo::Ssh(SshProxyPassModel {
-                ssh_config: SshConfiguration::parse(
-                    proxy_pass_to.as_str(),
-                    &ssh_configs,
-                    variables,
-                )?,
-                http2: self.get_type().is_protocol_http2(),
-                default_file: self.default_file.clone(),
-            }));
-        }
-
-        if proxy_pass_to.as_str().starts_with("http") {
-            if self.get_type().is_protocol_http2() {
-                return Ok(ProxyPassTo::Http2(RemoteHost::new(
-                    proxy_pass_to.to_string(),
-                )));
-            } else {
-                return Ok(ProxyPassTo::Http1(RemoteHost::new(
-                    proxy_pass_to.to_string(),
-                )));
-            }
-        }
-
-        if proxy_pass_to.as_str().starts_with("~")
-            || proxy_pass_to.as_str().starts_with("/")
-            || proxy_pass_to.as_str().starts_with(".")
-        {
-            return Ok(ProxyPassTo::LocalPath(LocalPathModel {
-                local_path: LocalFilePath::new(proxy_pass_to.to_string()),
-                default_file: self.default_file.clone(),
-            }));
-        }
-
-        match std::net::SocketAddr::from_str(proxy_pass_to.as_str()) {
-            Ok(addr) => {
-                return Ok(ProxyPassTo::Tcp(addr));
-            }
-            Err(err) => {
-                return Err(format!(
-                    "Endpoint: {}. Unknown proxy pass to {}. Error: {}",
-                    endpoint_str,
-                    proxy_pass_to.as_str(),
-                    err
-                ));
-            }
-        }
-    }
-
-    pub fn get_type(&self) -> HttpType {
-        match self.location_type.as_ref() {
-            Some(location_type) => match location_type.as_str() {
-                "http" => HttpType::Http1,
-                "http2" => HttpType::Http2,
-                "https1" => HttpType::Https1,
-                "https2" => HttpType::Https2,
-                _ => HttpType::Http1,
-            },
-            None => HttpType::Http1,
-        }
-    }
-
-    pub fn get_compress(&self) -> bool {
-        match self.compress {
-            Some(compress) => compress,
-            None => false,
-        }
-    }
-
-    /*
-    pub fn is_http2(&self) -> Result<bool, String> {
+    pub fn get_location_type(&self) -> Result<Option<LocationType>, String> {
         if let Some(location_type) = self.location_type.as_ref() {
             match location_type.as_str() {
-                "http" => return Ok(false),
-                "http2" => return Ok(true),
+                "http" => return Ok(LocationType::Http.into()),
+                "http2" => return Ok(LocationType::Http2.into()),
+                "https" => return Ok(LocationType::Https1.into()),
+                "https1" => return Ok(LocationType::Https1.into()),
+                "https2" => return Ok(LocationType::Https2.into()),
+                "static" => return Ok(LocationType::StaticContent.into()),
                 _ => return Err(format!("Unknown remote location type {}", location_type)),
             }
+        } else {
+            Ok(None)
         }
-
-        Ok(false)
     }
-     */
 }

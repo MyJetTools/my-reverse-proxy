@@ -1,15 +1,15 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use my_http_client::utils::into_full_body_response;
 use tokio::sync::Mutex;
 
-use crate::{app::AppContext, configurations::*, http_server::ClientCertificateData};
+use crate::{app::AppContext, configurations::*, tcp_listener::https::ClientCertificateData};
 
 use super::{
-    GoogleAuthResult, HttpProxyPassIdentity, HttpProxyPassInner, HttpRequestBuilder,
-    ProxyPassError, ProxyPassLocations,
+    GoogleAuthResult, HttpListenPortInfo, HttpProxyPassIdentity, HttpProxyPassInner,
+    HttpRequestBuilder, ProxyPassError, ProxyPassLocations,
 };
 
 pub struct HttpProxyPass {
@@ -19,13 +19,13 @@ pub struct HttpProxyPass {
 }
 
 impl HttpProxyPass {
-    pub fn new(
+    pub async fn new(
         app: &Arc<AppContext>,
         endpoint_info: Arc<HttpEndpointInfo>,
         listening_port_info: HttpListenPortInfo,
-        client_cert: Option<ClientCertificateData>,
+        client_cert: Option<Arc<ClientCertificateData>>,
     ) -> Self {
-        let locations = ProxyPassLocations::new(app, &endpoint_info);
+        let locations = ProxyPassLocations::new(app, &endpoint_info).await;
         Self {
             inner: Mutex::new(
                 HttpProxyPassInner::new(
@@ -45,6 +45,7 @@ impl HttpProxyPass {
         &self,
         app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
+        connection_addr: &SocketAddr,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
             println!(
@@ -55,7 +56,7 @@ impl HttpProxyPass {
             );
         }
 
-        let mut req = HttpRequestBuilder::new(self.endpoint_info.http_type.clone(), req);
+        let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
         let (request, content_source, location_index) = {
             let mut inner = self.inner.lock().await;
@@ -72,9 +73,13 @@ impl HttpProxyPass {
                 }
             }
 
-            if let Some(allowed_users) = self.endpoint_info.allowed_user_list.as_ref() {
+            if let Some(allowed_user_list_id) = self.endpoint_info.allowed_user_list_id.as_ref() {
                 if let Some(identity) = inner.identity.get_identity() {
-                    if !allowed_users.is_allowed(identity) {
+                    if !app
+                        .allowed_users_list
+                        .is_allowed(allowed_user_list_id, identity)
+                        .await
+                    {
                         return Err(ProxyPassError::UserIsForbidden);
                     }
                 }
@@ -88,6 +93,22 @@ impl HttpProxyPass {
 
             let request = req.into_response(self, proxy_pass_location).await?;
 
+            if let Some(white_list_ip) = proxy_pass_location.config.ip_white_list_id.as_ref() {
+                if !app
+                    .current_configuration
+                    .get(|itm| {
+                        itm.white_list_ip_list
+                            .is_white_listed(white_list_ip, &connection_addr.ip())
+                    })
+                    .await
+                {
+                    return Err(ProxyPassError::IpRestricted(
+                        self.listening_port_info.socket_addr.ip().to_string(),
+                    ));
+                }
+            }
+
+            /*
             if !proxy_pass_location
                 .config
                 .whitelisted_ip
@@ -97,6 +118,7 @@ impl HttpProxyPass {
                     self.listening_port_info.socket_addr.ip().to_string(),
                 ));
             }
+             */
 
             (
                 request,

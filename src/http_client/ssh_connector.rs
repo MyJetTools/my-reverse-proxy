@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
-use my_ssh::{SshAsyncChannel, SshCredentials, SshSession};
-use rust_extensions::StrOrString;
+use my_ssh::{SshAsyncChannel, SshSession};
+use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
 use tokio::io::{ReadHalf, WriteHalf};
-
-use crate::configurations::RemoteHost;
 
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 
 pub struct SshConnector {
-    pub ssh_credentials: Arc<SshCredentials>,
-    pub remote_host: RemoteHost,
+    pub ssh_session: Arc<SshSession>,
+    pub remote_endpoint: RemoteEndpointOwned,
     pub debug: bool,
-    pub use_connection_pool: bool,
 }
 
 #[async_trait::async_trait]
@@ -22,13 +19,7 @@ impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
     }
 
     fn get_remote_host(&self) -> StrOrString {
-        format!(
-            "ssh:{}@{}->{}",
-            self.ssh_credentials.get_user_name(),
-            self.ssh_credentials.get_host_port_as_string(),
-            self.remote_host.as_str()
-        )
-        .into()
+        self.ssh_session.get_ssh_credentials().to_string().into()
     }
 
     fn reunite(
@@ -38,18 +29,15 @@ impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
         read.unsplit(write)
     }
     async fn connect(&self) -> Result<SshAsyncChannel, MyHttpClientError> {
-        let ssh_session = if self.use_connection_pool {
-            my_ssh::SSH_SESSIONS_POOL
-                .get_or_create(&self.ssh_credentials)
-                .await
-        } else {
-            Arc::new(SshSession::new(self.ssh_credentials.clone()))
-        };
+        let remote_host = self.remote_endpoint.get_host();
 
-        let tcp_stream = ssh_session
+        let remote_port = self.remote_endpoint.get_port().unwrap_or(80);
+
+        let tcp_stream = self
+            .ssh_session
             .connect_to_remote_host(
-                self.remote_host.get_host(),
-                self.remote_host.get_port(),
+                remote_host,
+                remote_port,
                 crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
             )
             .await;

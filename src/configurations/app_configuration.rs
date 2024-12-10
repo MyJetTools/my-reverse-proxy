@@ -1,29 +1,40 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
-
-use my_tls::tokio_rustls;
-use tokio::sync::Mutex;
-use tokio_rustls::rustls::sign::CertifiedKey;
-
-use crate::{crl::ListOfCrl, ssl::*};
+use tokio::sync::RwLock;
 
 use super::*;
 
-pub const SELF_SIGNED_CERT_NAME: &str = "self_signed";
-
 pub struct AppConfiguration {
-    pub client_certificates_cache: ClientCertificatesCache,
-    pub ssl_certificates_cache: SslCertificatesCache,
-    pub http_endpoints: BTreeMap<u16, HttpListenPortConfiguration>,
-    pub tcp_endpoints: BTreeMap<u16, Arc<TcpEndpointHostConfig>>,
-    pub tcp_over_ssh_endpoints: BTreeMap<u16, Arc<TcpOverSshEndpointHostConfig>>,
-    pub crl: HashMap<String, FileSource>,
-    pub list_of_crl: Mutex<ListOfCrl>,
+    inner: RwLock<AppConfigurationInner>,
 }
 
 impl AppConfiguration {
+    pub fn new() -> Self {
+        Self {
+            inner: RwLock::new(AppConfigurationInner::new()),
+        }
+    }
+
+    pub async fn get<TResult>(
+        &self,
+        func: impl FnOnce(&AppConfigurationInner) -> TResult,
+    ) -> TResult {
+        let inner = self.inner.read().await;
+        func(&inner)
+    }
+
+    pub async fn write(&self, func: impl FnOnce(&mut AppConfigurationInner)) {
+        let mut inner = self.inner.write().await;
+        func(&mut inner)
+    }
+    /*
+    pub async fn write_with_result<TResult>(
+        &self,
+        func: impl FnOnce(&mut AppConfigurationInner) -> TResult,
+    ) -> TResult {
+        let mut inner = self.inner.write().await;
+        func(&mut inner)
+    }
+
+
     pub async fn get_ssl_certified_key(
         &self,
         listen_port: u16,
@@ -82,4 +93,5 @@ impl AppConfiguration {
 
         Err(format!("Not port is listening at port: {}", listen_port))
     }
+     */
 }

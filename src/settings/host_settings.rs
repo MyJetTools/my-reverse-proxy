@@ -1,8 +1,4 @@
-use std::sync::Arc;
-
 use serde::*;
-
-use crate::{http_proxy_pass::AllowedUserList, types::WhiteListedIpList};
 
 use super::*;
 
@@ -12,6 +8,7 @@ pub struct HostSettings {
     pub locations: Vec<LocationSettings>,
 }
 
+/*
 impl HostSettings {
     pub fn get_allowed_users(
         &self,
@@ -38,3 +35,4 @@ impl HostSettings {
         return Ok(result);
     }
 }
+ */

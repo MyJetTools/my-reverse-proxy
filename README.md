@@ -187,7 +187,7 @@ Example of serving static content with custom headers and body
       type: http
 
     locations:
-    - proxy_pass_to: static
+    - type: static
       status_code: 200
       content_type: text/html
       body: <h2>Body H2</h2><h3>Body H3</h3>
@@ -202,7 +202,7 @@ Example of serving redirect to the same url but with https schema
       type: http
 
     locations:
-    - proxy_pass_to: static
+    - type: static
       status_code: 302
       modify_http_headers:
         add:
@@ -359,17 +359,13 @@ hosts:
   localhost:8000:
     endpoint:
       type: http
-      whitelisted_ip: 10.0.0.0;20.0.0.0      
-```
-
-or 
-
-```yaml
-hosts:
-  localhost:8000:
-    endpoint:
-      type: http
-      whitelisted_ip: 10.0.0.0-10.0.0.5;15.0.0.0     
+      whitelisted_ip: id_of_ip_list
+      
+      
+ip_white_lists:
+  id_of_ip_list:
+    - "10.0.0.5"
+    - "10.0.0.1-10.0.0.5"
 ```
 
 Same rules can be applied to any location
@@ -382,7 +378,7 @@ hosts:
 
     locations:
     - proxy_pass_to: http://10.0.0.4:7702
-      whitelisted_ip: 10.0.0.0 
+      whitelisted_ip: id_of_ip_list 
 ```
 
 

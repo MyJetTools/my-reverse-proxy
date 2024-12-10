@@ -1,4 +1,4 @@
-use crate::configurations::*;
+use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 pub struct StaticContentModel {
     pub status_code: u16,
@@ -17,35 +17,31 @@ impl StaticContentModel {
     }
 }
 
-pub struct LocalPathModel {
-    pub local_path: LocalFilePath,
+pub struct ProxyPassFilesPathModel {
+    pub files_path: OverSshConnectionSettings,
     pub default_file: Option<String>,
 }
 
-impl LocalPathModel {
+impl ProxyPassFilesPathModel {
     pub fn to_string(&self) -> String {
-        self.local_path.get_value().to_string()
-    }
-}
-
-pub struct SshProxyPassModel {
-    pub ssh_config: SshConfiguration,
-    pub http2: bool,
-    pub default_file: Option<String>,
-}
-
-impl SshProxyPassModel {
-    pub fn to_string(&self) -> String {
-        self.ssh_config.to_string()
+        if let Some(ssh_credentials) = self.files_path.ssh_credentials.as_ref() {
+            format!(
+                "ssh:{}@{}:{}->{}",
+                ssh_credentials.get_user_name(),
+                ssh_credentials.get_host_port().0,
+                ssh_credentials.get_host_port().1,
+                self.files_path.remote_resource_string
+            )
+        } else {
+            self.files_path.remote_resource_string.clone()
+        }
     }
 }
 
 pub enum ProxyPassTo {
-    Http1(RemoteHost),
-    Http2(RemoteHost),
-    LocalPath(LocalPathModel),
-    Ssh(SshProxyPassModel),
-    Tcp(std::net::SocketAddr),
+    Http1(OverSshConnectionSettings),
+    Http2(OverSshConnectionSettings),
+    FilesPath(ProxyPassFilesPathModel),
     Static(StaticContentModel),
 }
 
@@ -54,49 +50,18 @@ impl ProxyPassTo {
         match self {
             ProxyPassTo::Http1(remote_host) => remote_host.to_string(),
             ProxyPassTo::Http2(remote_host) => remote_host.to_string(),
-            ProxyPassTo::LocalPath(model) => model.to_string(),
-            ProxyPassTo::Ssh(model) => model.to_string(),
-            ProxyPassTo::Tcp(socket_addr) => format!("{}", socket_addr),
+            ProxyPassTo::FilesPath(model) => model.to_string(),
+
             ProxyPassTo::Static(model) => model.to_string(),
         }
     }
-}
 
-/*
-impl ProxyPassTo {
-    pub fn from_str(
-        src: StrOrString<'_>,
-        ssh_configs: &Option<HashMap<String, SshConfigSettings>>,
-        get_static_content_model: impl FnOnce() -> Result<StaticContentModel, String>,
-    ) -> Result<Self, String> {
-        if src.as_str().trim() == "static" {
-            return Ok(ProxyPassTo::Static(get_static_content_model()?));
+    pub fn get_type_as_str(&self) -> &'static str {
+        match self {
+            ProxyPassTo::Http1(_) => "http1",
+            ProxyPassTo::Http2(_) => "http2",
+            ProxyPassTo::FilesPath(_) => "files_path",
+            ProxyPassTo::Static(_) => "static",
         }
-
-        if src.as_str().starts_with(super::SSH_PREFIX) {
-            return Ok(ProxyPassTo::Ssh(SshConfiguration::parse(
-                src,
-                &ssh_configs,
-            )?));
-        }
-
-        if src.as_str().starts_with("http") {
-            return Ok(ProxyPassTo::Http(RemoteHost::new(src.to_string())));
-        }
-
-        if src.as_str().starts_with("~")
-            || src.as_str().starts_with("/")
-            || src.as_str().starts_with(".")
-        {
-            return Ok(ProxyPassTo::LocalPath(LocalPathModel {
-                local_path: LocalFilePath::new(src.to_string()),
-                default_file: self.,
-            }));
-        }
-
-        Ok(ProxyPassTo::Tcp(
-            std::net::SocketAddr::from_str(src.as_str()).unwrap(),
-        ))
     }
 }
- */

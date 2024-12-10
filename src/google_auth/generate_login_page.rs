@@ -1,8 +1,8 @@
-use crate::{http_proxy_pass::HostPort, settings::GoogleAuthSettings};
+use crate::{configurations::*, http_proxy_pass::HostPort};
 
 pub fn generate_login_page<THostPort: HostPort + Send + Sync + 'static>(
     req: &THostPort,
-    settings: &GoogleAuthSettings,
+    settings: &GoogleAuthCredentials,
 ) -> String {
     return super::html::generate_with_template(|| {
         format!(

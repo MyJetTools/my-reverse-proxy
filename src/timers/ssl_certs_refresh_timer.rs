@@ -4,7 +4,7 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
 
 use crate::{
     app::AppContext,
-    configurations::{AppConfiguration, SslCertificateId},
+    configurations::SslCertificateId,
     ssl::{SslCertificate, SslCertificateHolder},
 };
 
@@ -21,25 +21,25 @@ impl SslCertsRefreshTimer {
 #[async_trait::async_trait]
 impl MyTimerTick for SslCertsRefreshTimer {
     async fn tick(&self) {
-        let configuration = self.app.try_get_current_app_configuration().await;
+        let ssl_certs = self
+            .app
+            .ssl_certificates_cache
+            .read(|itm| itm.ssl_certs.get_list())
+            .await;
 
-        if configuration.is_none() {
+        if ssl_certs.len() == 0 {
             return;
         }
 
-        let configuration = configuration.unwrap();
-
-        let ssl_certs = configuration.ssl_certificates_cache.get_list().await;
-
         let now = DateTimeAsMicroseconds::now();
         for (cert_id, ssl_cert) in ssl_certs {
-            try_renew_cert(&configuration, cert_id.into(), ssl_cert, now).await;
+            try_renew_cert(&self.app, cert_id.into(), ssl_cert, now).await;
         }
     }
 }
 
 async fn try_renew_cert(
-    configuration: &AppConfiguration,
+    app: &Arc<AppContext>,
     cert_id: SslCertificateId,
     ssl_holder: Arc<SslCertificateHolder>,
     now: DateTimeAsMicroseconds,
@@ -58,7 +58,7 @@ async fn try_renew_cert(
         return;
     }
 
-    let certificates_content = ssl_holder.cert_src.load_file_content(None, false).await;
+    let certificates_content = crate::scripts::load_file(app, &ssl_holder.cert_src).await;
 
     if let Err(err) = &certificates_content {
         println!(
@@ -71,11 +71,7 @@ async fn try_renew_cert(
 
     let certificates_content = certificates_content.unwrap();
 
-    let private_key_content = ssl_holder
-        .private_key_src
-        .load_file_content(None, false)
-        .await;
-
+    let private_key_content = crate::scripts::load_file(app, &ssl_holder.private_key_src).await;
     if let Err(err) = &private_key_content {
         println!(
             "Error loading private_key {}. Err:{}",
@@ -100,14 +96,15 @@ async fn try_renew_cert(
 
     let ssl_cert = ssl_cert.unwrap();
 
-    configuration
-        .ssl_certificates_cache
-        .add_or_update(
-            &cert_id,
-            ssl_cert,
-            ssl_holder.private_key_src.clone(),
-            ssl_holder.cert_src.clone(),
-        )
+    app.ssl_certificates_cache
+        .write(|config| {
+            config.ssl_certs.add_or_update(
+                cert_id.as_ref(),
+                ssl_cert,
+                ssl_holder.private_key_src.clone(),
+                ssl_holder.cert_src.clone(),
+            );
+        })
         .await;
 
     println!("Certificate {} has been renewed.", cert_id.as_str());

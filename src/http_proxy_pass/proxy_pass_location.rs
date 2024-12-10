@@ -12,8 +12,8 @@ pub struct ProxyPassLocation {
 }
 
 impl ProxyPassLocation {
-    pub fn new(
-        app: &AppContext,
+    pub async fn new(
+        app: &Arc<AppContext>,
         config: Arc<ProxyPassLocationConfig>,
         debug: bool,
         compress: bool,
@@ -21,8 +21,9 @@ impl ProxyPassLocation {
         //let content_source = config.create_content_source(debug, request_timeout);
         //let is_http1 = content_source.is_http1();
 
-        let content_source =
-            config.create_data_source(app, debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT);
+        let content_source = config
+            .create_data_source(app, debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
+            .await;
         let result = Self {
             content_source: Arc::new(content_source),
             config,
@@ -43,7 +44,7 @@ impl ProxyPassLocation {
     }
 
     pub fn is_http1(&self) -> Option<bool> {
-        self.config.is_http1()
+        self.config.is_remote_content_http1()
     }
 
     /*
