@@ -27,7 +27,9 @@ pub async fn sync_tcp_endpoints(app: &Arc<AppContext>) {
 
     for port_to_stop in ports_to_stop {
         if let Some(server_handler) = listen_end_points.data.remove(&port_to_stop) {
+            println!("Stopping server on port {}", port_to_stop);
             server_handler.stop().await;
+            println!("Stopped server on port {}", port_to_stop);
         }
     }
 }

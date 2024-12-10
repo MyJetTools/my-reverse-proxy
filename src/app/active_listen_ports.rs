@@ -23,6 +23,8 @@ impl ActiveListenPorts {
         if self.data.contains_key(&port) {
             return;
         }
+
+        println!("Starting server on port {}", port);
         let listen_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
         let server_handler = crate::tcp_listener::start_listen_server(listen_addr, app.clone());
 

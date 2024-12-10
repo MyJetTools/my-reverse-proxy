@@ -15,7 +15,7 @@ impl ListenServerHandler {
 
     pub async fn stop(&self) {
         self.shutting_down
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+            .store(true, std::sync::atomic::Ordering::Relaxed);
 
         loop {
             tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
