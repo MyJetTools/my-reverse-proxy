@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use tokio::sync::RwLock;
 
 use super::*;
@@ -24,6 +26,35 @@ impl AppConfiguration {
     pub async fn write(&self, func: impl FnOnce(&mut AppConfigurationInner)) {
         let mut inner = self.inner.write().await;
         func(&mut inner)
+    }
+
+    pub async fn add_http_configuration_error(
+        &self,
+        host_id: &EndpointHttpHostString,
+        error: String,
+    ) {
+        let port = host_id.get_port();
+        let mut inner = self.inner.write().await;
+
+        if let Some(location) = inner.listen_endpoints.get_mut(&port) {
+            if let ListenConfiguration::Http(location) = location {
+                let location = location.delete_configuration(&host_id);
+
+                if let Some(location) = location {
+                    if location.endpoints.len() == 0 {
+                        inner.listen_endpoints.remove(&port);
+                    } else {
+                        inner
+                            .listen_endpoints
+                            .insert(port, ListenConfiguration::Http(Arc::new(location)));
+                    }
+                }
+            }
+        }
+
+        inner
+            .error_configurations
+            .insert(host_id.as_str().to_string(), error);
     }
     /*
     pub async fn write_with_result<TResult>(

@@ -19,19 +19,22 @@ pub async fn load_everything_from_settings(app: &Arc<AppContext>) {
             }
         };
 
-        let host_str_id = endpoint_host.as_str().to_string();
-
         if let Err(err) = crate::scripts::update_host_configuration(
             app,
             &settings_model,
-            endpoint_host,
+            endpoint_host.clone(),
             host_settings,
         )
         .await
         {
+            app.current_configuration
+                .add_http_configuration_error(&endpoint_host, err.clone())
+                .await;
+
             println!(
-                "Error updating host configuration {}. Err is: {}",
-                host_str_id, err
+                "Error loading host configuration {}. Err is: {}",
+                endpoint_host.as_str(),
+                err
             );
         }
     }

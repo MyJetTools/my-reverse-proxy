@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use crate::types::{IntoIp, WhiteListedIpList};
 
@@ -17,10 +20,6 @@ impl WhiteListedIpListConfigurations {
         self.data.insert(id, Arc::new(white_list_ip));
     }
 
-    pub fn has(&self, id: &str) -> bool {
-        self.data.contains_key(id)
-    }
-
     pub fn get(&self, id: &str) -> Option<Arc<WhiteListedIpList>> {
         self.data.get(id).cloned()
     }
@@ -31,5 +30,18 @@ impl WhiteListedIpListConfigurations {
         }
 
         false
+    }
+
+    pub fn get_all<TResult>(
+        &self,
+        convert_value: impl Fn(&WhiteListedIpList) -> TResult,
+    ) -> BTreeMap<String, TResult> {
+        let mut result = BTreeMap::new();
+
+        for (key, value) in &self.data {
+            result.insert(key.clone(), convert_value(value));
+        }
+
+        result
     }
 }

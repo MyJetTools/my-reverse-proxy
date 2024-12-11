@@ -4,7 +4,7 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
     app::AppContext,
-    configurations::{EndpointHttpHostString, SslCertificateId, SslCertificateIdRef},
+    configurations::{SslCertificateId, SslCertificateIdRef},
     settings::*,
     tcp_listener::https::ClientCertificateCa,
 };
@@ -12,12 +12,10 @@ use crate::{
 pub async fn make_sure_client_ca_exists<'s>(
     app: &Arc<AppContext>,
     settings_model: &'s SettingsModel,
-    host_endpoint: &EndpointHttpHostString,
     host_settings: &'s HostSettings,
 ) -> Result<Option<SslCertificateId>, String> {
     let client_ca_id = super::get_from_host_or_templates(
         settings_model,
-        host_endpoint,
         host_settings,
         |host_settings| host_settings.endpoint.client_certificate_ca.as_ref(),
         |templates| templates.client_certificate_ca.as_ref(),
@@ -44,9 +42,8 @@ pub async fn make_sure_client_ca_exists<'s>(
         Some(ssl_certificates) => ssl_certificates,
         None => {
             return Err(format!(
-                "Client certificate with id {} not found for endpoint {}",
+                "Client certificate with id '{}' is not found",
                 client_ca_id.as_str(),
-                host_endpoint.as_str()
             ));
         }
     };
@@ -62,9 +59,8 @@ pub async fn make_sure_client_ca_exists<'s>(
 
     if found_certificate.is_none() {
         return Err(format!(
-            "Client certificate with id {} not found for endpoint {}",
+            "Client certificate with id '{}' is not found",
             client_ca_id.as_str(),
-            host_endpoint.as_str()
         ));
     }
 

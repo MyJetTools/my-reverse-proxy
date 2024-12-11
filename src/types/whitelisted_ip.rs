@@ -1,4 +1,4 @@
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 pub trait IntoIp {
     fn get_ip_value(&self) -> u32;
@@ -43,6 +43,12 @@ impl IntoIp for IpAddr {
     }
 }
 
+impl IntoIp for Ipv4Addr {
+    fn get_ip_value(&self) -> u32 {
+        (&self.octets()).get_ip_value()
+    }
+}
+
 pub enum WhitelistedIp {
     SingleIp(u32),
     Range { ip_from: u32, ip_to: u32 },
@@ -56,6 +62,20 @@ impl WhitelistedIp {
             WhitelistedIp::Range { ip_from, ip_to } => *ip_from <= value && value <= *ip_to,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            WhitelistedIp::SingleIp(ip) => format!("{}", to_ip(*ip)),
+            WhitelistedIp::Range { ip_from, ip_to } => {
+                format!("{}-{}", to_ip(*ip_from), to_ip(*ip_to))
+            }
+        }
+    }
+}
+
+fn to_ip(ip: u32) -> Ipv4Addr {
+    let v = ip.to_be_bytes();
+    Ipv4Addr::new(v[0], v[1], v[2], v[3])
 }
 
 #[cfg(test)]
@@ -72,5 +92,16 @@ mod test {
         let right = "192.168.1.1".get_ip_value();
 
         assert_eq!(left, right)
+    }
+
+    #[test]
+    fn test_convert_both_sides() {
+        let ip = Ipv4Addr::new(192, 168, 1, 5);
+
+        let as_u32 = ip.get_ip_value();
+
+        let back_to_ip = to_ip(as_u32);
+
+        assert_eq!(ip, back_to_ip);
     }
 }

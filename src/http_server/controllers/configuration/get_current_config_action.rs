@@ -28,11 +28,6 @@ async fn handle_request(
     action: &GetCurrentConfigAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let result = action
-        .app
-        .current_configuration
-        .get(|itm| CurrentConfigurationHttpModel::new(itm))
-        .await;
-
+    let result = CurrentConfigurationHttpModel::new(&action.app).await;
     HttpOutput::as_json(result).into_ok_result(true).into()
 }

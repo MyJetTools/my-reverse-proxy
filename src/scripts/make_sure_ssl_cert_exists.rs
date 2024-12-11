@@ -4,7 +4,8 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
     app::AppContext,
-    configurations::{EndpointHttpHostString, SslCertificateId, SslCertificateIdRef},
+    configurations::{SslCertificateId, SslCertificateIdRef},
+    self_signed_cert::SELF_SIGNED_CERT_NAME,
     settings::*,
     ssl::SslCertificate,
 };
@@ -12,23 +13,16 @@ use crate::{
 pub async fn make_sure_ssl_cert_exists(
     app: &Arc<AppContext>,
     settings_model: &SettingsModel,
-    host_endpoint: &EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<SslCertificateId, String> {
     let ssl_id = match super::get_from_host_or_templates(
         settings_model,
-        host_endpoint,
         host_settings,
         |host_settings| host_settings.endpoint.ssl_certificate.as_ref(),
         |templates| templates.ssl_certificate.as_ref(),
     )? {
         Some(ssl_id) => ssl_id,
-        None => {
-            return Err(format!(
-                "No Client certificate id specified for endpoint {}",
-                host_endpoint.as_str()
-            ));
-        }
+        None => return Ok(SslCertificateId::new(SELF_SIGNED_CERT_NAME.to_string())),
     };
 
     let ssl_cert_id = SslCertificateIdRef::new(ssl_id);
@@ -45,11 +39,7 @@ pub async fn make_sure_ssl_cert_exists(
     let ssl_certificates = match settings_model.ssl_certificates.as_ref() {
         Some(ssl_certificates) => ssl_certificates,
         None => {
-            return Err(format!(
-                "SSL certificate with id {} not found for endpoint {}",
-                ssl_id,
-                host_endpoint.as_str()
-            ));
+            return Err(format!("SSL certificate with id '{}' not found", ssl_id));
         }
     };
 
@@ -63,11 +53,7 @@ pub async fn make_sure_ssl_cert_exists(
     }
 
     if found_certificate.is_none() {
-        return Err(format!(
-            "SSL certificate with id {} not found for endpoint {}",
-            ssl_id,
-            host_endpoint.as_str()
-        ));
+        return Err(format!("SSL certificate with id '{}' not found", ssl_id));
     }
 
     let ssl_certificate = found_certificate.unwrap();

@@ -38,6 +38,14 @@ impl WhiteListedIpList {
 
         false
     }
+
+    pub fn to_list_of_string(&self) -> Vec<String> {
+        let mut result = Vec::with_capacity(self.items.len());
+        for itm in &self.items {
+            result.push(itm.to_string());
+        }
+        result
+    }
 }
 
 #[cfg(test)]

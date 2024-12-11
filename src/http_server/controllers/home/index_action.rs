@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
@@ -29,12 +29,7 @@ async fn handle_request(
     action: &IndexAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let config = action
-        .app
-        .current_configuration
-        .get(|itm| CurrentConfigurationHttpModel::new(itm))
-        .await;
-
+    let config = CurrentConfigurationHttpModel::new(&action.app).await;
     HttpOutput::Content {
         headers: None,
         content_type: WebContentType::Html.into(),
@@ -48,6 +43,15 @@ async fn create_html_content(
     config_model: CurrentConfigurationHttpModel,
 ) -> String {
     let mut table_lines = String::new();
+
+    const ERR_STYLE: &str = "color: white;background: red;font-weight: 500;";
+    for (host, error) in config_model.errors.iter() {
+        table_lines.push_str(
+            format!(r##"<tr><td style="{ERR_STYLE}">{host}</td><td colspan="4" style="{ERR_STYLE}">{error}</td></tr>"##)
+                .as_str(),
+        );
+    }
+
     for port_configuration in &config_model.ports {
         let connections = app
             .metrics
@@ -168,6 +172,10 @@ async fn create_html_content(
         }
     }
 
+    let mut users = String::new();
+    render_users(&mut users, &config_model.users);
+    render_ip_list(&mut users, &config_model.ip_lists);
+
     format!(
         r##"
     <!DOCTYPE html>
@@ -189,6 +197,8 @@ async fn create_html_content(
             </tr>
             {table_lines}
             </table>
+
+            {users}
 
         </body>
         "##
@@ -221,4 +231,42 @@ fn render_http_badge(src: &str) -> StrOrString<'static> {
             ).into()
         }
     }
+}
+
+fn render_users(html: &mut String, users: &BTreeMap<String, Vec<String>>) {
+    html.push_str("<h3>Users</h3>");
+    html.push_str(r#"<table class="table table-striped" style="width:100%;"><tr><th>Id</th><th>Users</th><tr>"#);
+
+    for (id, list) in users {
+        html.push_str(format!(r#"<tr><td>{id}</td><td>"#).as_str());
+
+        for user in list {
+            html.push_str(
+                format!(r#"<span class="badge text-bg-secondary">{user}</span>"#).as_str(),
+            );
+        }
+
+        html.push_str("</td></tr>");
+    }
+
+    html.push_str("</table>");
+}
+
+fn render_ip_list(html: &mut String, ip_lists: &BTreeMap<String, Vec<String>>) {
+    html.push_str("<h3>Ip White Lists</h3>");
+    html.push_str(r#"<table class="table table-striped" style="width:100%;"><tr><th>Id</th><th>Ip list</th><tr>"#);
+
+    for (id, list) in ip_lists {
+        html.push_str(format!(r#"<tr><td>{id}</td><td>"#).as_str());
+
+        for user in list {
+            html.push_str(
+                format!(r#"<span class="badge text-bg-secondary">{user}</span>"#).as_str(),
+            );
+        }
+
+        html.push_str("</td></tr>");
+    }
+
+    html.push_str("</table>");
 }

@@ -13,6 +13,11 @@ impl AllowedUsersList {
         }
     }
 
+    pub async fn insert(&self, id: String, users: HashSet<String>) {
+        let mut data = self.data.write().await;
+        data.insert(id, users);
+    }
+
     pub async fn is_allowed(&self, id: &str, user: &str) -> bool {
         let data = self.data.read().await;
         if let Some(users) = data.get(id) {

@@ -27,8 +27,7 @@ pub async fn compile_tcp_configuration(
     };
 
     let ip_white_list_id =
-        super::get_endpoint_white_listed_ip(app, settings_model, &host_endpoint, host_settings)
-            .await?;
+        super::get_endpoint_white_listed_ip(app, settings_model, host_settings).await?;
 
     let over_ssh_connection = OverSshConnectionSettings::try_parse(remote_host.as_str());
 

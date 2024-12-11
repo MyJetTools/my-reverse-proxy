@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use super::*;
 
@@ -21,6 +24,7 @@ pub struct AppConfigurationInner {
     pub listen_endpoints: HashMap<u16, ListenConfiguration>,
     pub google_auth_credentials: GoogleAuthCredentialsList,
     pub white_list_ip_list: WhiteListedIpListConfigurations,
+    pub error_configurations: BTreeMap<String, String>,
 }
 
 impl AppConfigurationInner {
@@ -29,6 +33,7 @@ impl AppConfigurationInner {
             listen_endpoints: HashMap::new(),
             google_auth_credentials: GoogleAuthCredentialsList::new(),
             white_list_ip_list: WhiteListedIpListConfigurations::new(),
+            error_configurations: BTreeMap::new(),
         }
     }
 }

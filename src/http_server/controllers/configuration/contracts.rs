@@ -1,24 +1,54 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::configurations::*;
+use crate::{app::AppContext, configurations::*};
 
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct CurrentConfigurationHttpModel {
     pub ports: Vec<PortConfigurationHttpModel>,
+    pub users: BTreeMap<String, Vec<String>>,
+    pub ip_lists: BTreeMap<String, Vec<String>>,
+    pub errors: BTreeMap<String, String>,
 }
 
 impl CurrentConfigurationHttpModel {
-    pub fn new(config: &AppConfigurationInner) -> Self {
-        let mut ports = Vec::new();
+    pub async fn new(app: &AppContext) -> Self {
+        let (ports, ip_lists, errors) = app
+            .current_configuration
+            .get(|config| {
+                let mut ports = Vec::new();
 
-        for (port, listen_port_config) in &config.listen_endpoints {
-            ports.push(PortConfigurationHttpModel::new(*port, listen_port_config))
+                for (port, listen_port_config) in &config.listen_endpoints {
+                    let item = PortConfigurationHttpModel::new(*port, listen_port_config);
+                    ports.push(item);
+                }
+
+                let ip_list = config
+                    .white_list_ip_list
+                    .get_all(|itm| itm.to_list_of_string());
+
+                (ports, ip_list, config.error_configurations.clone())
+            })
+            .await;
+
+        let mut users = BTreeMap::new();
+
+        {
+            let users_access = app.allowed_users_list.data.read().await;
+
+            for (id, list) in users_access.iter() {
+                users.insert(id.clone(), list.iter().cloned().collect());
+            }
         }
 
-        Self { ports }
+        Self {
+            ports,
+            users,
+            ip_lists,
+            errors,
+        }
     }
 }
 

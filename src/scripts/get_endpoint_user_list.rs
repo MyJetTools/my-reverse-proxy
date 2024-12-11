@@ -1,8 +1,10 @@
-use crate::{configurations::EndpointHttpHostString, settings::*};
+use std::{collections::HashSet, sync::Arc};
 
-pub fn get_endpoint_user_list(
+use crate::{app::AppContext, settings::*};
+
+pub async fn get_endpoint_user_list(
+    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
-    host_endpoint: &EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
     let allowed_users_list_id =
@@ -17,8 +19,7 @@ pub fn get_endpoint_user_list(
         allowed_users_dict
     } else {
         return Err(format!(
-            "Endpoint {} has a user_list with id {} which is not found",
-            host_endpoint.as_str(),
+            "User list with id '{}' is not found",
             allowed_users_list_id
         ));
     };
@@ -27,17 +28,20 @@ pub fn get_endpoint_user_list(
         user_list
     } else {
         return Err(format!(
-            "Endpoint {} has a user_list with id {} which is not found",
-            host_endpoint.as_str(),
+            "User list with id {} is not found",
             allowed_users_list_id
         ));
     };
 
-    let mut users = Vec::new();
+    let mut users = HashSet::new();
 
     for user in user_list {
-        users.push(super::apply_variables(settings_model, user)?.to_string());
+        users.insert(super::apply_variables(settings_model, user)?.to_string());
     }
+
+    app.allowed_users_list
+        .insert(allowed_users_list_id.to_string(), users)
+        .await;
 
     Ok(Some(allowed_users_list_id.to_string()))
 }

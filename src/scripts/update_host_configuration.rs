@@ -12,13 +12,15 @@ pub async fn update_host_configuration(
     let configuration = crate::scripts::compile_host_configuration(
         app,
         &settings_model,
-        host_endpoint,
+        host_endpoint.clone(),
         host_settings,
     )
     .await?;
 
     app.current_configuration
         .write(move |config| {
+            config.error_configurations.remove(host_endpoint.as_str());
+
             config.listen_endpoints.insert(port, configuration);
         })
         .await;

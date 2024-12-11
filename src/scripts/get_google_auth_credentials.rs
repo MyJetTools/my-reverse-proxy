@@ -1,20 +1,14 @@
 use std::sync::Arc;
 
-use crate::{
-    app::AppContext,
-    configurations::{EndpointHttpHostString, GoogleAuthCredentials},
-    settings::*,
-};
+use crate::{app::AppContext, configurations::GoogleAuthCredentials, settings::*};
 
 pub async fn get_google_auth_credentials(
     app: &Arc<AppContext>,
     settings_model: &SettingsModel,
-    host_endpoint: &EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
     let google_auth_id = super::get_from_host_or_templates(
         settings_model,
-        host_endpoint,
         host_settings,
         |host_settings| host_settings.endpoint.google_auth.as_ref(),
         |templates| templates.google_auth.as_ref(),
