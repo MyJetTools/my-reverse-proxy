@@ -15,7 +15,7 @@ pub struct CurrentConfigurationHttpModel {
 
 impl CurrentConfigurationHttpModel {
     pub async fn new(app: &AppContext) -> Self {
-        let (ports, ip_lists, errors) = app
+        let (mut ports, ip_lists, errors) = app
             .current_configuration
             .get(|config| {
                 let mut ports = Vec::new();
@@ -42,6 +42,8 @@ impl CurrentConfigurationHttpModel {
                 users.insert(id.clone(), list.iter().cloned().collect());
             }
         }
+
+        ports.sort_by(|a, b| b.port.cmp(&a.port));
 
         Self {
             ports,
