@@ -5,7 +5,6 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 use crate::{
     app::AppContext,
     configurations::{SslCertificateId, SslCertificateIdRef},
-    self_signed_cert::SELF_SIGNED_CERT_NAME,
     settings::*,
     ssl::SslCertificate,
 };
