@@ -43,7 +43,7 @@ impl CurrentConfigurationHttpModel {
             }
         }
 
-        ports.sort_by(|a, b| b.port.cmp(&a.port));
+        ports.sort_by(|a, b| a.port.cmp(&b.port));
 
         Self {
             ports,
