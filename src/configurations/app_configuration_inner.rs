@@ -31,30 +31,4 @@ impl AppConfigurationInner {
             white_list_ip_list: WhiteListedIpListConfigurations::new(),
         }
     }
-
-    pub fn get_http_endpoint_info(
-        &self,
-        listen_port: u16,
-        server_name: &str,
-    ) -> Option<Arc<HttpEndpointInfo>> {
-        let listen_configuration = self.listen_endpoints.get(&listen_port)?;
-
-        match listen_configuration {
-            ListenConfiguration::Http(http_port_configuration) => {
-                for endpoint_info in &http_port_configuration.endpoints {
-                    if endpoint_info.is_my_endpoint(server_name) {
-                        return Some(endpoint_info.clone());
-                    }
-                }
-            }
-            ListenConfiguration::Tcp(_) => {
-                panic!(
-                    "Port:{}. ServerName: {}. Http Endpoint info is requested for Tcp endpoint",
-                    listen_port, server_name
-                );
-            }
-        }
-
-        None
-    }
 }

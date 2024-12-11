@@ -55,6 +55,16 @@ impl HttpListenPortConfiguration {
         Some(result)
     }
 
+    pub fn get_http_endpoint_info(&self, server_name: &str) -> Option<Arc<HttpEndpointInfo>> {
+        for endpoint_info in &self.endpoints {
+            if endpoint_info.is_my_endpoint(server_name) {
+                return Some(endpoint_info.clone());
+            }
+        }
+
+        None
+    }
+
     /*
        pub fn get_listen_endpoint_type(&self) -> ListenHttpEndpointType {
            self.endpoint_info[0].listen_endpoint_type

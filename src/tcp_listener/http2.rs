@@ -5,7 +5,7 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 
 use crate::{app::AppContext, configurations::HttpListenPortConfiguration};
 
-use super::{handle_request::HttpRequestHandler, AcceptedTcpConnection};
+use super::{http_request_handler::http::HttpRequestHandler, AcceptedTcpConnection};
 
 /*
 pub fn start_h2_server(
@@ -114,9 +114,8 @@ pub async fn handle_connection(
     app: Arc<AppContext>,
     accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
-    _configuration: Arc<HttpListenPortConfiguration>,
+    configuration: Arc<HttpListenPortConfiguration>,
 ) {
-    //todo!("Somehow we do not use configuration")
     let listening_addr_str = format!("http://{}", listening_addr);
 
     let http2_builder = Arc::new(hyper::server::conn::http2::Builder::new(
@@ -139,11 +138,8 @@ pub async fn handle_connection(
     tokio::spawn(async move {
         let io = TokioIo::new(accepted_connection.tcp_stream);
 
-        let http_request_handler = HttpRequestHandler::new_lazy(
-            app.clone(),
-            listening_addr.port(),
-            accepted_connection.addr,
-        );
+        let http_request_handler =
+            HttpRequestHandler::new(app.clone(), accepted_connection.addr, configuration);
 
         let http_request_handler = Arc::new(http_request_handler);
 
@@ -152,7 +148,10 @@ pub async fn handle_connection(
             .serve_connection(
                 io,
                 service_fn(move |req| {
-                    super::handle_request::handle_request(http_request_handler.clone(), req)
+                    super::http_request_handler::http::handle_request(
+                        http_request_handler.clone(),
+                        req,
+                    )
                 }),
             )
             .await;

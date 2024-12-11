@@ -11,7 +11,7 @@ use crate::app::AppContext;
 
 use crate::configurations::*;
 use crate::http_proxy_pass::{HttpListenPortInfo, HttpProxyPass};
-use crate::tcp_listener::handle_request::HttpRequestHandler;
+use crate::tcp_listener::http_request_handler::https::HttpsRequestsHandler;
 use crate::tcp_listener::AcceptedTcpConnection;
 
 use super::ClientCertificateData;
@@ -267,22 +267,30 @@ async fn kick_off_https1(
             endpoint_type: endpoint_info.listen_endpoint_type,
             socket_addr,
         };
-        let http_proxy_pass =
-            HttpProxyPass::new(&app, endpoint_info, listening_port_info, cn_user_name).await;
+        let http_proxy_pass = HttpProxyPass::new(
+            &app,
+            endpoint_info.clone(),
+            listening_port_info,
+            cn_user_name,
+        )
+        .await;
 
-        let http_request_handler =
-            HttpRequestHandler::new(http_proxy_pass, app.clone(), socket_addr);
+        let https_requests_handler =
+            HttpsRequestsHandler::new(app.clone(), http_proxy_pass, socket_addr);
 
-        let http_request_handler = Arc::new(http_request_handler);
+        let https_requests_handler = Arc::new(https_requests_handler);
 
-        let http_request_handler_dispose = http_request_handler.clone();
+        let https_requests_handler_dispose = https_requests_handler.clone();
 
         let _ = http1
             .clone()
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::super::handle_request::handle_request(http_request_handler.clone(), req)
+                    super::super::http_request_handler::https::handle_request(
+                        https_requests_handler.clone(),
+                        req,
+                    )
                 }),
             )
             .with_upgrades()
@@ -295,7 +303,7 @@ async fn kick_off_https1(
             .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
 
-        http_request_handler_dispose.dispose().await;
+        https_requests_handler_dispose.dispose().await;
     });
 }
 
@@ -328,22 +336,30 @@ async fn kick_off_https2(
             socket_addr,
         };
 
-        let http_proxy_pass =
-            HttpProxyPass::new(&app, endpoint_info, listening_port_info, client_certificate).await;
+        let http_proxy_pass = HttpProxyPass::new(
+            &app,
+            endpoint_info.clone(),
+            listening_port_info,
+            client_certificate,
+        )
+        .await;
 
-        let http_request_handler =
-            HttpRequestHandler::new(http_proxy_pass, app.clone(), socket_addr);
+        let https_requests_handler =
+            HttpsRequestsHandler::new(app.clone(), http_proxy_pass, socket_addr);
 
-        let http_request_handler = Arc::new(http_request_handler);
+        let https_requests_handler = Arc::new(https_requests_handler);
 
-        let http_request_handler_dispose = http_request_handler.clone();
+        let https_requests_handler_dispose = https_requests_handler.clone();
 
         let _ = http_builder
             .clone()
             .serve_connection(
                 TokioIo::new(tls_stream),
                 service_fn(move |req| {
-                    super::super::handle_request::handle_request(http_request_handler.clone(), req)
+                    super::super::http_request_handler::https::handle_request(
+                        https_requests_handler.clone(),
+                        req,
+                    )
                 }),
             )
             .await;
@@ -357,6 +373,6 @@ async fn kick_off_https2(
 
         println!("Http2 connection is gone {}", socket_addr);
 
-        http_request_handler_dispose.dispose().await;
+        https_requests_handler_dispose.dispose().await;
     });
 }

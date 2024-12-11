@@ -8,14 +8,31 @@ use tokio::sync::Mutex;
 
 use crate::{
     app::AppContext,
+    configurations::{HttpEndpointInfo, HttpListenPortConfiguration},
     http_proxy_pass::{HostPort, HttpListenPortInfo, HttpProxyPass},
 };
+
+pub enum HandleRequestInputEndpointInfo {
+    ListenPortHttpConfiguration(Arc<HttpListenPortConfiguration>),
+    HttpEndpointInto(Arc<HttpEndpointInfo>),
+}
+
+impl Into<HandleRequestInputEndpointInfo> for Arc<HttpListenPortConfiguration> {
+    fn into(self) -> HandleRequestInputEndpointInfo {
+        HandleRequestInputEndpointInfo::ListenPortHttpConfiguration(self)
+    }
+}
+
+impl Into<HandleRequestInputEndpointInfo> for Arc<HttpEndpointInfo> {
+    fn into(self) -> HandleRequestInputEndpointInfo {
+        HandleRequestInputEndpointInfo::HttpEndpointInto(self)
+    }
+}
 
 pub enum HttpRequestHandler {
     LazyInit {
         proxy_pass: Mutex<Option<Arc<HttpProxyPass>>>,
         app: Arc<AppContext>,
-        listen_port: u16,
         socket_addr: SocketAddr,
     },
     Direct {
@@ -26,13 +43,12 @@ pub enum HttpRequestHandler {
 }
 
 impl HttpRequestHandler {
-    pub fn new_lazy(app: Arc<AppContext>, listen_port: u16, socket_addr: SocketAddr) -> Self {
+    pub fn new_lazy(app: Arc<AppContext>, socket_addr: SocketAddr) -> Self {
         app.http_connections
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Self::LazyInit {
             proxy_pass: Mutex::new(None),
             app,
-            listen_port,
             socket_addr,
         }
     }
@@ -52,7 +68,6 @@ impl HttpRequestHandler {
             HttpRequestHandler::LazyInit {
                 proxy_pass,
                 app: _,
-                listen_port: _,
                 socket_addr: _,
             } => {
                 let proxy_pass = proxy_pass.lock().await.clone();
@@ -73,12 +88,12 @@ impl HttpRequestHandler {
 pub async fn handle_request(
     handler: Arc<HttpRequestHandler>,
     req: hyper::Request<hyper::body::Incoming>,
+    configuration: HandleRequestInputEndpointInfo,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     match handler.as_ref() {
         HttpRequestHandler::LazyInit {
             proxy_pass,
             app,
-            listen_port,
             socket_addr,
         } => {
             let mut proxy_pass_result = {
@@ -101,17 +116,19 @@ pub async fn handle_request(
                     );
                 }
 
-                let http_endpoint_info = app
-                    .current_configuration
-                    .get(|itm| itm.get_http_endpoint_info(*listen_port, host.unwrap()))
-                    .await;
-
-                if http_endpoint_info.is_none() {
-                    let content = super::generate_layout(400, "No configuration found", None);
-                    return create_err_response(StatusCode::BAD_REQUEST, content);
-                }
-
-                let http_endpoint_info = http_endpoint_info.unwrap();
+                let http_endpoint_info = match configuration {
+                    HandleRequestInputEndpointInfo::ListenPortHttpConfiguration(configuration) => {
+                        let http_endpoint_info =
+                            configuration.get_http_endpoint_info(host.unwrap());
+                        if http_endpoint_info.is_none() {
+                            let content =
+                                super::generate_layout(400, "No configuration found", None);
+                            return create_err_response(StatusCode::BAD_REQUEST, content);
+                        }
+                        http_endpoint_info.unwrap()
+                    }
+                    HandleRequestInputEndpointInfo::HttpEndpointInto(result) => result,
+                };
 
                 if http_endpoint_info.debug {
                     println!(
@@ -147,7 +164,7 @@ pub async fn handle_request(
     }
 }
 
-async fn handle_requests(
+pub async fn handle_requests(
     app: &Arc<AppContext>,
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
