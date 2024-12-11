@@ -145,7 +145,7 @@ impl HttpEndpointInfoModel {
     }
 }
 
-#[derive(MyHttpObjectStructure, Serialize)]
+#[derive(MyHttpObjectStructure, Serialize, Debug)]
 pub struct HttpProxyPassLocationModel {
     pub path: String,
     pub to: String,
@@ -155,10 +155,12 @@ pub struct HttpProxyPassLocationModel {
 
 impl HttpProxyPassLocationModel {
     pub fn new(src: &Arc<ProxyPassLocationConfig>) -> Self {
-        Self {
+        let result = Self {
             path: src.path.to_string(),
             to: src.get_proxy_pass_to_as_string(),
             r#type: src.proxy_pass_to.get_type_as_str().to_string(),
-        }
+        };
+
+        result
     }
 }
