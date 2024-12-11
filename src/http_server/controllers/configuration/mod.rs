@@ -5,3 +5,5 @@ mod reload_endpoint_configuration;
 pub use reload_endpoint_configuration::*;
 mod reload_port_configurations;
 pub use reload_port_configurations::*;
+mod refresh_ssl_certificate_action;
+pub use refresh_ssl_certificate_action::*;

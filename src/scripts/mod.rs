@@ -45,3 +45,5 @@ mod update_host_configuration;
 pub use update_host_configuration::*;
 mod delete_http_endpoint_if_exists;
 pub use delete_http_endpoint_if_exists::*;
+mod refresh_ssl_certs_from_sources;
+pub use refresh_ssl_certs_from_sources::*;

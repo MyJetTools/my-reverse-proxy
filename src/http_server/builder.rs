@@ -31,6 +31,10 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
         super::controllers::configuration::ReloadPortAction::new(app.clone()),
     ));
 
+    result.register_post_action(Arc::new(
+        super::controllers::configuration::RefreshSslCertificateAction::new(app.clone()),
+    ));
+
     result.register_get_action(Arc::new(
         super::controllers::prometheus::GetMetricsAction::new(app.clone()),
     ));
