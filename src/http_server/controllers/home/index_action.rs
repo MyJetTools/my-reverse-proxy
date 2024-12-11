@@ -225,6 +225,9 @@ fn render_http_badge(src: &str) -> StrOrString<'static> {
         "https2" => {
             r##"<span class="badge text-bg-success" style="border-radius: 5px 0 0 5px;">https2</span>"##.into()
         }
+        "files_path" => {
+            r##"<span class="badge text-bg-info" style="border-radius: 5px 0 0 5px;">https2</span>"##.into()
+        }
         _ => {
             format!(
                 r##"<span class="badge text-bg-danger" style="border-radius: 5px 0 0 5px;">{src}</span>"##
