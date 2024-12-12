@@ -66,24 +66,27 @@ async fn create_html_content(
         let mut draw_port = format!("<span class='badge {class}' style='border-radius: 5px 0 0 5px;'>{connections}</span><span class='badge text-bg-secondary'  style='border-radius: 0 5px 5px 0;'>{}</span>", port_configuration.port);
 
         for http_endpoint in &port_configuration.endpoints {
-            let allowed_users_html =
-                if let Some(allowed_user_list_id) = &http_endpoint.allowed_user_list_id {
-                    let mut allowed_users_html = String::new();
-                    allowed_users_html.push_str("<div>");
+            let allowed_users_html = if let Some(allowed_user_list_id) =
+                &http_endpoint.allowed_user_list_id
+            {
+                let mut allowed_users_html = String::new();
+                allowed_users_html.push_str("<div>");
 
-                    allowed_users_html.push_str(
-                        format!(
-                            r##"<span class="badge text-bg-success">{allowed_user_list_id}</span>"##
-                        )
-                        .as_str(),
-                    );
+                let users_icon = super::icons::users_icon();
 
-                    allowed_users_html.push_str("</div>");
+                allowed_users_html.push_str(
+                    format!(
+                        r##"<span class="badge text-bg-success">{users_icon}{allowed_user_list_id}</span>"##
+                    )
+                    .as_str(),
+                );
 
-                    allowed_users_html
-                } else {
-                    "".to_string()
-                };
+                allowed_users_html.push_str("</div>");
+
+                allowed_users_html
+            } else {
+                "".to_string()
+            };
 
             let mut locations_html = String::new();
             for location in &http_endpoint.locations {
@@ -163,7 +166,7 @@ async fn create_html_content(
 
             table_lines.push_str(
                     format!(
-                        r##"<tr><td>{draw_port}</td><td>{host_type}{debug}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span>  {allowed_users_html}</td><td>{ssl_cert}</td><td>{auth}</td><td>{locations_html}</td></tr>"##,
+                        r##"<tr><td>{draw_port}</td><td>{host_type}{debug}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span></td><td>{ssl_cert}</td><td>{auth} {allowed_users_html}</td><td>{locations_html}</td></tr>"##,
                     )
                     .as_str(),
                 );

@@ -19,7 +19,7 @@ pub async fn compile_http_configuration(
         super::get_endpoint_white_listed_ip(app, settings_model, host_settings).await?;
 
     let allowed_user_list =
-        crate::scripts::get_endpoint_user_list(app, settings_model, host_settings).await?;
+        crate::scripts::get_endpoint_users_list(app, settings_model, host_settings).await?;
 
     let modify_endpoints_headers =
         crate::scripts::get_endpoint_modify_headers(settings_model, host_settings);

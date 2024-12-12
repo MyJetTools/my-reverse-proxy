@@ -7,3 +7,5 @@ mod reload_port_configurations;
 pub use reload_port_configurations::*;
 mod refresh_ssl_certificate_action;
 pub use refresh_ssl_certificate_action::*;
+mod refresh_users_list_action;
+pub use refresh_users_list_action::*;

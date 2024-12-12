@@ -2,8 +2,8 @@ mod apply_variables;
 pub use apply_variables::*;
 mod compile_location_proxy_pass_to;
 pub use compile_location_proxy_pass_to::*;
-mod get_endpoint_user_list;
-pub use get_endpoint_user_list::*;
+mod get_endpoint_users_list;
+pub use get_endpoint_users_list::*;
 
 mod get_endpoint_modify_headers;
 pub use get_endpoint_modify_headers::*;
@@ -47,3 +47,5 @@ mod delete_http_endpoint_if_exists;
 pub use delete_http_endpoint_if_exists::*;
 mod refresh_ssl_certs_from_sources;
 pub use refresh_ssl_certs_from_sources::*;
+mod refresh_users_list;
+pub use refresh_users_list::*;
