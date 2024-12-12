@@ -66,6 +66,14 @@ async fn create_html_content(
         let mut draw_port = format!("<span class='badge {class}' style='border-radius: 5px 0 0 5px;'>{connections}</span><span class='badge text-bg-secondary'  style='border-radius: 0 5px 5px 0;'>{}</span>", port_configuration.port);
 
         for http_endpoint in &port_configuration.endpoints {
+            let ip_list = if let Some(ip_list) = http_endpoint.ip_list.as_ref() {
+                let ip_list = ip_list.as_str();
+                let shield_icon = super::icons::shield_icon();
+                format!(r##"<span class="badge text-bg-success">{shield_icon} {ip_list}</span>"##)
+            } else {
+                "".into()
+            };
+
             let allowed_users_html = if let Some(allowed_user_list_id) =
                 &http_endpoint.allowed_user_list_id
             {
@@ -166,7 +174,7 @@ async fn create_html_content(
 
             table_lines.push_str(
                     format!(
-                        r##"<tr><td>{draw_port}</td><td>{host_type}{debug}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span></td><td>{ssl_cert}</td><td>{auth} {allowed_users_html}</td><td>{locations_html}</td></tr>"##,
+                        r##"<tr><td>{draw_port}</td><td>{host_type}{debug}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{host}</span><div>{ip_list}</div></td><td>{ssl_cert}</td><td>{auth} {allowed_users_html}</td><td>{locations_html}</td></tr>"##,
                     )
                     .as_str(),
                 );

@@ -94,6 +94,8 @@ pub struct HttpEndpointInfoModel {
     pub locations: Vec<HttpProxyPassLocationModel>,
     pub debug: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_list: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_user_list_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_cert_id: Option<String>,
@@ -110,6 +112,7 @@ impl HttpEndpointInfoModel {
             r#type: endpoint.listen_endpoint_type.as_str().to_string(),
             debug: endpoint.debug,
             allowed_user_list_id: endpoint.allowed_user_list_id.clone(),
+            ip_list: endpoint.whitelisted_ip_list_id.clone(),
             ssl_cert_id: endpoint
                 .ssl_certificate_id
                 .as_ref()
@@ -132,6 +135,7 @@ impl HttpEndpointInfoModel {
             host: config.host_endpoint.as_str().to_string(),
             r#type: "tcp".to_string(),
             debug: config.debug,
+            ip_list: config.ip_white_list_id.clone(),
             locations: vec![HttpProxyPassLocationModel {
                 path: "".to_string(),
                 to: config.remote_host.to_string(),
