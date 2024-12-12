@@ -61,7 +61,7 @@ async fn main() {
 
     my_timer.start(app.states.clone(), my_logger::LOGGER.clone());
 
-    let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60 * 3));
+    let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60));
 
     gc_connections_time.register_timer(
         "GcConnections",
