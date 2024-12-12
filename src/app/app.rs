@@ -12,7 +12,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use crate::{
     configurations::*,
     http2_client_pool::Http2ClientPool,
-    http_client::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
+    http_client_connectors::*,
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,

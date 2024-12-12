@@ -5,7 +5,7 @@ use std::future::Future;
 use futures::future::IntoFuture;
 use hyper::header::PRAGMA;
 
-use crate::http_client::HttpClientError;
+use crate::http_client_connectors::HttpClientError;
 
 #[derive(Debug)]
 pub enum ProxyPassError {

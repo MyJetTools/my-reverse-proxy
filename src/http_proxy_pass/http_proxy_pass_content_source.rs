@@ -7,7 +7,7 @@ use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
     app::AppContext,
-    http_client::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
+    http_client_connectors::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
 };
 

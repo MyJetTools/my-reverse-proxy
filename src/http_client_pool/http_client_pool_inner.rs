@@ -44,7 +44,9 @@ impl<
     pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
         let items = self.items.lock().await;
         for (key, value) in items.iter() {
-            dest.insert(key.clone(), value.len());
+            if value.len() > 0 {
+                dest.insert(key.clone(), value.len());
+            }
         }
     }
 

@@ -12,7 +12,7 @@ mod configurations;
 mod consts;
 //mod crl;
 mod google_auth;
-mod http_client;
+mod http_client_connectors;
 mod http_content_source;
 mod http_proxy_pass;
 mod http_server;
