@@ -6,14 +6,14 @@ use tokio::io::{ReadHalf, WriteHalf};
 
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 
-pub struct SshConnector {
+pub struct HttpOverSshConnector {
     pub ssh_session: Arc<SshSession>,
     pub remote_endpoint: RemoteEndpointOwned,
     pub debug: bool,
 }
 
 #[async_trait::async_trait]
-impl MyHttpClientConnector<SshAsyncChannel> for SshConnector {
+impl MyHttpClientConnector<SshAsyncChannel> for HttpOverSshConnector {
     fn is_debug(&self) -> bool {
         self.debug
     }

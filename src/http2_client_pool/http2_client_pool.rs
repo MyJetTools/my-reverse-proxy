@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use my_http_client::{http2::MyHttp2ClientMetrics, MyHttpClientConnector};
-use rust_extensions::remote_endpoint::RemoteEndpoint;
+use rust_extensions::StrOrString;
 
 use super::{Http2ClientPoolInner, Http2ClientPoolItem};
 
@@ -22,9 +22,13 @@ impl<
         Self { inner }
     }
 
+    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        self.inner.fill_connections_amount(dest).await;
+    }
+
     pub async fn get<'s>(
         &self,
-        remote_endpoint: RemoteEndpoint<'s>,
+        remote_endpoint: StrOrString<'s>,
 
         create_connector: impl Fn() -> (
             TConnector,
@@ -33,13 +37,13 @@ impl<
     ) -> Http2ClientPoolItem<TStream, TConnector> {
         let my_http_client = self
             .inner
-            .get_or_create(remote_endpoint, create_connector)
+            .get_or_create(remote_endpoint.as_str(), create_connector)
             .await;
 
         Http2ClientPoolItem::new(
             my_http_client,
             self.inner.clone(),
-            remote_endpoint.to_owned(),
+            remote_endpoint.to_string(),
         )
     }
 }

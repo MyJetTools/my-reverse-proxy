@@ -4,7 +4,6 @@ use my_http_client::{
     http1::{MyHttpClient, MyHttpRequest, MyHttpResponse},
     MyHttpClientConnector, MyHttpClientError,
 };
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use super::HttpClientPoolInner;
 
@@ -14,7 +13,7 @@ pub struct HttpClientPoolItem<
 > {
     my_http_client: Option<MyHttpClient<TStream, TConnector>>,
     pool: Option<Arc<HttpClientPoolInner<TStream, TConnector>>>,
-    end_point: Option<RemoteEndpointOwned>,
+    end_point: Option<String>,
 }
 
 impl<
@@ -25,7 +24,7 @@ impl<
     pub fn new(
         my_http_client: MyHttpClient<TStream, TConnector>,
         pool: Arc<HttpClientPoolInner<TStream, TConnector>>,
-        end_point: RemoteEndpointOwned,
+        end_point: String,
     ) -> Self {
         Self {
             my_http_client: Some(my_http_client),

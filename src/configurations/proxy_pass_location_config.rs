@@ -65,7 +65,7 @@ impl ProxyPassLocationConfig {
 
                     HttpProxyPassContentSource::Http1OverSsh {
                         app: app.clone(),
-                        remote_endpoint: remote_content.get_remote_endpoint().to_owned(),
+                        over_ssh: remote_content.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
                     }
@@ -112,7 +112,7 @@ impl ProxyPassLocationConfig {
 
                     HttpProxyPassContentSource::Http2OverSsh {
                         app: app.clone(),
-                        remote_endpoint: remote_host.get_remote_endpoint().to_owned(),
+                        over_ssh: remote_host.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
                     }

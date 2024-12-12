@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
@@ -11,6 +14,7 @@ pub struct CurrentConfigurationHttpModel {
     pub users: BTreeMap<String, Vec<String>>,
     pub ip_lists: BTreeMap<String, Vec<String>>,
     pub errors: BTreeMap<String, String>,
+    pub remote_connections: HashMap<String, usize>,
 }
 
 impl CurrentConfigurationHttpModel {
@@ -45,11 +49,34 @@ impl CurrentConfigurationHttpModel {
 
         ports.sort_by(|a, b| a.port.cmp(&b.port));
 
+        let mut remote_connections = HashMap::new();
+
+        app.http_clients_pool
+            .fill_connections_amount(&mut remote_connections)
+            .await;
+
+        app.http2_clients_pool
+            .fill_connections_amount(&mut remote_connections)
+            .await;
+
+        app.https_clients_pool
+            .fill_connections_amount(&mut remote_connections)
+            .await;
+
+        app.http_over_ssh_clients_pool
+            .fill_connections_amount(&mut remote_connections)
+            .await;
+
+        app.http2_over_ssh_clients_pool
+            .fill_connections_amount(&mut remote_connections)
+            .await;
+
         Self {
             ports,
             users,
             ip_lists,
             errors,
+            remote_connections,
         }
     }
 }

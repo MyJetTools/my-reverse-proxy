@@ -2,12 +2,12 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
-use my_ssh::{SshAsyncChannel, SshSession};
+use my_ssh::{ssh_settings::OverSshConnectionSettings, SshAsyncChannel, SshSession};
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
     app::AppContext,
-    http_client::{HttpConnector, HttpTlsConnector, SshConnector},
+    http_client::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
 };
 
@@ -39,13 +39,13 @@ pub enum HttpProxyPassContentSource {
     },
     Http1OverSsh {
         app: Arc<AppContext>,
-        remote_endpoint: RemoteEndpointOwned,
+        over_ssh: OverSshConnectionSettings,
         ssh_session: Arc<SshSession>,
         debug: bool,
     },
     Http2OverSsh {
         app: Arc<AppContext>,
-        remote_endpoint: RemoteEndpointOwned,
+        over_ssh: OverSshConnectionSettings,
         ssh_session: Arc<SshSession>,
         debug: bool,
     },
@@ -68,7 +68,7 @@ impl HttpProxyPassContentSource {
             } => {
                 let mut http_client = app
                     .http_clients_pool
-                    .get(remote_endpoint.to_ref(), || HttpConnector {
+                    .get(remote_endpoint.as_str().into(), || HttpConnector {
                         remote_endpoint: remote_endpoint.clone(),
                         debug: *debug,
                     })
@@ -103,7 +103,7 @@ impl HttpProxyPassContentSource {
             } => {
                 let mut http_client = app
                     .https_clients_pool
-                    .get(remote_endpoint.to_ref(), || HttpTlsConnector {
+                    .get(remote_endpoint.as_str().into(), || HttpTlsConnector {
                         remote_endpoint: remote_endpoint.clone(),
                         debug: *debug,
                         domain_name: domain_name.clone(),
@@ -138,7 +138,7 @@ impl HttpProxyPassContentSource {
             } => {
                 let http_client = app
                     .http2_clients_pool
-                    .get(remote_endpoint.to_ref(), || {
+                    .get(remote_endpoint.as_str().into(), || {
                         (
                             HttpConnector {
                                 remote_endpoint: remote_endpoint.clone(),
@@ -160,7 +160,7 @@ impl HttpProxyPassContentSource {
             } => {
                 let http_client = app
                     .https2_clients_pool
-                    .get(remote_endpoint.to_ref(), || {
+                    .get(remote_endpoint.as_str().into(), || {
                         (
                             HttpTlsConnector {
                                 remote_endpoint: remote_endpoint.clone(),
@@ -177,14 +177,14 @@ impl HttpProxyPassContentSource {
             }
             HttpProxyPassContentSource::Http1OverSsh {
                 app,
-                remote_endpoint,
+                over_ssh,
                 ssh_session,
                 debug,
             } => {
                 let mut http_client = app
                     .http_over_ssh_clients_pool
-                    .get(remote_endpoint.to_ref(), || SshConnector {
-                        remote_endpoint: remote_endpoint.clone(),
+                    .get(over_ssh.to_string().into(), || HttpOverSshConnector {
+                        remote_endpoint: over_ssh.get_remote_endpoint().to_owned(),
                         debug: *debug,
                         ssh_session: ssh_session.clone(),
                     })
@@ -212,16 +212,16 @@ impl HttpProxyPassContentSource {
             }
             HttpProxyPassContentSource::Http2OverSsh {
                 app,
-                remote_endpoint,
+                over_ssh,
                 ssh_session,
                 debug,
             } => {
                 let http_client = app
                     .http2_over_ssh_clients_pool
-                    .get(remote_endpoint.to_ref(), || {
+                    .get(over_ssh.to_string().into(), || {
                         (
-                            SshConnector {
-                                remote_endpoint: remote_endpoint.clone(),
+                            HttpOverSshConnector {
+                                remote_endpoint: over_ssh.get_remote_endpoint().to_owned(),
                                 debug: *debug,
                                 ssh_session: ssh_session.clone(),
                             },

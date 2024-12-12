@@ -120,18 +120,18 @@ async fn load_content_from_http_via_ssh<'s>(
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: RemoteEndpoint<'s>,
 ) -> Result<Vec<u8>, String> {
-    use crate::http_client::SshConnector;
+    use crate::http_client::HttpOverSshConnector;
     use my_ssh::*;
 
     let ssh_session = super::ssh::get_ssh_session(app, ssh_credentials).await?;
 
-    let connector = SshConnector {
+    let connector = HttpOverSshConnector {
         ssh_session,
         remote_endpoint: remote_endpoint.to_owned(),
         debug: false,
     };
 
-    let http_client: MyHttpClient<SshAsyncChannel, SshConnector> = MyHttpClient::new(connector);
+    let http_client: MyHttpClient<SshAsyncChannel, HttpOverSshConnector> = MyHttpClient::new(connector);
 
     let http_request = MyHttpRequestBuilder::new(Method::GET, remote_endpoint.as_str()).build();
 

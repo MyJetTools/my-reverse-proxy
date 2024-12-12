@@ -4,7 +4,6 @@ use my_http_client::{
     http2::{MyHttp2Client, MyHttp2ClientMetrics},
     MyHttpClientConnector,
 };
-use rust_extensions::remote_endpoint::{RemoteEndpoint, RemoteEndpointOwned};
 use tokio::sync::Mutex;
 
 pub struct Http2ClientPoolInner<
@@ -25,9 +24,16 @@ impl<
         }
     }
 
-    pub async fn get_or_create<'s>(
+    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        let items = self.items.lock().await;
+        for (key, value) in items.iter() {
+            dest.insert(key.clone(), value.len());
+        }
+    }
+
+    pub async fn get_or_create(
         &self,
-        remote_endpoint: RemoteEndpoint<'s>,
+        remote_endpoint: &str,
         create_connector: impl Fn() -> (
             TConnector,
             Arc<dyn MyHttp2ClientMetrics + Send + Sync + 'static>,
@@ -35,7 +41,7 @@ impl<
     ) -> MyHttp2Client<TStream, TConnector> {
         let mut items_access = self.items.lock().await;
 
-        match items_access.get_mut(remote_endpoint.as_str()) {
+        match items_access.get_mut(remote_endpoint) {
             Some(pool) => {
                 let (connector, metrics) = create_connector();
                 if pool.is_empty() {
@@ -53,7 +59,7 @@ impl<
 
     pub async fn return_back(
         &self,
-        remote_endpoint: RemoteEndpointOwned,
+        remote_endpoint: String,
         my_http_client: MyHttp2Client<TStream, TConnector>,
     ) {
         let mut items_access = self.items.lock().await;
@@ -61,7 +67,7 @@ impl<
         match items_access.get_mut(remote_endpoint.as_str()) {
             Some(pool) => pool.push(my_http_client),
             None => {
-                items_access.insert(remote_endpoint.as_str().to_string(), vec![my_http_client]);
+                items_access.insert(remote_endpoint, vec![my_http_client]);
             }
         }
     }

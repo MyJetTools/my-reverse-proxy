@@ -102,8 +102,19 @@ async fn create_html_content(
                 let remote_type = render_http_badge(&location.r#type);
                 let remote_type = remote_type.as_str();
                 let path = location.path.as_str();
+
+                let connections_amount = if let Some(count) =
+                    config_model.remote_connections.get(proxy_pass_to.as_str())
+                {
+                    format!(
+                        r##"<span class="badge text-bg-success" style="border-radius:0">{count}</span>"##,
+                    )
+                } else {
+                    String::new()
+                };
+
                 locations_html.push_str(
-                        format!(r##"<div><span class="badge text-bg-secondary">{path}</span> → {remote_type}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{proxy_pass_to}</span></div>"##,).as_str(),
+                        format!(r##"<div><span class="badge text-bg-secondary">{path}</span> → {remote_type}{connections_amount}<span class="badge text-bg-secondary" style="{RIGHT_BADGE_STYLE}">{proxy_pass_to}</span></div>"##,).as_str(),
                     );
             }
 

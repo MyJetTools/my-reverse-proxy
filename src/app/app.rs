@@ -12,7 +12,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use crate::{
     configurations::*,
     http2_client_pool::Http2ClientPool,
-    http_client::{HttpConnector, HttpTlsConnector, SshConnector},
+    http_client::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,
@@ -25,11 +25,11 @@ pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub struct AppContext {
     pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
-    pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, SshConnector>,
+    pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
-    pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, SshConnector>,
+    pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http_connections: AtomicIsize,

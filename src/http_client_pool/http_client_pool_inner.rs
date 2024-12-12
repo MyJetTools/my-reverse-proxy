@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
-use rust_extensions::remote_endpoint::{RemoteEndpoint, RemoteEndpointOwned};
 use tokio::sync::Mutex;
 
 pub struct HttpClientPoolInner<
@@ -22,14 +21,14 @@ impl<
         }
     }
 
-    pub async fn get_or_create<'s>(
+    pub async fn get_or_create(
         &self,
-        remote_endpoint: RemoteEndpoint<'s>,
+        remote_endpoint: &str,
         create_connector: impl FnOnce() -> TConnector,
     ) -> MyHttpClient<TStream, TConnector> {
         let mut items_access = self.items.lock().await;
 
-        match items_access.get_mut(remote_endpoint.as_str()) {
+        match items_access.get_mut(remote_endpoint) {
             Some(pool) => {
                 if pool.is_empty() {
                     return MyHttpClient::new(create_connector());
@@ -41,9 +40,16 @@ impl<
         }
     }
 
+    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        let items = self.items.lock().await;
+        for (key, value) in items.iter() {
+            dest.insert(key.clone(), value.len());
+        }
+    }
+
     pub async fn return_back(
         &self,
-        remote_endpoint: RemoteEndpointOwned,
+        remote_endpoint: String,
         my_http_client: MyHttpClient<TStream, TConnector>,
     ) {
         let mut items_access = self.items.lock().await;
@@ -51,7 +57,7 @@ impl<
         match items_access.get_mut(remote_endpoint.as_str()) {
             Some(pool) => pool.push(my_http_client),
             None => {
-                items_access.insert(remote_endpoint.as_str().to_string(), vec![my_http_client]);
+                items_access.insert(remote_endpoint, vec![my_http_client]);
             }
         }
     }

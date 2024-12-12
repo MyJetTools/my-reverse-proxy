@@ -3,7 +3,6 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
 use my_http_client::{http2::MyHttp2Client, MyHttpClientConnector, MyHttpClientError};
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use super::Http2ClientPoolInner;
 
@@ -13,7 +12,7 @@ pub struct Http2ClientPoolItem<
 > {
     my_http_client: Option<MyHttp2Client<TStream, TConnector>>,
     pool: Option<Arc<Http2ClientPoolInner<TStream, TConnector>>>,
-    end_point: Option<RemoteEndpointOwned>,
+    end_point: Option<String>,
 }
 
 impl<
@@ -24,7 +23,7 @@ impl<
     pub fn new(
         my_http_client: MyHttp2Client<TStream, TConnector>,
         pool: Arc<Http2ClientPoolInner<TStream, TConnector>>,
-        end_point: RemoteEndpointOwned,
+        end_point: String,
     ) -> Self {
         Self {
             my_http_client: Some(my_http_client),
