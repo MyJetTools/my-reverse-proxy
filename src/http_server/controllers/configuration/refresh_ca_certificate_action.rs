@@ -9,37 +9,37 @@ use crate::app::AppContext;
 
 #[http_route(
     method: "POST",
-    route: "/api/configuration/RefreshUsersList",
-    summary: "Refresh Users List from settings",
-    description: "Refresh Users List from settings",
-    input_data: ReloadUsersListHttpInput,
+    route: "/api/configuration/RefreshCaCertificate",
+    summary: "Refresh Ca Certificates configuration",
+    description: "Refresh Ca Certificates configuration",
+    input_data: ReloadCaCertificatesHttpInput,
     controller: "Configuration",
     result:[
         {status_code: 204, description: "Ok response"},
     ]
 )]
-pub struct RefreshUsersListAction {
+pub struct RefreshCaAction {
     app: Arc<AppContext>,
 }
 
-impl RefreshUsersListAction {
+impl RefreshCaAction {
     pub fn new(app: Arc<AppContext>) -> Self {
         Self { app }
     }
 }
 async fn handle_request(
-    action: &RefreshUsersListAction,
-    input_data: ReloadUsersListHttpInput,
+    action: &RefreshCaAction,
+    input_data: ReloadCaCertificatesHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    match crate::flows::refresh_users_list(&action.app, &input_data.users_list_id).await {
+    match crate::flows::refresh_ca_from_settings(&action.app, &input_data.ca_id).await {
         Ok(_) => HttpOutput::Empty.into_ok_result(true),
         Err(err) => Err(HttpFailResult::as_validation_error(err)),
     }
 }
 
 #[derive(MyHttpInput)]
-pub struct ReloadUsersListHttpInput {
-    #[http_form_data(name = "users_list_id", description = "Id of certificate")]
-    pub users_list_id: String,
+pub struct ReloadCaCertificatesHttpInput {
+    #[http_form_data(name = "ca_id", description = "Id of ca")]
+    pub ca_id: String,
 }

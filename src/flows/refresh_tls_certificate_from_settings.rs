@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{app::AppContext, configurations::SslCertificateIdRef};
 
-pub async fn refresh_ssl_certificate_from_settings(
+pub async fn refresh_tls_certificate_from_settings(
     app: &Arc<AppContext>,
     cert_id: &str,
 ) -> Result<(), String> {

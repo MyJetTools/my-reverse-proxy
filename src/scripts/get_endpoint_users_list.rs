@@ -14,7 +14,7 @@ pub async fn get_endpoint_users_list(
             return Ok(None);
         };
 
-    super::refresh_users_list(app, settings_model, allowed_users_list_id).await?;
+    super::refresh_users_list_from_settings(app, settings_model, allowed_users_list_id).await?;
 
     Ok(Some(allowed_users_list_id.to_string()))
 }

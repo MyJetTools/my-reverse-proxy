@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{app::AppContext, settings::*, types::WhiteListedIpList};
+use crate::{app::AppContext, settings::*};
 
 pub async fn get_endpoint_white_listed_ip(
     app: &Arc<AppContext>,
@@ -20,29 +20,7 @@ pub async fn get_endpoint_white_listed_ip(
 
     let white_list_ip_id = white_list_ip_id.unwrap();
 
-    let ip_white_lists = match settings_model.ip_white_lists.as_ref() {
-        Some(ip_white_lists) => ip_white_lists,
-        None => {
-            return Err(format!("Ip list with id '{}' not found", white_list_ip_id));
-        }
-    };
-
-    let ip_list = match ip_white_lists.get(white_list_ip_id) {
-        Some(ip_list) => ip_list,
-        None => {
-            return Err(format!("Ip list with id '{}' not found", white_list_ip_id,));
-        }
-    };
-
-    let white_list_ip_list = WhiteListedIpList::new(ip_list);
-
-    app.current_configuration
-        .write(|config| {
-            config
-                .white_list_ip_list
-                .insert_or_update(white_list_ip_id.to_string(), white_list_ip_list)
-        })
-        .await;
+    super::refresh_ip_list_from_settings(app, settings_model, white_list_ip_id).await?;
 
     Ok(Some(white_list_ip_id.to_string()))
 }

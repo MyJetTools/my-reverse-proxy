@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use crate::{app::AppContext, settings::SettingsModel};
 
-pub async fn refresh_users_list(
+pub async fn refresh_users_list_from_settings(
     app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     users_list_id: &str,

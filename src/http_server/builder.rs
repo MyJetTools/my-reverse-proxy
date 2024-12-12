@@ -36,7 +36,15 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
     ));
 
     result.register_post_action(Arc::new(
+        super::controllers::configuration::RefreshCaAction::new(app.clone()),
+    ));
+
+    result.register_post_action(Arc::new(
         super::controllers::configuration::RefreshUsersListAction::new(app.clone()),
+    ));
+
+    result.register_post_action(Arc::new(
+        super::controllers::configuration::RefreshIpListAction::new(app.clone()),
     ));
 
     result.register_get_action(Arc::new(

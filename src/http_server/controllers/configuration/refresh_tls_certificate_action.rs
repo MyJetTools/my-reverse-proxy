@@ -10,9 +10,9 @@ use crate::app::AppContext;
 #[http_route(
     method: "POST",
     route: "/api/configuration/RefreshSslCertificate",
-    summary: "Refresh SSL certificate",
-    description: "Refresh SSL certificate from the source",
-    input_data: ReloadEndpointHttpInput,
+    summary: "Refresh TLS certificate",
+    description: "Refresh TLS certificate from the source",
+    input_data: ReloadTlsCertificatesHttpInput,
     controller: "Configuration",
     result:[
         {status_code: 204, description: "Ok response"},
@@ -29,10 +29,10 @@ impl RefreshSslCertificateAction {
 }
 async fn handle_request(
     action: &RefreshSslCertificateAction,
-    input_data: ReloadEndpointHttpInput,
+    input_data: ReloadTlsCertificatesHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    match crate::flows::refresh_ssl_certificate_from_settings(&action.app, &input_data.cert_id)
+    match crate::flows::refresh_tls_certificate_from_settings(&action.app, &input_data.cert_id)
         .await
     {
         Ok(_) => HttpOutput::Empty.into_ok_result(true),
@@ -41,7 +41,7 @@ async fn handle_request(
 }
 
 #[derive(MyHttpInput)]
-pub struct ReloadEndpointHttpInput {
+pub struct ReloadTlsCertificatesHttpInput {
     #[http_form_data(name = "cert_id", description = "Id of certificate")]
     pub cert_id: String,
 }
