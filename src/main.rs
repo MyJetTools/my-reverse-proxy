@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use app::AppContext;
 
-use timers::{CrlRefresherTimer, SslCertsRefreshTimer};
+use timers::{CrlRefresherTimer, GcConnectionsTimer, SslCertsRefreshTimer};
 
 mod app;
 mod flows;
@@ -60,6 +60,15 @@ async fn main() {
     );
 
     my_timer.start(app.states.clone(), my_logger::LOGGER.clone());
+
+    let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60 * 3));
+
+    gc_connections_time.register_timer(
+        "GcConnections",
+        Arc::new(GcConnectionsTimer::new(app.clone())),
+    );
+
+    gc_connections_time.start(app.states.clone(), my_logger::LOGGER.clone());
 
     app.states.wait_until_shutdown().await;
 

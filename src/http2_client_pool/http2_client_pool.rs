@@ -26,6 +26,10 @@ impl<
         self.inner.fill_connections_amount(dest).await;
     }
 
+    pub async fn gc(&self) {
+        self.inner.gc().await;
+    }
+
     pub async fn get<'s>(
         &self,
         remote_endpoint: StrOrString<'s>,

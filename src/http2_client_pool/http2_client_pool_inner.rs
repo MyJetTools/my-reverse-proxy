@@ -4,13 +4,15 @@ use my_http_client::{
     http2::{MyHttp2Client, MyHttp2ClientMetrics},
     MyHttpClientConnector,
 };
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
 
 pub struct Http2ClientPoolInner<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 > {
-    items: Mutex<HashMap<String, Vec<MyHttp2Client<TStream, TConnector>>>>,
+    items:
+        Mutex<HashMap<String, Vec<(DateTimeAsMicroseconds, MyHttp2Client<TStream, TConnector>)>>>,
 }
 
 impl<
@@ -48,7 +50,7 @@ impl<
                     return MyHttp2Client::new(connector, metrics);
                 }
 
-                pool.pop().unwrap()
+                pool.pop().unwrap().1
             }
             None => {
                 let (connector, metrics) = create_connector();
@@ -62,12 +64,33 @@ impl<
         remote_endpoint: String,
         my_http_client: MyHttp2Client<TStream, TConnector>,
     ) {
+        let now = DateTimeAsMicroseconds::now();
         let mut items_access = self.items.lock().await;
 
         match items_access.get_mut(remote_endpoint.as_str()) {
-            Some(pool) => pool.push(my_http_client),
+            Some(pool) => pool.push((now, my_http_client)),
             None => {
-                items_access.insert(remote_endpoint, vec![my_http_client]);
+                items_access.insert(remote_endpoint, vec![(now, my_http_client)]);
+            }
+        }
+    }
+
+    pub async fn gc(&self) {
+        let now = DateTimeAsMicroseconds::now();
+        let mut items_access = self.items.lock().await;
+
+        for v in items_access.values_mut() {
+            while v.len() > 0 {
+                let first = v.first().unwrap().0;
+                if now.duration_since(first).get_full_minutes() > 2 {
+                    v.remove(0);
+                } else {
+                    break;
+                }
+            }
+
+            if v.len() < 32 {
+                v.shrink_to(32);
             }
         }
     }
