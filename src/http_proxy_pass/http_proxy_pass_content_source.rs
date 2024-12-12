@@ -51,7 +51,7 @@ impl HttpProxyPassContentSource {
                 app,
                 remote_endpoint,
             } => {
-                let http_client = app
+                let mut http_client = app
                     .http_clients_pool
                     .get(remote_endpoint.to_ref(), || HttpConnector {
                         remote_endpoint: remote_endpoint.clone(),
@@ -70,11 +70,12 @@ impl HttpProxyPassContentSource {
                         response,
                         disconnection,
                     } => {
+                        http_client.upgraded_to_websocket();
                         return Ok(HttpResponse::WebSocketUpgrade {
                             stream: WebSocketUpgradeStream::TcpStream(stream),
                             response,
                             disconnection,
-                        })
+                        });
                     }
                 }
             }
@@ -84,7 +85,7 @@ impl HttpProxyPassContentSource {
                 remote_endpoint,
                 domain_name,
             } => {
-                let http_client = app
+                let mut http_client = app
                     .https_clients_pool
                     .get(remote_endpoint.to_ref(), || HttpTlsConnector {
                         remote_endpoint: remote_endpoint.clone(),
@@ -104,11 +105,12 @@ impl HttpProxyPassContentSource {
                         response,
                         disconnection,
                     } => {
+                        http_client.upgraded_to_websocket();
                         return Ok(HttpResponse::WebSocketUpgrade {
                             stream: WebSocketUpgradeStream::TlsStream(stream),
                             response,
                             disconnection,
-                        })
+                        });
                     }
                 }
             }

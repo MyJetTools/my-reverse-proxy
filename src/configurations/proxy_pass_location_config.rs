@@ -45,17 +45,6 @@ impl ProxyPassLocationConfig {
         self.proxy_pass_to.to_string()
     }
 
-    /*
-    pub fn is_my_uri(&self, uri: &Uri) -> bool {
-        let result = rust_extensions::str_utils::starts_with_case_insensitive(
-            uri.path(),
-            self.path.as_str(),
-        );
-
-        result
-    }
-     */
-
     pub async fn create_data_source(
         &self,
         app: &Arc<AppContext>,

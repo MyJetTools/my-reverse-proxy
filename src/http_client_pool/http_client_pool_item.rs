@@ -34,6 +34,10 @@ impl<
         }
     }
 
+    pub fn upgraded_to_websocket(&mut self) {
+        self.my_http_client.take();
+    }
+
     pub async fn do_request(
         &self,
         req: &MyHttpRequest,
@@ -53,13 +57,13 @@ impl<
     > Drop for HttpClientPoolItem<TStream, TConnector>
 {
     fn drop(&mut self) {
-        let http_client = self.my_http_client.take().unwrap();
+        if let Some(http_client) = self.my_http_client.take() {
+            let pool = self.pool.take().unwrap();
 
-        let pool = self.pool.take().unwrap();
-
-        let end_point = self.end_point.take().unwrap();
-        tokio::spawn(async move {
-            pool.return_back(end_point, http_client).await;
-        });
+            let end_point = self.end_point.take().unwrap();
+            tokio::spawn(async move {
+                pool.return_back(end_point, http_client).await;
+            });
+        }
     }
 }
