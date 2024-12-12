@@ -23,6 +23,8 @@ mod tcp_listener;
 
 mod scripts;
 
+mod http2_client_pool;
+mod http_client_pool;
 mod ssl;
 mod timers;
 mod types;

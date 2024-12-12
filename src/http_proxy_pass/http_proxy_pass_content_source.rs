@@ -3,9 +3,11 @@ use std::sync::Arc;
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
 use my_ssh::SshAsyncChannel;
+use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
-    http_client::{Http1Client, Http2Client, SshConnector},
+    app::AppContext,
+    http_client::{HttpConnector, HttpTlsConnector, SshConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
 };
 
@@ -13,8 +15,24 @@ use super::ProxyPassError;
 use my_http_client::{http1::*, http2::MyHttp2Client, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
-    Http1(Http1Client),
-    Http2(Http2Client),
+    Http1 {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+    },
+    Https1 {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+        domain_name: Option<String>,
+    },
+    Http2 {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+    },
+    Https2 {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+        domain_name: Option<String>,
+    },
     Http1OverSsh(MyHttpClient<SshAsyncChannel, SshConnector>),
     Http2OverSsh(MyHttp2Client<SshAsyncChannel, SshConnector>),
     LocalPath(LocalPathContentSrc),
@@ -29,58 +47,136 @@ impl HttpProxyPassContentSource {
         request_timeout: std::time::Duration,
     ) -> Result<HttpResponse, ProxyPassError> {
         match self {
-            HttpProxyPassContentSource::Http1(client) => match client {
-                Http1Client::Http(my_http_client) => {
-                    let req = MyHttpRequest::from_hyper_request(req).await;
+            HttpProxyPassContentSource::Http1 {
+                app,
+                remote_endpoint,
+            } => {
+                let http_client = app
+                    .http_clients_pool
+                    .get(remote_endpoint.to_ref(), || HttpConnector {
+                        remote_endpoint: remote_endpoint.clone(),
+                        debug: false,
+                    })
+                    .await;
 
-                    match my_http_client.do_request(&req, request_timeout).await? {
-                        MyHttpResponse::Response(response) => {
-                            return Ok(HttpResponse::Response(response));
-                        }
-                        MyHttpResponse::WebSocketUpgrade {
-                            stream,
+                let req = MyHttpRequest::from_hyper_request(req).await;
+
+                match http_client.do_request(&req, request_timeout).await? {
+                    MyHttpResponse::Response(response) => {
+                        return Ok(HttpResponse::Response(response));
+                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => {
+                        return Ok(HttpResponse::WebSocketUpgrade {
+                            stream: WebSocketUpgradeStream::TcpStream(stream),
                             response,
                             disconnection,
-                        } => {
-                            return Ok(HttpResponse::WebSocketUpgrade {
-                                stream: WebSocketUpgradeStream::TcpStream(stream),
-                                response,
-                                disconnection,
-                            })
-                        }
+                        })
                     }
                 }
-                Http1Client::Https(my_http_client) => {
-                    let req = MyHttpRequest::from_hyper_request(req).await;
+            }
 
-                    match my_http_client.do_request(&req, request_timeout).await? {
-                        MyHttpResponse::Response(response) => {
-                            return Ok(HttpResponse::Response(response));
-                        }
-                        MyHttpResponse::WebSocketUpgrade {
-                            stream,
+            HttpProxyPassContentSource::Https1 {
+                app,
+                remote_endpoint,
+                domain_name,
+            } => {
+                let http_client = app
+                    .https_clients_pool
+                    .get(remote_endpoint.to_ref(), || HttpTlsConnector {
+                        remote_endpoint: remote_endpoint.clone(),
+                        debug: false,
+                        domain_name: domain_name.clone(),
+                    })
+                    .await;
+
+                let req = MyHttpRequest::from_hyper_request(req).await;
+
+                match http_client.do_request(&req, request_timeout).await? {
+                    MyHttpResponse::Response(response) => {
+                        return Ok(HttpResponse::Response(response));
+                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => {
+                        return Ok(HttpResponse::WebSocketUpgrade {
+                            stream: WebSocketUpgradeStream::TlsStream(stream),
                             response,
                             disconnection,
-                        } => {
-                            return Ok(HttpResponse::WebSocketUpgrade {
-                                stream: WebSocketUpgradeStream::TlsStream(stream),
-                                response: response,
-                                disconnection,
-                            })
-                        }
+                        })
                     }
                 }
-            },
-            HttpProxyPassContentSource::Http2(client) => match client {
-                Http2Client::Http(my_http_client) => {
-                    let response = my_http_client.do_request(req, request_timeout).await?;
-                    return Ok(HttpResponse::Response(response));
+            }
+
+            /*
+            Http1Client::Https(my_http_client) => {
+                let req = MyHttpRequest::from_hyper_request(req).await;
+
+                match my_http_client.do_request(&req, request_timeout).await? {
+                    MyHttpResponse::Response(response) => {
+                        return Ok(HttpResponse::Response(response));
+                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => {
+                        return Ok(HttpResponse::WebSocketUpgrade {
+                            stream: WebSocketUpgradeStream::TlsStream(stream),
+                            response: response,
+                            disconnection,
+                        })
+                    }
                 }
-                Http2Client::Https(my_http_client) => {
-                    let response = my_http_client.do_request(req, request_timeout).await?;
-                    return Ok(HttpResponse::Response(response));
-                }
-            },
+            }
+             */
+            HttpProxyPassContentSource::Http2 {
+                app,
+                remote_endpoint,
+            } => {
+                let http_client = app
+                    .http2_clients_pool
+                    .get(remote_endpoint.to_ref(), || {
+                        (
+                            HttpConnector {
+                                remote_endpoint: remote_endpoint.clone(),
+                                debug: false,
+                            },
+                            app.prometheus.clone(),
+                        )
+                    })
+                    .await;
+
+                let response = http_client.do_request(req, request_timeout).await?;
+                return Ok(HttpResponse::Response(response));
+            }
+            HttpProxyPassContentSource::Https2 {
+                app,
+                remote_endpoint,
+                domain_name,
+            } => {
+                let http_client = app
+                    .https2_clients_pool
+                    .get(remote_endpoint.to_ref(), || {
+                        (
+                            HttpTlsConnector {
+                                remote_endpoint: remote_endpoint.clone(),
+                                debug: false,
+                                domain_name: domain_name.clone(),
+                            },
+                            app.prometheus.clone(),
+                        )
+                    })
+                    .await;
+
+                let response = http_client.do_request(req, request_timeout).await?;
+                return Ok(HttpResponse::Response(response));
+            }
             HttpProxyPassContentSource::Http1OverSsh(client) => {
                 let req = MyHttpRequest::from_hyper_request(req).await;
                 match client.do_request(&req, request_timeout).await? {

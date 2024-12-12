@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     app::AppContext,
-    http_client::{Http1Client, Http2Client, SshConnector},
+    http_client::SshConnector,
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
@@ -86,13 +86,35 @@ impl ProxyPassLocationConfig {
 
                     HttpProxyPassContentSource::Http1OverSsh(http_client)
                 } else {
-                    let http_client = Http1Client::create(
-                        app.prometheus.clone(),
-                        remote_content.get_remote_endpoint().to_owned(),
-                        self.domain_name.clone(),
-                        debug,
-                    );
-                    HttpProxyPassContentSource::Http1(http_client)
+                    let remote_endpoint = remote_content.get_remote_endpoint();
+
+                    let remote_endpoint_scheme = remote_endpoint.get_scheme();
+
+                    if remote_endpoint_scheme.is_none() {
+                        panic!(
+                            "Scheme is not set for remote resource {}",
+                            remote_endpoint.as_str()
+                        );
+                    }
+
+                    match remote_endpoint_scheme.as_ref().unwrap() {
+                        rust_extensions::remote_endpoint::Scheme::Http => {
+                            HttpProxyPassContentSource::Http1 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::Https => {
+                            HttpProxyPassContentSource::Https1 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                domain_name: self.domain_name.clone(),
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::UnixSocket => {
+                            panic!("HTTP1 UnixSocket is not supported as remote content source");
+                        }
+                    }
                 }
             }
 
@@ -112,13 +134,35 @@ impl ProxyPassLocationConfig {
 
                     HttpProxyPassContentSource::Http2OverSsh(http_client)
                 } else {
-                    let http_client = Http2Client::create(
-                        app,
-                        remote_host.get_remote_endpoint().to_owned(),
-                        self.domain_name.clone(),
-                        debug,
-                    );
-                    HttpProxyPassContentSource::Http2(http_client)
+                    let remote_endpoint = remote_host.get_remote_endpoint();
+
+                    let remote_endpoint_scheme = remote_endpoint.get_scheme();
+
+                    if remote_endpoint_scheme.is_none() {
+                        panic!(
+                            "Scheme is not set for remote resource {}",
+                            remote_endpoint.as_str()
+                        );
+                    }
+
+                    match remote_endpoint_scheme.as_ref().unwrap() {
+                        rust_extensions::remote_endpoint::Scheme::Http => {
+                            HttpProxyPassContentSource::Http2 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::Https => {
+                            HttpProxyPassContentSource::Https2 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                domain_name: self.domain_name.clone(),
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::UnixSocket => {
+                            panic!("HTTP2 UnixSocket is not supported as remote content source");
+                        }
+                    }
                 }
             }
             ProxyPassTo::FilesPath(model) => {
