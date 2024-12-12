@@ -2,14 +2,12 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{
     app::AppContext,
-    http_client::SshConnector,
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
 };
 
 use super::*;
-use my_http_client::{http1::MyHttpClient, http2::MyHttp2Client};
 
 pub struct ProxyPassLocationConfig {
     pub path: String,
@@ -64,16 +62,13 @@ impl ProxyPassLocationConfig {
                     let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
                         .await
                         .unwrap();
-                    let connector = SshConnector {
-                        ssh_session,
+
+                    HttpProxyPassContentSource::Http1OverSsh {
+                        app: app.clone(),
                         remote_endpoint: remote_content.get_remote_endpoint().to_owned(),
+                        ssh_session: ssh_session.clone(),
                         debug,
-                    };
-
-                    let http_client =
-                        MyHttpClient::new_with_metrics(connector, app.prometheus.clone());
-
-                    HttpProxyPassContentSource::Http1OverSsh(http_client)
+                    }
                 } else {
                     let remote_endpoint = remote_content.get_remote_endpoint();
 
@@ -91,6 +86,7 @@ impl ProxyPassLocationConfig {
                             HttpProxyPassContentSource::Http1 {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
+                                debug,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
@@ -98,6 +94,7 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
+                                debug,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
@@ -113,15 +110,12 @@ impl ProxyPassLocationConfig {
                         .await
                         .unwrap();
 
-                    let connector = SshConnector {
-                        ssh_session,
+                    HttpProxyPassContentSource::Http2OverSsh {
+                        app: app.clone(),
                         remote_endpoint: remote_host.get_remote_endpoint().to_owned(),
+                        ssh_session: ssh_session.clone(),
                         debug,
-                    };
-
-                    let http_client = MyHttp2Client::new(connector, app.prometheus.clone());
-
-                    HttpProxyPassContentSource::Http2OverSsh(http_client)
+                    }
                 } else {
                     let remote_endpoint = remote_host.get_remote_endpoint();
 
@@ -139,6 +133,7 @@ impl ProxyPassLocationConfig {
                             HttpProxyPassContentSource::Http2 {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
+                                debug,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
@@ -146,6 +141,7 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
+                                debug,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {

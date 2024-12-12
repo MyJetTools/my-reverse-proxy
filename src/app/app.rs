@@ -4,6 +4,7 @@ use std::sync::{
 };
 
 use encryption::aes::AesKey;
+use my_ssh::SshAsyncChannel;
 use my_tls::tokio_rustls::client::TlsStream;
 use rust_extensions::{AppStates, UnsafeValue};
 use tokio::{net::TcpStream, sync::Mutex};
@@ -11,7 +12,7 @@ use tokio::{net::TcpStream, sync::Mutex};
 use crate::{
     configurations::*,
     http2_client_pool::Http2ClientPool,
-    http_client::{HttpConnector, HttpTlsConnector},
+    http_client::{HttpConnector, HttpTlsConnector, SshConnector},
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,
@@ -24,9 +25,11 @@ pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 pub struct AppContext {
     pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
+    pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, SshConnector>,
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
+    pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, SshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http_connections: AtomicIsize,
@@ -85,6 +88,8 @@ impl AppContext {
             https_clients_pool: HttpClientPool::new(),
             http2_clients_pool: Http2ClientPool::new(),
             https2_clients_pool: Http2ClientPool::new(),
+            http_over_ssh_clients_pool: HttpClientPool::new(),
+            http2_over_ssh_clients_pool: Http2ClientPool::new(),
         }
     }
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
-use my_ssh::SshAsyncChannel;
+use my_ssh::{SshAsyncChannel, SshSession};
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
@@ -12,29 +12,43 @@ use crate::{
 };
 
 use super::ProxyPassError;
-use my_http_client::{http1::*, http2::MyHttp2Client, MyHttpClientDisconnect};
+use my_http_client::{http1::*, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
     Http1 {
         app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
+        debug: bool,
     },
     Https1 {
         app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         domain_name: Option<String>,
+        debug: bool,
     },
     Http2 {
         app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
+        debug: bool,
     },
     Https2 {
         app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         domain_name: Option<String>,
+        debug: bool,
     },
-    Http1OverSsh(MyHttpClient<SshAsyncChannel, SshConnector>),
-    Http2OverSsh(MyHttp2Client<SshAsyncChannel, SshConnector>),
+    Http1OverSsh {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+        ssh_session: Arc<SshSession>,
+        debug: bool,
+    },
+    Http2OverSsh {
+        app: Arc<AppContext>,
+        remote_endpoint: RemoteEndpointOwned,
+        ssh_session: Arc<SshSession>,
+        debug: bool,
+    },
     LocalPath(LocalPathContentSrc),
     PathOverSsh(PathOverSshContentSource),
     Static(StaticContentSrc),
@@ -50,12 +64,13 @@ impl HttpProxyPassContentSource {
             HttpProxyPassContentSource::Http1 {
                 app,
                 remote_endpoint,
+                debug,
             } => {
                 let mut http_client = app
                     .http_clients_pool
                     .get(remote_endpoint.to_ref(), || HttpConnector {
                         remote_endpoint: remote_endpoint.clone(),
-                        debug: false,
+                        debug: *debug,
                     })
                     .await;
 
@@ -84,12 +99,13 @@ impl HttpProxyPassContentSource {
                 app,
                 remote_endpoint,
                 domain_name,
+                debug,
             } => {
                 let mut http_client = app
                     .https_clients_pool
                     .get(remote_endpoint.to_ref(), || HttpTlsConnector {
                         remote_endpoint: remote_endpoint.clone(),
-                        debug: false,
+                        debug: *debug,
                         domain_name: domain_name.clone(),
                     })
                     .await;
@@ -115,31 +131,10 @@ impl HttpProxyPassContentSource {
                 }
             }
 
-            /*
-            Http1Client::Https(my_http_client) => {
-                let req = MyHttpRequest::from_hyper_request(req).await;
-
-                match my_http_client.do_request(&req, request_timeout).await? {
-                    MyHttpResponse::Response(response) => {
-                        return Ok(HttpResponse::Response(response));
-                    }
-                    MyHttpResponse::WebSocketUpgrade {
-                        stream,
-                        response,
-                        disconnection,
-                    } => {
-                        return Ok(HttpResponse::WebSocketUpgrade {
-                            stream: WebSocketUpgradeStream::TlsStream(stream),
-                            response: response,
-                            disconnection,
-                        })
-                    }
-                }
-            }
-             */
             HttpProxyPassContentSource::Http2 {
                 app,
                 remote_endpoint,
+                debug,
             } => {
                 let http_client = app
                     .http2_clients_pool
@@ -147,7 +142,7 @@ impl HttpProxyPassContentSource {
                         (
                             HttpConnector {
                                 remote_endpoint: remote_endpoint.clone(),
-                                debug: false,
+                                debug: *debug,
                             },
                             app.prometheus.clone(),
                         )
@@ -161,6 +156,7 @@ impl HttpProxyPassContentSource {
                 app,
                 remote_endpoint,
                 domain_name,
+                debug,
             } => {
                 let http_client = app
                     .https2_clients_pool
@@ -168,7 +164,7 @@ impl HttpProxyPassContentSource {
                         (
                             HttpTlsConnector {
                                 remote_endpoint: remote_endpoint.clone(),
-                                debug: false,
+                                debug: *debug,
                                 domain_name: domain_name.clone(),
                             },
                             app.prometheus.clone(),
@@ -179,9 +175,24 @@ impl HttpProxyPassContentSource {
                 let response = http_client.do_request(req, request_timeout).await?;
                 return Ok(HttpResponse::Response(response));
             }
-            HttpProxyPassContentSource::Http1OverSsh(client) => {
+            HttpProxyPassContentSource::Http1OverSsh {
+                app,
+                remote_endpoint,
+                ssh_session,
+                debug,
+            } => {
+                let mut http_client = app
+                    .http_over_ssh_clients_pool
+                    .get(remote_endpoint.to_ref(), || SshConnector {
+                        remote_endpoint: remote_endpoint.clone(),
+                        debug: *debug,
+                        ssh_session: ssh_session.clone(),
+                    })
+                    .await;
+
                 let req = MyHttpRequest::from_hyper_request(req).await;
-                match client.do_request(&req, request_timeout).await? {
+
+                match http_client.do_request(&req, request_timeout).await? {
                     MyHttpResponse::Response(response) => {
                         return Ok(HttpResponse::Response(response));
                     }
@@ -190,17 +201,37 @@ impl HttpProxyPassContentSource {
                         response,
                         disconnection,
                     } => {
+                        http_client.upgraded_to_websocket();
                         return Ok(HttpResponse::WebSocketUpgrade {
                             stream: WebSocketUpgradeStream::SshChannel(stream),
-                            response: response,
+                            response,
                             disconnection,
-                        })
+                        });
                     }
                 }
             }
-            HttpProxyPassContentSource::Http2OverSsh(client) => {
-                let result = client.do_request(req, request_timeout).await?;
-                return Ok(HttpResponse::Response(result.into()));
+            HttpProxyPassContentSource::Http2OverSsh {
+                app,
+                remote_endpoint,
+                ssh_session,
+                debug,
+            } => {
+                let http_client = app
+                    .http2_over_ssh_clients_pool
+                    .get(remote_endpoint.to_ref(), || {
+                        (
+                            SshConnector {
+                                remote_endpoint: remote_endpoint.clone(),
+                                debug: *debug,
+                                ssh_session: ssh_session.clone(),
+                            },
+                            app.prometheus.clone(),
+                        )
+                    })
+                    .await;
+
+                let response = http_client.do_request(req, request_timeout).await?;
+                return Ok(HttpResponse::Response(response));
             }
             HttpProxyPassContentSource::LocalPath(src) => {
                 let request_executor = src.get_request_executor(&req.uri())?;
