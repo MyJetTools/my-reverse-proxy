@@ -31,9 +31,9 @@ pub async fn load_file(
                 )
                 .await
             }
-            rust_extensions::remote_endpoint::Scheme::UnixSocket => {
+            _ => {
                 panic!(
-                    "Http or Https scheme is expected within host: {}",
+                    "File can be loaded from the url: {}",
                     content_source.get_remote_endpoint().as_str()
                 );
             }
@@ -131,7 +131,8 @@ async fn load_content_from_http_via_ssh<'s>(
         debug: false,
     };
 
-    let http_client: MyHttpClient<SshAsyncChannel, HttpOverSshConnector> = MyHttpClient::new(connector);
+    let http_client: MyHttpClient<SshAsyncChannel, HttpOverSshConnector> =
+        MyHttpClient::new(connector);
 
     let http_request = MyHttpRequestBuilder::new(Method::GET, remote_endpoint.as_str()).build();
 

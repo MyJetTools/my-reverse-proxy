@@ -97,6 +97,21 @@ impl ProxyPassLocationConfig {
                                 debug,
                             }
                         }
+                        rust_extensions::remote_endpoint::Scheme::Ws => {
+                            HttpProxyPassContentSource::Http1 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                debug,
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::Wss => {
+                            HttpProxyPassContentSource::Https1 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                domain_name: self.domain_name.clone(),
+                                debug,
+                            }
+                        }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
                             panic!("HTTP1 UnixSocket is not supported as remote content source");
                         }
@@ -137,6 +152,21 @@ impl ProxyPassLocationConfig {
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
+                            HttpProxyPassContentSource::Https2 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                domain_name: self.domain_name.clone(),
+                                debug,
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::Ws => {
+                            HttpProxyPassContentSource::Http2 {
+                                app: app.clone(),
+                                remote_endpoint: remote_endpoint.to_owned(),
+                                debug,
+                            }
+                        }
+                        rust_extensions::remote_endpoint::Scheme::Wss => {
                             HttpProxyPassContentSource::Https2 {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
