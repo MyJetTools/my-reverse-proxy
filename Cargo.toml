@@ -61,3 +61,4 @@ rcgen = "*"
 flate2 = "*"
 http = "*"
 prometheus = "*"
+url-utils = { tag = "0.1.4", git = "https://github.com/MyJetTools/url-utils.git" }

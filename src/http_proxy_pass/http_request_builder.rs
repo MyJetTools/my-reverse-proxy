@@ -39,6 +39,7 @@ impl HttpRequestBuilder {
         src: hyper::Request<hyper::body::Incoming>,
     ) -> Self {
         let (parts, body) = src.into_parts();
+
         Self {
             parts,
             body,
@@ -176,10 +177,7 @@ impl HttpRequestBuilder {
 
             if let Some(right) = parts.next() {
                 if left == param {
-                    return Some(
-                        my_settings_reader::flurl::url_utils::decode_from_url_string(right.trim())
-                            .to_string(),
-                    );
+                    return Some(url_utils::decode_from_url_string(right.trim()).to_string());
                 }
             }
         }

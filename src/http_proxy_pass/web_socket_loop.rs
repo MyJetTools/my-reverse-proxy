@@ -65,7 +65,9 @@ async fn web_socket_loop<
                     break;
                 }
 
-                if let Err(err) = ws_sender.send(message.unwrap()).await {
+                let message = message.unwrap();
+
+                if let Err(err) = ws_sender.send(message).await {
                     if debug {
                         println!("ws_sender.send error: {:?}", err);
                     }

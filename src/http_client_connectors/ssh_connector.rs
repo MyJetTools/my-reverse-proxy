@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use my_ssh::{SshAsyncChannel, SshSession};
-use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
+use rust_extensions::remote_endpoint::*;
 use tokio::io::{ReadHalf, WriteHalf};
 
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
@@ -18,8 +18,8 @@ impl MyHttpClientConnector<SshAsyncChannel> for HttpOverSshConnector {
         self.debug
     }
 
-    fn get_remote_host(&self) -> StrOrString {
-        self.ssh_session.get_ssh_credentials().to_string().into()
+    fn get_remote_endpoint(&self) -> RemoteEndpoint {
+        self.remote_endpoint.to_ref()
     }
 
     fn reunite(
@@ -47,7 +47,7 @@ impl MyHttpClientConnector<SshAsyncChannel> for HttpOverSshConnector {
             Err(err) => {
                 return Err(MyHttpClientError::CanNotConnectToRemoteHost(format!(
                     "{}. Err: {:?}",
-                    self.get_remote_host().as_str(),
+                    self.get_remote_endpoint().as_str(),
                     err
                 )))
             }

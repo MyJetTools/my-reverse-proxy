@@ -153,6 +153,7 @@ impl HttpProxyPass {
                         response
                     }
                 }
+
                 super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
                     if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                         let server_web_socket = web_socket_upgrade.server_web_socket;

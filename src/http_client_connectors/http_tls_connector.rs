@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use my_http_client::MyHttpClientConnector;
 use my_tls::tokio_rustls::client::TlsStream;
-use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
+use rust_extensions::remote_endpoint::*;
 use tokio::{
     io::{ReadHalf, WriteHalf},
     net::TcpStream,
@@ -16,8 +16,8 @@ pub struct HttpTlsConnector {
 
 #[async_trait::async_trait]
 impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
-    fn get_remote_host(&self) -> StrOrString {
-        self.remote_endpoint.as_str().into()
+    fn get_remote_endpoint(&self) -> RemoteEndpoint {
+        self.remote_endpoint.to_ref()
     }
 
     fn is_debug(&self) -> bool {
@@ -27,7 +27,7 @@ impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
     async fn connect(&self) -> Result<TlsStream<TcpStream>, my_http_client::MyHttpClientError> {
         use my_tls::tokio_rustls::rustls::pki_types::ServerName;
 
-        let host_port = self.remote_endpoint.get_host_port(Some(443));
+        let host_port = self.remote_endpoint.get_host_port();
 
         let tcp_stream = match TcpStream::connect(host_port.as_str()).await {
             Ok(tcp_stream) => tcp_stream,
