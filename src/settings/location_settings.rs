@@ -76,13 +76,17 @@ impl LocationSettings {
     }
 
     pub fn get_request_timeout(&self) -> Duration {
-        let timeout = self.request_timeout.unwrap_or(30_000);
+        if let Some(request_timeout) = self.request_timeout {
+            return Duration::from_millis(request_timeout);
+        }
 
-        Duration::from_millis(timeout)
+        crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT
     }
     pub fn get_connect_timeout(&self) -> Duration {
-        let timeout = self.connect_timeout.unwrap_or(5_000);
+        if let Some(connection_timeout) = self.connect_timeout {
+            return Duration::from_millis(connection_timeout);
+        }
 
-        Duration::from_millis(timeout)
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT
     }
 }

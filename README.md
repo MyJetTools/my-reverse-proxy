@@ -480,14 +480,10 @@ Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to 
 
 
 
-### Timeouts for remote HTTP endpoints
+### Timeouts for Remote HTTP Endpoints
+Remote HTTP endpoints have default timeouts: 5 seconds for establishing a connection and 15 seconds for completing a request.
 
-
-By default remote http endpoint has 5 seconds timeout for connection and 50 seconds for request execution.
-
-To adjust timeouts - here an example of configuration:
-
-1000 - means 1000 milliseconds or 1 second
+You can adjust these timeouts using the following configuration example. Values are specified in milliseconds (ms); for instance, 1000 represents 1 second.
 
 ```yaml
 
@@ -496,9 +492,9 @@ To adjust timeouts - here an example of configuration:
       type: http
 
     locations:
-    - path: /
-      proxy_pass_to: http://127.0.0.1:8080
-      connect_timeout: 1000
-      request_timeout: 2000 
+      - path: /
+        proxy_pass_to: http://127.0.0.1:8080
+        connect_timeout: 1000  # 1 second connection timeout
+        request_timeout: 2000  # 2 second request timeout
 
 ```
