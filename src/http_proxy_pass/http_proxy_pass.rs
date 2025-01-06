@@ -127,9 +127,7 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source
-            .send_request(request.request, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT)
-            .await?;
+        let result = content_source.send_request(request.request).await?;
 
         let mut response = match result {
             super::HttpResponse::Response(response) => response,

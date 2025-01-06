@@ -48,7 +48,12 @@ pub async fn refresh_ca_from_sources<'s>(
         file_src.as_str()
     ))?;
 
-    let ca = super::load_file(app, &ca_file_src).await?;
+    let ca = super::load_file(
+        app,
+        &ca_file_src,
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    )
+    .await?;
 
     let crl = if let Some(crl_file_path) = client_certificate.revocation_list.as_ref() {
         let crl_file_path = super::apply_variables(settings_model, crl_file_path)?;
@@ -58,7 +63,12 @@ pub async fn refresh_ca_from_sources<'s>(
                 crl_file_path.as_str()
             ))?;
 
-        let crl = super::load_file(app, &crl_file_src).await?;
+        let crl = super::load_file(
+            app,
+            &crl_file_src,
+            crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+        )
+        .await?;
 
         let crl = my_tls::crl::read(crl.as_slice())?;
 

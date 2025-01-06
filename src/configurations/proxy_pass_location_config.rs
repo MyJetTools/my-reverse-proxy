@@ -57,20 +57,22 @@ impl ProxyPassLocationConfig {
                     static_content_model.body.clone(),
                 ))
             }
-            ProxyPassTo::Http1(remote_content) => {
-                if let Some(ssh_credentials) = remote_content.ssh_credentials.as_ref() {
+            ProxyPassTo::Http1(proxy_pass) => {
+                if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
                     let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
                         .await
                         .unwrap();
 
                     HttpProxyPassContentSource::Http1OverSsh {
                         app: app.clone(),
-                        over_ssh: remote_content.clone(),
+                        over_ssh: proxy_pass.remote_host.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
+                        request_timeout: proxy_pass.request_timeout,
+                        connect_timeout: proxy_pass.connect_timeout,
                     }
                 } else {
-                    let remote_endpoint = remote_content.get_remote_endpoint();
+                    let remote_endpoint = proxy_pass.remote_host.get_remote_endpoint();
 
                     let remote_endpoint_scheme = remote_endpoint.get_scheme();
 
@@ -87,6 +89,8 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
@@ -95,6 +99,8 @@ impl ProxyPassLocationConfig {
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
@@ -102,6 +108,8 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
@@ -110,6 +118,8 @@ impl ProxyPassLocationConfig {
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
@@ -119,20 +129,22 @@ impl ProxyPassLocationConfig {
                 }
             }
 
-            ProxyPassTo::Http2(remote_host) => {
-                if let Some(ssh_credentials) = remote_host.ssh_credentials.as_ref() {
+            ProxyPassTo::Http2(proxy_pass) => {
+                if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
                     let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
                         .await
                         .unwrap();
 
                     HttpProxyPassContentSource::Http2OverSsh {
                         app: app.clone(),
-                        over_ssh: remote_host.clone(),
+                        over_ssh: proxy_pass.remote_host.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
+                        request_timeout: proxy_pass.request_timeout,
+                        connect_timeout: proxy_pass.connect_timeout,
                     }
                 } else {
-                    let remote_endpoint = remote_host.get_remote_endpoint();
+                    let remote_endpoint = proxy_pass.remote_host.get_remote_endpoint();
 
                     let remote_endpoint_scheme = remote_endpoint.get_scheme();
 
@@ -149,6 +161,8 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
@@ -157,6 +171,8 @@ impl ProxyPassLocationConfig {
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
@@ -164,6 +180,8 @@ impl ProxyPassLocationConfig {
                                 app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
@@ -172,6 +190,8 @@ impl ProxyPassLocationConfig {
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {

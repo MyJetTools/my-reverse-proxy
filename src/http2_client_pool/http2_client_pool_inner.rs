@@ -38,6 +38,7 @@ impl<
     pub async fn get_or_create(
         &self,
         remote_endpoint: &str,
+        connect_timeout: std::time::Duration,
         create_connector: impl Fn() -> (
             TConnector,
             Arc<dyn MyHttp2ClientMetrics + Send + Sync + 'static>,
@@ -49,14 +50,19 @@ impl<
             Some(pool) => {
                 let (connector, metrics) = create_connector();
                 if pool.is_empty() {
-                    return MyHttp2Client::new(connector, metrics);
+                    let mut result = MyHttp2Client::new(connector, metrics);
+                    result.set_connect_timeout(connect_timeout);
+                    return result;
                 }
 
                 pool.pop().unwrap().1
             }
             None => {
                 let (connector, metrics) = create_connector();
-                MyHttp2Client::new(connector, metrics)
+                let mut result = MyHttp2Client::new(connector, metrics);
+
+                result.set_connect_timeout(connect_timeout);
+                result
             }
         }
     }

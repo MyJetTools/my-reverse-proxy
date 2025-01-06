@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
@@ -13,6 +13,7 @@ pub struct Http2ClientPoolItem<
     my_http_client: Option<MyHttp2Client<TStream, TConnector>>,
     pool: Option<Arc<Http2ClientPoolInner<TStream, TConnector>>>,
     end_point: Option<String>,
+    disposed: AtomicBool,
 }
 
 impl<
@@ -29,6 +30,7 @@ impl<
             my_http_client: Some(my_http_client),
             pool: Some(pool),
             end_point: Some(end_point),
+            disposed: AtomicBool::new(false),
         }
     }
 
@@ -37,11 +39,19 @@ impl<
         req: hyper::Request<Full<Bytes>>,
         request_timeout: std::time::Duration,
     ) -> Result<hyper::Response<BoxBody<Bytes, String>>, MyHttpClientError> {
-        self.my_http_client
+        let result = self
+            .my_http_client
             .as_ref()
             .unwrap()
             .do_request(req, request_timeout)
-            .await
+            .await;
+
+        if result.is_err() {
+            self.disposed
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        result
     }
 }
 
@@ -51,6 +61,10 @@ impl<
     > Drop for Http2ClientPoolItem<TStream, TConnector>
 {
     fn drop(&mut self) {
+        if self.disposed.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
         let http_client = self.my_http_client.take().unwrap();
 
         let pool = self.pool.take().unwrap();

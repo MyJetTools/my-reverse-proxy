@@ -136,6 +136,8 @@ mod tests {
                     whitelisted_ip: None,
                     domain_name: None,
                     compress: None,
+                    request_timeout: None,
+                    connect_timeout: None,
                 }],
             },
         );

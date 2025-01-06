@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 pub struct StaticContentModel {
@@ -38,9 +40,15 @@ impl ProxyPassFilesPathModel {
     }
 }
 
+pub struct ProxyPassToModel {
+    pub remote_host: OverSshConnectionSettings,
+    pub request_timeout: Duration,
+    pub connect_timeout: Duration,
+}
+
 pub enum ProxyPassTo {
-    Http1(OverSshConnectionSettings),
-    Http2(OverSshConnectionSettings),
+    Http1(ProxyPassToModel),
+    Http2(ProxyPassToModel),
     FilesPath(ProxyPassFilesPathModel),
     Static(StaticContentModel),
 }
@@ -48,10 +56,9 @@ pub enum ProxyPassTo {
 impl ProxyPassTo {
     pub fn to_string(&self) -> String {
         match self {
-            ProxyPassTo::Http1(remote_host) => remote_host.to_string(),
-            ProxyPassTo::Http2(remote_host) => remote_host.to_string(),
+            ProxyPassTo::Http1(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassTo::Http2(proxy_pass) => proxy_pass.remote_host.to_string(),
             ProxyPassTo::FilesPath(model) => model.to_string(),
-
             ProxyPassTo::Static(model) => model.to_string(),
         }
     }

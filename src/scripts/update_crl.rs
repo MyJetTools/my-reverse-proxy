@@ -9,7 +9,12 @@ pub async fn update_crl(
     id: String,
     file_source: &OverSshConnectionSettings,
 ) {
-    let crl = super::load_file(app, &file_source).await;
+    let crl = super::load_file(
+        app,
+        &file_source,
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    )
+    .await;
 
     if let Err(err) = &crl {
         println!("Error loading CRL file: {}", err);

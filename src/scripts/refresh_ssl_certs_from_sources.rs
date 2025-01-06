@@ -49,7 +49,12 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
             private_key_file_src.as_str()
         ))?;
 
-    let private_key = super::load_file(app, &private_key_src).await?;
+    let private_key = super::load_file(
+        app,
+        &private_key_src,
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    )
+    .await?;
 
     let cert_src = super::apply_variables(settings_model, ssl_certificate.certificate.as_str())?;
 
@@ -58,7 +63,8 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
         cert_src.as_str()
     ))?;
 
-    let certificate = super::load_file(app, &cert_src).await?;
+    let certificate =
+        super::load_file(app, &cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
 
     let ssl_certificate = SslCertificate::new(private_key, certificate)?;
 

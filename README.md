@@ -477,3 +477,28 @@ Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to 
       compress: true
 
 ```
+
+
+
+### Timeouts for remote HTTP endpoints
+
+
+By default remote http endpoint has 5 seconds timeout for connection and 50 seconds for request execution.
+
+To adjust timeouts - here an example of configuration:
+
+1000 - means 1000 milliseconds or 1 second
+
+```yaml
+
+  8989:
+    endpoint:
+      type: http
+
+    locations:
+    - path: /
+      proxy_pass_to: http://127.0.0.1:8080
+      connect_timeout: 1000
+      request_timeout: 2000 
+
+```

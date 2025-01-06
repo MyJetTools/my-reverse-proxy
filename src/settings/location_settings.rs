@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde::*;
 
 use super::*;
@@ -52,6 +54,8 @@ pub struct LocationSettings {
     pub body: Option<String>,
     pub whitelisted_ip: Option<String>,
     pub compress: Option<bool>,
+    pub connect_timeout: Option<u64>,
+    pub request_timeout: Option<u64>,
 }
 
 impl LocationSettings {
@@ -69,5 +73,16 @@ impl LocationSettings {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn get_request_timeout(&self) -> Duration {
+        let timeout = self.request_timeout.unwrap_or(30_000);
+
+        Duration::from_millis(timeout)
+    }
+    pub fn get_connect_timeout(&self) -> Duration {
+        let timeout = self.connect_timeout.unwrap_or(5_000);
+
+        Duration::from_millis(timeout)
     }
 }

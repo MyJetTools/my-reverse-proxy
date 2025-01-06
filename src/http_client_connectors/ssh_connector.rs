@@ -10,6 +10,7 @@ pub struct HttpOverSshConnector {
     pub ssh_session: Arc<SshSession>,
     pub remote_endpoint: RemoteEndpointOwned,
     pub debug: bool,
+    pub connect_timeout: std::time::Duration,
 }
 
 #[async_trait::async_trait]
@@ -35,11 +36,7 @@ impl MyHttpClientConnector<SshAsyncChannel> for HttpOverSshConnector {
 
         let tcp_stream = self
             .ssh_session
-            .connect_to_remote_host(
-                remote_host,
-                remote_port,
-                crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-            )
+            .connect_to_remote_host(remote_host, remote_port, self.connect_timeout)
             .await;
 
         let tcp_stream = match tcp_stream {

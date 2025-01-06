@@ -58,7 +58,12 @@ async fn try_renew_cert(
         return;
     }
 
-    let certificates_content = crate::scripts::load_file(app, &ssl_holder.cert_src).await;
+    let certificates_content = crate::scripts::load_file(
+        app,
+        &ssl_holder.cert_src,
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    )
+    .await;
 
     if let Err(err) = &certificates_content {
         println!(
@@ -71,7 +76,12 @@ async fn try_renew_cert(
 
     let certificates_content = certificates_content.unwrap();
 
-    let private_key_content = crate::scripts::load_file(app, &ssl_holder.private_key_src).await;
+    let private_key_content = crate::scripts::load_file(
+        app,
+        &ssl_holder.private_key_src,
+        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    )
+    .await;
     if let Err(err) = &private_key_content {
         println!(
             "Error loading private_key {}. Err:{}",

@@ -41,7 +41,7 @@ impl SshConfigList {
 
         let id = ssh_credentials.to_string();
 
-        if let Some(result) = inner.data.get(&id).cloned() {
+        if let Some(result) = inner.data.get(id.as_str()).cloned() {
             return Some(result);
         }
 

@@ -52,7 +52,7 @@ pub async fn update_ssh_config_list(app: &Arc<AppContext>, settings_model: &Sett
                         }
                     };
 
-                    match super::load_file(app, &file_source).await {
+                    match super::load_file(app, &file_source,        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await {
                         Ok(private_key) => {
                             let private_key = match String::from_utf8(private_key) {
                                 Ok(private_key) => private_key,

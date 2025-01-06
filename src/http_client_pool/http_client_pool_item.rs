@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use my_http_client::{
     http1::{MyHttpClient, MyHttpRequest, MyHttpResponse},
@@ -14,6 +14,7 @@ pub struct HttpClientPoolItem<
     my_http_client: Option<MyHttpClient<TStream, TConnector>>,
     pool: Option<Arc<HttpClientPoolInner<TStream, TConnector>>>,
     end_point: Option<String>,
+    disposed: AtomicBool,
 }
 
 impl<
@@ -30,6 +31,7 @@ impl<
             my_http_client: Some(my_http_client),
             pool: Some(pool),
             end_point: Some(end_point),
+            disposed: AtomicBool::new(false),
         }
     }
 
@@ -42,11 +44,19 @@ impl<
         req: &MyHttpRequest,
         request_timeout: std::time::Duration,
     ) -> Result<MyHttpResponse<TStream>, MyHttpClientError> {
-        self.my_http_client
+        let result = self
+            .my_http_client
             .as_ref()
             .unwrap()
             .do_request(req, request_timeout)
-            .await
+            .await;
+
+        if result.is_err() {
+            self.disposed
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        result
     }
 }
 
@@ -56,6 +66,10 @@ impl<
     > Drop for HttpClientPoolItem<TStream, TConnector>
 {
     fn drop(&mut self) {
+        if self.disposed.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
         if let Some(http_client) = self.my_http_client.take() {
             let pool = self.pool.take().unwrap();
 

@@ -32,7 +32,7 @@ impl CertPassKeys {
     pub async fn get(&self, ssh_credentials: &SshCredentials) -> Option<String> {
         let id = ssh_credentials.to_string();
         let read_access = self.inner.lock().await;
-        if let Some(pass_key) = read_access.pass_keys.get(&id) {
+        if let Some(pass_key) = read_access.pass_keys.get(id.as_str()) {
             return Some(pass_key.clone());
         }
 

@@ -41,7 +41,11 @@ pub async fn compile_location_proxy_pass_to(
                     "error parsing proxy_pass_to {}",
                     proxy_pass_to.as_str()
                 ))?;
-            ProxyPassTo::Http1(proxy_pass_to)
+            ProxyPassTo::Http1(ProxyPassToModel {
+                remote_host: proxy_pass_to,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
         }
         LocationType::Http2 => {
             if proxy_pass_to.is_none() {
@@ -55,7 +59,11 @@ pub async fn compile_location_proxy_pass_to(
                     proxy_pass_to.as_str()
                 ))?;
 
-            ProxyPassTo::Http2(proxy_pass_to)
+            ProxyPassTo::Http2(ProxyPassToModel {
+                remote_host: proxy_pass_to,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
         }
         LocationType::Https1 => {
             if proxy_pass_to.is_none() {
@@ -69,7 +77,11 @@ pub async fn compile_location_proxy_pass_to(
                     proxy_pass_to.as_str()
                 ))?;
 
-            ProxyPassTo::Http1(proxy_pass_to)
+            ProxyPassTo::Http1(ProxyPassToModel {
+                remote_host: proxy_pass_to,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
         }
         LocationType::Https2 => {
             if proxy_pass_to.is_none() {
@@ -82,7 +94,11 @@ pub async fn compile_location_proxy_pass_to(
                     "error parsing proxy_pass_to {}",
                     proxy_pass_to.as_str()
                 ))?;
-            ProxyPassTo::Http2(proxy_pass_to)
+            ProxyPassTo::Http2(ProxyPassToModel {
+                remote_host: proxy_pass_to,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
         }
         LocationType::Files => {
             if proxy_pass_to.is_none() {
@@ -148,7 +164,14 @@ async fn get_static_content_body(
 
             let remote_resource = super::apply_variables(settings_model, body.as_str())?;
             match OverSshConnectionSettings::try_parse(remote_resource.as_str()) {
-                Some(data_source) => super::load_file(app, &data_source).await,
+                Some(data_source) => {
+                    super::load_file(
+                        app,
+                        &data_source,
+                        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+                    )
+                    .await
+                }
                 None => {
                     return Ok(body.into_bytes());
                 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
@@ -25,6 +25,7 @@ impl<
     pub async fn get_or_create(
         &self,
         remote_endpoint: &str,
+        connect_timeout: Duration,
         create_connector: impl FnOnce() -> TConnector,
     ) -> MyHttpClient<TStream, TConnector> {
         let mut items_access = self.items.lock().await;
@@ -32,12 +33,18 @@ impl<
         match items_access.get_mut(remote_endpoint) {
             Some(pool) => {
                 if pool.is_empty() {
-                    return MyHttpClient::new(create_connector());
+                    let mut client = MyHttpClient::new(create_connector());
+                    client.set_connect_timeout(connect_timeout);
+                    return client;
                 }
 
                 pool.pop().unwrap().1
             }
-            None => MyHttpClient::new(create_connector()),
+            None => {
+                let mut client = MyHttpClient::new(create_connector());
+                client.set_connect_timeout(connect_timeout);
+                client
+            }
         }
     }
 

@@ -33,11 +33,12 @@ impl<
     pub async fn get<'s>(
         &self,
         remote_endpoint: StrOrString<'s>,
+        connect_timeout: std::time::Duration,
         create_connector: impl FnOnce() -> TConnector,
     ) -> HttpClientPoolItem<TStream, TConnector> {
         let my_http_client = self
             .inner
-            .get_or_create(remote_endpoint.as_str(), create_connector)
+            .get_or_create(remote_endpoint.as_str(), connect_timeout, create_connector)
             .await;
 
         HttpClientPoolItem::new(

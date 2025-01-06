@@ -12,6 +12,7 @@ use crate::{app::AppContext, configurations::LocalFilePath};
 pub async fn load_file(
     app: &Arc<AppContext>,
     content_source: &OverSshConnectionSettings,
+    connect_timeout: Duration,
 ) -> Result<Vec<u8>, String> {
     if let Some(scheme) = content_source.get_remote_endpoint().get_scheme() {
         match scheme {
@@ -20,6 +21,7 @@ pub async fn load_file(
                     app,
                     content_source.get_remote_endpoint(),
                     content_source.ssh_credentials.as_ref(),
+                    connect_timeout,
                 )
                 .await
             }
@@ -28,6 +30,7 @@ pub async fn load_file(
                     app,
                     content_source.get_remote_endpoint(),
                     content_source.ssh_credentials.as_ref(),
+                    connect_timeout,
                 )
                 .await
             }
@@ -72,9 +75,16 @@ async fn load_from_http_or_https<'s>(
     app: &Arc<AppContext>,
     remote_endpoint: RemoteEndpoint<'s>,
     ssh_credentials: Option<&Arc<SshCredentials>>,
+    connect_timeout: Duration,
 ) -> Result<Vec<u8>, String> {
     if let Some(ssh_credentials) = ssh_credentials {
-        return load_content_from_http_via_ssh(app, ssh_credentials, remote_endpoint).await;
+        return load_content_from_http_via_ssh(
+            app,
+            ssh_credentials,
+            remote_endpoint,
+            connect_timeout,
+        )
+        .await;
     }
 
     let response = FlUrl::new(remote_endpoint.as_str())
@@ -119,6 +129,7 @@ async fn load_content_from_http_via_ssh<'s>(
     app: &Arc<AppContext>,
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: RemoteEndpoint<'s>,
+    connect_timeout: Duration,
 ) -> Result<Vec<u8>, String> {
     use crate::http_client_connectors::HttpOverSshConnector;
     use my_ssh::*;
@@ -129,6 +140,7 @@ async fn load_content_from_http_via_ssh<'s>(
         ssh_session,
         remote_endpoint: remote_endpoint.to_owned(),
         debug: false,
+        connect_timeout,
     };
 
     let http_client: MyHttpClient<SshAsyncChannel, HttpOverSshConnector> =
