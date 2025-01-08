@@ -141,7 +141,8 @@ pub async fn compile_location_proxy_pass_to(
         location_settings.whitelisted_ip.clone(),
         proxy_pass_to,
         location_settings.domain_name.clone(),
-        location_settings.compress.unwrap_or(false),
+        location_settings.get_compress(),
+        location_settings.get_trace_payload(),
     );
 
     Ok(result)

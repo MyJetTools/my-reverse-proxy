@@ -56,6 +56,7 @@ pub struct LocationSettings {
     pub compress: Option<bool>,
     pub connect_timeout: Option<u64>,
     pub request_timeout: Option<u64>,
+    pub trace_payload: Option<bool>,
 }
 
 impl LocationSettings {
@@ -88,5 +89,13 @@ impl LocationSettings {
         }
 
         crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT
+    }
+
+    pub fn get_trace_payload(&self) -> bool {
+        self.trace_payload.unwrap_or(false)
+    }
+
+    pub fn get_compress(&self) -> bool {
+        self.trace_payload.unwrap_or(false)
     }
 }

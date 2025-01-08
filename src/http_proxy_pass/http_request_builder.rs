@@ -47,7 +47,7 @@ impl HttpRequestBuilder {
         }
     }
 
-    pub async fn into_response(
+    pub async fn into_request(
         self,
         proxy_pass: &HttpProxyPass,
         location: &ProxyPassLocation,

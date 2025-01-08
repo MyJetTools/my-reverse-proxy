@@ -25,6 +25,7 @@ impl ProxyPassLocations {
                 location.clone(),
                 endpoint_info.debug,
                 location.compress,
+                location.trace_payload,
             )
             .await;
             data.push(location)

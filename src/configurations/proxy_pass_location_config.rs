@@ -17,6 +17,7 @@ pub struct ProxyPassLocationConfig {
     pub domain_name: Option<String>,
     pub proxy_pass_to: ProxyPassTo,
     pub compress: bool,
+    pub trace_payload: bool,
 }
 
 impl ProxyPassLocationConfig {
@@ -28,6 +29,7 @@ impl ProxyPassLocationConfig {
         proxy_pass_to: ProxyPassTo,
         domain_name: Option<String>,
         compress: bool,
+        trace_payload: bool,
     ) -> Self {
         Self {
             path,
@@ -37,6 +39,7 @@ impl ProxyPassLocationConfig {
             proxy_pass_to,
             domain_name,
             compress,
+            trace_payload,
         }
     }
     pub fn get_proxy_pass_to_as_string(&self) -> String {

@@ -58,6 +58,8 @@ impl HttpProxyPass {
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
+        let mut trace_payload = false;
+
         let (request, content_source, location_index) = {
             let mut inner = self.inner.lock().await;
             if inner.is_none() {
@@ -89,9 +91,15 @@ impl HttpProxyPass {
 
             let proxy_pass_location = inner.locations.find(&location_index);
 
+            trace_payload = proxy_pass_location.trace_payload;
+
             req.process_headers(self, &inner, proxy_pass_location);
 
-            let request = req.into_response(self, proxy_pass_location).await?;
+            let request = req.into_request(self, proxy_pass_location).await?;
+
+            if trace_payload {
+                println!("Request parts: {:?}", request.req_parts);
+            }
 
             if let Some(white_list_ip) = proxy_pass_location.config.ip_white_list_id.as_ref() {
                 if !app

@@ -9,6 +9,7 @@ pub struct ProxyPassLocation {
     pub config: Arc<ProxyPassLocationConfig>,
     pub compress: bool,
     pub debug: bool,
+    pub trace_payload: bool,
 }
 
 impl ProxyPassLocation {
@@ -17,6 +18,7 @@ impl ProxyPassLocation {
         config: Arc<ProxyPassLocationConfig>,
         debug: bool,
         compress: bool,
+        trace_payload: bool,
     ) -> Self {
         //let content_source = config.create_content_source(debug, request_timeout);
         //let is_http1 = content_source.is_http1();
@@ -29,6 +31,7 @@ impl ProxyPassLocation {
             config,
             compress,
             debug,
+            trace_payload,
         };
 
         result

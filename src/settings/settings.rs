@@ -138,6 +138,7 @@ mod tests {
                     compress: None,
                     request_timeout: None,
                     connect_timeout: None,
+                    trace_payload: None,
                 }],
             },
         );
