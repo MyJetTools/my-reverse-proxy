@@ -18,9 +18,10 @@ pub async fn start_web_socket_loop<
     to_remote_stream: TStream,
     debug: bool,
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+    trace_payload: bool,
 ) {
     let _ = tokio::spawn(async move {
-        web_socket_loop(server_web_socket, to_remote_stream, debug).await;
+        web_socket_loop(server_web_socket, to_remote_stream, debug, trace_payload).await;
     })
     .await;
     disconnect.web_socket_disconnect();
@@ -32,6 +33,7 @@ async fn web_socket_loop<
     server_web_socket: HyperWebsocket,
     to_remote_stream: TStream,
     debug: bool,
+    trace_payload: bool,
 ) {
     let ws_stream = server_web_socket.await;
 
@@ -52,7 +54,14 @@ async fn web_socket_loop<
                 ws_receiver,
                 to_remote_write,
                 debug,
+                trace_payload,
             ));
+
+            if trace_payload {
+                println!("WS is starting reading message from remote");
+            }
+
+            let mut have_traced_message = false;
 
             while let Some(message) = from_remote_read.next().await {
                 let message = message;
@@ -66,6 +75,13 @@ async fn web_socket_loop<
                 }
 
                 let message = message.unwrap();
+
+                if trace_payload {
+                    if !have_traced_message {
+                        println!("WS Message from remote: {:?}", message);
+                        have_traced_message = true;
+                    }
+                }
 
                 if let Err(err) = ws_sender.send(message).await {
                     if debug {
@@ -90,9 +106,22 @@ async fn serve_from_server_to_client<
     mut websocket: SplitStream<HyperWebsocketStream>,
     mut to_remote_write: SplitSink<WebSocketStream<TStream>, Message>,
     debug: bool,
+    trace_payload: bool,
 ) -> Result<(), Error> {
+    if trace_payload {
+        println!("WS is starting reading message to remote");
+    }
+
+    let mut have_traced_message = false;
     while let Some(message) = websocket.next().await {
         let msg: Message = message?;
+
+        if trace_payload {
+            if !have_traced_message {
+                println!("WS Message to remote: {:?}", msg);
+                have_traced_message = true;
+            }
+        }
 
         let err = to_remote_write.send(msg).await;
         if let Err(err) = err {

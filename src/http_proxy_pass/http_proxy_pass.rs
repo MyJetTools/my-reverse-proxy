@@ -58,9 +58,7 @@ impl HttpProxyPass {
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
-        let mut trace_payload = false;
-
-        let (request, content_source, location_index) = {
+        let (request, content_source, location_index, trace_payload) = {
             let mut inner = self.inner.lock().await;
             if inner.is_none() {
                 return Err(ProxyPassError::Disposed);
@@ -91,7 +89,7 @@ impl HttpProxyPass {
 
             let proxy_pass_location = inner.locations.find(&location_index);
 
-            trace_payload = proxy_pass_location.trace_payload;
+            let trace_payload = proxy_pass_location.trace_payload;
 
             req.process_headers(self, &inner, proxy_pass_location);
 
@@ -132,65 +130,83 @@ impl HttpProxyPass {
                 request,
                 proxy_pass_location.content_source.clone(),
                 location_index,
+                trace_payload,
             )
         };
 
         let result = content_source.send_request(request.request).await?;
 
         let mut response = match result {
-            super::HttpResponse::Response(response) => response,
+            super::HttpResponse::Response(response) => {
+                if trace_payload {
+                    println!("Response headers: {:?}", response.headers());
+                }
+                response
+            }
             super::HttpResponse::WebSocketUpgrade {
                 stream,
                 response,
                 disconnection,
-            } => match stream {
-                super::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
-                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                        let server_web_socket = web_socket_upgrade.server_web_socket;
-                        tokio::spawn(super::start_web_socket_loop(
-                            server_web_socket,
-                            tcp_stream,
-                            self.endpoint_info.debug,
-                            disconnection,
-                        ));
+            } => {
+                if trace_payload {
+                    println!(
+                        "Response as web-socket upgrade. Headers: {:?}",
+                        response.headers()
+                    );
+                }
+                match stream {
+                    super::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
+                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                            let server_web_socket = web_socket_upgrade.server_web_socket;
 
-                        into_full_body_response(web_socket_upgrade.upgrade_response)
-                    } else {
-                        response
+                            tokio::spawn(super::start_web_socket_loop(
+                                server_web_socket,
+                                tcp_stream,
+                                self.endpoint_info.debug,
+                                disconnection,
+                                trace_payload,
+                            ));
+
+                            into_full_body_response(web_socket_upgrade.upgrade_response)
+                        } else {
+                            response
+                        }
+                    }
+
+                    super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
+                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                            let server_web_socket = web_socket_upgrade.server_web_socket;
+                            tokio::spawn(super::start_web_socket_loop(
+                                server_web_socket,
+                                tls_stream,
+                                self.endpoint_info.debug,
+                                disconnection,
+                                trace_payload,
+                            ));
+
+                            into_full_body_response(web_socket_upgrade.upgrade_response)
+                        } else {
+                            response
+                        }
+                    }
+                    super::WebSocketUpgradeStream::SshChannel(async_channel) => {
+                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                            let server_web_socket = web_socket_upgrade.server_web_socket;
+                            tokio::spawn(super::start_web_socket_loop(
+                                server_web_socket,
+                                async_channel,
+                                self.endpoint_info.debug,
+                                disconnection,
+                                trace_payload,
+                            ));
+
+                            into_full_body_response(web_socket_upgrade.upgrade_response)
+                        } else {
+                            response
+                        }
                     }
                 }
-
-                super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
-                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                        let server_web_socket = web_socket_upgrade.server_web_socket;
-                        tokio::spawn(super::start_web_socket_loop(
-                            server_web_socket,
-                            tls_stream,
-                            self.endpoint_info.debug,
-                            disconnection,
-                        ));
-
-                        into_full_body_response(web_socket_upgrade.upgrade_response)
-                    } else {
-                        response
-                    }
-                }
-                super::WebSocketUpgradeStream::SshChannel(async_channel) => {
-                    if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                        let server_web_socket = web_socket_upgrade.server_web_socket;
-                        tokio::spawn(super::start_web_socket_loop(
-                            server_web_socket,
-                            async_channel,
-                            self.endpoint_info.debug,
-                            disconnection,
-                        ));
-
-                        into_full_body_response(web_socket_upgrade.upgrade_response)
-                    } else {
-                        response
-                    }
-                }
-            },
+            }
         };
 
         let inner = self.inner.lock().await;
