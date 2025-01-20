@@ -117,11 +117,7 @@ pub async fn compile_location_proxy_pass_to(
             ProxyPassTo::FilesPath(model)
         }
         LocationType::StaticContent => {
-            if location_settings.body.is_none() {
-                return Err("body is required for static content location type".to_string());
-            }
-
-            let body = location_settings.body.clone().unwrap();
+            let body = location_settings.body.clone().unwrap_or_default();
 
             let body = get_static_content_body(app, settings_model, body).await?;
             let model: StaticContentModel = StaticContentModel {
@@ -153,6 +149,9 @@ async fn get_static_content_body(
     settings_model: &SettingsModel,
     body: String,
 ) -> Result<Vec<u8>, String> {
+    if body.is_empty() {
+        return Ok(Vec::new());
+    }
     match get_fist_char(body.as_str()) {
         Some(c) => {
             if c == '<' {
