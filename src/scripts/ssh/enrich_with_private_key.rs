@@ -24,6 +24,19 @@ pub async fn enrich_with_private_key_or_password(
             )
             .await;
         }
+
+        if ssh_credentials_as_string.as_str().ends_with(":22") {
+            let without_22 =
+                &ssh_credentials_as_string.as_str()[..ssh_credentials_as_string.len() - 3];
+            if let Some(config) = ssh_config.get(without_22) {
+                return apply_ssh_config(
+                    ssh_credentials,
+                    config,
+                    over_ssh_connection.remote_resource_string,
+                )
+                .await;
+            }
+        }
     }
 
     Ok(OverSshConnectionSettings {
