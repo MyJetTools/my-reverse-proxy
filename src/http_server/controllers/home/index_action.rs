@@ -34,6 +34,7 @@ async fn handle_request(
         headers: None,
         content_type: WebContentType::Html.into(),
         content: create_html_content(&action.app, config).await.into_bytes(),
+        set_cookies: None,
     }
     .into_ok_result(false)
 }
