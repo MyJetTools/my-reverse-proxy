@@ -18,7 +18,12 @@ pub async fn compile_tcp_configuration(
         if location_settings.proxy_pass_to.is_none() {
             return Err("proxy_pass_to is required for tcp location type".to_string());
         }
-        location_settings.proxy_pass_to.clone().unwrap()
+        let proxy_pass_to = super::apply_variables(
+            settings_model,
+            location_settings.proxy_pass_to.as_ref().unwrap(),
+        )?;
+
+        proxy_pass_to.to_string()
     } else {
         return Err(format!(
             "No location found for tcp host {}",
