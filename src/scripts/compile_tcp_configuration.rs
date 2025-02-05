@@ -40,7 +40,11 @@ pub async fn compile_tcp_configuration(
         return Err(format!("Invalid remote host {}", remote_host));
     }
 
-    let over_ssh_connection = over_ssh_connection.unwrap();
+    let over_ssh_connection = super::ssh::enrich_with_private_key_or_password(
+        over_ssh_connection.unwrap(),
+        settings_model,
+    )
+    .await?;
 
     let result = TcpEndpointHostConfig {
         host_endpoint,
