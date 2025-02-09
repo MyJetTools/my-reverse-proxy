@@ -22,7 +22,7 @@ pub async fn ping_loop(gateway_connection: Arc<impl TcpGatewayConnection>) {
 
         if incoming_interval.get_full_seconds() > 3 {
             let sent_ok = gateway_connection
-                .send_payload(TcpGatewayContract::PING_PAYLOAD.as_slice())
+                .send_payload(&TcpGatewayContract::Ping)
                 .await;
 
             if !sent_ok {

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use x509_parser::nom::AsBytes;
-
 use crate::tcp_gateway::*;
 
 use super::TcpGatewayServerConnection;
@@ -19,9 +17,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
         match contract {
             TcpGatewayContract::Handshake { client_name } => {
                 println!("Got handshake from client: {}", client_name);
-                gateway_connection
-                    .send_payload(contract.to_vec().as_bytes())
-                    .await;
+                gateway_connection.send_payload(&contract).await;
             }
             TcpGatewayContract::Connect {
                 connection_id,
@@ -49,7 +45,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             }
             TcpGatewayContract::Ping => {
                 gateway_connection
-                    .send_payload(TcpGatewayContract::PONG_PAYLOAD.as_slice())
+                    .send_payload(&TcpGatewayContract::Pong)
                     .await;
             }
             TcpGatewayContract::Pong => {}

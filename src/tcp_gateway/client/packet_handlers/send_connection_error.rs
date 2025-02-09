@@ -13,10 +13,7 @@ pub async fn send_connection_error(
     let connection_fail = TcpGatewayContract::ConnectionError {
         connection_id: connection_id,
         error: err,
-    }
-    .to_vec();
+    };
 
-    gateway_connection
-        .send_payload(connection_fail.as_slice())
-        .await;
+    gateway_connection.send_payload(&connection_fail).await;
 }

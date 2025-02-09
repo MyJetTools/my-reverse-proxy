@@ -30,9 +30,8 @@ pub async fn handle_forward_connect(
 
     match connection_result{
         Ok(forward_connection) => {
-            let connected_payload = TcpGatewayContract::Connected { connection_id } 
-            .to_vec();
-        gateway_connection.send_payload(connected_payload.as_slice()).await;
+            let connected_payload = TcpGatewayContract::Connected { connection_id } ;
+        gateway_connection.send_payload(&connected_payload).await;
 
         let forward_connection = Arc::new(forward_connection);
 

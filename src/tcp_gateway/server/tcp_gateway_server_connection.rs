@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
-use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayConnection};
+use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayConnection, TcpGatewayContract};
 
 use super::TcpGatewayServerForwardConnection;
 
@@ -60,8 +60,9 @@ impl TcpGatewayConnection for TcpGatewayServerConnection {
     async fn disconnect(&self) {
         self.inner.disconnect().await
     }
-    async fn send_payload(&self, payload: &[u8]) -> bool {
-        self.inner.send_payload(payload).await
+    async fn send_payload(&self, payload: &TcpGatewayContract) -> bool {
+        let vec = payload.to_vec();
+        self.inner.send_payload(vec.as_slice()).await
     }
 
     async fn add_forward_connection(

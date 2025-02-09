@@ -107,6 +107,7 @@ impl<'s> TcpGatewayContract<'s> {
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut result = Vec::new();
+        result.extend_from_slice(&[0, 0, 0, 0]);
         match self {
             Self::Handshake { client_name } => {
                 result.push(HANDSHAKE_PACKET_ID);
@@ -151,6 +152,15 @@ impl<'s> TcpGatewayContract<'s> {
                 result.push(PONG);
             }
         }
+
+        let len = (result.len() - 4) as u32;
+
+        let len = len.to_be_bytes();
+        result[0] = len[0];
+        result[1] = len[1];
+        result[2] = len[2];
+        result[3] = len[3];
+
         result
     }
 }

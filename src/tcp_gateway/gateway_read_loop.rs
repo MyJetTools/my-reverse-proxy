@@ -91,7 +91,7 @@ pub trait TcpGatewayConnection {
     fn get_last_incoming_payload_time(&self) -> DateTimeAsMicroseconds;
 
     async fn disconnect(&self);
-    async fn send_payload(&self, payload: &[u8]) -> bool;
+    async fn send_payload(&self, contract: &TcpGatewayContract) -> bool;
 
     async fn add_forward_connection(
         &self,

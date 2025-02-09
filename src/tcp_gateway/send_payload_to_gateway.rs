@@ -27,11 +27,8 @@ pub async fn send_payload_to_gateway<
             let disconnected_payload = TcpGatewayContract::ConnectionError {
                 connection_id,
                 error: "Connection is closed",
-            }
-            .to_vec();
-            gateway_connection
-                .send_payload(disconnected_payload.as_slice())
-                .await;
+            };
+            gateway_connection.send_payload(&disconnected_payload).await;
         }
     }
 }

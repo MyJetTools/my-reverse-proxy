@@ -169,6 +169,16 @@ mod tests {
             },
         );
 
+        let mut gateway_clients = HashMap::new();
+
+        gateway_clients.insert(
+            "client_id".to_string(),
+            GatewayClientSettings {
+                remote_host: "127.0.0.1:3000".to_string(),
+                password: None,
+            },
+        );
+
         let model = SettingsModel {
             hosts,
             global_settings: None,
@@ -181,7 +191,7 @@ mod tests {
             allowed_users: None,
             ip_white_lists: None,
             gateway_server: None,
-            gateway_clients: None,
+            gateway_clients: Some(gateway_clients),
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

@@ -24,12 +24,9 @@ pub async fn handle_connect_forward_endpoint(
         let payload_to_send = TcpGatewayContract::ConnectionError {
             connection_id,
             error: err.as_str(),
-        }
-        .to_vec();
+        };
 
-        gateway_connection
-            .send_payload(payload_to_send.as_slice())
-            .await;
+        gateway_connection.send_payload(&payload_to_send).await;
 
         return;
     }
@@ -41,20 +38,17 @@ pub async fn handle_connect_forward_endpoint(
             let payload_to_send = TcpGatewayContract::ConnectionError {
                 connection_id,
                 error: err.as_str(),
-            }
-            .to_vec();
+            };
 
-            gateway_connection
-                .send_payload(payload_to_send.as_slice())
-                .await;
+            gateway_connection.send_payload(&payload_to_send).await;
 
             return;
         }
     };
 
-    let payload = TcpGatewayContract::Connected { connection_id }.to_vec();
+    let connected_payload = TcpGatewayContract::Connected { connection_id };
 
-    gateway_connection.send_payload(payload.as_slice()).await;
+    gateway_connection.send_payload(&connected_payload).await;
 
     let (read, write) = tcp_stream.into_split();
 
