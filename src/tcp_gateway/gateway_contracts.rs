@@ -34,17 +34,14 @@ pub enum TcpGatewayContract<'s> {
 }
 
 impl<'s> TcpGatewayContract<'s> {
-    pub const PING_PAYLOAD: [u8; 1] = [PING];
-    pub const PONG_PAYLOAD: [u8; 1] = [PONG];
-
     pub fn parse(payload: &'s [u8]) -> Result<Self, String> {
         let packet_type = payload[0];
         let payload = &payload[1..];
         match packet_type {
             HANDSHAKE_PACKET_ID => {
                 let timestamp = i64::from_le_bytes([
-                    payload[0], payload[1], payload[2], payload[3], payload[5], payload[6],
-                    payload[7], payload[8],
+                    payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
+                    payload[6], payload[7],
                 ]);
                 let client_name = std::str::from_utf8(&payload[8..]).map_err(|_| {
                     format!("Can not convert client_name to string during parsing Handshake")
