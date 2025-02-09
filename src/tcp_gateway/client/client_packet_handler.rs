@@ -73,11 +73,6 @@ impl TcpGatewayClientPacketHandler {
                 connection_id,
                 payload,
             } => {
-                println!(
-                    "Got BackwardPayload for connection_id: {}. Size: {}",
-                    connection_id,
-                    payload.len()
-                );
                 gateway_connection
                     .notify_incoming_payload(connection_id, payload)
                     .await;

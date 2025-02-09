@@ -46,7 +46,7 @@ impl TcpConnectionInner {
         self.is_connected.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub async fn disconnect(&self) {
+    pub async fn disconnect(&self) -> bool {
         self.is_connected
             .store(false, std::sync::atomic::Ordering::Relaxed);
 
@@ -59,6 +59,7 @@ impl TcpConnectionInner {
             let mut buffer_access = self.buffer.lock().await;
             buffer_access.disconnect();
         }
+        connection.is_some()
     }
 
     pub async fn flush_payload(&self) -> bool {

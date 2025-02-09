@@ -94,13 +94,18 @@ impl TcpGatewayProxyForwardedConnection {
     }
 
     pub async fn disconnect_forwarded_connection(&self, message: String) {
-        let send_payload = TcpGatewayContract::ConnectionError {
-            connection_id: self.connection_id,
-            error: message.as_str(),
-        }
-        .to_vec();
+        let just_disconnected = self.connection_inner.disconnect().await;
 
-        self.connection_inner.send_payload(&send_payload).await;
+        if just_disconnected {
+            let send_payload = TcpGatewayContract::ConnectionError {
+                connection_id: self.connection_id,
+                error: message.as_str(),
+            }
+            .to_vec();
+
+            self.connection_inner.send_payload(&send_payload).await;
+        }
+
         let mut receive_buffer = self.receive_buffer.lock().await;
         receive_buffer.disconnect(message);
     }
