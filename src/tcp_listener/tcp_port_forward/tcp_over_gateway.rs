@@ -145,7 +145,7 @@ async fn copy_from_connection_to_gateway(
                     err
                 );
                 println!("{}", err);
-                connection.disconnect(err).await;
+                connection.disconnect_forwarded_connection(err).await;
                 break;
             }
         };
@@ -159,7 +159,7 @@ async fn copy_from_connection_to_gateway(
             );
 
             println!("{}", err);
-            connection.disconnect(err).await;
+            connection.disconnect_forwarded_connection(err).await;
             break;
         }
 
@@ -187,7 +187,7 @@ async fn copy_from_gateway_to_connection(
                     err
                 );
                 println!("{}", err);
-                connection.disconnect(err).await;
+                connection.disconnect_forwarded_connection(err).await;
                 break;
             }
         };
@@ -207,7 +207,7 @@ async fn copy_from_gateway_to_connection(
 
             println!("{}", err);
 
-            connection.disconnect(err).await;
+            connection.disconnect_forwarded_connection(err).await;
             break;
         }
 
@@ -223,7 +223,7 @@ async fn copy_from_gateway_to_connection(
                 err
             );
             println!("{}", err);
-            connection.disconnect(err).await;
+            connection.disconnect_forwarded_connection(err).await;
             break;
         }
     }
