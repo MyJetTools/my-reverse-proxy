@@ -19,20 +19,26 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
+        tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         match contract {
             TcpGatewayContract::Handshake {
-                client_name,
+                gateway_name,
                 timestamp,
             } => {
                 let date_time = DateTimeAsMicroseconds::new(timestamp);
 
                 println!(
-                    "Got handshake from client. Timestamp: {}: {}",
-                    client_name,
+                    "Got handshake from gateway {}. Timestamp: {}",
+                    gateway_name,
                     date_time.to_rfc3339()
                 );
+
+                gateway_connection.set_gateway_id(gateway_name).await;
+                tcp_gateway
+                    .set_gateway_connection(gateway_name, gateway_connection.clone().into())
+                    .await;
                 gateway_connection.send_payload(&contract).await;
             }
             TcpGatewayContract::Connect {

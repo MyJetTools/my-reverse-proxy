@@ -24,9 +24,9 @@ impl TcpGatewayForwardConnection {
 
         if result.is_err() {
             return Err(format!(
-                "Can not connect to {} using gateway {}. Err: Timeout {:?}",
+                "Can not connect to {} using gateway [{}]. Err: Timeout {:?}",
                 remote_endpoint.as_str(),
-                gateway_connection.gateway_id.as_str(),
+                gateway_connection.get_gateway_id().await,
                 timeout
             ));
         }
@@ -37,9 +37,9 @@ impl TcpGatewayForwardConnection {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 return Err(format!(
-                    "Can not connect to {} using gateway {}. Err: {:?}",
+                    "Can not connect to {} using gateway [{}]. Err: {:?}",
                     remote_endpoint.as_str(),
-                    gateway_connection.gateway_id.as_str(),
+                    gateway_connection.get_gateway_id().await,
                     err
                 ));
             }
@@ -88,8 +88,8 @@ async fn read_loop(
             Err(err) => {
                 write.disconnect().await;
                 let err = format!(
-                    "ReadLoop. Can not read from connection {connection_id} using gateway {}  ConnectionError: {:?}",
-                    gateway_connection.gateway_id.as_str(),
+                    "ReadLoop. Can not read from connection {connection_id} using gateway [{}]  ConnectionError: {:?}",
+                    gateway_connection.get_gateway_id().await,
                     err
                 );
                 crate::tcp_gateway::scripts::send_connection_error(
@@ -105,8 +105,8 @@ async fn read_loop(
 
         if read_size == 0 {
             let err = format!(
-                "ReadLoop. Connection {connection_id} using gateway {} id disconnected",
-                gateway_connection.gateway_id.as_str(),
+                "ReadLoop. Connection {connection_id} using gateway [{}] id disconnected",
+                gateway_connection.get_gateway_id().await,
             );
 
             crate::tcp_gateway::scripts::send_connection_error(

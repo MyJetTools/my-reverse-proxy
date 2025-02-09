@@ -9,7 +9,7 @@ use super::{
 };
 
 pub struct TcpGatewayConnection {
-    pub gateway_id: Arc<String>,
+    gateway_id: Mutex<Arc<String>>,
     pub addr: Arc<String>,
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
@@ -18,11 +18,11 @@ pub struct TcpGatewayConnection {
 }
 
 impl TcpGatewayConnection {
-    pub fn new(gateway_id: Arc<String>, addr: Arc<String>, write_half: OwnedWriteHalf) -> Self {
+    pub fn new(addr: Arc<String>, write_half: OwnedWriteHalf) -> Self {
         let (inner, receiver) = TcpConnectionInner::new(write_half);
         let inner = Arc::new(inner);
         let result = Self {
-            gateway_id,
+            gateway_id: Mutex::new(Arc::new(String::new())),
             addr,
             inner: inner.clone(),
             forward_connections: Mutex::default(),
@@ -33,6 +33,16 @@ impl TcpGatewayConnection {
         super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
+    }
+
+    pub async fn set_gateway_id(&self, id: &str) {
+        let mut gateway_id = self.gateway_id.lock().await;
+        *gateway_id = Arc::new(id.to_string());
+    }
+
+    pub async fn get_gateway_id(&self) -> Arc<String> {
+        let gateway = self.gateway_id.lock().await;
+        gateway.clone()
     }
 
     pub async fn add_forward_connection(
@@ -77,9 +87,10 @@ impl TcpGatewayConnection {
         timeout: Duration,
         connection_id: u32,
     ) -> Result<Arc<TcpGatewayProxyForwardedConnection>, String> {
+        let gateway_id = self.get_gateway_id().await;
         let connection = Arc::new(TcpGatewayProxyForwardedConnection::new(
             connection_id,
-            self.gateway_id.clone(),
+            gateway_id.clone(),
             self.inner.clone(),
             remote_endpoint.to_string(),
         ));
@@ -98,7 +109,7 @@ impl TcpGatewayConnection {
         if !self.send_payload(&connect_contract).await {
             return Err(format!(
                 "Gateway {} connection to endpoint {} is lost",
-                self.gateway_id,
+                gateway_id.as_str(),
                 self.addr.as_str()
             ));
         }
@@ -119,7 +130,7 @@ impl TcpGatewayConnection {
 
         return Err(format!(
             "Gateway {} connection to endpoint {} is lost during awaiting forward to {} connecting result",
-            self.gateway_id,
+            gateway_id,
             self.addr.as_str(),
             remote_endpoint
         ));
@@ -164,13 +175,15 @@ impl TcpGatewayConnection {
 
         match status {
             forwarded_connection::TcpGatewayProxyConnectionStatus::AwaitingConnection => {
-                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is not connected yet", payload.len(), connection_id, self.gateway_id.as_str());
+                let gateway_id = self.get_gateway_id().await;
+                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is not connected yet", payload.len(), connection_id, gateway_id.as_str());
             }
             forwarded_connection::TcpGatewayProxyConnectionStatus::Connected => {
                 proxy_connection.enqueue_receive_payload(payload).await;
             }
             forwarded_connection::TcpGatewayProxyConnectionStatus::Disconnected(err) => {
-                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is disconnected with err: {}", payload.len(), connection_id, self.gateway_id.as_str(), err);
+                let gateway_id = self.get_gateway_id().await;
+                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is disconnected with err: {}", payload.len(), connection_id, gateway_id.as_str(), err);
             }
         }
     }

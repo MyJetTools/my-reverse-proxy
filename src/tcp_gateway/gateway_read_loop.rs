@@ -76,7 +76,7 @@ pub async fn read_loop(
                 let now = DateTimeAsMicroseconds::now();
                 gateway_connection.set_last_incoming_payload_time(now);
                 packet_handler
-                    .handle_packet(packet, &gateway_connection)
+                    .handle_packet(packet, &tcp_gateway, &gateway_connection)
                     .await
             }
             Err(err) => {
@@ -91,13 +91,4 @@ pub async fn read_loop(
     }
 
     gateway_connection.disconnect_gateway().await;
-}
-
-#[async_trait::async_trait]
-pub trait TcpGatewayPacketHandler {
-    async fn handle_packet<'d>(
-        &self,
-        contract: TcpGatewayContract<'d>,
-        connection: &Arc<TcpGatewayConnection>,
-    );
 }

@@ -18,9 +18,9 @@ pub async fn gateway_ping_loop(gateway_connection: Arc<TcpGatewayConnection>, de
         if incoming_interval_sec > 9 {
             if debug {
                 println!(
-                    "Detected dead Tcp Gateway connection to {} with id {}",
+                    "Detected dead Tcp Gateway connection to {} with id [{}]",
                     gateway_connection.addr.as_str(),
-                    gateway_connection.gateway_id.as_str()
+                    gateway_connection.get_gateway_id().await
                 );
             }
 

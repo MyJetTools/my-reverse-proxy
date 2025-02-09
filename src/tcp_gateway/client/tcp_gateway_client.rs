@@ -118,8 +118,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let gateway_connection =
-            TcpGatewayConnection::new(inner.id.clone(), inner.addr.clone(), write);
+        let gateway_connection = TcpGatewayConnection::new(inner.addr.clone(), write);
 
         let gateway_connection = Arc::new(gateway_connection);
         inner
@@ -136,7 +135,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let handshake_contract = TcpGatewayContract::Handshake {
             timestamp: DateTimeAsMicroseconds::now().unix_microseconds,
-            client_name: inner.get_id(),
+            gateway_name: inner.get_id(),
         };
 
         gateway_connection.send_payload(&handshake_contract).await;

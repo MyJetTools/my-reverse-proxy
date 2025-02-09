@@ -13,7 +13,7 @@ const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
 pub enum TcpGatewayContract<'s> {
     Handshake {
         timestamp: i64,
-        client_name: &'s str,
+        gateway_name: &'s str,
     },
     Connect {
         connection_id: u32,
@@ -49,11 +49,11 @@ impl<'s> TcpGatewayContract<'s> {
                     payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
                     payload[6], payload[7],
                 ]);
-                let client_name = std::str::from_utf8(&payload[8..]).map_err(|_| {
+                let gateway_name = std::str::from_utf8(&payload[8..]).map_err(|_| {
                     format!("Can not convert client_name to string during parsing Handshake")
                 })?;
                 return Ok(Self::Handshake {
-                    client_name,
+                    gateway_name,
                     timestamp,
                 });
             }
@@ -132,12 +132,12 @@ impl<'s> TcpGatewayContract<'s> {
         result.extend_from_slice(&[0, 0, 0, 0]);
         match self {
             Self::Handshake {
-                client_name,
+                gateway_name,
                 timestamp,
             } => {
                 result.push(HANDSHAKE_PACKET_ID);
                 result.extend_from_slice(&timestamp.to_le_bytes());
-                result.extend_from_slice(client_name.as_bytes());
+                result.extend_from_slice(gateway_name.as_bytes());
             }
             Self::Connect {
                 connection_id,

@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::tcp_gateway::{TcpGatewayConnection, TcpGatewayContract, TcpGatewayPacketHandler};
+use crate::tcp_gateway::{
+    TcpGatewayConnection, TcpGatewayContract, TcpGatewayInner, TcpGatewayPacketHandler,
+};
 
 pub struct TcpGatewayClientPacketHandler {
     debug: bool,
@@ -16,20 +18,26 @@ impl TcpGatewayClientPacketHandler {
     async fn handle_client_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
+        tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         match contract {
             TcpGatewayContract::Handshake {
-                client_name,
+                gateway_name,
                 timestamp,
             } => {
                 let timestamp = DateTimeAsMicroseconds::new(timestamp);
 
                 println!(
                     "Got handshake from gateway server {} with timestamp {}",
-                    client_name,
+                    gateway_name,
                     timestamp.to_rfc3339()
                 );
+
+                gateway_connection.set_gateway_id(gateway_name).await;
+                tcp_gateway
+                    .set_gateway_connection(gateway_name, gateway_connection.clone().into())
+                    .await;
             }
             TcpGatewayContract::Connect {
                 connection_id,
@@ -97,9 +105,10 @@ impl TcpGatewayPacketHandler for TcpGatewayClientPacketHandler {
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
+        tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
-        self.handle_client_packet(contract, gateway_connection)
+        self.handle_client_packet(contract, tcp_gateway, gateway_connection)
             .await;
     }
 }
