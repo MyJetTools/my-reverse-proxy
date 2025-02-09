@@ -38,18 +38,12 @@ impl ProxyReceiveBuffer {
 
     pub fn disconnect(&mut self, message: String) {
         match self {
-            ProxyReceiveBuffer::Buffer(_) => {
-                println!("Disconnecting Proxy receive buffer on Buffer State with size");
-            }
+            ProxyReceiveBuffer::Buffer(_) => {}
             ProxyReceiveBuffer::Awaiting(task_completion) => {
                 task_completion.set_error(message.to_string());
-                println!("Disconnecting Proxy receive buffer on Awaiting State");
             }
-            ProxyReceiveBuffer::Disconnected(msg) => {
-                println!(
-                    "Disconnecting Proxy receive buffer on Disconnected State with message: {}",
-                    msg
-                );
+            ProxyReceiveBuffer::Disconnected(_) => {
+                return;
             }
         }
         *self = ProxyReceiveBuffer::Disconnected(message);
