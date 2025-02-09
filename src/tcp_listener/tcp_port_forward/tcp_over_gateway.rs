@@ -216,9 +216,8 @@ async fn copy_from_gateway_to_connection(
                     proxy_connection.connection_id,
                     err
                 );
-                if debug {
-                    println!("{}", err);
-                }
+
+                println!("{}", err);
 
                 gateway_connection
                     .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
@@ -227,8 +226,6 @@ async fn copy_from_gateway_to_connection(
                 break;
             }
         };
-
-        println!("Getting from gateway {}", payload.len());
 
         let write_future = write.write_all(payload.as_slice());
 
@@ -243,9 +240,8 @@ async fn copy_from_gateway_to_connection(
                 listening_addr
             );
 
-            if debug {
-                println!("{}", err);
-            }
+            println!("{}", err);
+
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                 .await;
@@ -263,9 +259,9 @@ async fn copy_from_gateway_to_connection(
                 listening_addr,
                 err
             );
-            if debug {
-                println!("{}", err);
-            }
+
+            println!("{}", err);
+
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                 .await;

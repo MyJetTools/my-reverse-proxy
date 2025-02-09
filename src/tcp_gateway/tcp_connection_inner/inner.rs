@@ -71,7 +71,7 @@ impl TcpConnectionInner {
                     return false;
                 }
 
-                write_access.get_payload_to_send(1024 * 1024)
+                write_access.get_payload_to_send()
             };
 
             if payload_to_send.is_none() {
