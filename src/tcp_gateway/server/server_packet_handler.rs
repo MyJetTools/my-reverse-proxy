@@ -50,6 +50,11 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 connection_id,
                 payload,
             } => {
+                println!(
+                    "Got ForwardPayload for connection_id: {}. Size: {}",
+                    connection_id,
+                    payload.len()
+                );
                 gateway_connection
                     .notify_incoming_payload(connection_id, payload)
                     .await;

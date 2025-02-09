@@ -90,9 +90,14 @@ pub async fn handle_connection(
         return;
     }
 
-    println!("Accepted connection using gateway {}", gateway_id);
-
     let connection = connection_result.unwrap();
+
+    println!(
+        "Accepted connection to {}->{}. Connection_id: {}",
+        gateway_id,
+        connection.remote_endpoint.as_str(),
+        connection.connection_id,
+    );
 
     let (read, write) = accepted_server_connection.tcp_stream.into_split();
 
@@ -158,6 +163,7 @@ async fn copy_from_connection_to_gateway(
             break;
         }
 
+        println!("Sending payload to gateway sized: {}", read_size);
         connection.send_payload(&buffer[..read_size]).await;
     }
 }

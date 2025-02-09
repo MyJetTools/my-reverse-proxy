@@ -43,6 +43,7 @@ impl TcpGatewayClientPacketHandler {
                 ));
             }
             TcpGatewayContract::Connected { connection_id } => {
+                println!("Got Gateway payload connected: {}", connection_id);
                 gateway_connection
                     .notify_proxy_connection_accepted(connection_id)
                     .await;
