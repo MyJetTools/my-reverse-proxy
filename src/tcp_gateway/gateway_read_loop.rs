@@ -110,16 +110,20 @@ async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -
     match read_result {
         Ok(result) => {
             if result != buffer.len() {
-                println!("[2] TCP Gateway is disconnected");
+                if debug {
+                    println!("[2] TCP Gateway is disconnected");
+                }
 
                 return false;
             }
         }
         Err(err) => {
-            println!(
-                "[2] Failed to read payload size from TCP Gateway. Err: {:?}",
-                err
-            );
+            if debug {
+                println!(
+                    "[2] Failed to read payload size from TCP Gateway. Err: {:?}",
+                    err
+                );
+            }
 
             return false;
         }

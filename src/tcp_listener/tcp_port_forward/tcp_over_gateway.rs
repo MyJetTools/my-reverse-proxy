@@ -217,7 +217,9 @@ async fn copy_from_gateway_to_connection(
                     err
                 );
 
-                println!("{}", err);
+                if debug {
+                    println!("{}", err);
+                }
 
                 gateway_connection
                     .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
@@ -240,7 +242,9 @@ async fn copy_from_gateway_to_connection(
                 listening_addr
             );
 
-            println!("{}", err);
+            if debug {
+                println!("{}", err);
+            }
 
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
@@ -260,7 +264,9 @@ async fn copy_from_gateway_to_connection(
                 err
             );
 
-            println!("{}", err);
+            if debug {
+                println!("{}", err);
+            }
 
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
