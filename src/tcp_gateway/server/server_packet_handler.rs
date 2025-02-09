@@ -44,6 +44,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 send_payload_to_gateway(gateway_connection, connection_id, payload).await;
             }
             TcpGatewayContract::Ping => {
+                println!("Got PING");
                 gateway_connection
                     .send_payload(&TcpGatewayContract::Pong)
                     .await;

@@ -72,7 +72,9 @@ impl TcpGatewayClientPacketHandler {
                 send_payload_to_gateway(gateway_connection, connection_id, payload).await;
             }
             TcpGatewayContract::Ping => {}
-            TcpGatewayContract::Pong => {}
+            TcpGatewayContract::Pong => {
+                println!("Got PONG")
+            }
         }
     }
 }
