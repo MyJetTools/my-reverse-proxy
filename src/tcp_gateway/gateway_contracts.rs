@@ -155,7 +155,7 @@ impl<'s> TcpGatewayContract<'s> {
 
         let len = (result.len() - 4) as u32;
 
-        let len = len.to_be_bytes();
+        let len = len.to_le_bytes();
         result[0] = len[0];
         result[1] = len[1];
         result[2] = len[2];
