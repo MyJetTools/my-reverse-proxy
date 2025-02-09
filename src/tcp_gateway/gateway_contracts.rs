@@ -10,6 +10,7 @@ const PONG: u8 = 9;
 
 pub enum TcpGatewayContract<'s> {
     Handshake {
+        timestamp: i64,
         client_name: &'s str,
     },
     Connect {
@@ -41,10 +42,17 @@ impl<'s> TcpGatewayContract<'s> {
         let payload = &payload[1..];
         match packet_type {
             HANDSHAKE_PACKET_ID => {
-                let client_name = std::str::from_utf8(payload).map_err(|_| {
+                let timestamp = i64::from_le_bytes([
+                    payload[0], payload[1], payload[2], payload[3], payload[5], payload[6],
+                    payload[7], payload[8],
+                ]);
+                let client_name = std::str::from_utf8(&payload[8..]).map_err(|_| {
                     format!("Can not convert client_name to string during parsing Handshake")
                 })?;
-                return Ok(Self::Handshake { client_name });
+                return Ok(Self::Handshake {
+                    client_name,
+                    timestamp,
+                });
             }
 
             CONNECT_PACKET_ID => {
@@ -109,8 +117,12 @@ impl<'s> TcpGatewayContract<'s> {
         let mut result = Vec::new();
         result.extend_from_slice(&[0, 0, 0, 0]);
         match self {
-            Self::Handshake { client_name } => {
+            Self::Handshake {
+                client_name,
+                timestamp,
+            } => {
                 result.push(HANDSHAKE_PACKET_ID);
+                result.extend_from_slice(&timestamp.to_le_bytes());
                 result.extend_from_slice(client_name.as_bytes());
             }
             Self::Connect {

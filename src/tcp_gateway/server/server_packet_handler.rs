@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use rust_extensions::date_time::DateTimeAsMicroseconds;
+
 use crate::tcp_gateway::*;
 
 use super::TcpGatewayServerConnection;
@@ -15,8 +17,16 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
         gateway_connection: &Arc<Self::GateWayConnection>,
     ) {
         match contract {
-            TcpGatewayContract::Handshake { client_name } => {
-                println!("Got handshake from client: {}", client_name);
+            TcpGatewayContract::Handshake {
+                client_name,
+                timestamp,
+            } => {
+                let date_time = DateTimeAsMicroseconds::new(timestamp);
+                println!(
+                    "Got handshake from client. Timestamp: {}: {}",
+                    client_name,
+                    date_time.to_rfc3339()
+                );
                 gateway_connection.send_payload(&contract).await;
             }
             TcpGatewayContract::Connect {

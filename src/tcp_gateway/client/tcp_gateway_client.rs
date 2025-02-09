@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
 use crate::tcp_gateway::{client::*, *};
@@ -64,6 +65,15 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
             gateway_client_connection.clone(),
             TcpGatewayClientPacketHandler::new(),
         ));
+
+        let handshake_contract = TcpGatewayContract::Handshake {
+            timestamp: DateTimeAsMicroseconds::now().unix_microseconds,
+            client_name: inner.get_id(),
+        };
+
+        gateway_client_connection
+            .send_payload(&handshake_contract)
+            .await;
 
         super::ping_loop(gateway_client_connection).await;
     }
