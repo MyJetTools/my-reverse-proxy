@@ -60,11 +60,13 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             }
         };
 
-        println!(
-            "Gateway {} connection {} is accepted",
-            tcp_gateway.get_id(),
-            socket_addr
-        );
+        if debug {
+            println!(
+                "Gateway {} connection {} is accepted",
+                tcp_gateway.get_id(),
+                socket_addr
+            );
+        }
 
         let (read, write) = tcp_stream.into_split();
 

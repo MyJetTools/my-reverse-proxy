@@ -21,11 +21,13 @@ pub async fn handle_connection(
     gateway_id: Arc<String>,
     remote_host: Arc<RemoteEndpointOwned>,
 ) {
-    println!(
-        "Accepted connection forwarded to {}->{}",
-        gateway_id.as_str(),
-        remote_host.as_str()
-    );
+    if configuration.debug {
+        println!(
+            "Accepted connection forwarded to {}->{}",
+            gateway_id.as_str(),
+            remote_host.as_str()
+        );
+    }
 
     if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
         let ip_white_list = app
@@ -73,7 +75,9 @@ pub async fn handle_connection(
 
     let gateway_client = gateway_client.unwrap();
 
-    println!("Connecting to {}", remote_host.as_str());
+    if configuration.debug {
+        println!("Connecting to {}", remote_host.as_str());
+    }
     let connection_result = gateway_client
         .connect_to_forward_proxy_connection(remote_host.as_str())
         .await;
@@ -93,12 +97,14 @@ pub async fn handle_connection(
 
     let (proxy_connection, gateway_connection) = connection_result.unwrap();
 
-    println!(
-        "Accepted connection to {}->{}. Connection_id: {}",
-        gateway_id,
-        proxy_connection.remote_endpoint.as_str(),
-        proxy_connection.connection_id,
-    );
+    if configuration.debug {
+        println!(
+            "Accepted connection to {}->{}. Connection_id: {}",
+            gateway_id,
+            proxy_connection.remote_endpoint.as_str(),
+            proxy_connection.connection_id,
+        );
+    }
 
     let (read, write) = accepted_server_connection.tcp_stream.into_split();
 
@@ -107,24 +113,15 @@ pub async fn handle_connection(
         gateway_connection.clone(),
         proxy_connection.clone(),
         listening_addr,
+        configuration.debug,
     ));
     tokio::spawn(copy_from_gateway_to_connection(
         write,
         gateway_connection,
         proxy_connection,
         listening_addr,
-    ));
-
-    /*
-    tokio::spawn(connection_loop(
-        listening_addr,
-        remote_host,
-        accepted_server_connection.tcp_stream,
-        remote_tcp_connection_result.unwrap(),
-        app.connection_settings.buffer_size,
         configuration.debug,
     ));
-     */
 }
 
 async fn copy_from_connection_to_gateway(
@@ -132,6 +129,7 @@ async fn copy_from_connection_to_gateway(
     gateway_connection: Arc<TcpGatewayConnection>,
     proxy_connection: Arc<TcpGatewayProxyForwardedConnection>,
     listening_addr: SocketAddr,
+    debug: bool,
 ) {
     let mut buffer = crate::tcp_utils::allocated_read_buffer();
 
@@ -148,7 +146,11 @@ async fn copy_from_connection_to_gateway(
                     proxy_connection.get_gateway_id(),
                     err
                 );
-                println!("{}", err);
+
+                if debug {
+                    println!("{}", err);
+                }
+
                 gateway_connection
                     .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                     .await;
@@ -164,7 +166,9 @@ async fn copy_from_connection_to_gateway(
                 proxy_connection.get_gateway_id(),
             );
 
-            println!("{}", err);
+            if debug {
+                println!("{}", err);
+            }
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                 .await;
@@ -180,6 +184,7 @@ async fn copy_from_gateway_to_connection(
     gateway_connection: Arc<TcpGatewayConnection>,
     proxy_connection: Arc<TcpGatewayProxyForwardedConnection>,
     listening_addr: SocketAddr,
+    debug: bool,
 ) {
     loop {
         let read_result = proxy_connection.receive_payload().await;
@@ -194,7 +199,9 @@ async fn copy_from_gateway_to_connection(
                     proxy_connection.connection_id,
                     err
                 );
-                println!("{}", err);
+                if debug {
+                    println!("{}", err);
+                }
 
                 gateway_connection
                     .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
@@ -217,7 +224,9 @@ async fn copy_from_gateway_to_connection(
                 listening_addr
             );
 
-            println!("{}", err);
+            if debug {
+                println!("{}", err);
+            }
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                 .await;
@@ -235,7 +244,9 @@ async fn copy_from_gateway_to_connection(
                 listening_addr,
                 err
             );
-            println!("{}", err);
+            if debug {
+                println!("{}", err);
+            }
             gateway_connection
                 .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
                 .await;
