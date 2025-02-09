@@ -228,6 +228,8 @@ async fn copy_from_gateway_to_connection(
             }
         };
 
+        println!("Getting from gateway {}", payload.len());
+
         let write_future = write.write_all(payload.as_slice());
 
         let result = tokio::time::timeout(Duration::from_secs(30), write_future).await;
