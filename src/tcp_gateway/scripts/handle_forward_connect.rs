@@ -30,9 +30,6 @@ pub async fn handle_forward_connect(
 
     match connection_result{
         Ok(forward_connection) => {
-
-            println!("Connected to {}", forward_connection.remote_endpoint.as_str());
-
             let connected_payload = TcpGatewayContract::Connected { connection_id } ;
         gateway_connection.send_payload(&connected_payload).await;
 
@@ -42,7 +39,6 @@ pub async fn handle_forward_connect(
   
         },
         Err(err) => {
-            println!("Not Connected to {} with err: {}", remote_host.as_str(), err);
             crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
         },
     }
