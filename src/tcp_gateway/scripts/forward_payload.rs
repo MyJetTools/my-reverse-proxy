@@ -14,7 +14,7 @@ pub async fn forward_payload(
         .get_forward_connection(connection_id)
         .await
     {
-        println!("Found forward_connection with id{}", connection_id);
+        println!("Found forward_connection with id {}", connection_id);
         if !forward_connection.send_payload(payload).await {
             gateway_connection
                 .disconnect_forward_connection(connection_id)

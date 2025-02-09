@@ -147,36 +147,16 @@ impl TcpGatewayConnection {
         self.inner.is_connected()
     }
 
-    pub async fn send_payload_to_gateway(&self, connection_id: u32, payload: &[u8]) -> bool {
-        let proxy_connection = self.get_forward_proxy_connection(connection_id).await;
-
-        if proxy_connection.is_none() {
-            return false;
-        }
-
-        let proxy_connection = proxy_connection.unwrap();
-
-        let status = proxy_connection.get_status().await;
-
-        match status {
-            forwarded_connection::TcpGatewayProxyConnectionStatus::AwaitingConnection => {
-                println!("Can not send payload with size: {} to connection {}  through gateway {}. Connection is not connected yet", payload.len(), connection_id, self.gateway_id.as_str());
-                false
-            }
-            forwarded_connection::TcpGatewayProxyConnectionStatus::Connected => {
-                let payload = TcpGatewayContract::ForwardPayload {
-                    connection_id: connection_id,
-                    payload,
-                };
-                self.send_payload(&payload).await;
-                true
-            }
-            forwarded_connection::TcpGatewayProxyConnectionStatus::Disconnected(err) => {
-                println!("Can not send payload with size: {} to connection {}  through gateway {}. Connection is disconnected with err: {}", payload.len(), connection_id, self.gateway_id.as_str(), err);
-                false
-            }
+    pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
+        if self.has_forward_connection(connection_id).await {
+            let payload = TcpGatewayContract::BackwardPayload {
+                connection_id,
+                payload,
+            };
+            self.send_payload(&payload).await;
         }
     }
+
     pub async fn notify_incoming_payload(&self, connection_id: u32, payload: &[u8]) {
         let proxy_connection = self.get_forward_proxy_connection(connection_id).await;
 
