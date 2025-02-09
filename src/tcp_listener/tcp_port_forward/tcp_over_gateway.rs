@@ -65,37 +65,52 @@ pub async fn handle_connection(
         }
     }
 
-    let gateway_client = app.gateway_clients.get(gateway_id.as_str());
-
-    if gateway_client.is_none() {
-        println!("Gateway connection with id '{}' is not found", gateway_id);
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
-        return;
-    }
-
-    let gateway_client = gateway_client.unwrap();
-
-    if configuration.debug {
-        println!("Connecting to {}", remote_host.as_str());
-    }
-    let connection_result = gateway_client
-        .connect_to_forward_proxy_connection(remote_host.as_str(), configuration.debug)
-        .await;
-
-    if let Err(err) = &connection_result {
-        if configuration.debug {
-            println!(
-                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
+    let mut connect_result = if let Some(server_gateway) = app.gateway_server.as_ref() {
+        server_gateway
+            .connect_to_forward_proxy_connection(
+                &gateway_id,
                 remote_host.as_str(),
-                err,
-                accepted_server_connection.addr
-            );
+                configuration.debug,
+            )
+            .await
+    } else {
+        None
+    };
+
+    if connect_result.is_none() {
+        let gateway_client = app.gateway_clients.get(gateway_id.as_str());
+
+        if gateway_client.is_none() {
+            println!("Gateway connection with id '{}' is not found", gateway_id);
+            let _ = accepted_server_connection.tcp_stream.shutdown().await;
+            return;
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
-        return;
+
+        let gateway_client = gateway_client.unwrap();
+
+        if configuration.debug {
+            println!("Connecting to {}", remote_host.as_str());
+        }
+        let connection_result = gateway_client
+            .connect_to_forward_proxy_connection(remote_host.as_str(), configuration.debug)
+            .await;
+        if let Err(err) = &connection_result {
+            if configuration.debug {
+                println!(
+                    "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
+                    remote_host.as_str(),
+                    err,
+                    accepted_server_connection.addr
+                );
+            }
+            let _ = accepted_server_connection.tcp_stream.shutdown().await;
+            return;
+        }
+
+        connect_result = Some(connection_result.unwrap());
     }
 
-    let (proxy_connection, gateway_connection) = connection_result.unwrap();
+    let (proxy_connection, gateway_connection) = connect_result.unwrap();
 
     if configuration.debug {
         println!(

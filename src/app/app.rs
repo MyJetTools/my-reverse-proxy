@@ -57,7 +57,7 @@ pub struct AppContext {
 
     pub ssh_cert_pass_keys: CertPassKeys,
 
-    pub _gateway_server: Option<TcpGatewayServer>,
+    pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
 }
 
@@ -121,7 +121,7 @@ impl AppContext {
             https2_clients_pool: Http2ClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
-            _gateway_server: gateway_server,
+            gateway_server: gateway_server,
             gateway_clients: gateway_clients,
         }
     }

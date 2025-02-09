@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use tokio::sync::Mutex;
 
@@ -8,7 +11,7 @@ pub struct TcpGatewayInner {
     pub id: Arc<String>,
     pub addr: Arc<String>,
     running: AtomicBool,
-    connection: Mutex<Option<Arc<TcpGatewayConnection>>>,
+    connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
 }
 
 impl TcpGatewayInner {
@@ -21,14 +24,26 @@ impl TcpGatewayInner {
         }
     }
 
-    pub async fn set_gateway_connection(&self, connection: Option<Arc<TcpGatewayConnection>>) {
+    pub async fn set_gateway_connection(
+        &self,
+        id: &str,
+        connection: Option<Arc<TcpGatewayConnection>>,
+    ) {
         let mut connection_access = self.connection.lock().await;
-        *connection_access = connection;
+
+        match connection {
+            Some(connection) => {
+                connection_access.insert(id.to_string(), connection);
+            }
+            None => {
+                connection_access.remove(id);
+            }
+        }
     }
 
-    pub async fn get_gateway_connection(&self) -> Option<Arc<TcpGatewayConnection>> {
+    pub async fn get_gateway_connection(&self, id: &str) -> Option<Arc<TcpGatewayConnection>> {
         let connection_access = self.connection.lock().await;
-        connection_access.clone()
+        connection_access.get(id).cloned()
     }
 
     pub fn get_id(&self) -> &str {

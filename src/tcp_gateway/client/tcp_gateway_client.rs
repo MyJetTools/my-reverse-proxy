@@ -8,6 +8,8 @@ use tokio::net::TcpStream;
 
 use crate::tcp_gateway::{client::*, forwarded_connection::TcpGatewayProxyForwardedConnection, *};
 
+const CLIENT_CONNECTION_ID: &str = "";
+
 pub struct TcpGatewayClient {
     inner: Arc<TcpGatewayInner>,
     next_connection_id: AtomicU32,
@@ -42,7 +44,10 @@ impl TcpGatewayClient {
         ),
         String,
     > {
-        let gateway_connection = self.inner.get_gateway_connection().await;
+        let gateway_connection = self
+            .inner
+            .get_gateway_connection(CLIENT_CONNECTION_ID)
+            .await;
 
         if gateway_connection.is_none() {
             let err = format!(
@@ -86,7 +91,9 @@ impl Drop for TcpGatewayClient {
 
 async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
     while inner.is_running() {
-        inner.set_gateway_connection(None).await;
+        inner
+            .set_gateway_connection(CLIENT_CONNECTION_ID, None)
+            .await;
         println!(
             "Connecting to remote gateway '{}' with addr '{}'",
             inner.get_id(),
@@ -116,7 +123,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let gateway_connection = Arc::new(gateway_connection);
         inner
-            .set_gateway_connection(gateway_connection.clone().into())
+            .set_gateway_connection(CLIENT_CONNECTION_ID, gateway_connection.clone().into())
             .await;
 
         tokio::spawn(crate::tcp_gateway::gateway_read_loop::read_loop(
