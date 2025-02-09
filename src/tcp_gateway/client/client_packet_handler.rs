@@ -66,7 +66,9 @@ impl TcpGatewayClientPacketHandler {
                 connection_id,
                 error,
             } => {
-                println!("Got ConnectionError {}. Message: {}", connection_id, error);
+                if self.debug {
+                    println!("Got ConnectionError {}. Message: {}", connection_id, error);
+                }
 
                 gateway_connection
                     .disconnect_forward_proxy_connection(connection_id, error)
