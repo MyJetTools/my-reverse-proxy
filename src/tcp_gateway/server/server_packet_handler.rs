@@ -31,13 +31,6 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 timeout,
                 remote_host,
             } => {
-                println!(
-                    "Connect to {}->{} with connection_id {} with timeout {:?}",
-                    gateway_connection.gateway_id.as_str(),
-                    remote_host,
-                    connection_id,
-                    timeout
-                );
                 let remote_addr = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
 

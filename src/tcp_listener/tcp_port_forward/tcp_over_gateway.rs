@@ -171,7 +171,6 @@ async fn copy_from_connection_to_gateway(
             break;
         }
 
-        println!("Sending payload to gateway sized: {}", read_size);
         proxy_connection.send_payload(&buffer[..read_size]).await;
     }
 }
