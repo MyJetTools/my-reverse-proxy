@@ -78,7 +78,7 @@ pub async fn read_loop(
         }
     }
 
-    gateway_connection.disconnect().await;
+    gateway_connection.disconnect_gateway().await;
 }
 
 #[async_trait::async_trait]

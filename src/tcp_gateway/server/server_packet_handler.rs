@@ -77,7 +77,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             TcpGatewayContract::Pong => {}
             TcpGatewayContract::Connected { connection_id } => {
                 gateway_connection
-                    .notify_proxy_connection_accepted(connection_id)
+                    .notify_forward_proxy_connection_accepted(connection_id)
                     .await;
             }
             TcpGatewayContract::ConnectionError {
@@ -86,7 +86,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             } => {
                 println!("Got ConnectionError {}. Message: {}", connection_id, error);
                 gateway_connection
-                    .notify_proxy_connection_disconnected(connection_id, error)
+                    .disconnect_forward_connection(connection_id)
                     .await;
             }
         }

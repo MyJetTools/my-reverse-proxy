@@ -66,11 +66,12 @@ impl TcpGatewayConnection {
     }
 
     pub async fn disconnect_forward_connection(&self, connection_id: u32) {
-        self.remove_forward_connection(connection_id).await;
-        //todo!("Думаю надо отправить disconnect payload");
+        if let Some(forward_connection) = self.remove_forward_connection(connection_id).await {
+            forward_connection.disconnect().await;
+        }
     }
 
-    pub async fn connect_forward_connection(
+    pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: &str,
         timeout: Duration,
@@ -102,7 +103,7 @@ impl TcpGatewayConnection {
             ));
         }
 
-        while self.is_connected() {
+        while self.is_gateway_connected() {
             tokio::time::sleep(Duration::from_millis(100)).await;
 
             match connection.get_status().await {
@@ -124,26 +125,19 @@ impl TcpGatewayConnection {
         ));
     }
 
-    pub async fn notify_proxy_connection_accepted(&self, connection_id: u32) {
+    pub async fn notify_forward_proxy_connection_accepted(&self, connection_id: u32) {
         let connection = self.get_forward_proxy_connection(connection_id).await;
 
         if let Some(connection) = connection {
             connection.set_connected().await;
         }
     }
-    pub async fn notify_proxy_connection_disconnected(&self, connection_id: u32, err: &str) {
-        let connection = self.remove_forward_proxy_connection(connection_id).await;
 
-        if let Some(connection) = connection {
-            connection.set_disconnected(err).await;
-        }
-    }
-
-    pub async fn disconnect(&self) {
+    pub async fn disconnect_gateway(&self) {
         self.inner.disconnect().await;
     }
 
-    pub fn is_connected(&self) -> bool {
+    pub fn is_gateway_connected(&self) -> bool {
         self.inner.is_connected()
     }
 
@@ -202,11 +196,17 @@ impl TcpGatewayConnection {
         write_access.get(&connection_id).cloned()
     }
 
-    async fn remove_forward_proxy_connection(
+    pub async fn remove_forward_proxy_connection(
         &self,
         connection_id: u32,
     ) -> Option<Arc<TcpGatewayProxyForwardedConnection>> {
         let mut write_access = self.forward_proxy_connections.lock().await;
         write_access.remove(&connection_id)
+    }
+
+    pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
+        if let Some(connection) = self.remove_forward_proxy_connection(connection_id).await {
+            connection.disconnect(message).await;
+        }
     }
 }

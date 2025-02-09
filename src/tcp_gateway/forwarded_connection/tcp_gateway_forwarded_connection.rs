@@ -8,7 +8,6 @@ use tokio::{
 use crate::tcp_gateway::*;
 
 pub struct TcpGatewayForwardConnection {
-    pub remote_endpoint: Arc<String>,
     inner: Arc<TcpConnectionInner>,
 }
 
@@ -53,7 +52,6 @@ impl TcpGatewayForwardConnection {
         let inner = Arc::new(inner);
 
         let result = Self {
-            remote_endpoint,
             inner: inner.clone(),
         };
 
@@ -69,6 +67,10 @@ impl TcpGatewayForwardConnection {
             return false;
         }
         true
+    }
+
+    pub async fn disconnect(&self) {
+        self.inner.disconnect().await;
     }
 }
 

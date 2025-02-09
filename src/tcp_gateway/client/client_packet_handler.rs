@@ -45,7 +45,7 @@ impl TcpGatewayClientPacketHandler {
             TcpGatewayContract::Connected { connection_id } => {
                 println!("Got Gateway payload connected: {}", connection_id);
                 gateway_connection
-                    .notify_proxy_connection_accepted(connection_id)
+                    .notify_forward_proxy_connection_accepted(connection_id)
                     .await;
             }
             TcpGatewayContract::ConnectionError {
@@ -54,7 +54,7 @@ impl TcpGatewayClientPacketHandler {
             } => {
                 println!("Got ConnectionError {}. Message: {}", connection_id, error);
                 gateway_connection
-                    .notify_proxy_connection_disconnected(connection_id, error)
+                    .disconnect_forward_connection(connection_id)
                     .await;
             }
             TcpGatewayContract::ForwardPayload {

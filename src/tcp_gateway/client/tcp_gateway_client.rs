@@ -31,10 +31,16 @@ impl TcpGatewayClient {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub async fn connect_forward_connection(
+    pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: &str,
-    ) -> Result<Arc<TcpGatewayProxyForwardedConnection>, String> {
+    ) -> Result<
+        (
+            Arc<TcpGatewayProxyForwardedConnection>,
+            Arc<TcpGatewayConnection>,
+        ),
+        String,
+    > {
         let gateway_connection = self.inner.get_gateway_connection().await;
 
         if gateway_connection.is_none() {
@@ -56,9 +62,15 @@ impl TcpGatewayClient {
             "Connecting to {} with id {} ",
             remote_endpoint, connection_id
         );
-        gateway_connection
-            .connect_forward_connection(remote_endpoint, Duration::from_secs(5), connection_id)
-            .await
+        let result = gateway_connection
+            .connect_to_forward_proxy_connection(
+                remote_endpoint,
+                Duration::from_secs(5),
+                connection_id,
+            )
+            .await?;
+
+        Ok((result, gateway_connection))
     }
 }
 
@@ -117,6 +129,6 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
 
         gateway_connection.send_payload(&handshake_contract).await;
 
-        super::ping_loop(gateway_connection).await;
+        super::gateway_ping_loop(gateway_connection).await;
     }
 }
