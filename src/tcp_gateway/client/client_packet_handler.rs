@@ -52,6 +52,7 @@ impl TcpGatewayClientPacketHandler {
                 connection_id,
                 error,
             } => {
+                println!("Got ConnectionError {}. Message: {}", connection_id, error);
                 gateway_connection
                     .notify_proxy_connection_disconnected(connection_id, error)
                     .await;
