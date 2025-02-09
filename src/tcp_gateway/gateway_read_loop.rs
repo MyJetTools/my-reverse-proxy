@@ -13,7 +13,7 @@ pub async fn read_loop(
     packet_handler: impl TcpGatewayPacketHandler,
     debug: bool,
 ) {
-    let mut buf = crate::tcp_utils::allocated_read_buffer();
+    let mut buf = crate::tcp_utils::allocated_read_buffer(None);
 
     loop {
         let mut payload_size = [0u8; 4];
@@ -45,45 +45,27 @@ pub async fn read_loop(
             }
         }
 
-        let payload_size = u32::from_le_bytes(payload_size) as usize;
+        let decrypted = {
+            let payload_size = u32::from_le_bytes(payload_size) as usize;
+            if payload_size > buf.len() {
+                let mut dynamic_buffer =
+                    crate::tcp_utils::allocated_read_buffer(Some(payload_size));
 
-        if payload_size as usize > buf.len() {
-            panic!(
-                "Expecting payload size {} > {} buf.len()",
-                payload_size,
-                buf.len()
-            );
-        }
-
-        let payload = &mut buf[0..payload_size];
-
-        let read_result = read.read_exact(payload).await;
-
-        match read_result {
-            Ok(result) => {
-                if result != payload.len() {
-                    if debug {
-                        println!("[2] TCP Gateway is disconnected");
-                    }
+                if !read_buffer(&mut read, &mut dynamic_buffer, debug).await {
                     break;
                 }
-            }
-            Err(err) => {
-                if debug {
-                    println!(
-                        "[2] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                        tcp_gateway.addr.as_str(),
-                        err
-                    );
+
+                let aes_encrypted_data = AesEncryptedDataRef::new(&dynamic_buffer);
+                tcp_gateway.encryption.decrypt(&aes_encrypted_data)
+            } else {
+                if !read_buffer(&mut read, &mut buf[0..payload_size], debug).await {
+                    break;
                 }
 
-                break;
+                let aes_encrypted_data = AesEncryptedDataRef::new(&buf[0..payload_size]);
+                tcp_gateway.encryption.decrypt(&aes_encrypted_data)
             }
         };
-
-        let aes_encrypted_data = AesEncryptedDataRef::new(payload);
-
-        let decrypted = tcp_gateway.encryption.decrypt(&aes_encrypted_data);
 
         if decrypted.is_err() {
             println!("TcpGateway is closing connection since Encryption key is wrong");
@@ -124,4 +106,31 @@ pub async fn read_loop(
         .set_gateway_connection(gateway_id.as_str(), None)
         .await;
     gateway_connection.disconnect_gateway().await;
+}
+
+async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -> bool {
+    let read_result = read.read_exact(buffer).await;
+
+    match read_result {
+        Ok(result) => {
+            if result != buffer.len() {
+                if debug {
+                    println!("[2] TCP Gateway is disconnected");
+                }
+                return false;
+            }
+        }
+        Err(err) => {
+            if debug {
+                println!(
+                    "[2] Failed to read payload size from TCP Gateway. Err: {:?}",
+                    err
+                );
+            }
+
+            return false;
+        }
+    };
+
+    true
 }

@@ -68,6 +68,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 connection_id,
                 payload,
             } => {
+                println!("Forward_Payload: {}", payload.len());
                 crate::tcp_gateway::scripts::forward_payload(
                     gateway_connection,
                     connection_id,
@@ -80,6 +81,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 connection_id,
                 payload,
             } => {
+                println!("Backward: {}", payload.len());
                 gateway_connection
                     .notify_incoming_payload(connection_id, payload)
                     .await;

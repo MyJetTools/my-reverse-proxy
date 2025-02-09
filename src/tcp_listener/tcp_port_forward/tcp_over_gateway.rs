@@ -146,7 +146,7 @@ async fn copy_from_connection_to_gateway(
     listening_addr: SocketAddr,
     debug: bool,
 ) {
-    let mut buffer = crate::tcp_utils::allocated_read_buffer();
+    let mut buffer = crate::tcp_utils::allocated_read_buffer(None);
 
     loop {
         let read_result = read.read(&mut buffer).await;

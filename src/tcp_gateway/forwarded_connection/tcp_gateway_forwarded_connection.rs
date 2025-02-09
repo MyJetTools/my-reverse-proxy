@@ -80,7 +80,7 @@ async fn read_loop(
     write: Arc<TcpConnectionInner>,
     connection_id: u32,
 ) {
-    let mut buf = crate::tcp_utils::allocated_read_buffer();
+    let mut buf = crate::tcp_utils::allocated_read_buffer(None);
 
     loop {
         let read_size = match read.read(&mut buf).await {
