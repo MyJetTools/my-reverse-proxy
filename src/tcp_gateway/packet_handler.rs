@@ -9,5 +9,5 @@ pub trait TcpGatewayPacketHandler {
         contract: TcpGatewayContract<'d>,
         tcp_gateway: &Arc<TcpGatewayInner>,
         connection: &Arc<TcpGatewayConnection>,
-    );
+    ) -> Result<(), String>;
 }

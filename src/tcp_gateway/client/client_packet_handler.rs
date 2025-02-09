@@ -107,8 +107,10 @@ impl TcpGatewayPacketHandler for TcpGatewayClientPacketHandler {
         contract: TcpGatewayContract<'d>,
         tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
-    ) {
+    ) -> Result<(), String> {
         self.handle_client_packet(contract, tcp_gateway, gateway_connection)
             .await;
+
+        Ok(())
     }
 }

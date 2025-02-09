@@ -87,13 +87,21 @@ pub async fn read_loop(
             Ok(packet) => {
                 let now = DateTimeAsMicroseconds::now();
                 gateway_connection.set_last_incoming_payload_time(now);
-                packet_handler
+                if let Err(err) = packet_handler
                     .handle_packet(packet, &tcp_gateway, &gateway_connection)
                     .await
+                {
+                    println!(
+                        "Failed to handle packet from TCP Gateway at {}. Err: {}",
+                        tcp_gateway.addr.as_str(),
+                        err
+                    );
+                    break;
+                }
             }
             Err(err) => {
                 println!(
-                    "Failed to handle packet from TCP Gateway at {}. Err: {:?}",
+                    "Failed to parse packet from TCP Gateway at {}. Err: {:?}",
                     tcp_gateway.addr.as_str(),
                     err
                 );

@@ -499,7 +499,6 @@ You can adjust these timeouts using the following configuration example. Values 
 
 ```
 
-
 # GATEWAY
 
 Two or more instances of reverse proxy can be connected as network and forward traffic through gateway.

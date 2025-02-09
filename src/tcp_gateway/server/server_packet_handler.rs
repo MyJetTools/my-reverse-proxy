@@ -21,19 +21,26 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
         contract: TcpGatewayContract<'d>,
         tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
-    ) {
+    ) -> Result<(), String> {
         match contract {
             TcpGatewayContract::Handshake {
                 gateway_name,
                 timestamp,
             } => {
-                let date_time = DateTimeAsMicroseconds::new(timestamp);
+                let timestamp = DateTimeAsMicroseconds::new(timestamp);
 
                 println!(
                     "Got handshake from gateway {}. Timestamp: {}",
                     gateway_name,
-                    date_time.to_rfc3339()
+                    timestamp.to_rfc3339()
                 );
+
+                let now = DateTimeAsMicroseconds::now();
+
+                let loading_packet = now - timestamp;
+                if loading_packet.get_full_seconds() > 5 {
+                    return Err(format!("Handshake packet is too old. {:?}", loading_packet));
+                }
 
                 gateway_connection.set_gateway_id(gateway_name).await;
                 tcp_gateway
@@ -101,5 +108,6 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     .await;
             }
         }
+        Ok(())
     }
 }
