@@ -117,12 +117,12 @@ async fn read_loop(
             break;
         }
 
-        let buffer = &buf[..read_size];
-
         println!(
-            "Got buffer from forwarded connection {}->{}",
-            gateway_connection.gateway_id, connection_id
+            "Got buffer from forwarded connection {}->{} with size {}",
+            gateway_connection.gateway_id, connection_id, read_size
         );
+
+        let buffer = &buf[..read_size];
 
         gateway_connection
             .send_backward_payload(connection_id, buffer)
