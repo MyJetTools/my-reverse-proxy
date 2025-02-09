@@ -78,9 +78,7 @@ impl TcpGatewayClientPacketHandler {
                     .await;
             }
             TcpGatewayContract::Ping => {}
-            TcpGatewayContract::Pong => {
-                println!("Got PONG")
-            }
+            TcpGatewayContract::Pong => {}
         }
     }
 }
