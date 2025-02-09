@@ -87,6 +87,10 @@ impl TcpConnectionInner {
                 let write_result = tokio::time::timeout(SEND_TIMEOUT, write_future).await;
 
                 if write_result.is_err() {
+                    println!(
+                        "Timeout sending payload to socket with size {}",
+                        payload_to_send.len()
+                    );
                     return false;
                 }
 
