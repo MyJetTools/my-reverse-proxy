@@ -77,7 +77,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             tcp_gateway.clone(),
             read,
             tcp_gateway_connection,
-            TcpGatewayServerPacketHandler,
+            TcpGatewayServerPacketHandler::new(debug),
             debug,
         ));
     }

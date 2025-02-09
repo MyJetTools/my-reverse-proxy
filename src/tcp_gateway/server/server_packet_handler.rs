@@ -4,7 +4,15 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::tcp_gateway::*;
 
-pub struct TcpGatewayServerPacketHandler;
+pub struct TcpGatewayServerPacketHandler {
+    debug: bool,
+}
+
+impl TcpGatewayServerPacketHandler {
+    pub fn new(debug: bool) -> Self {
+        Self { debug }
+    }
+}
 
 #[async_trait::async_trait]
 impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
@@ -19,6 +27,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 timestamp,
             } => {
                 let date_time = DateTimeAsMicroseconds::new(timestamp);
+
                 println!(
                     "Got handshake from client. Timestamp: {}: {}",
                     client_name,
@@ -77,7 +86,10 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 connection_id,
                 error,
             } => {
-                println!("Got ConnectionError {}. Message: {}", connection_id, error);
+                if self.debug {
+                    println!("Got ConnectionError {}. Message: {}", connection_id, error);
+                }
+
                 gateway_connection
                     .disconnect_forward_connection(connection_id)
                     .await;

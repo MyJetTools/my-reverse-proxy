@@ -119,7 +119,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
             inner.clone(),
             read,
             gateway_connection.clone(),
-            TcpGatewayClientPacketHandler::new(),
+            TcpGatewayClientPacketHandler::new(debug),
             debug,
         ));
 
@@ -130,6 +130,6 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         gateway_connection.send_payload(&handshake_contract).await;
 
-        super::gateway_ping_loop(gateway_connection).await;
+        super::gateway_ping_loop(gateway_connection, debug).await;
     }
 }
