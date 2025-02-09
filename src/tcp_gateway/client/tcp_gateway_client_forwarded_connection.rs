@@ -10,10 +10,8 @@ use crate::tcp_gateway::*;
 use super::TcpGatewayClientConnection;
 
 pub struct TcpGatewayClientForwardConnection {
-    gateway_connection: Arc<TcpGatewayClientConnection>,
     addr_id: Arc<String>,
     inner: Arc<TcpConnectionInner>,
-    connection_id: u32,
 }
 
 impl TcpGatewayClientForwardConnection {
@@ -60,10 +58,8 @@ impl TcpGatewayClientForwardConnection {
         let inner = Arc::new(inner);
 
         let result = Self {
-            gateway_connection: gateway_connection.clone(),
             addr_id,
             inner: inner.clone(),
-            connection_id,
         };
 
         super::super::tcp_connection_inner::start_write_loop(inner.clone(), receiver);
@@ -109,7 +105,8 @@ async fn read_loop(
                     connection_id,
                     err.as_str(),
                     true,
-                );
+                )
+                .await;
                 break;
             }
         };

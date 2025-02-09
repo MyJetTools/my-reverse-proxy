@@ -52,13 +52,19 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>) {
             Ok(value) => value,
             Err(err) => {
                 println!(
-                    "Failed to accept connection at {}. Err: {:?}",
+                    "Failed to accept connection at {} for. Err: {:?}",
                     tcp_gateway.addr.as_str(),
                     err
                 );
                 continue;
             }
         };
+
+        println!(
+            "Gateway {} connection {} is accepted",
+            tcp_gateway.get_id(),
+            socket_addr
+        );
 
         let (read, write) = tcp_stream.into_split();
 
