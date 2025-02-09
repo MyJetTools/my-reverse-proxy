@@ -55,6 +55,27 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     connection_id,
                     payload.len()
                 );
+                if let Some(forward_connection) = gateway_connection
+                    .get_forward_connection(connection_id)
+                    .await
+                {
+                    if !forward_connection.send_payload(payload).await {
+                        gateway_connection
+                            .disconnect_forward_connection(connection_id)
+                            .await;
+                    }
+                }
+            }
+
+            TcpGatewayContract::BackwardPayload {
+                connection_id,
+                payload,
+            } => {
+                println!(
+                    "Got BackwardPayload for connection_id: {}. Size: {}",
+                    connection_id,
+                    payload.len()
+                );
                 gateway_connection
                     .notify_incoming_payload(connection_id, payload)
                     .await;

@@ -65,6 +65,11 @@ impl TcpGatewayConnection {
         write_access.remove(&connection_id)
     }
 
+    pub async fn disconnect_forward_connection(&self, connection_id: u32) {
+        self.remove_forward_connection(connection_id).await;
+        //todo!("Думаю надо отправить disconnect payload");
+    }
+
     pub async fn connect_forward_connection(
         &self,
         remote_endpoint: &str,

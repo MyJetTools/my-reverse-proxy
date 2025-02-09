@@ -62,6 +62,14 @@ impl TcpGatewayForwardConnection {
         tokio::spawn(read_loop(read, gateway_connection, inner, connection_id));
         Ok(result)
     }
+
+    pub async fn send_payload(&self, payload: &[u8]) -> bool {
+        if !self.inner.send_payload(payload).await {
+            self.inner.disconnect().await;
+            return false;
+        }
+        true
+    }
 }
 
 async fn read_loop(

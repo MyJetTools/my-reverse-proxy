@@ -1,12 +1,13 @@
 use std::time::Duration;
 
-const HANDSHAKE_PACKET_ID: u8 = 0;
-const CONNECT_PACKET_ID: u8 = 1;
-const CONNECT_OK_PACKET_ID: u8 = 3;
-const CONNECTION_ERROR_PACKET_ID: u8 = 4;
-const SEND_PAYLOAD_PACKET_ID: u8 = 7;
-const PING: u8 = 8;
-const PONG: u8 = 9;
+const PING: u8 = 0;
+const PONG: u8 = 1;
+const HANDSHAKE_PACKET_ID: u8 = 2;
+const CONNECT_PACKET_ID: u8 = 3;
+const CONNECT_OK_PACKET_ID: u8 = 4;
+const CONNECTION_ERROR_PACKET_ID: u8 = 5;
+const SEND_PAYLOAD_PACKET_ID: u8 = 6;
+const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
 
 #[derive(Debug)]
 pub enum TcpGatewayContract<'s> {
@@ -27,6 +28,10 @@ pub enum TcpGatewayContract<'s> {
         error: &'s str,
     },
     ForwardPayload {
+        connection_id: u32,
+        payload: &'s [u8],
+    },
+    BackwardPayload {
         connection_id: u32,
         payload: &'s [u8],
     },
@@ -98,6 +103,17 @@ impl<'s> TcpGatewayContract<'s> {
                 });
             }
 
+            RECEIVE_PAYLOAD_PACKET_ID => {
+                let connection_id =
+                    u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+
+                let payload = &payload[4..];
+                return Ok(Self::BackwardPayload {
+                    connection_id,
+                    payload,
+                });
+            }
+
             PING => {
                 return Ok(Self::Ping);
             }
@@ -152,6 +168,14 @@ impl<'s> TcpGatewayContract<'s> {
                 payload,
             } => {
                 result.push(SEND_PAYLOAD_PACKET_ID);
+                result.extend_from_slice(&connection_id.to_le_bytes());
+                result.extend_from_slice(payload);
+            }
+            Self::BackwardPayload {
+                connection_id,
+                payload,
+            } => {
+                result.push(RECEIVE_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
                 result.extend_from_slice(payload);
             }
