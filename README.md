@@ -498,3 +498,38 @@ You can adjust these timeouts using the following configuration example. Values 
         request_timeout: 2000  # 2 second request timeout
 
 ```
+
+
+# GATEWAY
+
+Two or more instances of reverse proxy can be connected as network and forward traffic through gateway.
+
+How to setup Server Gateway connection
+```yaml
+gateway_server:
+  port: 30000
+  encryption_key: 12345678901234567890
+```
+
+How to setup Client Gateway connections
+```yaml
+gateway_clients:
+  gateway_name:
+    remote_host: 10.0.0.0:30000
+    encryption_key: 12345678901234567890
+```
+
+To Setup location through gateway
+```yaml
+hosts:
+  7777:
+    endpoint:
+      type: tcp
+    locations:
+    - proxy_pass_to: gateway:gateway_name->192.168.1.1:5123
+
+```
+
+For now TCP Traffic can be forwarded only. HTTP traffic is on development
+
+encryption_key - is mandatory and recommended to be 48 symbols and random as possible
