@@ -182,7 +182,6 @@ impl TcpGatewayConnection {
     }
 
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
-        println!("Sending payload: {:?}", payload);
         let vec = payload.to_vec();
         self.inner.send_payload(vec.as_slice()).await
     }
