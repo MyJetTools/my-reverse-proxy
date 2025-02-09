@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicI64, AtomicIsize, Ordering},
-    Arc,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicI64, AtomicIsize, Ordering},
+        Arc,
+    },
 };
 
 use encryption::aes::AesKey;
@@ -16,6 +19,7 @@ use crate::{
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,
+    tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer},
 };
 
 use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
@@ -52,6 +56,9 @@ pub struct AppContext {
     pub ssl_certificates_cache: CertificatesCache,
 
     pub ssh_cert_pass_keys: CertPassKeys,
+
+    pub _gateway_server: Option<TcpGatewayServer>,
+    pub _gateway_clients: HashMap<String, TcpGatewayClient>,
 }
 
 impl AppContext {
@@ -63,6 +70,27 @@ impl AppContext {
         } else {
             AesKey::new(generate_random_token_secret_key().as_slice())
         };
+
+        let gateway_server =
+            if let Some(gateway_server_settings) = settings_model.get_gateway_server() {
+                Some(TcpGatewayServer::new(format!(
+                    "0.0.0.0:{}",
+                    gateway_server_settings.port
+                )))
+            } else {
+                None
+            };
+
+        let mut gateway_clients = HashMap::new();
+
+        if let Some(clients_settings) = &settings_model.gateway_clients {
+            for (id, client_settings) in clients_settings.iter() {
+                let client =
+                    TcpGatewayClient::new(id.to_string(), client_settings.remote_host.to_string());
+
+                gateway_clients.insert(id.clone(), client);
+            }
+        }
 
         Self {
             http_connections: AtomicIsize::new(0),
@@ -90,6 +118,8 @@ impl AppContext {
             https2_clients_pool: Http2ClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
+            _gateway_server: gateway_server,
+            _gateway_clients: gateway_clients,
         }
     }
 

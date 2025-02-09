@@ -5,43 +5,6 @@ use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
 use crate::{app::AppContext, configurations::*, tcp_listener::AcceptedTcpConnection};
 
-/*
-pub fn start_tcp(
-    app: Arc<AppContext>,
-    listen_addr: std::net::SocketAddr,
-    endpoint_info: Arc<TcpEndpointHostConfig>,
-) {
-    tokio::spawn(tcp_server_accept_loop(app, listen_addr, endpoint_info));
-}
-
-async fn tcp_server_accept_loop(
-    app: Arc<AppContext>,
-    listen_addr: std::net::SocketAddr,
-    endpoint_info: Arc<TcpEndpointHostConfig>,
-) {
-    let listener = tokio::net::TcpListener::bind(listen_addr).await;
-
-    if let Err(err) = listener {
-        println!(
-            "Error binding to tcp port {} for forwarding to {} has Error: {:?}",
-            listen_addr, endpoint_info.remote_addr, err
-        );
-        return;
-    }
-
-    let listener = listener.unwrap();
-
-    println!(
-        "Enabled PortForward: {} -> {}",
-        listen_addr, endpoint_info.remote_addr
-    );
-
-    loop {
-        let (mut server_stream, socket_addr) = listener.accept().await.unwrap();
-    }
-}
- */
-
 pub async fn handle_connection(
     app: Arc<AppContext>,
     mut accepted_server_connection: AcceptedTcpConnection,

@@ -18,6 +18,8 @@ pub struct SettingsModel {
     pub endpoint_templates: Option<HashMap<String, EndpointTemplateSettings>>,
     pub allowed_users: Option<HashMap<String, Vec<String>>>,
     pub ip_white_lists: Option<HashMap<String, Vec<String>>>,
+    pub gateway_server: Option<GatewayServerSettings>,
+    pub gateway_clients: Option<HashMap<String, GatewayClientSettings>>,
 }
 
 impl SettingsModel {
@@ -27,6 +29,10 @@ impl SettingsModel {
         }
 
         None
+    }
+
+    pub fn get_gateway_server(&self) -> Option<&GatewayServerSettings> {
+        self.gateway_server.as_ref()
     }
 
     pub fn get_show_error_description_on_error_page(&self) -> bool {
@@ -174,6 +180,8 @@ mod tests {
             endpoint_templates: None,
             allowed_users: None,
             ip_white_lists: None,
+            gateway_server: None,
+            gateway_clients: None,
         };
 
         let json = serde_yaml::to_string(&model).unwrap();

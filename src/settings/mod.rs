@@ -36,3 +36,8 @@ mod endpoint_type_settings;
 pub use endpoint_type_settings::*;
 mod ssh_config_settings;
 pub use ssh_config_settings::*;
+
+mod gateway_server_settings;
+pub use gateway_server_settings::*;
+mod gateway_client_settings;
+pub use gateway_client_settings::*;
