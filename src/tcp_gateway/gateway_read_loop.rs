@@ -25,21 +25,17 @@ pub async fn read_loop(
         match read_result {
             Ok(result) => {
                 if result != payload_size.len() {
-                    if debug {
-                        println!("[1] TCP Gateway is disconnected");
-                    }
+                    println!("[1] TCP Gateway is disconnected");
 
                     break;
                 }
             }
             Err(err) => {
-                if debug {
-                    println!(
-                        "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                        tcp_gateway.addr.as_str(),
-                        err
-                    );
-                }
+                println!(
+                    "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
+                    tcp_gateway.addr.as_str(),
+                    err
+                );
 
                 break;
             }
@@ -114,19 +110,16 @@ async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -
     match read_result {
         Ok(result) => {
             if result != buffer.len() {
-                if debug {
-                    println!("[2] TCP Gateway is disconnected");
-                }
+                println!("[2] TCP Gateway is disconnected");
+
                 return false;
             }
         }
         Err(err) => {
-            if debug {
-                println!(
-                    "[2] Failed to read payload size from TCP Gateway. Err: {:?}",
-                    err
-                );
-            }
+            println!(
+                "[2] Failed to read payload size from TCP Gateway. Err: {:?}",
+                err
+            );
 
             return false;
         }
