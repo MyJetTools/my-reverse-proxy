@@ -117,11 +117,6 @@ async fn read_loop(
             break;
         }
 
-        println!(
-            "Got buffer from forwarded connection {}->{} with size {}",
-            gateway_connection.gateway_id, connection_id, read_size
-        );
-
         let buffer = &buf[..read_size];
 
         gateway_connection
