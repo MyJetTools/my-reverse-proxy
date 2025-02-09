@@ -18,6 +18,7 @@ pub async fn read_loop(
     loop {
         let mut payload_size = [0u8; 4];
         let read_result = read.read_exact(&mut payload_size).await;
+
         let now = DateTimeAsMicroseconds::now();
         gateway_connection.set_last_incoming_payload_time(now);
 
@@ -45,6 +46,14 @@ pub async fn read_loop(
         }
 
         let payload_size = u32::from_le_bytes(payload_size) as usize;
+
+        if payload_size as usize > buf.len() {
+            panic!(
+                "Expecting payload size {} > {} buf.len()",
+                payload_size,
+                buf.len()
+            );
+        }
 
         let payload = &mut buf[0..payload_size];
 
