@@ -145,24 +145,39 @@ async fn handle_accepted_connection(
             }
         },
 
-        ListenConfiguration::Tcp(configuration) => {
-            if configuration.remote_host.ssh_credentials.is_none() {
-                super::tcp_port_forward::tcp::handle_connection(
+        ListenConfiguration::Tcp(configuration) => match configuration.remote_host.as_ref() {
+            crate::configurations::MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                super::tcp_port_forward::tcp_over_gateway::handle_connection(
                     app,
                     accepted_connection,
                     listening_addr,
-                    configuration,
+                    configuration.clone(),
+                    id.clone(),
+                    remote_host.clone(),
                 )
                 .await;
-            } else {
+            }
+            crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh { ssh, remote_host } => {
                 super::tcp_port_forward::tcp_over_ssh::handle_connection(
                     app,
                     accepted_connection,
                     listening_addr,
-                    configuration,
+                    configuration.clone(),
+                    ssh.clone(),
+                    remote_host.clone(),
                 )
                 .await;
             }
-        }
+            crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                super::tcp_port_forward::tcp::handle_connection(
+                    app,
+                    accepted_connection,
+                    listening_addr,
+                    configuration.clone(),
+                    remote_host.clone(),
+                )
+                .await;
+            }
+        },
     }
 }

@@ -25,7 +25,7 @@ pub enum TcpGatewayContract<'s> {
         connection_id: u32,
         error: &'s str,
     },
-    SendPayload {
+    ForwardPayload {
         connection_id: u32,
         payload: &'s [u8],
     },
@@ -91,7 +91,7 @@ impl<'s> TcpGatewayContract<'s> {
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
                 let payload = &payload[4..];
-                return Ok(Self::SendPayload {
+                return Ok(Self::ForwardPayload {
                     connection_id,
                     payload,
                 });
@@ -146,7 +146,7 @@ impl<'s> TcpGatewayContract<'s> {
                 result.extend_from_slice(error.as_bytes());
             }
 
-            Self::SendPayload {
+            Self::ForwardPayload {
                 connection_id,
                 payload,
             } => {

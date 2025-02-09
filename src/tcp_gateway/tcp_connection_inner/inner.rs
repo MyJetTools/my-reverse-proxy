@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::atomic::AtomicBool, time::Duration};
 
 use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::Mutex};
 
@@ -10,6 +10,7 @@ pub struct TcpConnectionInner {
     pub connection: Mutex<Option<OwnedWriteHalf>>,
     pub buffer: Mutex<SendBuffer>,
     sender: tokio::sync::mpsc::Sender<()>,
+    is_connected: AtomicBool,
 }
 
 impl TcpConnectionInner {
@@ -19,6 +20,7 @@ impl TcpConnectionInner {
             connection: Mutex::new(Some(connection)),
             buffer: Mutex::new(SendBuffer::new()),
             sender,
+            is_connected: AtomicBool::new(true),
         };
 
         (result, receiver)
@@ -40,7 +42,14 @@ impl TcpConnectionInner {
         true
     }
 
+    pub fn is_connected(&self) -> bool {
+        self.is_connected.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub async fn disconnect(&self) {
+        self.is_connected
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+
         let connection = {
             let mut write_access = self.connection.lock().await;
             write_access.take()

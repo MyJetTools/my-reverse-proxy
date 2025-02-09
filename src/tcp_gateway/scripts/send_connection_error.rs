@@ -1,7 +1,7 @@
-use crate::tcp_gateway::{client::*, *};
+use crate::tcp_gateway::*;
 
 pub async fn send_connection_error(
-    gateway_connection: &TcpGatewayClientConnection,
+    gateway_connection: &TcpGatewayConnection,
     connection_id: u32,
     err: &str,
     is_error: bool,

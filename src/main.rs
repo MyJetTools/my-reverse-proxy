@@ -19,6 +19,7 @@ mod http_server;
 mod self_signed_cert;
 mod settings;
 mod tcp_listener;
+mod tcp_utils;
 //mod ssh_to_http_port_forward;
 
 mod scripts;

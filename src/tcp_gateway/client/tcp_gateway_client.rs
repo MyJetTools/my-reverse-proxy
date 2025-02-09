@@ -1,12 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicU32, Arc},
+    time::Duration,
+};
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
-use crate::tcp_gateway::{client::*, *};
+use crate::tcp_gateway::{client::*, forwarded_connection::TcpGatewayProxyForwardedConnection, *};
 
 pub struct TcpGatewayClient {
     inner: Arc<TcpGatewayInner>,
+    next_connection_id: AtomicU32,
 }
 
 impl TcpGatewayClient {
@@ -14,11 +18,40 @@ impl TcpGatewayClient {
         let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint));
         let result = Self {
             inner: inner.clone(),
+            next_connection_id: AtomicU32::new(0),
         };
 
         tokio::spawn(connection_loop(inner.clone()));
 
         result
+    }
+
+    fn get_next_connection_id(&self) -> u32 {
+        self.next_connection_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub async fn connect_forward_connection(
+        &self,
+        remote_endpoint: &str,
+    ) -> Result<Arc<TcpGatewayProxyForwardedConnection>, String> {
+        let gateway_connection = self.inner.get_gateway_connection().await;
+
+        if gateway_connection.is_none() {
+            return Err(format!(
+                "Gateway {} connection to endpoint {} is not established",
+                self.inner.get_id(),
+                self.inner.addr.as_str()
+            ));
+        }
+
+        let gateway_connection = gateway_connection.unwrap();
+
+        let connection_id = self.get_next_connection_id();
+
+        gateway_connection
+            .connect_forward_connection(remote_endpoint, Duration::from_secs(5), connection_id)
+            .await
     }
 }
 
@@ -54,15 +87,15 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let gateway_client_connection =
-            TcpGatewayClientConnection::new(inner.id.clone(), inner.addr.clone(), write);
+        let gateway_connection =
+            TcpGatewayConnection::new(inner.id.clone(), inner.addr.clone(), write);
 
-        let gateway_client_connection = Arc::new(gateway_client_connection);
+        let gateway_connection = Arc::new(gateway_connection);
 
         tokio::spawn(crate::tcp_gateway::gateway_read_loop::read_loop(
             inner.clone(),
             read,
-            gateway_client_connection.clone(),
+            gateway_connection.clone(),
             TcpGatewayClientPacketHandler::new(),
         ));
 
@@ -71,10 +104,8 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
             client_name: inner.get_id(),
         };
 
-        gateway_client_connection
-            .send_payload(&handshake_contract)
-            .await;
+        gateway_connection.send_payload(&handshake_contract).await;
 
-        super::ping_loop(gateway_client_connection).await;
+        super::ping_loop(gateway_connection).await;
     }
 }

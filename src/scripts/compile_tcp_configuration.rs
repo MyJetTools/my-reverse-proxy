@@ -4,7 +4,10 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
     app::AppContext,
-    configurations::{EndpointHttpHostString, ListenConfiguration, TcpEndpointHostConfig},
+    configurations::{
+        EndpointHttpHostString, ListenConfiguration, MyReverseProxyRemoteEndpoint,
+        TcpEndpointHostConfig, GATEWAY_PREFIX,
+    },
     settings::{HostSettings, SettingsModel},
 };
 
@@ -34,21 +37,27 @@ pub async fn compile_tcp_configuration(
     let ip_white_list_id =
         super::get_endpoint_white_listed_ip(app, settings_model, host_settings).await?;
 
-    let over_ssh_connection = OverSshConnectionSettings::try_parse(remote_host.as_str());
+    let remote_host = if remote_host.starts_with(GATEWAY_PREFIX) {
+        MyReverseProxyRemoteEndpoint::try_parse_gateway_source(remote_host.as_str())?
+    } else {
+        let over_ssh_connection = OverSshConnectionSettings::try_parse(remote_host.as_str());
 
-    if over_ssh_connection.is_none() {
-        return Err(format!("Invalid remote host {}", remote_host));
-    }
+        if over_ssh_connection.is_none() {
+            return Err(format!("Invalid remote host {}", remote_host));
+        }
 
-    let over_ssh_connection = super::ssh::enrich_with_private_key_or_password(
-        over_ssh_connection.unwrap(),
-        settings_model,
-    )
-    .await?;
+        let over_ssh_connection = super::ssh::enrich_with_private_key_or_password(
+            over_ssh_connection.unwrap(),
+            settings_model,
+        )
+        .await?;
+
+        over_ssh_connection.try_into()?
+    };
 
     let result = TcpEndpointHostConfig {
         host_endpoint,
-        remote_host: over_ssh_connection.into(),
+        remote_host: remote_host.into(),
         debug: host_settings.endpoint.get_debug(),
         ip_white_list_id,
     };

@@ -6,7 +6,7 @@ use crate::tcp_gateway::{TcpGatewayConnection, TcpGatewayContract};
 
 const PING_DELAY: Duration = Duration::from_secs(3);
 
-pub async fn ping_loop(gateway_connection: Arc<impl TcpGatewayConnection>) {
+pub async fn ping_loop(gateway_connection: Arc<TcpGatewayConnection>) {
     loop {
         tokio::time::sleep(PING_DELAY).await;
         let now = DateTimeAsMicroseconds::now();

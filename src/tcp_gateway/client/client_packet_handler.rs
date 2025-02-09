@@ -2,12 +2,7 @@ use std::sync::Arc;
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::tcp_gateway::{
-    send_payload_to_gateway, TcpGatewayConnection, TcpGatewayContract, TcpGatewayForwardConnection,
-    TcpGatewayPacketHandler,
-};
-
-use super::*;
+use crate::tcp_gateway::{TcpGatewayConnection, TcpGatewayContract, TcpGatewayPacketHandler};
 
 pub struct TcpGatewayClientPacketHandler;
 
@@ -19,7 +14,7 @@ impl TcpGatewayClientPacketHandler {
     async fn handle_client_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        gateway_connection: &Arc<TcpGatewayClientConnection>,
+        gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         match contract {
             TcpGatewayContract::Handshake {
@@ -40,7 +35,7 @@ impl TcpGatewayClientPacketHandler {
             } => {
                 let remote_host = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
-                tokio::spawn(super::packet_handlers::handle_forward_connect(
+                tokio::spawn(crate::tcp_gateway::scripts::handle_forward_connect(
                     connection_id,
                     remote_host,
                     timeout,
@@ -48,38 +43,25 @@ impl TcpGatewayClientPacketHandler {
                 ));
             }
             TcpGatewayContract::Connected { connection_id } => {
-                if let Some(connection) = gateway_connection
-                    .get_forward_connection(connection_id)
-                    .await
-                {
-                    println!(
-                        "Somehow we got TcpGatewayContract::Connected Connection  with id {} to '{}' is connected. Can not happen on GatewayClient",
-                        connection_id,
-                        connection.get_addr()
-                    );
-                }
+                gateway_connection
+                    .notify_proxy_connection_accepted(connection_id)
+                    .await;
             }
             TcpGatewayContract::ConnectionError {
                 connection_id,
                 error,
             } => {
-                if let Some(removed_connection) = gateway_connection
-                    .remove_forward_connection(connection_id)
-                    .await
-                {
-                    println!(
-                        "Connection  with id {} to {} error: {}",
-                        connection_id,
-                        removed_connection.get_addr(),
-                        error
-                    );
-                }
+                gateway_connection
+                    .notify_proxy_connection_disconnected(connection_id, error)
+                    .await;
             }
-            TcpGatewayContract::SendPayload {
+            TcpGatewayContract::ForwardPayload {
                 connection_id,
                 payload,
             } => {
-                send_payload_to_gateway(gateway_connection, connection_id, payload).await;
+                gateway_connection
+                    .notify_incoming_payload(connection_id, payload)
+                    .await;
             }
             TcpGatewayContract::Ping => {}
             TcpGatewayContract::Pong => {
@@ -91,11 +73,10 @@ impl TcpGatewayClientPacketHandler {
 
 #[async_trait::async_trait]
 impl TcpGatewayPacketHandler for TcpGatewayClientPacketHandler {
-    type GateWayConnection = TcpGatewayClientConnection;
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        gateway_connection: &Arc<Self::GateWayConnection>,
+        gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         self.handle_client_packet(contract, gateway_connection)
             .await;

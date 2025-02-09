@@ -5,13 +5,13 @@ use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 use super::*;
 
-pub async fn read_loop<TTcpGatewayConnection: TcpGatewayConnection + Send + Sync + 'static>(
+pub async fn read_loop(
     tcp_gateway: Arc<TcpGatewayInner>,
     mut read: OwnedReadHalf,
-    gateway_connection: Arc<TTcpGatewayConnection>,
-    packet_handler: impl TcpGatewayPacketHandler<GateWayConnection = TTcpGatewayConnection>,
+    gateway_connection: Arc<TcpGatewayConnection>,
+    packet_handler: impl TcpGatewayPacketHandler,
 ) {
-    let mut buf = super::create_read_loop();
+    let mut buf = crate::tcp_utils::allocated_read_buffer();
 
     loop {
         let mut payload_size = [0u8; 4];
@@ -82,42 +82,10 @@ pub async fn read_loop<TTcpGatewayConnection: TcpGatewayConnection + Send + Sync
 }
 
 #[async_trait::async_trait]
-pub trait TcpGatewayConnection {
-    type ForwardConnection: TcpGatewayForwardConnection;
-
-    fn get_addr(&self) -> &str;
-
-    fn set_last_incoming_payload_time(&self, time: DateTimeAsMicroseconds);
-    fn get_last_incoming_payload_time(&self) -> DateTimeAsMicroseconds;
-
-    async fn disconnect(&self);
-    async fn send_payload(&self, contract: &TcpGatewayContract) -> bool;
-
-    async fn add_forward_connection(
-        &self,
-        connection_id: u32,
-        connection: Arc<Self::ForwardConnection>,
-    );
-
-    async fn get_forward_connection(
-        &self,
-        connection_id: u32,
-    ) -> Option<Arc<Self::ForwardConnection>>;
-
-    async fn has_forward_connection(&self, connection_id: u32) -> bool;
-
-    async fn remove_forward_connection(
-        &self,
-        connection_id: u32,
-    ) -> Option<Arc<Self::ForwardConnection>>;
-}
-
-#[async_trait::async_trait]
 pub trait TcpGatewayPacketHandler {
-    type GateWayConnection: TcpGatewayConnection;
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        connection: &Arc<Self::GateWayConnection>,
+        connection: &Arc<TcpGatewayConnection>,
     );
 }

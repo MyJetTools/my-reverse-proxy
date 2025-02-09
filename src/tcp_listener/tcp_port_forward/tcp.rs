@@ -1,6 +1,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use rust_extensions::date_time::AtomicDateTimeAsMicroseconds;
+use rust_extensions::{
+    date_time::AtomicDateTimeAsMicroseconds, remote_endpoint::RemoteEndpointOwned,
+};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
 use crate::{app::AppContext, configurations::*, tcp_listener::AcceptedTcpConnection};
@@ -10,6 +12,7 @@ pub async fn handle_connection(
     mut accepted_server_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
+    remote_host: Arc<RemoteEndpointOwned>,
 ) {
     if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
         let ip_white_list = app
@@ -47,14 +50,6 @@ pub async fn handle_connection(
         }
     }
 
-    let remote_host = Arc::new(
-        configuration
-            .remote_host
-            .get_remote_endpoint()
-            .as_str()
-            .to_string(),
-    );
-
     let remote_tcp_connection_result = tokio::time::timeout(
         app.connection_settings.remote_connect_timeout,
         TcpStream::connect(remote_host.as_str()),
@@ -88,7 +83,7 @@ pub async fn handle_connection(
         return;
     }
 
-    tokio::spawn(connection_loop(
+    tokio::spawn(handle_port_forward(
         listening_addr,
         remote_host,
         accepted_server_connection.tcp_stream,
@@ -98,9 +93,9 @@ pub async fn handle_connection(
     ));
 }
 
-async fn connection_loop(
+async fn handle_port_forward(
     listen_addr: std::net::SocketAddr,
-    remote_host: Arc<String>,
+    remote_host: Arc<RemoteEndpointOwned>,
     server_stream: TcpStream,
     remote_stream: TcpStream,
     buffer_size: usize,
@@ -139,7 +134,8 @@ async fn connection_loop(
             if debug {
                 println!(
                     "Dead Tcp PortForward {}->{} connection detected. Closing",
-                    listen_addr, remote_host
+                    listen_addr,
+                    remote_host.as_str()
                 );
             }
         },

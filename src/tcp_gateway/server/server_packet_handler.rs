@@ -4,17 +4,14 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::tcp_gateway::*;
 
-use super::TcpGatewayServerConnection;
-
 pub struct TcpGatewayServerPacketHandler;
 
 #[async_trait::async_trait]
 impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
-    type GateWayConnection = TcpGatewayServerConnection;
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        gateway_connection: &Arc<Self::GateWayConnection>,
+        gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         match contract {
             TcpGatewayContract::Handshake {
@@ -37,21 +34,21 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 let remote_addr = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
 
-                tokio::spawn(
-                    super::handle_connect_forward_endpoint::handle_connect_forward_endpoint(
-                        connection_id,
-                        remote_addr,
-                        timeout,
-                        gateway_connection,
-                    ),
-                );
+                tokio::spawn(crate::tcp_gateway::scripts::handle_forward_connect(
+                    connection_id,
+                    remote_addr,
+                    timeout,
+                    gateway_connection,
+                ));
             }
 
-            TcpGatewayContract::SendPayload {
+            TcpGatewayContract::ForwardPayload {
                 connection_id,
                 payload,
             } => {
-                send_payload_to_gateway(gateway_connection, connection_id, payload).await;
+                gateway_connection
+                    .notify_incoming_payload(connection_id, payload)
+                    .await;
             }
             TcpGatewayContract::Ping => {
                 println!("Got PING");
@@ -60,19 +57,17 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     .await;
             }
             TcpGatewayContract::Pong => {}
-            TcpGatewayContract::Connected { connection_id: _ } => {}
+            TcpGatewayContract::Connected { connection_id } => {
+                gateway_connection
+                    .notify_proxy_connection_accepted(connection_id)
+                    .await;
+            }
             TcpGatewayContract::ConnectionError {
                 connection_id,
                 error,
             } => {
-                if error.len() > 0 {
-                    println!(
-                        "Connection error for connection_id: {}. Error: {}",
-                        connection_id, error
-                    );
-                }
                 gateway_connection
-                    .remove_forward_connection(connection_id)
+                    .notify_proxy_connection_disconnected(connection_id, error)
                     .await;
             }
         }

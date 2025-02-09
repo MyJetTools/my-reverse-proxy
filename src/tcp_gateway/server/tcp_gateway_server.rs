@@ -68,11 +68,8 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let tcp_gateway_connection = TcpGatewayServerConnection::new(
-            tcp_gateway.id.clone(),
-            tcp_gateway.addr.clone(),
-            write,
-        );
+        let tcp_gateway_connection =
+            TcpGatewayConnection::new(tcp_gateway.id.clone(), tcp_gateway.addr.clone(), write);
 
         let tcp_gateway_connection = Arc::new(tcp_gateway_connection);
 

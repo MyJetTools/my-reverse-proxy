@@ -7,28 +7,26 @@ use tokio::{
 
 use crate::tcp_gateway::*;
 
-use super::TcpGatewayClientConnection;
-
-pub struct TcpGatewayClientForwardConnection {
-    addr_id: Arc<String>,
+pub struct TcpGatewayForwardConnection {
+    pub remote_endpoint: Arc<String>,
     inner: Arc<TcpConnectionInner>,
 }
 
-impl TcpGatewayClientForwardConnection {
+impl TcpGatewayForwardConnection {
     pub async fn connect(
         connection_id: u32,
-        gateway_connection: Arc<TcpGatewayClientConnection>,
-        addr_id: Arc<String>,
+        gateway_connection: Arc<TcpGatewayConnection>,
+        remote_endpoint: Arc<String>,
         timeout: Duration,
     ) -> Result<Self, String> {
-        let connect_future = TcpStream::connect(addr_id.as_str());
+        let connect_future = TcpStream::connect(remote_endpoint.as_str());
 
         let result = tokio::time::timeout(timeout, connect_future).await;
 
         if result.is_err() {
             return Err(format!(
                 "Can not connect to {} using gateway {}. Err: Timeout {:?}",
-                addr_id.as_str(),
+                remote_endpoint.as_str(),
                 gateway_connection.gateway_id.as_str(),
                 timeout
             ));
@@ -41,7 +39,7 @@ impl TcpGatewayClientForwardConnection {
             Err(err) => {
                 return Err(format!(
                     "Can not connect to {} using gateway {}. Err: {:?}",
-                    addr_id.as_str(),
+                    remote_endpoint.as_str(),
                     gateway_connection.gateway_id.as_str(),
                     err
                 ));
@@ -50,15 +48,12 @@ impl TcpGatewayClientForwardConnection {
 
         let (read, write) = tcp_stream.into_split();
 
-        // let mut tcp_connection_access = self.tcp_connection.lock().await;
-        // *tcp_connection_access = Some(write);
-
         let (inner, receiver) = TcpConnectionInner::new(write);
 
         let inner = Arc::new(inner);
 
         let result = Self {
-            addr_id,
+            remote_endpoint,
             inner: inner.clone(),
         };
 
@@ -69,26 +64,13 @@ impl TcpGatewayClientForwardConnection {
     }
 }
 
-#[async_trait::async_trait]
-impl TcpGatewayForwardConnection for TcpGatewayClientForwardConnection {
-    fn get_addr(&self) -> &str {
-        &self.addr_id
-    }
-    async fn disconnect(&self) {
-        self.inner.disconnect().await
-    }
-    async fn send_payload(&self, payload: &[u8]) -> bool {
-        self.inner.send_payload(payload).await
-    }
-}
-
 async fn read_loop(
     mut read: OwnedReadHalf,
-    gateway_connection: Arc<TcpGatewayClientConnection>,
+    gateway_connection: Arc<TcpGatewayConnection>,
     write: Arc<TcpConnectionInner>,
     connection_id: u32,
 ) {
-    let mut buf = super::super::create_read_loop();
+    let mut buf = crate::tcp_utils::allocated_read_buffer();
 
     loop {
         let read_size = match read.read(&mut buf).await {
@@ -100,8 +82,8 @@ async fn read_loop(
                     gateway_connection.gateway_id.as_str(),
                     err
                 );
-                super::packet_handlers::send_connection_error(
-                    &gateway_connection,
+                crate::tcp_gateway::scripts::send_connection_error(
+                    gateway_connection.as_ref(),
                     connection_id,
                     err.as_str(),
                     true,
@@ -117,8 +99,8 @@ async fn read_loop(
                 gateway_connection.gateway_id.as_str(),
             );
 
-            super::packet_handlers::send_connection_error(
-                &gateway_connection,
+            crate::tcp_gateway::scripts::send_connection_error(
+                gateway_connection.as_ref(),
                 connection_id,
                 err.as_str(),
                 false,
@@ -129,6 +111,8 @@ async fn read_loop(
 
         let buffer = &buf[..read_size];
 
-        super::super::send_payload_to_gateway(&gateway_connection, connection_id, buffer).await;
+        gateway_connection
+            .send_payload_to_gateway(connection_id, buffer)
+            .await;
     }
 }

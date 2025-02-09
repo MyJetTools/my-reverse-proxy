@@ -1,13 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 
-use crate::tcp_gateway::{client::*, *};
+use crate::tcp_gateway::{ forwarded_connection::TcpGatewayForwardConnection, *};
 
 pub async fn handle_forward_connect(
     connection_id: u32,
     remote_host: String,
     timeout: Duration,
-    gateway_connection: Arc<TcpGatewayClientConnection>,
+    gateway_connection: Arc<TcpGatewayConnection>,
 ) {
     if gateway_connection
         .has_forward_connection(connection_id)
@@ -17,11 +17,11 @@ pub async fn handle_forward_connect(
         let err = 
         format!("Attempt to establish client forward connection is fail. ConnectionId {} is already has a connection", connection_id);
 
-        super::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
+        crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
         return;
     }
 
-    let  connection_result = TcpGatewayClientForwardConnection::connect(
+    let  connection_result = TcpGatewayForwardConnection::connect(
         connection_id,
         gateway_connection.clone(),
         Arc::new(remote_host.to_string()),
@@ -39,7 +39,7 @@ pub async fn handle_forward_connect(
   
         },
         Err(err) => {
-            super::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
+            crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
         },
     }
 }
