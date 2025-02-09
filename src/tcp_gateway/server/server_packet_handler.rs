@@ -80,7 +80,6 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 connection_id,
                 payload,
             } => {
-                println!("Backward: {}", payload.len());
                 gateway_connection
                     .notify_incoming_payload(connection_id, payload)
                     .await;
