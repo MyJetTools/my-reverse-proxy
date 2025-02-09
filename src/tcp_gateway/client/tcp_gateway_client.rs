@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use encryption::aes::AesKey;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
@@ -14,8 +15,8 @@ pub struct TcpGatewayClient {
 }
 
 impl TcpGatewayClient {
-    pub fn new(id: String, remote_endpoint: String, debug: bool) -> Self {
-        let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint));
+    pub fn new(id: String, remote_endpoint: String, encryption: AesKey, debug: bool) -> Self {
+        let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint, encryption));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
@@ -114,7 +115,8 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let gateway_connection = TcpGatewayConnection::new(inner.addr.clone(), write);
+        let gateway_connection =
+            TcpGatewayConnection::new(inner.addr.clone(), write, inner.encryption.clone());
 
         let gateway_connection = Arc::new(gateway_connection);
         inner

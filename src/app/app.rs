@@ -73,8 +73,10 @@ impl AppContext {
 
         let gateway_server =
             if let Some(gateway_server_settings) = settings_model.get_gateway_server() {
+                let encryption = gateway_server_settings.get_encryption_key().unwrap();
                 Some(TcpGatewayServer::new(
                     format!("0.0.0.0:{}", gateway_server_settings.port,),
+                    encryption,
                     gateway_server_settings.is_debug(),
                 ))
             } else {
@@ -85,9 +87,11 @@ impl AppContext {
 
         if let Some(clients_settings) = &settings_model.gateway_clients {
             for (id, client_settings) in clients_settings.iter() {
+                let encryption = client_settings.get_encryption_key().unwrap();
                 let client = TcpGatewayClient::new(
                     id.to_string(),
                     client_settings.remote_host.to_string(),
+                    encryption,
                     client_settings.is_debug(),
                 );
 

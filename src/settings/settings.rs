@@ -175,7 +175,7 @@ mod tests {
             "client_id".to_string(),
             GatewayClientSettings {
                 remote_host: "127.0.0.1:3000".to_string(),
-                password: None,
+                encryption_key: String::new(),
                 debug: None,
             },
         );

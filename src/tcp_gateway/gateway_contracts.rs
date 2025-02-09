@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use encryption::aes::AesKey;
+
 const PING: u8 = 0;
 const PONG: u8 = 1;
 const HANDSHAKE_PACKET_ID: u8 = 2;
@@ -127,9 +129,9 @@ impl<'s> TcpGatewayContract<'s> {
         }
     }
 
-    pub fn to_vec(&self) -> Vec<u8> {
+    pub fn to_vec(&self, aes_key: &AesKey) -> Vec<u8> {
         let mut result = Vec::new();
-        result.extend_from_slice(&[0, 0, 0, 0]);
+
         match self {
             Self::Handshake {
                 gateway_name,
@@ -187,13 +189,18 @@ impl<'s> TcpGatewayContract<'s> {
             }
         }
 
-        let len = (result.len() - 4) as u32;
+        let encrypted = aes_key.encrypt(&result);
 
-        let len = len.to_le_bytes();
-        result[0] = len[0];
-        result[1] = len[1];
-        result[2] = len[2];
-        result[3] = len[3];
+        let encrypted = encrypted.as_slice();
+
+        let len = encrypted.len();
+
+        let mut result = Vec::with_capacity(len + 4);
+
+        let len = (len as u32).to_le_bytes();
+
+        result.extend_from_slice(&len);
+        result.extend_from_slice(encrypted);
 
         result
     }

@@ -3,6 +3,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use encryption::aes::AesKey;
 use tokio::sync::Mutex;
 
 use super::TcpGatewayConnection;
@@ -12,15 +13,17 @@ pub struct TcpGatewayInner {
     pub addr: Arc<String>,
     running: AtomicBool,
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
+    pub encryption: Arc<AesKey>,
 }
 
 impl TcpGatewayInner {
-    pub fn new(gateway_id: String, addr: String) -> Self {
+    pub fn new(gateway_id: String, addr: String, encryption: AesKey) -> Self {
         Self {
             gateway_id: Arc::new(gateway_id),
             addr: Arc::new(addr),
             running: AtomicBool::new(true),
             connection: Mutex::default(),
+            encryption: Arc::new(encryption),
         }
     }
 

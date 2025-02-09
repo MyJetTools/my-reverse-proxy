@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use encryption::aes::AesEncryptedData;
+use encryption::*;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{app::AppContext, types::*};
@@ -30,7 +30,7 @@ pub fn generate(app: &AppContext, email: &str) -> String {
 }
 
 pub fn resolve(app: &AppContext, token_str: &str) -> Option<Email> {
-    let aes = AesEncryptedData::from_base_64(token_str).ok()?;
+    let aes = AesEncryptedDataOwned::from_base_64(token_str).ok()?;
 
     let token = app.token_secret_key.decrypt(&aes).ok()?;
 

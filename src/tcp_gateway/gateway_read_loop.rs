@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use encryption::*;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
@@ -71,7 +72,18 @@ pub async fn read_loop(
             }
         };
 
-        match TcpGatewayContract::parse(payload) {
+        let aes_encrypted_data = AesEncryptedDataRef::new(payload);
+
+        let decrypted = tcp_gateway.encryption.decrypt(&aes_encrypted_data);
+
+        if decrypted.is_err() {
+            println!("TcpGateway is closing connection since Encryption key is wrong");
+            break;
+        }
+
+        let decrypted = decrypted.unwrap();
+
+        match TcpGatewayContract::parse(decrypted.as_slice()) {
             Ok(packet) => {
                 let now = DateTimeAsMicroseconds::now();
                 gateway_connection.set_last_incoming_payload_time(now);

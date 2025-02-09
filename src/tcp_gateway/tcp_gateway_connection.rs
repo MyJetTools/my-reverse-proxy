@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use encryption::aes::AesKey;
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
@@ -15,10 +16,11 @@ pub struct TcpGatewayConnection {
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
     forward_proxy_connections: Mutex<HashMap<u32, Arc<TcpGatewayProxyForwardedConnection>>>,
+    pub aes_key: Arc<AesKey>,
 }
 
 impl TcpGatewayConnection {
-    pub fn new(addr: Arc<String>, write_half: OwnedWriteHalf) -> Self {
+    pub fn new(addr: Arc<String>, write_half: OwnedWriteHalf, aes_key: Arc<AesKey>) -> Self {
         let (inner, receiver) = TcpConnectionInner::new(write_half);
         let inner = Arc::new(inner);
         let result = Self {
@@ -28,6 +30,7 @@ impl TcpGatewayConnection {
             forward_connections: Mutex::default(),
             forward_proxy_connections: Mutex::default(),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
+            aes_key,
         };
 
         super::tcp_connection_inner::start_write_loop(inner, receiver);
@@ -189,7 +192,7 @@ impl TcpGatewayConnection {
     }
 
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
-        let vec = payload.to_vec();
+        let vec = payload.to_vec(&self.aes_key);
         self.inner.send_payload(vec.as_slice()).await
     }
 
@@ -219,7 +222,7 @@ impl TcpGatewayConnection {
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
         if let Some(connection) = self.remove_forward_proxy_connection(connection_id).await {
-            connection.disconnect(message).await;
+            connection.disconnect(message, &self.aes_key).await;
         }
     }
 }

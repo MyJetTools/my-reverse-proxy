@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Duration;
 
+use encryption::aes::AesKey;
 use tokio::net::TcpListener;
 
 use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardedConnection;
@@ -15,9 +16,13 @@ pub struct TcpGatewayServer {
 }
 
 impl TcpGatewayServer {
-    pub fn new(listen: String, debug: bool) -> Self {
+    pub fn new(listen: String, encryption: AesKey, debug: bool) -> Self {
         println!("Starting TCP Gateway Server at address: {}", listen);
-        let inner = Arc::new(TcpGatewayInner::new("ServerGateway".to_string(), listen));
+        let inner = Arc::new(TcpGatewayInner::new(
+            "ServerGateway".to_string(),
+            listen,
+            encryption,
+        ));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
@@ -116,7 +121,11 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let tcp_gateway_connection = TcpGatewayConnection::new(tcp_gateway.addr.clone(), write);
+        let tcp_gateway_connection = TcpGatewayConnection::new(
+            tcp_gateway.addr.clone(),
+            write,
+            tcp_gateway.encryption.clone(),
+        );
 
         let tcp_gateway_connection = Arc::new(tcp_gateway_connection);
 

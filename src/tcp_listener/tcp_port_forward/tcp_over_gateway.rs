@@ -190,7 +190,9 @@ async fn copy_from_connection_to_gateway(
             break;
         }
 
-        proxy_connection.send_payload(&buffer[..read_size]).await;
+        proxy_connection
+            .send_payload(&buffer[..read_size], &gateway_connection.aes_key)
+            .await;
     }
 }
 

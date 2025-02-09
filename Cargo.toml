@@ -23,7 +23,7 @@ my-logger = { tag = "1.2.1", git = "https://github.com/MyJetTools/my-logger.git"
 
 my-ssh = { git = "https://github.com/MyJetTools/my-ssh.git", tag = "0.1.2" }
 
-encryption = { git = "https://github.com/MyJetTools/encryption.git", tag = "0.1.0" }
+encryption = { git = "https://github.com/MyJetTools/encryption.git", tag = "0.1.1" }
 
 
 hyper = { version = "*", features = ["full"] }
