@@ -73,10 +73,10 @@ impl AppContext {
 
         let gateway_server =
             if let Some(gateway_server_settings) = settings_model.get_gateway_server() {
-                Some(TcpGatewayServer::new(format!(
-                    "0.0.0.0:{}",
-                    gateway_server_settings.port
-                )))
+                Some(TcpGatewayServer::new(
+                    format!("0.0.0.0:{}", gateway_server_settings.port,),
+                    gateway_server_settings.is_debug(),
+                ))
             } else {
                 None
             };
@@ -85,8 +85,11 @@ impl AppContext {
 
         if let Some(clients_settings) = &settings_model.gateway_clients {
             for (id, client_settings) in clients_settings.iter() {
-                let client =
-                    TcpGatewayClient::new(id.to_string(), client_settings.remote_host.to_string());
+                let client = TcpGatewayClient::new(
+                    id.to_string(),
+                    client_settings.remote_host.to_string(),
+                    client_settings.is_debug(),
+                );
 
                 gateway_clients.insert(id.clone(), client);
             }

@@ -14,14 +14,14 @@ pub struct TcpGatewayClient {
 }
 
 impl TcpGatewayClient {
-    pub fn new(id: String, remote_endpoint: String) -> Self {
+    pub fn new(id: String, remote_endpoint: String, debug: bool) -> Self {
         let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner.clone()));
+        tokio::spawn(connection_loop(inner.clone(), debug));
 
         result
     }
@@ -80,7 +80,7 @@ impl Drop for TcpGatewayClient {
     }
 }
 
-async fn connection_loop(inner: Arc<TcpGatewayInner>) {
+async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
     while inner.is_running() {
         inner.set_gateway_connection(None).await;
         println!(
@@ -120,6 +120,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
             read,
             gateway_connection.clone(),
             TcpGatewayClientPacketHandler::new(),
+            debug,
         ));
 
         let handshake_contract = TcpGatewayContract::Handshake {

@@ -10,6 +10,7 @@ pub async fn read_loop(
     mut read: OwnedReadHalf,
     gateway_connection: Arc<TcpGatewayConnection>,
     packet_handler: impl TcpGatewayPacketHandler,
+    debug: bool,
 ) {
     let mut buf = crate::tcp_utils::allocated_read_buffer();
 
@@ -22,16 +23,22 @@ pub async fn read_loop(
         match read_result {
             Ok(result) => {
                 if result != payload_size.len() {
-                    println!("[1] TCP Gateway is disconnected");
+                    if debug {
+                        println!("[1] TCP Gateway is disconnected");
+                    }
+
                     break;
                 }
             }
             Err(err) => {
-                println!(
-                    "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                    tcp_gateway.addr.as_str(),
-                    err
-                );
+                if debug {
+                    println!(
+                        "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
+                        tcp_gateway.addr.as_str(),
+                        err
+                    );
+                }
+
                 break;
             }
         }
@@ -45,16 +52,21 @@ pub async fn read_loop(
         match read_result {
             Ok(result) => {
                 if result != payload.len() {
-                    println!("[2] TCP Gateway is disconnected");
+                    if debug {
+                        println!("[2] TCP Gateway is disconnected");
+                    }
                     break;
                 }
             }
             Err(err) => {
-                println!(
-                    "[2] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                    tcp_gateway.addr.as_str(),
-                    err
-                );
+                if debug {
+                    println!(
+                        "[2] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
+                        tcp_gateway.addr.as_str(),
+                        err
+                    );
+                }
+
                 break;
             }
         };

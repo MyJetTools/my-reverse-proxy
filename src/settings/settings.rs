@@ -176,6 +176,7 @@ mod tests {
             GatewayClientSettings {
                 remote_host: "127.0.0.1:3000".to_string(),
                 password: None,
+                debug: None,
             },
         );
 

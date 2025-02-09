@@ -10,14 +10,14 @@ pub struct TcpGatewayServer {
 }
 
 impl TcpGatewayServer {
-    pub fn new(listen: String) -> Self {
+    pub fn new(listen: String, debug: bool) -> Self {
         println!("Starting TCP Gateway Server at address: {}", listen);
         let inner = Arc::new(TcpGatewayInner::new("ServerGateway".to_string(), listen));
         let result = Self {
             inner: inner.clone(),
         };
 
-        tokio::spawn(connection_loop(inner));
+        tokio::spawn(connection_loop(inner, debug));
 
         result
     }
@@ -33,7 +33,7 @@ impl Drop for TcpGatewayServer {
     }
 }
 
-async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>) {
+async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
     let listener = TcpListener::bind(tcp_gateway.addr.as_str()).await;
 
     if let Err(err) = &listener {
@@ -78,6 +78,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>) {
             read,
             tcp_gateway_connection,
             TcpGatewayServerPacketHandler,
+            debug,
         ));
     }
 }
