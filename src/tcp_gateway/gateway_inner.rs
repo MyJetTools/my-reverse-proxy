@@ -8,16 +8,16 @@ use tokio::sync::Mutex;
 use super::TcpGatewayConnection;
 
 pub struct TcpGatewayInner {
-    pub id: Arc<String>,
+    pub gateway_id: Arc<String>,
     pub addr: Arc<String>,
     running: AtomicBool,
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
 }
 
 impl TcpGatewayInner {
-    pub fn new(id: String, addr: String) -> Self {
+    pub fn new(gateway_id: String, addr: String) -> Self {
         Self {
-            id: Arc::new(id),
+            gateway_id: Arc::new(gateway_id),
             addr: Arc::new(addr),
             running: AtomicBool::new(true),
             connection: Mutex::default(),
@@ -47,7 +47,7 @@ impl TcpGatewayInner {
     }
 
     pub fn get_id(&self) -> &str {
-        &self.id
+        &self.gateway_id
     }
 
     pub fn stop(&self) {
