@@ -104,7 +104,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 }
 
                 gateway_connection
-                    .disconnect_forward_connection(connection_id)
+                    .disconnect_forward_proxy_connection(connection_id, error)
                     .await;
             }
         }
