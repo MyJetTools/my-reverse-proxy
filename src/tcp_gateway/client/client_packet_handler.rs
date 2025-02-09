@@ -69,11 +69,14 @@ impl TcpGatewayClientPacketHandler {
                     .get_forward_connection(connection_id)
                     .await
                 {
+                    println!("Found forward_connection with id{}", connection_id);
                     if !forward_connection.send_payload(payload).await {
                         gateway_connection
                             .disconnect_forward_connection(connection_id)
                             .await;
                     }
+                } else {
+                    println!("Not Found forward_connection with id{}", connection_id);
                 }
             }
 
