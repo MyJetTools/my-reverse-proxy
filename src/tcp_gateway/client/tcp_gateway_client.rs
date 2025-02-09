@@ -34,6 +34,7 @@ impl TcpGatewayClient {
     pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: &str,
+        debug: bool,
     ) -> Result<
         (
             Arc<TcpGatewayProxyForwardedConnection>,
@@ -58,10 +59,13 @@ impl TcpGatewayClient {
 
         let connection_id = self.get_next_connection_id();
 
-        println!(
-            "Connecting to {} with id {} ",
-            remote_endpoint, connection_id
-        );
+        if debug {
+            println!(
+                "Connecting to {} with id {} ",
+                remote_endpoint, connection_id
+            );
+        }
+
         let result = gateway_connection
             .connect_to_forward_proxy_connection(
                 remote_endpoint,

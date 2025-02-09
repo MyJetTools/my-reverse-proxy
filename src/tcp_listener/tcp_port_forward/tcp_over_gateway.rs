@@ -79,7 +79,7 @@ pub async fn handle_connection(
         println!("Connecting to {}", remote_host.as_str());
     }
     let connection_result = gateway_client
-        .connect_to_forward_proxy_connection(remote_host.as_str())
+        .connect_to_forward_proxy_connection(remote_host.as_str(), configuration.debug)
         .await;
 
     if let Err(err) = &connection_result {
