@@ -20,6 +20,12 @@ pub async fn handle_connection(
     gateway_id: Arc<String>,
     remote_host: Arc<RemoteEndpointOwned>,
 ) {
+    println!(
+        "Accepted connection forwarded to {}->{}",
+        gateway_id.as_str(),
+        remote_host.as_str()
+    );
+
     if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
         let ip_white_list = app
             .current_configuration
@@ -66,6 +72,7 @@ pub async fn handle_connection(
 
     let gateway_client = gateway_client.unwrap();
 
+    println!("Connecting to {}", remote_host.as_str());
     let connection_result = gateway_client
         .connect_forward_connection(remote_host.as_str())
         .await;

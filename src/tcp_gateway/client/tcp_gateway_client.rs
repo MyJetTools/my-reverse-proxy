@@ -38,17 +38,24 @@ impl TcpGatewayClient {
         let gateway_connection = self.inner.get_gateway_connection().await;
 
         if gateway_connection.is_none() {
-            return Err(format!(
+            let err = format!(
                 "Gateway {} connection to endpoint {} is not established",
                 self.inner.get_id(),
                 self.inner.addr.as_str()
-            ));
+            );
+
+            println!("{}", err);
+            return Err(err);
         }
 
         let gateway_connection = gateway_connection.unwrap();
 
         let connection_id = self.get_next_connection_id();
 
+        println!(
+            "Connecting to {} with id {} ",
+            remote_endpoint, connection_id
+        );
         gateway_connection
             .connect_forward_connection(remote_endpoint, Duration::from_secs(5), connection_id)
             .await
@@ -63,6 +70,7 @@ impl Drop for TcpGatewayClient {
 
 async fn connection_loop(inner: Arc<TcpGatewayInner>) {
     while inner.is_running() {
+        inner.set_gateway_connection(None).await;
         println!(
             "Connecting to remote gateway '{}' with addr '{}'",
             inner.get_id(),
@@ -91,6 +99,9 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>) {
             TcpGatewayConnection::new(inner.id.clone(), inner.addr.clone(), write);
 
         let gateway_connection = Arc::new(gateway_connection);
+        inner
+            .set_gateway_connection(gateway_connection.clone().into())
+            .await;
 
         tokio::spawn(crate::tcp_gateway::gateway_read_loop::read_loop(
             inner.clone(),

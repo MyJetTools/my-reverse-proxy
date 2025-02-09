@@ -8,6 +8,7 @@ const SEND_PAYLOAD_PACKET_ID: u8 = 7;
 const PING: u8 = 8;
 const PONG: u8 = 9;
 
+#[derive(Debug)]
 pub enum TcpGatewayContract<'s> {
     Handshake {
         timestamp: i64,
