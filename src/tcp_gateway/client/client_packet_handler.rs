@@ -73,7 +73,7 @@ impl TcpGatewayClientPacketHandler {
                 payload,
             } => {
                 println!(
-                    "Got Backward for connection_id: {}. Size: {}",
+                    "Got BackwardPayload for connection_id: {}. Size: {}",
                     connection_id,
                     payload.len()
                 );
