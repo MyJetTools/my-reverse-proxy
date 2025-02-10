@@ -194,7 +194,7 @@ impl<'s> TcpGatewayContract<'s> {
 
                 let status = GetFileStatus::from_u8(payload[4]);
 
-                let content = extract_content(&payload[4..])?;
+                let content = extract_content(&payload[5..])?;
 
                 return Ok(Self::GetFileResponse {
                     request_id,
@@ -332,7 +332,10 @@ fn push_content(result: &mut Vec<u8>, payload: &[u8], support_compression: bool)
     } else {
         result.push(0);
     }
-    result.extend_from_slice(payload.as_slice());
+
+    if payload.get_len() > 0 {
+        result.extend_from_slice(payload.as_slice());
+    }
 }
 
 fn extract_content(payload: &[u8]) -> Result<SliceOrVec<'_, u8>, String> {
