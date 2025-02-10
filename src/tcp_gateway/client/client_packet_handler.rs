@@ -24,7 +24,7 @@ impl TcpGatewayClientPacketHandler {
         match contract {
             TcpGatewayContract::Handshake {
                 gateway_name,
-                support_compression: bool,
+                support_compression: _,
                 timestamp,
             } => {
                 let timestamp = DateTimeAsMicroseconds::new(timestamp);
@@ -77,24 +77,23 @@ impl TcpGatewayClientPacketHandler {
             }
             TcpGatewayContract::ForwardPayload {
                 connection_id,
-                compressed,
+
                 payload,
             } => {
                 crate::tcp_gateway::scripts::forward_payload(
                     gateway_connection,
                     connection_id,
-                    payload,
+                    payload.as_slice(),
                 )
                 .await
             }
 
             TcpGatewayContract::BackwardPayload {
                 connection_id,
-                compressed,
                 payload,
             } => {
                 gateway_connection
-                    .notify_incoming_payload(connection_id, payload)
+                    .notify_incoming_payload(connection_id, payload.as_slice())
                     .await;
             }
             TcpGatewayContract::Ping => {}

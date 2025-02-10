@@ -49,6 +49,7 @@ pub struct TcpGatewayProxyForwardedConnection {
     pub gateway_id: Arc<String>,
     pub remote_endpoint: String,
     pub receive_buffer: Mutex<ProxyReceiveBuffer>,
+    pub support_compression: bool,
 }
 
 impl TcpGatewayProxyForwardedConnection {
@@ -57,6 +58,7 @@ impl TcpGatewayProxyForwardedConnection {
         gateway_id: Arc<String>,
         connection_inner: Arc<TcpConnectionInner>,
         remote_endpoint: String,
+        support_compression: bool,
     ) -> Self {
         Self {
             connection_id,
@@ -65,6 +67,7 @@ impl TcpGatewayProxyForwardedConnection {
             remote_endpoint,
             inner: Mutex::new(TcpGatewayProxyForwardedConnectionInner::new()),
             receive_buffer: Mutex::default(),
+            support_compression,
         }
     }
 
@@ -101,7 +104,7 @@ impl TcpGatewayProxyForwardedConnection {
         };
 
         self.connection_inner
-            .send_payload(&connection_error.to_vec(aes_key))
+            .send_payload(&connection_error.to_vec(aes_key, self.support_compression))
             .await;
 
         let mut receive_buffer = self.receive_buffer.lock().await;
@@ -113,10 +116,9 @@ impl TcpGatewayProxyForwardedConnection {
     pub async fn send_payload(&self, payload: &[u8], aes_key: &AesKey) {
         let send_payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
-            compressed: false,
-            payload,
+            payload: payload.into(),
         }
-        .to_vec(aes_key);
+        .to_vec(aes_key, self.support_compression);
 
         self.connection_inner.send_payload(&send_payload).await;
     }

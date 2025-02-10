@@ -516,7 +516,10 @@ gateway_clients:
   gateway_name:
     remote_host: 10.0.0.0:30000
     encryption_key: 12345678901234567890
+    compress: true 
 ```
+
+* compress parameter is optional. Omitting the parameter leads to the compress: false value
 
 To Setup location through gateway
 ```yaml

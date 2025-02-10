@@ -125,6 +125,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             tcp_gateway.addr.clone(),
             write,
             tcp_gateway.encryption.clone(),
+            false,
         );
 
         let tcp_gateway_connection = Arc::new(tcp_gateway_connection);

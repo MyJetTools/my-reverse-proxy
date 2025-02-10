@@ -177,6 +177,7 @@ mod tests {
                 remote_host: "127.0.0.1:3000".to_string(),
                 encryption_key: String::new(),
                 debug: None,
+                compress: None,
             },
         );
 

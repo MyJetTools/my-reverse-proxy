@@ -15,14 +15,20 @@ pub struct TcpGatewayClient {
 }
 
 impl TcpGatewayClient {
-    pub fn new(id: String, remote_endpoint: String, encryption: AesKey, debug: bool) -> Self {
+    pub fn new(
+        id: String,
+        remote_endpoint: String,
+        encryption: AesKey,
+        supported_compression: bool,
+        debug: bool,
+    ) -> Self {
         let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint, encryption));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner.clone(), debug));
+        tokio::spawn(connection_loop(inner.clone(), supported_compression, debug));
 
         result
     }
@@ -88,7 +94,7 @@ impl Drop for TcpGatewayClient {
     }
 }
 
-async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
+async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: bool, debug: bool) {
     while inner.is_running() {
         inner.set_gateway_connection(&inner.gateway_id, None).await;
         println!(
@@ -115,8 +121,12 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let (read, write) = tcp_stream.into_split();
 
-        let gateway_connection =
-            TcpGatewayConnection::new(inner.addr.clone(), write, inner.encryption.clone());
+        let gateway_connection = TcpGatewayConnection::new(
+            inner.addr.clone(),
+            write,
+            inner.encryption.clone(),
+            supported_compression,
+        );
 
         let gateway_connection = Arc::new(gateway_connection);
         inner
@@ -133,7 +143,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let handshake_contract = TcpGatewayContract::Handshake {
             timestamp: DateTimeAsMicroseconds::now().unix_microseconds,
-            support_compression: false,
+            support_compression: supported_compression,
             gateway_name: inner.get_id(),
         };
 

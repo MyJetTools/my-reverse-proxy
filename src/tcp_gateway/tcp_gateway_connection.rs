@@ -1,4 +1,8 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use encryption::aes::AesKey;
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
@@ -17,10 +21,16 @@ pub struct TcpGatewayConnection {
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
     forward_proxy_connections: Mutex<HashMap<u32, Arc<TcpGatewayProxyForwardedConnection>>>,
     pub aes_key: Arc<AesKey>,
+    support_compression: AtomicBool,
 }
 
 impl TcpGatewayConnection {
-    pub fn new(addr: Arc<String>, write_half: OwnedWriteHalf, aes_key: Arc<AesKey>) -> Self {
+    pub fn new(
+        addr: Arc<String>,
+        write_half: OwnedWriteHalf,
+        aes_key: Arc<AesKey>,
+        supported_connection: bool,
+    ) -> Self {
         let (inner, receiver) = TcpConnectionInner::new(write_half);
         let inner = Arc::new(inner);
         let result = Self {
@@ -31,11 +41,22 @@ impl TcpGatewayConnection {
             forward_proxy_connections: Mutex::default(),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             aes_key,
+            support_compression: AtomicBool::new(supported_connection),
         };
 
         super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
+    }
+
+    pub fn get_supported_compression(&self) -> bool {
+        self.support_compression
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn set_supported_compression(&self, value: bool) {
+        self.support_compression
+            .store(value, std::sync::atomic::Ordering::Relaxed);
     }
 
     pub async fn set_gateway_id(&self, id: &str) {
@@ -96,6 +117,7 @@ impl TcpGatewayConnection {
             gateway_id.clone(),
             self.inner.clone(),
             remote_endpoint.to_string(),
+            self.get_supported_compression(),
         ));
         {
             let mut write_access = self.forward_proxy_connections.lock().await;
@@ -158,9 +180,8 @@ impl TcpGatewayConnection {
     pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
         if self.has_forward_connection(connection_id).await {
             let payload = TcpGatewayContract::BackwardPayload {
-                compressed: false,
                 connection_id,
-                payload,
+                payload: payload.into(),
             };
             self.send_payload(&payload).await;
         }
@@ -193,7 +214,8 @@ impl TcpGatewayConnection {
     }
 
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
-        let vec = payload.to_vec(&self.aes_key);
+        let supported_compression = self.get_supported_compression();
+        let vec = payload.to_vec(&self.aes_key, supported_compression);
         self.inner.send_payload(vec.as_slice()).await
     }
 

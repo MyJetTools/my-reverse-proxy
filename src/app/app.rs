@@ -92,6 +92,7 @@ impl AppContext {
                     id.to_string(),
                     client_settings.remote_host.to_string(),
                     encryption,
+                    client_settings.get_supported_compression(),
                     client_settings.is_debug(),
                 );
 

@@ -5,6 +5,7 @@ use serde::*;
 pub struct GatewayClientSettings {
     pub remote_host: String,
     pub encryption_key: String,
+    pub compress: Option<bool>,
 
     pub debug: Option<bool>,
 }
@@ -12,6 +13,10 @@ pub struct GatewayClientSettings {
 impl GatewayClientSettings {
     pub fn is_debug(&self) -> bool {
         self.debug.unwrap_or(false)
+    }
+
+    pub fn get_supported_compression(&self) -> bool {
+        self.compress.unwrap_or(false)
     }
 
     pub fn get_encryption_key(&self) -> Result<AesKey, String> {

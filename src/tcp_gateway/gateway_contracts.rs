@@ -1,6 +1,10 @@
-use std::time::Duration;
+use std::{
+    io::{Read, Write},
+    time::Duration,
+};
 
 use encryption::aes::AesKey;
+use rust_extensions::SliceOrVec;
 
 const PING: u8 = 0;
 const PONG: u8 = 1;
@@ -32,13 +36,11 @@ pub enum TcpGatewayContract<'s> {
     },
     ForwardPayload {
         connection_id: u32,
-        compressed: bool,
-        payload: &'s [u8],
+        payload: SliceOrVec<'s, u8>,
     },
     BackwardPayload {
         connection_id: u32,
-        compressed: bool,
-        payload: &'s [u8],
+        payload: SliceOrVec<'s, u8>,
     },
     Ping,
     Pong,
@@ -106,10 +108,10 @@ impl<'s> TcpGatewayContract<'s> {
 
                 let compressed = payload[4] == 1;
 
-                let payload = &payload[5..];
+                let payload = decompress_payload(&payload[5..], compressed)?;
+
                 return Ok(Self::ForwardPayload {
                     connection_id,
-                    compressed,
                     payload,
                 });
             }
@@ -120,10 +122,9 @@ impl<'s> TcpGatewayContract<'s> {
 
                 let compressed = payload[4] == 1;
 
-                let payload = &payload[5..];
+                let payload = decompress_payload(&payload[5..], compressed)?;
                 return Ok(Self::BackwardPayload {
                     connection_id,
-                    compressed,
                     payload,
                 });
             }
@@ -141,7 +142,7 @@ impl<'s> TcpGatewayContract<'s> {
         }
     }
 
-    pub fn to_vec(&self, aes_key: &AesKey) -> Vec<u8> {
+    pub fn to_vec(&self, aes_key: &AesKey, support_compression: bool) -> Vec<u8> {
         let mut result = Vec::new();
 
         match self {
@@ -187,32 +188,37 @@ impl<'s> TcpGatewayContract<'s> {
 
             Self::ForwardPayload {
                 connection_id,
-                compressed,
                 payload,
             } => {
                 result.push(SEND_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
-                if *compressed {
+
+                let (compressed, payload) =
+                    compress_payload_if_require(payload.as_slice(), support_compression);
+
+                if compressed {
                     result.push(1);
                 } else {
                     result.push(0);
                 }
 
-                result.extend_from_slice(payload);
+                result.extend_from_slice(payload.as_slice());
             }
             Self::BackwardPayload {
                 connection_id,
-                compressed,
                 payload,
             } => {
                 result.push(RECEIVE_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
-                if *compressed {
+                let (compressed, payload) =
+                    compress_payload_if_require(payload.as_slice(), support_compression);
+
+                if compressed {
                     result.push(1);
                 } else {
                     result.push(0);
                 }
-                result.extend_from_slice(payload);
+                result.extend_from_slice(payload.as_slice());
             }
             Self::Ping => {
                 result.push(PING);
@@ -236,5 +242,58 @@ impl<'s> TcpGatewayContract<'s> {
         result.extend_from_slice(encrypted);
 
         result
+    }
+}
+
+pub fn compress_payload_if_require<'s>(
+    payload: &'s [u8],
+    try_compress_payload: bool,
+) -> (bool, SliceOrVec<'s, u8>) {
+    use flate2::{write::GzEncoder, Compression};
+
+    if try_compress_payload {
+        if payload.len() < 64 {
+            return (false, SliceOrVec::AsSlice(payload));
+        }
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(payload).unwrap();
+        let compressed = encoder.finish().unwrap();
+
+        if compressed.len() < payload.len() {
+            return (true, SliceOrVec::AsVec(compressed));
+        }
+    }
+
+    (false, SliceOrVec::AsSlice(payload))
+}
+
+pub fn decompress_payload<'s>(
+    src: &'s [u8],
+    compressed: bool,
+) -> Result<SliceOrVec<'s, u8>, String> {
+    if !compressed {
+        return Ok(src.into());
+    }
+
+    let mut decompressor = flate2::read::GzDecoder::new(src);
+
+    let mut result = Vec::new();
+    let mut buffer = [0u8; 1024 * 4];
+
+    loop {
+        let read_amount = decompressor.read(&mut buffer);
+
+        if read_amount.is_err() {
+            return Err("Can not decompress deflate payload".to_string());
+        }
+
+        let read_amount = read_amount.unwrap();
+
+        if read_amount == 0 {
+            return Ok(result.into());
+        }
+
+        result.extend_from_slice(&buffer[..read_amount]);
     }
 }
