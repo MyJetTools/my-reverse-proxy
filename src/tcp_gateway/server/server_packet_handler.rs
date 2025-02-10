@@ -115,6 +115,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 gateway_connection.last_ping_duration.update(duration);
             }
             TcpGatewayContract::GetFileRequest { path, request_id } => {
+                println!("Requesting file {}. RequestId: {}", path, request_id);
                 crate::tcp_gateway::scripts::serve_file(
                     request_id,
                     path.to_string(),
