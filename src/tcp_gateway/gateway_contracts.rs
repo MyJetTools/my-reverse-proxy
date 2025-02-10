@@ -31,10 +31,12 @@ pub enum TcpGatewayContract<'s> {
     },
     ForwardPayload {
         connection_id: u32,
+        compressed: bool,
         payload: &'s [u8],
     },
     BackwardPayload {
         connection_id: u32,
+        compressed: bool,
         payload: &'s [u8],
     },
     Ping,
@@ -98,9 +100,12 @@ impl<'s> TcpGatewayContract<'s> {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let payload = &payload[4..];
+                let compressed = payload[4] == 1;
+
+                let payload = &payload[5..];
                 return Ok(Self::ForwardPayload {
                     connection_id,
+                    compressed,
                     payload,
                 });
             }
@@ -109,9 +114,12 @@ impl<'s> TcpGatewayContract<'s> {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let payload = &payload[4..];
+                let compressed = payload[4] == 1;
+
+                let payload = &payload[5..];
                 return Ok(Self::BackwardPayload {
                     connection_id,
+                    compressed,
                     payload,
                 });
             }
@@ -167,18 +175,31 @@ impl<'s> TcpGatewayContract<'s> {
 
             Self::ForwardPayload {
                 connection_id,
+                compressed,
                 payload,
             } => {
                 result.push(SEND_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
+                if *compressed {
+                    result.push(1);
+                } else {
+                    result.push(0);
+                }
+
                 result.extend_from_slice(payload);
             }
             Self::BackwardPayload {
                 connection_id,
+                compressed,
                 payload,
             } => {
                 result.push(RECEIVE_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
+                if *compressed {
+                    result.push(1);
+                } else {
+                    result.push(0);
+                }
                 result.extend_from_slice(payload);
             }
             Self::Ping => {

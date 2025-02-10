@@ -66,6 +66,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
 
             TcpGatewayContract::ForwardPayload {
                 connection_id,
+                compressed,
                 payload,
             } => {
                 crate::tcp_gateway::scripts::forward_payload(
@@ -78,6 +79,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
 
             TcpGatewayContract::BackwardPayload {
                 connection_id,
+                compressed,
                 payload,
             } => {
                 gateway_connection

@@ -113,6 +113,7 @@ impl TcpGatewayProxyForwardedConnection {
     pub async fn send_payload(&self, payload: &[u8], aes_key: &AesKey) {
         let send_payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
+            compressed: false,
             payload,
         }
         .to_vec(aes_key);

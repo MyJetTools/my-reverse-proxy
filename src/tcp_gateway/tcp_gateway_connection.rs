@@ -158,6 +158,7 @@ impl TcpGatewayConnection {
     pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
         if self.has_forward_connection(connection_id).await {
             let payload = TcpGatewayContract::BackwardPayload {
+                compressed: false,
                 connection_id,
                 payload,
             };
