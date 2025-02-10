@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::{app::AppContext, tcp_gateway::server::TcpGatewayServer};
+use crate::{
+    app::AppContext,
+    tcp_gateway::{server::TcpGatewayServer, TcpGatewayConnection},
+};
 
 #[derive(MyHttpObjectStructure, Serialize, Debug)]
 pub struct GatewayServerStatus {
@@ -10,10 +15,13 @@ pub struct GatewayServerStatus {
 
 impl GatewayServerStatus {
     pub async fn new(app: &AppContext) -> Option<Self> {
-        let server_gateway = app.gateway_server.as_ref().unwrap();
+        let server_gateway = app.gateway_server.as_ref()?;
 
         let result = Self {
-            connections: GatewayConnection::new(server_gateway).await,
+            connections: GatewayConnection::new(
+                server_gateway.get_gateway_connections().await.as_slice(),
+            )
+            .await,
         };
 
         Some(result)
@@ -28,9 +36,7 @@ pub struct GatewayConnection {
 }
 
 impl GatewayConnection {
-    pub async fn new(src: &TcpGatewayServer) -> Vec<GatewayConnection> {
-        let connections = src.get_gateway_connections().await;
-
+    pub async fn new(connections: &[Arc<TcpGatewayConnection>]) -> Vec<GatewayConnection> {
         let mut result = Vec::new();
 
         for connection in connections {

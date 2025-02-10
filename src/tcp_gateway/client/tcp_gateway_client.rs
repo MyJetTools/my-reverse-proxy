@@ -38,6 +38,10 @@ impl TcpGatewayClient {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
+    pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
+        self.inner.get_gateway_connections().await
+    }
+
     pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: &str,

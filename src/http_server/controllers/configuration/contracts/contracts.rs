@@ -18,6 +18,7 @@ pub struct CurrentConfigurationHttpModel {
     pub errors: BTreeMap<String, String>,
     pub remote_connections: HashMap<String, usize>,
     pub gateway_server: Option<GatewayServerStatus>,
+    pub gateway_clients: Vec<GatewayClientStatus>,
 }
 
 impl CurrentConfigurationHttpModel {
@@ -81,6 +82,7 @@ impl CurrentConfigurationHttpModel {
             errors,
             remote_connections,
             gateway_server: GatewayServerStatus::new(app).await,
+            gateway_clients: GatewayClientStatus::new(app).await,
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     app::AppContext,
     configurations::*,
     http_server::controllers::configuration::contracts::{
-        CurrentConfigurationHttpModel, GatewayServerStatus,
+        CurrentConfigurationHttpModel, GatewayClientStatus, GatewayServerStatus,
     },
 };
 
@@ -202,8 +202,9 @@ async fn create_html_content(
     render_users(&mut users, &config_model.users);
     render_ip_list(&mut users, &config_model.ip_lists);
 
-    let mut gateway_server = String::new();
-    render_server_gateway(&mut gateway_server, config_model.gateway_server.as_ref());
+    let mut gateways = String::new();
+    render_server_gateway(&mut gateways, config_model.gateway_server.as_ref());
+    render_client_gateway(&mut gateways, config_model.gateway_clients.as_slice());
 
     format!(
         r##"
@@ -215,7 +216,7 @@ async fn create_html_content(
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
         </head>
         <body>
-            {gateway_server}
+            {gateways}
             <h1>Http configs</h1>
             <table class="table table-striped" style="width:100%;">
             <tr>
@@ -309,6 +310,28 @@ fn render_server_gateway(html: &mut String, gateway_server_status: Option<&Gatew
         html.push_str("<h1>GATEWAY SERVER</h1>");
 
         for connection in gateway_server_status.connections.as_slice() {
+            html.push_str(
+                format!(
+                    "<div>{} Forwarded connections: {}. Proxy connections: {}</div>",
+                    connection.name.as_str(),
+                    connection.forward_connections,
+                    connection.proxy_connections,
+                )
+                .as_str(),
+            );
+        }
+    }
+}
+
+fn render_client_gateway(html: &mut String, gateway_client_status: &[GatewayClientStatus]) {
+    if gateway_client_status.len() == 0 {
+        return;
+    }
+
+    html.push_str("<h1>GATEWAY CLIENTS</h1>");
+
+    for gateway_client in gateway_client_status {
+        for connection in gateway_client.connections.as_slice() {
             html.push_str(
                 format!(
                     "<div>{} Forwarded connections: {}. Proxy connections: {}</div>",
