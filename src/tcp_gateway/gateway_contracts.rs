@@ -260,6 +260,12 @@ pub fn compress_payload_if_require<'s>(
         encoder.write_all(payload).unwrap();
         let compressed = encoder.finish().unwrap();
 
+        println!(
+            "Compressed: {}. Not Compressed: {}",
+            compressed.len(),
+            payload.len()
+        );
+
         if compressed.len() < payload.len() {
             return (true, SliceOrVec::AsVec(compressed));
         }
