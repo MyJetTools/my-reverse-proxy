@@ -6,6 +6,8 @@ use tokio::{io::AsyncReadExt, net::tcp::OwnedReadHalf};
 
 use super::*;
 
+const MAX_PAYLOAD_SIZE: usize = 1024 * 1024 * 5;
+
 pub async fn read_loop(
     tcp_gateway: Arc<TcpGatewayInner>,
     mut read: OwnedReadHalf,
@@ -43,6 +45,15 @@ pub async fn read_loop(
 
         let decrypted = {
             let payload_size = u32::from_le_bytes(payload_size) as usize;
+
+            if payload_size > MAX_PAYLOAD_SIZE {
+                println!(
+                    "[1] Failed to read payload size from TCP Gateway at {}. Max payload size is overflows, PayloadSize: {payload_size}",
+                    tcp_gateway.addr.as_str(),
+                );
+
+                break;
+            }
             if payload_size > buf.len() {
                 let mut dynamic_buffer =
                     crate::tcp_utils::allocated_read_buffer(Some(payload_size));
