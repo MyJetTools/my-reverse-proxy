@@ -3,10 +3,7 @@ use std::sync::Arc;
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::{
-    app::AppContext,
-    tcp_gateway::{server::TcpGatewayServer, TcpGatewayConnection},
-};
+use crate::{app::AppContext, tcp_gateway::TcpGatewayConnection};
 
 #[derive(MyHttpObjectStructure, Serialize, Debug)]
 pub struct GatewayServerStatus {
