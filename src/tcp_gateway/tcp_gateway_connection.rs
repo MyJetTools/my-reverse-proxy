@@ -91,6 +91,11 @@ impl TcpGatewayConnection {
         read_access.contains_key(&connection_id)
     }
 
+    pub async fn get_forward_connections_amount(&self) -> usize {
+        let write_access = self.forward_connections.lock().await;
+        write_access.len()
+    }
+
     pub async fn remove_forward_connection(
         &self,
         connection_id: u32,
@@ -241,6 +246,11 @@ impl TcpGatewayConnection {
     ) -> Option<Arc<TcpGatewayProxyForwardedConnection>> {
         let mut write_access = self.forward_proxy_connections.lock().await;
         write_access.remove(&connection_id)
+    }
+
+    pub async fn get_forward_proxy_connections_amount(&self) -> usize {
+        let write_access = self.forward_proxy_connections.lock().await;
+        write_access.len()
     }
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {

@@ -49,6 +49,11 @@ impl TcpGatewayInner {
         connection_access.get(id).cloned()
     }
 
+    pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
+        let connection_access = self.connection.lock().await;
+        connection_access.values().cloned().collect()
+    }
+
     pub fn get_id(&self) -> &str {
         &self.gateway_id
     }

@@ -8,6 +8,8 @@ use serde::*;
 
 use crate::{app::AppContext, configurations::*};
 
+use super::*;
+
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct CurrentConfigurationHttpModel {
     pub ports: Vec<PortConfigurationHttpModel>,
@@ -15,6 +17,7 @@ pub struct CurrentConfigurationHttpModel {
     pub ip_lists: BTreeMap<String, Vec<String>>,
     pub errors: BTreeMap<String, String>,
     pub remote_connections: HashMap<String, usize>,
+    pub gateway_server: Option<GatewayServerStatus>,
 }
 
 impl CurrentConfigurationHttpModel {
@@ -77,6 +80,7 @@ impl CurrentConfigurationHttpModel {
             ip_lists,
             errors,
             remote_connections,
+            gateway_server: GatewayServerStatus::new(app).await,
         }
     }
 }

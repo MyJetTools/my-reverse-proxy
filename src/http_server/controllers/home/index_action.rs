@@ -6,8 +6,11 @@ use my_http_server::{
 use rust_extensions::{date_time::DateTimeAsMicroseconds, StrOrString};
 
 use crate::{
-    app::AppContext, configurations::*,
-    http_server::controllers::configuration::contracts::CurrentConfigurationHttpModel,
+    app::AppContext,
+    configurations::*,
+    http_server::controllers::configuration::contracts::{
+        CurrentConfigurationHttpModel, GatewayServerStatus,
+    },
 };
 
 const RIGHT_BADGE_STYLE: &str = "border-radius: 0 5px 5px 0;";
@@ -199,6 +202,9 @@ async fn create_html_content(
     render_users(&mut users, &config_model.users);
     render_ip_list(&mut users, &config_model.ip_lists);
 
+    let mut gateway_server = String::new();
+    render_server_gateway(&mut gateway_server, config_model.gateway_server.as_ref());
+
     format!(
         r##"
     <!DOCTYPE html>
@@ -209,6 +215,7 @@ async fn create_html_content(
             <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
         </head>
         <body>
+            {gateway_server}
             <h1>Http configs</h1>
             <table class="table table-striped" style="width:100%;">
             <tr>
@@ -295,4 +302,22 @@ fn render_ip_list(html: &mut String, ip_lists: &BTreeMap<String, Vec<String>>) {
     }
 
     html.push_str("</table>");
+}
+
+fn render_server_gateway(html: &mut String, gateway_server_status: Option<&GatewayServerStatus>) {
+    if let Some(gateway_server_status) = gateway_server_status {
+        html.push_str("<h1>GATEWAY SERVER</h1>");
+
+        for connection in gateway_server_status.connections.as_slice() {
+            html.push_str(
+                format!(
+                    "<div>{} Forwarded connections: {}. Proxy connections: {}</div>",
+                    connection.name.as_str(),
+                    connection.forward_connections,
+                    connection.proxy_connections,
+                )
+                .as_str(),
+            );
+        }
+    }
 }
