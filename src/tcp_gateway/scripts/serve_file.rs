@@ -12,18 +12,26 @@ pub async fn serve_file(
     tokio::spawn(async move {
         let path = FilePath::from_str(path.as_str());
 
-        let payload = match tokio::fs::read(path.as_str()).await {
-            Ok(content) => crate::tcp_gateway::TcpGatewayContract::GetFileResponse {
-                request_id,
-                status: GetFileStatus::Ok,
-                content: SliceOrVec::AsVec(content),
-            },
+        println!("Loading File {}", path.as_str());
 
-            Err(_) => crate::tcp_gateway::TcpGatewayContract::GetFileResponse {
-                request_id,
-                status: GetFileStatus::Error,
-                content: SliceOrVec::AsSlice(&[]),
-            },
+        let payload = match tokio::fs::read(path.as_str()).await {
+            Ok(content) => {
+                println!("Got File response len: {}", content.len());
+                crate::tcp_gateway::TcpGatewayContract::GetFileResponse {
+                    request_id,
+                    status: GetFileStatus::Ok,
+                    content: SliceOrVec::AsVec(content),
+                }
+            }
+
+            Err(err) => {
+                println!("Got File response len: {:?}", err);
+                crate::tcp_gateway::TcpGatewayContract::GetFileResponse {
+                    request_id,
+                    status: GetFileStatus::Error,
+                    content: SliceOrVec::AsSlice(&[]),
+                }
+            }
         };
 
         gateway_connection.send_payload(&payload).await;
