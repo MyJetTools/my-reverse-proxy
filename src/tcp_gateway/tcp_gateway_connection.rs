@@ -5,7 +5,11 @@ use std::{
 };
 
 use encryption::aes::AesKey;
-use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
+
+use rust_extensions::{
+    date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds},
+    AtomicDuration, AtomicStopWatch,
+};
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
 use super::{
@@ -22,6 +26,8 @@ pub struct TcpGatewayConnection {
     forward_proxy_connections: Mutex<HashMap<u32, Arc<TcpGatewayProxyForwardedConnection>>>,
     pub aes_key: Arc<AesKey>,
     support_compression: AtomicBool,
+    pub ping_stop_watch: AtomicStopWatch,
+    pub last_ping_duration: AtomicDuration,
 }
 
 impl TcpGatewayConnection {
@@ -42,6 +48,8 @@ impl TcpGatewayConnection {
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             aes_key,
             support_compression: AtomicBool::new(supported_connection),
+            ping_stop_watch: AtomicStopWatch::new(),
+            last_ping_duration: AtomicDuration::from_micros(0),
         };
 
         super::tcp_connection_inner::start_write_loop(inner, receiver);

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
@@ -30,6 +30,7 @@ pub struct GatewayConnection {
     pub name: String,
     pub forward_connections: usize,
     pub proxy_connections: usize,
+    pub ping_time: String,
 }
 
 impl GatewayConnection {
@@ -37,10 +38,12 @@ impl GatewayConnection {
         let mut result = Vec::new();
 
         for connection in connections {
+            let ping = connection.last_ping_duration.to_duration();
             result.push(Self {
                 name: connection.get_gateway_id().await.to_string(),
                 forward_connections: connection.get_forward_connections_amount().await,
                 proxy_connections: connection.get_forward_proxy_connections_amount().await,
+                ping_time: format!("{:?}", ping),
             });
         }
 

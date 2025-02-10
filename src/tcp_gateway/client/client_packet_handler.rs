@@ -97,7 +97,15 @@ impl TcpGatewayClientPacketHandler {
                     .await;
             }
             TcpGatewayContract::Ping => {}
-            TcpGatewayContract::Pong => {}
+            TcpGatewayContract::Pong => {
+                gateway_connection.ping_stop_watch.pause();
+                let duration = gateway_connection
+                    .ping_stop_watch
+                    .duration()
+                    .as_positive_or_zero();
+
+                gateway_connection.last_ping_duration.update(duration);
+            }
         }
     }
 }
