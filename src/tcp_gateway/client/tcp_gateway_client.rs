@@ -133,6 +133,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, debug: bool) {
 
         let handshake_contract = TcpGatewayContract::Handshake {
             timestamp: DateTimeAsMicroseconds::now().unix_microseconds,
+            support_compression: false,
             gateway_name: inner.get_id(),
         };
 

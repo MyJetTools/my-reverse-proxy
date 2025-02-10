@@ -25,6 +25,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
         match contract {
             TcpGatewayContract::Handshake {
                 gateway_name,
+                support_compression,
                 timestamp,
             } => {
                 let timestamp = DateTimeAsMicroseconds::new(timestamp);

@@ -15,6 +15,7 @@ const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
 pub enum TcpGatewayContract<'s> {
     Handshake {
         timestamp: i64,
+        support_compression: bool,
         gateway_name: &'s str,
     },
     Connect {
@@ -53,11 +54,14 @@ impl<'s> TcpGatewayContract<'s> {
                     payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
                     payload[6], payload[7],
                 ]);
-                let gateway_name = std::str::from_utf8(&payload[8..]).map_err(|_| {
+
+                let support_compression = payload[8] == 1;
+                let gateway_name = std::str::from_utf8(&payload[9..]).map_err(|_| {
                     format!("Can not convert client_name to string during parsing Handshake")
                 })?;
                 return Ok(Self::Handshake {
                     gateway_name,
+                    support_compression,
                     timestamp,
                 });
             }
@@ -143,10 +147,18 @@ impl<'s> TcpGatewayContract<'s> {
         match self {
             Self::Handshake {
                 gateway_name,
+                support_compression,
                 timestamp,
             } => {
                 result.push(HANDSHAKE_PACKET_ID);
                 result.extend_from_slice(&timestamp.to_le_bytes());
+
+                if *support_compression {
+                    result.push(1);
+                } else {
+                    result.push(0);
+                }
+
                 result.extend_from_slice(gateway_name.as_bytes());
             }
             Self::Connect {
