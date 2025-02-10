@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
+use crate::configurations::MyReverseProxyRemoteEndpoint;
+
 pub struct StaticContentModel {
     pub status_code: u16,
     pub content_type: Option<String>,
@@ -20,23 +22,13 @@ impl StaticContentModel {
 }
 
 pub struct ProxyPassFilesPathModel {
-    pub files_path: OverSshConnectionSettings,
+    pub files_path: MyReverseProxyRemoteEndpoint,
     pub default_file: Option<String>,
 }
 
 impl ProxyPassFilesPathModel {
     pub fn to_string(&self) -> String {
-        if let Some(ssh_credentials) = self.files_path.ssh_credentials.as_ref() {
-            format!(
-                "ssh:{}@{}:{}->{}",
-                ssh_credentials.get_user_name(),
-                ssh_credentials.get_host_port().0,
-                ssh_credentials.get_host_port().1,
-                self.files_path.remote_resource_string
-            )
-        } else {
-            self.files_path.remote_resource_string.clone()
-        }
+        self.files_path.to_string()
     }
 }
 

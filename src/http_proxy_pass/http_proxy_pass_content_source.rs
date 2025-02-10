@@ -63,12 +63,18 @@ pub enum HttpProxyPassContentSource {
     },
     LocalPath(LocalPathContentSrc),
     PathOverSsh(PathOverSshContentSource),
+    PathOverGateway {
+        gateway_id: Arc<String>,
+        path: Arc<RemoteEndpointOwned>,
+        default_file: Option<String>,
+    },
     Static(StaticContentSrc),
 }
 
 impl HttpProxyPassContentSource {
     pub async fn send_request(
         &self,
+        app: &Arc<AppContext>,
         req: hyper::Request<Full<Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
         match self {
@@ -272,6 +278,23 @@ impl HttpProxyPassContentSource {
             HttpProxyPassContentSource::PathOverSsh(src) => {
                 let request_executor = src.get_request_executor(&req.uri()).await?;
                 let result = request_executor.execute_request().await?;
+                Ok(HttpResponse::Response(result.into()))
+            }
+
+            HttpProxyPassContentSource::PathOverGateway {
+                gateway_id,
+                path,
+                default_file,
+            } => {
+                let result = super::executors::get_file_from_gateway(
+                    app,
+                    gateway_id,
+                    path.as_str(),
+                    default_file,
+                    &req,
+                )
+                .await?;
+
                 Ok(HttpResponse::Response(result.into()))
             }
             HttpProxyPassContentSource::Static(src) => {

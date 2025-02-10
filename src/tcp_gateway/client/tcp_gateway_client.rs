@@ -7,7 +7,7 @@ use encryption::aes::AesKey;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
-use crate::tcp_gateway::{client::*, forwarded_connection::TcpGatewayProxyForwardedConnection, *};
+use crate::tcp_gateway::{client::*, *};
 
 pub struct TcpGatewayClient {
     inner: Arc<TcpGatewayInner>,
@@ -33,15 +33,23 @@ impl TcpGatewayClient {
         result
     }
 
-    fn get_next_connection_id(&self) -> u32 {
+    pub fn get_next_connection_id(&self) -> u32 {
         self.next_connection_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub async fn get_gateway_connection(
+        &self,
+        gateway_id: &str,
+    ) -> Option<Arc<TcpGatewayConnection>> {
+        self.inner.get_gateway_connection(gateway_id).await
     }
 
     pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
         self.inner.get_gateway_connections().await
     }
 
+    /*
     pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: &str,
@@ -90,6 +98,7 @@ impl TcpGatewayClient {
 
         Ok((result, gateway_connection))
     }
+     */
 }
 
 impl Drop for TcpGatewayClient {

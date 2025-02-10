@@ -134,7 +134,7 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source.send_request(request.request).await?;
+        let result = content_source.send_request(app, request.request).await?;
 
         let mut response = match result {
             super::HttpResponse::Response(response) => {

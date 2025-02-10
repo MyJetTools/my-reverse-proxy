@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
+use my_http_server::WebContentType;
+
 use crate::http_proxy_pass::ProxyPassError;
 
-use super::{RequestExecutor, RequestExecutorResult, WebContentType};
+use super::{RequestExecutor, RequestExecutorResult};
 
 pub struct StaticContentSrc {
     pub inner: Arc<StaticContentExecutor>,

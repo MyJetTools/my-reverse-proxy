@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::{app::AppContext, configurations::ProxyPassLocationConfig, settings::*};
+use crate::{
+    app::AppContext,
+    configurations::{MyReverseProxyRemoteEndpoint, ProxyPassLocationConfig},
+    settings::*,
+};
 
 pub async fn compile_location_proxy_pass_to(
     app: &Arc<AppContext>,
@@ -106,8 +110,9 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let files_path = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!("Invalid proxy_pass_to {}", proxy_pass_to.as_str()))?;
+            let files_path =
+                MyReverseProxyRemoteEndpoint::try_parse(proxy_pass_to.as_str(), settings_model)
+                    .await?;
 
             let model = ProxyPassFilesPathModel {
                 files_path,

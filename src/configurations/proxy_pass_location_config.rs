@@ -203,28 +203,38 @@ impl ProxyPassLocationConfig {
                     }
                 }
             }
-            ProxyPassTo::FilesPath(model) => {
-                if let Some(ssh_credentials) = model.files_path.ssh_credentials.as_ref() {
+            ProxyPassTo::FilesPath(model) => match &model.files_path {
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    HttpProxyPassContentSource::PathOverGateway {
+                        gateway_id: id.clone(),
+                        path: remote_host.clone(),
+                        default_file: model.default_file.clone(),
+                    }
+                }
+                MyReverseProxyRemoteEndpoint::OverSsh {
+                    ssh_credentials,
+                    remote_host,
+                } => {
                     let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
                         .await
                         .unwrap();
                     let src = PathOverSshContentSource::new(
                         ssh_session,
-                        model.files_path.remote_resource_string.to_string(),
+                        remote_host.as_str().to_string(),
                         model.default_file.clone(),
                         timeout,
                     );
 
-                    return HttpProxyPassContentSource::PathOverSsh(src);
+                    HttpProxyPassContentSource::PathOverSsh(src)
                 }
-
-                let local_file_path =
-                    LocalFilePath::new(model.files_path.remote_resource_string.to_string());
-                HttpProxyPassContentSource::LocalPath(LocalPathContentSrc::new(
-                    &local_file_path,
-                    model.default_file.clone(),
-                ))
-            }
+                MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    let local_file_path = LocalFilePath::new(remote_host.as_str().to_string());
+                    HttpProxyPassContentSource::LocalPath(LocalPathContentSrc::new(
+                        &local_file_path,
+                        model.default_file.clone(),
+                    ))
+                }
+            },
         };
 
         result

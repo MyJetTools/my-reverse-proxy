@@ -1,11 +1,8 @@
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
-use std::time::Duration;
 
 use encryption::aes::AesKey;
 use tokio::net::TcpListener;
-
-use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardedConnection;
 
 use super::super::*;
 use super::*;
@@ -33,15 +30,23 @@ impl TcpGatewayServer {
         result
     }
 
-    fn get_next_connection_id(&self) -> u32 {
+    pub fn get_next_connection_id(&self) -> u32 {
         self.next_connection_id
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub async fn get_gateway_connection(
+        &self,
+        gateway_id: &str,
+    ) -> Option<Arc<TcpGatewayConnection>> {
+        self.inner.get_gateway_connection(gateway_id).await
     }
 
     pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
         self.inner.get_gateway_connections().await
     }
 
+    /*
     pub async fn connect_to_forward_proxy_connection(
         &self,
         gateway_id: &str,
@@ -76,6 +81,7 @@ impl TcpGatewayServer {
 
         Some((result.unwrap(), gateway_connection))
     }
+     */
 }
 
 impl Drop for TcpGatewayServer {

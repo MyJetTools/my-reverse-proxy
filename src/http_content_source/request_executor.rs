@@ -1,9 +1,8 @@
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, BodyExt};
+use my_http_server::WebContentType;
 
 use crate::http_proxy_pass::ProxyPassError;
-
-use super::WebContentType;
 
 pub struct RequestExecutorResult {
     pub status_code: u16,

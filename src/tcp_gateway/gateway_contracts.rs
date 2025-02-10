@@ -15,6 +15,30 @@ const CONNECTION_ERROR_PACKET_ID: u8 = 5;
 const SEND_PAYLOAD_PACKET_ID: u8 = 6;
 const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
 const UPDATE_PING_TIME: u8 = 8;
+const GET_FILE_REQUEST: u8 = 9;
+const GET_FILE_RESPONSE: u8 = 10;
+
+#[derive(Debug)]
+pub enum GetFileStatus {
+    Ok,
+    Error,
+}
+
+impl GetFileStatus {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::Ok => 0,
+            Self::Error => 1,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Ok,
+            _ => Self::Error,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum TcpGatewayContract<'s> {
@@ -47,6 +71,15 @@ pub enum TcpGatewayContract<'s> {
     Pong,
     UpdatePingTime {
         duration: Duration,
+    },
+    GetFileRequest {
+        path: &'s str,
+        request_id: u32,
+    },
+    GetFileResponse {
+        request_id: u32,
+        status: GetFileStatus,
+        content: SliceOrVec<'s, u8>,
     },
 }
 
@@ -144,6 +177,32 @@ impl<'s> TcpGatewayContract<'s> {
                 return Ok(Self::UpdatePingTime { duration });
             }
 
+            GET_FILE_REQUEST => {
+                let request_id =
+                    u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+
+                let path = std::str::from_utf8(&payload[4..]).map_err(|_| {
+                    format!("Can not convert path to string during parsing GET_FILE_REQUEST.")
+                })?;
+
+                return Ok(Self::GetFileRequest { path, request_id });
+            }
+
+            GET_FILE_RESPONSE => {
+                let request_id =
+                    u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+
+                let status = GetFileStatus::from_u8(payload[4]);
+
+                let content = extract_content(&payload[4..])?;
+
+                return Ok(Self::GetFileResponse {
+                    request_id,
+                    status,
+                    content,
+                });
+            }
+
             PING => {
                 return Ok(Self::Ping);
             }
@@ -208,16 +267,7 @@ impl<'s> TcpGatewayContract<'s> {
                 result.push(SEND_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
 
-                let (compressed, payload) =
-                    compress_payload_if_require(payload.as_slice(), support_compression);
-
-                if compressed {
-                    result.push(1);
-                } else {
-                    result.push(0);
-                }
-
-                result.extend_from_slice(payload.as_slice());
+                push_content(&mut result, payload.as_slice(), support_compression);
             }
             Self::BackwardPayload {
                 connection_id,
@@ -225,21 +275,29 @@ impl<'s> TcpGatewayContract<'s> {
             } => {
                 result.push(RECEIVE_PAYLOAD_PACKET_ID);
                 result.extend_from_slice(&connection_id.to_le_bytes());
-                let (compressed, payload) =
-                    compress_payload_if_require(payload.as_slice(), support_compression);
 
-                if compressed {
-                    result.push(1);
-                } else {
-                    result.push(0);
-                }
-                result.extend_from_slice(payload.as_slice());
+                push_content(&mut result, payload.as_slice(), support_compression);
             }
 
             Self::UpdatePingTime { duration } => {
                 let miros = duration.as_micros() as u64;
                 result.push(UPDATE_PING_TIME);
                 result.extend_from_slice(&miros.to_le_bytes());
+            }
+            Self::GetFileRequest { path, request_id } => {
+                result.push(GET_FILE_REQUEST);
+                result.extend_from_slice(request_id.to_le_bytes().as_slice());
+                result.extend_from_slice(path.as_bytes());
+            }
+            Self::GetFileResponse {
+                request_id,
+                status,
+                content,
+            } => {
+                result.push(GET_FILE_RESPONSE);
+                result.extend_from_slice(request_id.to_le_bytes().as_slice());
+                result.push(status.as_u8());
+                push_content(&mut result, content.as_slice(), support_compression);
             }
             Self::Ping => {
                 result.push(PING);
@@ -264,6 +322,23 @@ impl<'s> TcpGatewayContract<'s> {
 
         result
     }
+}
+
+fn push_content(result: &mut Vec<u8>, payload: &[u8], support_compression: bool) {
+    let (compressed, payload) = compress_payload_if_require(payload, support_compression);
+
+    if compressed {
+        result.push(1);
+    } else {
+        result.push(0);
+    }
+    result.extend_from_slice(payload.as_slice());
+}
+
+fn extract_content(payload: &[u8]) -> Result<SliceOrVec<'_, u8>, String> {
+    let compressed = payload[0] == 1;
+
+    decompress_payload(&payload[1..], compressed)
 }
 
 pub fn compress_payload_if_require<'s>(

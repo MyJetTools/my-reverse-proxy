@@ -23,6 +23,7 @@ pub enum ProxyPassError {
     Disconnected,
     Timeout,
     Disposed,
+    GatewayError,
 }
 
 impl ProxyPassError {

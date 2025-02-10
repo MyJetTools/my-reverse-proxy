@@ -19,7 +19,7 @@ use crate::{
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,
-    tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer},
+    tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer, TcpGatewayConnection},
 };
 
 use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
@@ -135,26 +135,34 @@ impl AppContext {
         self.id.fetch_add(1, Ordering::SeqCst)
     }
 
-    /*
-       pub async fn set_current_app_configuration(&self, app_config: AppConfiguration) {
-           let mut current_app_configuration = self.current_app_configuration.write().await;
-           *current_app_configuration = Some(Arc::new(app_config));
-       }
+    pub async fn get_gateway_by_id_with_next_connection_id(
+        &self,
+        gateway_id: &str,
+    ) -> Option<(Arc<TcpGatewayConnection>, u32)> {
+        if let Some(server_gateway) = self.gateway_server.as_ref() {
+            if let Some(result) = server_gateway.get_gateway_connection(gateway_id).await {
+                return Some((result, server_gateway.get_next_connection_id()));
+            }
+        }
 
-       pub async fn get_current_app_configuration(&self) -> Arc<AppConfiguration> {
-           self.current_app_configuration
-               .read()
-               .await
-               .as_ref()
-               .unwrap()
-               .clone()
-       }
+        let gateway_client = self.gateway_clients.get(gateway_id)?;
 
-       pub async fn try_get_current_app_configuration(&self) -> Option<Arc<AppConfiguration>> {
-           let result = self.current_app_configuration.read().await;
-           result.clone()
-       }
-    */
+        let result = gateway_client.get_gateway_connection(gateway_id).await?;
+
+        Some((result, gateway_client.get_next_connection_id()))
+    }
+
+    pub async fn get_gateway_by_id(&self, gateway_id: &str) -> Option<Arc<TcpGatewayConnection>> {
+        if let Some(server_gateway) = self.gateway_server.as_ref() {
+            if let Some(result) = server_gateway.get_gateway_connection(gateway_id).await {
+                return Some(result);
+            }
+        }
+
+        let gateway_client = self.gateway_clients.get(gateway_id)?;
+
+        gateway_client.get_gateway_connection(gateway_id).await
+    }
 }
 
 fn generate_random_token_secret_key() -> Vec<u8> {

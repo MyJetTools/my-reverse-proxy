@@ -108,6 +108,24 @@ impl TcpGatewayClientPacketHandler {
                 let update_ping_time = TcpGatewayContract::UpdatePingTime { duration };
                 gateway_connection.send_payload(&update_ping_time).await;
             }
+            TcpGatewayContract::GetFileRequest { path, request_id } => {
+                crate::tcp_gateway::scripts::serve_file(
+                    request_id,
+                    path.to_string(),
+                    gateway_connection.clone(),
+                )
+                .await
+            }
+
+            TcpGatewayContract::GetFileResponse {
+                request_id,
+                status,
+                content,
+            } => {
+                gateway_connection
+                    .notify_file_response(request_id, status, content)
+                    .await;
+            }
 
             TcpGatewayContract::UpdatePingTime { duration: _ } => {}
         }

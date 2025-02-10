@@ -8,13 +8,15 @@ use encryption::aes::AesKey;
 
 use rust_extensions::{
     date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds},
-    AtomicDuration, AtomicStopWatch,
+    AtomicDuration, AtomicStopWatch, SliceOrVec,
 };
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
 use super::{
-    forwarded_connection::{TcpGatewayForwardConnection, TcpGatewayProxyForwardedConnection},
-    *,
+    super::forwarded_connection::{
+        TcpGatewayForwardConnection, TcpGatewayProxyForwardedConnection,
+    },
+    super::*,
 };
 
 pub struct TcpGatewayConnection {
@@ -28,6 +30,7 @@ pub struct TcpGatewayConnection {
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
+    pub file_requests: FileRequests,
 }
 
 impl TcpGatewayConnection {
@@ -50,9 +53,10 @@ impl TcpGatewayConnection {
             support_compression: AtomicBool::new(supported_connection),
             ping_stop_watch: AtomicStopWatch::new(),
             last_ping_duration: AtomicDuration::from_micros(0),
+            file_requests: FileRequests::new(),
         };
 
-        super::tcp_connection_inner::start_write_loop(inner, receiver);
+        super::super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
     }
@@ -179,6 +183,37 @@ impl TcpGatewayConnection {
 
         if let Some(connection) = connection {
             connection.set_connected().await;
+        }
+    }
+
+    pub async fn request_file(&self, path: &str) -> Result<Vec<u8>, FileRequestError> {
+        let (task_completion, request_id) = self.file_requests.start_request().await;
+
+        {
+            let request = TcpGatewayContract::GetFileRequest { path, request_id };
+            self.send_payload(&request).await;
+        }
+
+        task_completion.get_result().await
+    }
+
+    pub async fn notify_file_response(
+        &self,
+        request_id: u32,
+        status: GetFileStatus,
+        content: SliceOrVec<'_, u8>,
+    ) {
+        match status {
+            GetFileStatus::Ok => {
+                self.file_requests
+                    .set_content(request_id, content.into_vec())
+                    .await;
+            }
+            GetFileStatus::Error => {
+                self.file_requests
+                    .set_error(request_id, FileRequestError::FileNotFound)
+                    .await
+            }
         }
     }
 

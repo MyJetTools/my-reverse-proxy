@@ -157,13 +157,16 @@ async fn handle_accepted_connection(
                 )
                 .await;
             }
-            crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh { ssh, remote_host } => {
+            crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials,
+                remote_host,
+            } => {
                 super::tcp_port_forward::tcp_over_ssh::handle_connection(
                     app,
                     accepted_connection,
                     listening_addr,
                     configuration.clone(),
-                    ssh.clone(),
+                    ssh_credentials.clone(),
                     remote_host.clone(),
                 )
                 .await;

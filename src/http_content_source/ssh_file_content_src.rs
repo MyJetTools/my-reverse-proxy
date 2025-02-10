@@ -1,12 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
 use hyper::Uri;
+use my_http_server::WebContentType;
 use my_ssh::SshSession;
 use tokio::sync::Mutex;
 
 use crate::http_proxy_pass::ProxyPassError;
 
-use super::{RequestExecutor, RequestExecutorResult, WebContentType};
+use super::{RequestExecutor, RequestExecutorResult};
 
 pub struct PathOverSshContentSource {
     ssh_session: Arc<SshSession>,

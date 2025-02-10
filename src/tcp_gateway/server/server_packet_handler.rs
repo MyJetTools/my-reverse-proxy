@@ -114,6 +114,23 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             TcpGatewayContract::UpdatePingTime { duration } => {
                 gateway_connection.last_ping_duration.update(duration);
             }
+            TcpGatewayContract::GetFileRequest { path, request_id } => {
+                crate::tcp_gateway::scripts::serve_file(
+                    request_id,
+                    path.to_string(),
+                    gateway_connection.clone(),
+                )
+                .await
+            }
+            TcpGatewayContract::GetFileResponse {
+                request_id,
+                status,
+                content,
+            } => {
+                gateway_connection
+                    .notify_file_response(request_id, status, content)
+                    .await;
+            }
         }
         Ok(())
     }
