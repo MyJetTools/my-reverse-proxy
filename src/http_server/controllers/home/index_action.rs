@@ -334,10 +334,11 @@ fn render_client_gateway(html: &mut String, gateway_client_status: &[GatewayClie
         for connection in gateway_client.connections.as_slice() {
             html.push_str(
                 format!(
-                    "<div>{} Forwarded connections: {}. Proxy connections: {}</div>",
+                    "<div>{} Forwarded connections: {}. Proxy connections: {}. PingTime: {}.</div>",
                     connection.name.as_str(),
                     connection.forward_connections,
                     connection.proxy_connections,
+                    connection.ping_time
                 )
                 .as_str(),
             );
