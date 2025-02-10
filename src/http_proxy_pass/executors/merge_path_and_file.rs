@@ -5,14 +5,20 @@ pub fn merge_path_and_file(
 ) -> String {
     let mut result = files_path.to_string();
 
-    let req_path = if req_path == "/" {
+    let req_path = if req_path == "" {
+        if let Some(default_file) = default_file {
+            default_file
+        } else {
+            return result;
+        }
+    } else if req_path == "/" {
         if let Some(default_file) = default_file {
             default_file
         } else {
             return result;
         }
     } else {
-        return result;
+        req_path
     };
 
     if result.ends_with('/') {

@@ -50,10 +50,6 @@ pub async fn load_file(
             )
             .await;
         } else {
-            println!(
-                "Loading file {}",
-                content_source.remote_resource_string.as_str()
-            );
             let file_name = LocalFilePath::new(content_source.remote_resource_string.to_string());
 
             let result = tokio::fs::read(file_name.get_value().as_str())

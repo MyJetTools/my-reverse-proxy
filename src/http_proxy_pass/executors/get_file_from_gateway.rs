@@ -22,9 +22,11 @@ pub async fn get_file_from_gateway(
     if gateway.is_none() {
         return Err(ProxyPassError::GatewayError);
     }
+
     let gateway = gateway.unwrap();
 
     let full_path = super::merge_path_and_file(path, req.get_uri().path(), default_file);
+
     match gateway.request_file(full_path.as_str()).await {
         Ok(content) => Ok(RequestExecutorResult {
             status_code: 200,
