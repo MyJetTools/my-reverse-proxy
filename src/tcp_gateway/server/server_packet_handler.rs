@@ -111,6 +111,9 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     .disconnect_forward_proxy_connection(connection_id, error)
                     .await;
             }
+            TcpGatewayContract::UpdatePingTime { duration } => {
+                gateway_connection.last_ping_duration.update(duration);
+            }
         }
         Ok(())
     }

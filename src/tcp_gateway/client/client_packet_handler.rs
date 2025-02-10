@@ -105,7 +105,11 @@ impl TcpGatewayClientPacketHandler {
                     .as_positive_or_zero();
 
                 gateway_connection.last_ping_duration.update(duration);
+                let update_ping_time = TcpGatewayContract::UpdatePingTime { duration };
+                gateway_connection.send_payload(&update_ping_time).await;
             }
+
+            TcpGatewayContract::UpdatePingTime { duration: _ } => {}
         }
     }
 }

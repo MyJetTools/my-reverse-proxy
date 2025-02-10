@@ -14,6 +14,7 @@ const CONNECT_OK_PACKET_ID: u8 = 4;
 const CONNECTION_ERROR_PACKET_ID: u8 = 5;
 const SEND_PAYLOAD_PACKET_ID: u8 = 6;
 const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
+const UPDATE_PING_TIME: u8 = 8;
 
 #[derive(Debug)]
 pub enum TcpGatewayContract<'s> {
@@ -44,6 +45,9 @@ pub enum TcpGatewayContract<'s> {
     },
     Ping,
     Pong,
+    UpdatePingTime {
+        duration: Duration,
+    },
 }
 
 impl<'s> TcpGatewayContract<'s> {
@@ -127,6 +131,17 @@ impl<'s> TcpGatewayContract<'s> {
                     connection_id,
                     payload,
                 });
+            }
+
+            UPDATE_PING_TIME => {
+                let micros = u64::from_le_bytes([
+                    payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
+                    payload[6], payload[7],
+                ]);
+
+                let duration = Duration::from_micros(micros);
+
+                return Ok(Self::UpdatePingTime { duration });
             }
 
             PING => {
@@ -219,6 +234,12 @@ impl<'s> TcpGatewayContract<'s> {
                     result.push(0);
                 }
                 result.extend_from_slice(payload.as_slice());
+            }
+
+            Self::UpdatePingTime { duration } => {
+                let miros = duration.as_micros() as u64;
+                result.push(UPDATE_PING_TIME);
+                result.extend_from_slice(&miros.to_le_bytes());
             }
             Self::Ping => {
                 result.push(PING);
