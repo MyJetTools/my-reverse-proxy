@@ -49,6 +49,8 @@ pub struct AppContext {
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
+    pub http2_over_gateway_clients_pool:
+        Http2ClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
@@ -146,6 +148,7 @@ impl AppContext {
             http2_clients_pool: Http2ClientPool::new(),
             https2_clients_pool: Http2ClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
+            http2_over_gateway_clients_pool: Http2ClientPool::new(),
 
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,

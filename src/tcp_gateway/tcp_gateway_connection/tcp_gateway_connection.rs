@@ -21,7 +21,7 @@ pub struct TcpGatewayConnection {
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
-    forward_proxy_connections: Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>,
+    forward_proxy_handlers: Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -42,7 +42,7 @@ impl TcpGatewayConnection {
             addr,
             inner: inner.clone(),
             forward_connections: Mutex::default(),
-            forward_proxy_connections: Mutex::default(),
+            forward_proxy_handlers: Mutex::default(),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             support_compression: AtomicBool::new(supported_connection),
             ping_stop_watch: AtomicStopWatch::new(),
@@ -135,14 +135,16 @@ impl TcpGatewayConnection {
         );
 
         {
-            let mut write_access = self.forward_proxy_connections.lock().await;
+            let mut write_access = self.forward_proxy_handlers.lock().await;
             write_access.insert(connection_id, connection);
         }
+
+        let host_port = remote_endpoint.get_host_port();
 
         let connect_contract = TcpGatewayContract::Connect {
             connection_id,
             timeout,
-            remote_host: remote_endpoint.as_str(),
+            remote_host: host_port.as_str(),
         };
 
         if !self.send_payload(&connect_contract).await {
@@ -156,12 +158,12 @@ impl TcpGatewayConnection {
         while self.is_gateway_connected() {
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            let connections_access = self.forward_proxy_connections.lock().await;
+            let connections_access = self.forward_proxy_handlers.lock().await;
 
             let connection = connections_access.get(&connection_id);
 
             if connection.is_none() {
-                panic!("Somehow no connection with id {}", connection_id);
+                return Err("Connection closed".to_string());
             }
 
             let connection = connection.unwrap();
@@ -181,12 +183,12 @@ impl TcpGatewayConnection {
             "Gateway {} connection to endpoint {} is lost during awaiting forward to {} connecting result",
             gateway_id,
             self.addr.as_str(),
-            remote_endpoint.as_str()
+            host_port.as_str()
         ));
     }
 
     pub async fn notify_forward_proxy_connection_accepted(&self, connection_id: u32) {
-        let mut write_access = self.forward_proxy_connections.lock().await;
+        let mut write_access = self.forward_proxy_handlers.lock().await;
 
         if let Some(connection) = write_access.get_mut(&connection_id) {
             connection.set_connected();
@@ -243,7 +245,7 @@ impl TcpGatewayConnection {
     }
 
     pub async fn incoming_payload_for_proxy_connection(&self, connection_id: u32, payload: &[u8]) {
-        let mut proxy_connection_access = self.forward_proxy_connections.lock().await;
+        let mut proxy_connection_access = self.forward_proxy_handlers.lock().await;
 
         let proxy_connection = proxy_connection_access.get_mut(&connection_id);
 
@@ -286,12 +288,12 @@ impl TcpGatewayConnection {
     }
 
     pub async fn get_forward_proxy_connections_amount(&self) -> usize {
-        let write_access = self.forward_proxy_connections.lock().await;
+        let write_access = self.forward_proxy_handlers.lock().await;
         write_access.len()
     }
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
-        let mut write_access = self.forward_proxy_connections.lock().await;
+        let mut write_access = self.forward_proxy_handlers.lock().await;
         if let Some(mut connection) = write_access.remove(&connection_id) {
             connection.set_connection_error(message.into());
         }

@@ -49,6 +49,11 @@ pub enum HttpProxyPassContentSource {
         remote_endpoint: Arc<RemoteEndpointOwned>,
     },
 
+    Http2OverGateway {
+        gateway_id: Arc<String>,
+        remote_endpoint: Arc<RemoteEndpointOwned>,
+    },
+
     Http1OverSsh {
         over_ssh: OverSshConnectionSettings,
         ssh_session: Arc<SshSession>,
@@ -317,6 +322,33 @@ impl HttpProxyPassContentSource {
                         });
                     }
                 }
+            }
+
+            Self::Http2OverGateway {
+                gateway_id,
+                remote_endpoint,
+            } => {
+                let http_client = crate::app::APP_CTX
+                    .http2_over_gateway_clients_pool
+                    .get(
+                        remote_endpoint.as_str().into(),
+                        DEFAULT_HTTP_CONNECT_TIMEOUT,
+                        || {
+                            (
+                                HttpOverGatewayConnector {
+                                    gateway_id: gateway_id.clone(),
+                                    remote_endpoint: remote_endpoint.clone(),
+                                },
+                                crate::app::APP_CTX.prometheus.clone(),
+                            )
+                        },
+                    )
+                    .await;
+
+                let response = http_client
+                    .do_request(req, DEFAULT_HTTP_REQUEST_TIMEOUT)
+                    .await?;
+                return Ok(HttpResponse::Response(response));
             }
 
             Self::PathOverGateway {

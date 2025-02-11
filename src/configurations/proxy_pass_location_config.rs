@@ -139,11 +139,11 @@ impl ProxyPassLocationConfig {
             },
 
             ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
-                MyReverseProxyRemoteEndpoint::Gateway {
-                    id: _,
-                    remote_host: _,
-                } => {
-                    todo!("Not Implemented yet");
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    return HttpProxyPassContentSource::Http2OverGateway {
+                        gateway_id: id.clone(),
+                        remote_endpoint: remote_host.clone(),
+                    }
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
