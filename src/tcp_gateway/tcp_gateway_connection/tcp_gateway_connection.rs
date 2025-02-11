@@ -20,8 +20,8 @@ pub struct TcpGatewayConnection {
     pub addr: Arc<String>,
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
-    forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
-    forward_proxy_handlers: Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>,
+    forward_connections: Arc<Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>>,
+    forward_proxy_handlers: Arc<Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -41,8 +41,8 @@ impl TcpGatewayConnection {
             gateway_id: Mutex::new(Arc::new(String::new())),
             addr,
             inner: inner.clone(),
-            forward_connections: Mutex::default(),
-            forward_proxy_handlers: Mutex::default(),
+            forward_connections: Arc::new(Mutex::default()),
+            forward_proxy_handlers: Arc::new(Mutex::default()),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             support_compression: AtomicBool::new(supported_connection),
             ping_stop_watch: AtomicStopWatch::new(),
@@ -297,5 +297,27 @@ impl TcpGatewayConnection {
         if let Some(mut connection) = write_access.remove(&connection_id) {
             connection.set_connection_error(message.into());
         }
+    }
+}
+
+impl Drop for TcpGatewayConnection {
+    fn drop(&mut self) {
+        let proxy_connections = self.forward_proxy_handlers.clone();
+        let forward_connections = self.forward_connections.clone();
+        tokio::spawn(async move {
+            {
+                let write_access = proxy_connections.lock().await;
+                for itm in write_access.values() {
+                    itm.disconnect();
+                }
+            }
+
+            {
+                let write_access = forward_connections.lock().await;
+                for itm in write_access.values() {
+                    itm.disconnect().await;
+                }
+            }
+        });
     }
 }

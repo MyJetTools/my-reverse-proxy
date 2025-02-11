@@ -74,6 +74,10 @@ impl TcpGatewayProxyForwardConnectionHandler {
             support_compression: self.support_compression,
         }
     }
+
+    pub fn disconnect(&self) {
+        self.receive_buffer.disconnect();
+    }
 }
 
 /*
