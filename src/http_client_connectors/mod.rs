@@ -18,5 +18,5 @@ mod http_connector;
 pub use http_connector::*;
 mod http_tls_connector;
 pub use http_tls_connector::*;
-mod http_over_gateway_connection;
-pub use http_over_gateway_connection::*;
+mod http_over_gateway_connector;
+pub use http_over_gateway_connector::*;

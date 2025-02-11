@@ -36,13 +36,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
+
             ProxyPassTo::Http1(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -53,14 +53,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
 
             ProxyPassTo::Http2(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -71,14 +70,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
 
             ProxyPassTo::Http1(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -89,13 +87,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
+
             ProxyPassTo::Http2(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })

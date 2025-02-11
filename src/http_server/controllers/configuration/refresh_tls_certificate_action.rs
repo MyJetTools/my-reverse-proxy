@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
 use my_http_server::{
     macros::{http_route, MyHttpInput},
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
-
-use crate::app::AppContext;
 
 #[http_route(
     method: "POST",

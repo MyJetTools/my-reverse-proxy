@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use my_http_client::{MyHttpClientConnector, MyHttpClientError};
 use rust_extensions::remote_endpoint::{RemoteEndpoint, RemoteEndpointOwned};
 use tokio::{
@@ -6,7 +8,7 @@ use tokio::{
 };
 
 pub struct HttpConnector {
-    pub remote_endpoint: RemoteEndpointOwned,
+    pub remote_endpoint: Arc<RemoteEndpointOwned>,
     pub debug: bool,
 }
 

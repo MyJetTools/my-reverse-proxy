@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, configurations::SslCertificateIdRef};
+use crate::configurations::SslCertificateIdRef;
 
 pub async fn refresh_tls_certificate_from_settings(cert_id: &str) -> Result<(), String> {
     let settings_model = crate::scripts::load_settings().await?;

@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, configurations::EndpointHttpHostString};
+use crate::configurations::EndpointHttpHostString;
 
 pub async fn reload_endpoint_configuration(host_id_to_refresh: &str) -> Result<String, String> {
     let settings_model = crate::scripts::load_settings().await?;

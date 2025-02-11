@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use hyper::Uri;
 
-use crate::{app::AppContext, configurations::*};
+use crate::configurations::*;
 
 use super::{ProxyPassError, ProxyPassLocation};
 

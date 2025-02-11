@@ -3,7 +3,6 @@ use std::sync::Arc;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
 
 use crate::{
-    app::AppContext,
     configurations::SslCertificateId,
     ssl::{SslCertificate, SslCertificateHolder},
 };

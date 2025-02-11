@@ -8,6 +8,7 @@ use encryption::aes::AesKey;
 
 use rust_extensions::{
     date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds},
+    remote_endpoint::RemoteEndpointOwned,
     AtomicDuration, AtomicStopWatch, SliceOrVec,
 };
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
@@ -20,7 +21,7 @@ pub struct TcpGatewayConnection {
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
-    forward_proxy_connections: Mutex<HashMap<u32, TcpGatewayProxyForwardedConnection>>,
+    forward_proxy_connections: Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -121,17 +122,15 @@ impl TcpGatewayConnection {
 
     pub async fn connect_to_forward_proxy_connection(
         &self,
-        remote_endpoint: &str,
+        remote_endpoint: Arc<RemoteEndpointOwned>,
         timeout: Duration,
         connection_id: u32,
-    ) -> Result<(ProxyConnectionReadHalf, ProxyConnectionWriteHalf), String> {
+    ) -> Result<TcpGatewayProxyForwardStream, String> {
         let gateway_id = self.get_gateway_id().await;
 
-        let connection = TcpGatewayProxyForwardedConnection::new(
+        let connection = TcpGatewayProxyForwardConnectionHandler::new(
             connection_id,
-            gateway_id.clone(),
             self.inner.clone(),
-            Arc::new(remote_endpoint.to_string()),
             self.get_supported_compression(),
         );
 
@@ -143,7 +142,7 @@ impl TcpGatewayConnection {
         let connect_contract = TcpGatewayContract::Connect {
             connection_id,
             timeout,
-            remote_host: remote_endpoint,
+            remote_host: remote_endpoint.as_str(),
         };
 
         if !self.send_payload(&connect_contract).await {
@@ -170,7 +169,7 @@ impl TcpGatewayConnection {
             match connection.get_status() {
                 TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection => {}
                 TcpGatewayProxyForwardedConnectionStatus::Connected => {
-                    return Ok(connection.get_read_write_half());
+                    return Ok(connection.get_connection());
                 }
                 TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
                     return Err(err.as_str().to_string());
@@ -182,7 +181,7 @@ impl TcpGatewayConnection {
             "Gateway {} connection to endpoint {} is lost during awaiting forward to {} connecting result",
             gateway_id,
             self.addr.as_str(),
-            remote_endpoint
+            remote_endpoint.as_str()
         ));
     }
 
@@ -291,16 +290,10 @@ impl TcpGatewayConnection {
         write_access.len()
     }
 
-    pub async fn disconnect_forward_proxy_connection(
-        &self,
-        connection_id: u32,
-        message: &str,
-    ) -> Option<TcpGatewayProxyForwardedConnection> {
+    pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
         let mut write_access = self.forward_proxy_connections.lock().await;
         if let Some(mut connection) = write_access.remove(&connection_id) {
             connection.set_connection_error(message.into());
-            return Some(connection);
         }
-        None
     }
 }

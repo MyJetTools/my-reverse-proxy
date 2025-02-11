@@ -1,10 +1,10 @@
-use std::{sync::Arc, task::Poll};
+use std::sync::Arc;
 
 use rust_extensions::StrOrString;
 
 use crate::tcp_gateway::TcpConnectionInner;
 
-use super::{ProxyConnectionReadHalf, ProxyConnectionWriteHalf, ProxyReceiveBuffer};
+use super::{ProxyReceiveBuffer, TcpGatewayProxyForwardStream};
 
 #[derive(Clone)]
 pub enum TcpGatewayProxyForwardedConnectionStatus {
@@ -22,31 +22,25 @@ impl TcpGatewayProxyForwardedConnectionStatus {
     }
 }
 
-pub struct TcpGatewayProxyForwardedConnection {
+pub struct TcpGatewayProxyForwardConnectionHandler {
     pub status: TcpGatewayProxyForwardedConnectionStatus,
     connection_inner: Arc<TcpConnectionInner>,
     pub connection_id: u32,
-    pub gateway_id: Arc<String>,
-    pub remote_endpoint: Arc<String>,
     //pub receive_buffer: Mutex<ProxyReceiveBuffer>,
     pub support_compression: bool,
     receive_buffer: Arc<ProxyReceiveBuffer>,
 }
 
-impl TcpGatewayProxyForwardedConnection {
+impl TcpGatewayProxyForwardConnectionHandler {
     pub fn new(
         connection_id: u32,
-        gateway_id: Arc<String>,
         connection_inner: Arc<TcpConnectionInner>,
-        remote_endpoint: Arc<String>,
         support_compression: bool,
     ) -> Self {
         Self {
             status: TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection,
             connection_id,
             connection_inner,
-            gateway_id,
-            remote_endpoint,
             receive_buffer: ProxyReceiveBuffer::new().into(),
             support_compression,
         }
@@ -72,26 +66,17 @@ impl TcpGatewayProxyForwardedConnection {
         self.receive_buffer.extend_from_slice(payload);
     }
 
-    pub fn get_read_write_half(&self) -> (ProxyConnectionReadHalf, ProxyConnectionWriteHalf) {
-        let read_half = ProxyConnectionReadHalf {
+    pub fn get_connection(&self) -> TcpGatewayProxyForwardStream {
+        TcpGatewayProxyForwardStream {
             receive_buffer: self.receive_buffer.clone(),
-            connection_id: self.connection_id,
-            gateway_id: self.gateway_id.clone(),
-            remote_endpoint: self.remote_endpoint.clone(),
-        };
-
-        let write_half = ProxyConnectionWriteHalf {
-            gateway_id: self.gateway_id.clone(),
-            remote_host: self.remote_endpoint.clone(),
             connection_id: self.connection_id,
             gateway_connection_inner: self.connection_inner.clone(),
             support_compression: self.support_compression,
-            receive_buffer: self.receive_buffer.clone(),
-        };
-        (read_half, write_half)
+        }
     }
 }
 
+/*
 impl tokio::io::AsyncRead for TcpGatewayProxyForwardedConnection {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -125,3 +110,5 @@ impl tokio::io::AsyncRead for TcpGatewayProxyForwardedConnection {
         )));
     }
 }
+
+ */

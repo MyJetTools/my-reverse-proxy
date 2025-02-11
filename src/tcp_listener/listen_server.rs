@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::io::AsyncWriteExt;
 
-use crate::{app::AppContext, configurations::ListenConfiguration};
+use crate::configurations::ListenConfiguration;
 
 use super::ListenServerHandler;
 

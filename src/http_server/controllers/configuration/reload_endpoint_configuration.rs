@@ -16,7 +16,7 @@ use my_http_server::{
 )]
 pub struct ReloadEndpointAction;
 async fn handle_request(
-    action: &ReloadEndpointAction,
+    _action: &ReloadEndpointAction,
     input_data: ReloadEndpointHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
