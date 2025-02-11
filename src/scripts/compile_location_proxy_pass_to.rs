@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    app::AppContext,
     configurations::{MyReverseProxyRemoteEndpoint, ProxyPassLocationConfig},
     settings::*,
 };
 
 pub async fn compile_location_proxy_pass_to(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     location_settings: &LocationSettings,
 ) -> Result<ProxyPassLocationConfig, String> {
@@ -40,13 +36,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
+
             ProxyPassTo::Http1(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -57,14 +53,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
 
             ProxyPassTo::Http2(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -75,14 +70,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
 
             ProxyPassTo::Http1(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -93,13 +87,13 @@ pub async fn compile_location_proxy_pass_to(
             }
 
             let proxy_pass_to = proxy_pass_to.unwrap();
-            let proxy_pass_to = OverSshConnectionSettings::try_parse(proxy_pass_to.as_str())
-                .ok_or(format!(
-                    "error parsing proxy_pass_to {}",
-                    proxy_pass_to.as_str()
-                ))?;
+
             ProxyPassTo::Http2(ProxyPassToModel {
-                remote_host: proxy_pass_to,
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
             })
@@ -124,7 +118,7 @@ pub async fn compile_location_proxy_pass_to(
         LocationType::StaticContent => {
             let body = location_settings.body.clone().unwrap_or_default();
 
-            let body = get_static_content_body(app, settings_model, body).await?;
+            let body = get_static_content_body(settings_model, body).await?;
             let model: StaticContentModel = StaticContentModel {
                 status_code: location_settings.status_code.unwrap_or(200),
                 content_type: location_settings.content_type.clone(),
@@ -136,7 +130,7 @@ pub async fn compile_location_proxy_pass_to(
     };
 
     let result = ProxyPassLocationConfig::new(
-        app.get_next_id(),
+        crate::app::APP_CTX.get_next_id(),
         path.to_string(),
         location_settings.modify_http_headers.clone(),
         location_settings.whitelisted_ip.clone(),
@@ -150,7 +144,6 @@ pub async fn compile_location_proxy_pass_to(
 }
 
 async fn get_static_content_body(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     body: String,
 ) -> Result<Vec<u8>, String> {
@@ -170,12 +163,8 @@ async fn get_static_content_body(
             let remote_resource = super::apply_variables(settings_model, body.as_str())?;
             match OverSshConnectionSettings::try_parse(remote_resource.as_str()) {
                 Some(data_source) => {
-                    super::load_file(
-                        app,
-                        &data_source,
-                        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-                    )
-                    .await
+                    super::load_file(&data_source, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
+                        .await
                 }
                 None => {
                     return Ok(body.into_bytes());

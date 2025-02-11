@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use my_ssh::ssh_settings::OverSshConnectionSettings;
-
 use crate::configurations::MyReverseProxyRemoteEndpoint;
 
 pub struct StaticContentModel {
@@ -33,7 +31,7 @@ impl ProxyPassFilesPathModel {
 }
 
 pub struct ProxyPassToModel {
-    pub remote_host: OverSshConnectionSettings,
+    pub remote_host: MyReverseProxyRemoteEndpoint,
     pub request_timeout: Duration,
     pub connect_timeout: Duration,
 }

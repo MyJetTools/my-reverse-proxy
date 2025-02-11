@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, settings::*};
+use crate::settings::*;
 
 pub async fn get_endpoint_users_list(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
@@ -14,7 +11,7 @@ pub async fn get_endpoint_users_list(
             return Ok(None);
         };
 
-    super::refresh_users_list_from_settings(app, settings_model, allowed_users_list_id).await?;
+    super::refresh_users_list_from_settings(settings_model, allowed_users_list_id).await?;
 
     Ok(Some(allowed_users_list_id.to_string()))
 }

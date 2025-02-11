@@ -1,14 +1,8 @@
-use std::sync::Arc;
-
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::{
-    app::AppContext, configurations::SslCertificateIdRef, settings::SettingsModel,
-    ssl::SslCertificate,
-};
+use crate::{configurations::SslCertificateIdRef, settings::SettingsModel, ssl::SslCertificate};
 
 pub async fn refresh_ssl_certs_from_sources<'s>(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     ssl_cert_id: SslCertificateIdRef<'s>,
 ) -> Result<(), String> {
@@ -50,7 +44,6 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
         ))?;
 
     let private_key = super::load_file(
-        app,
         &private_key_src,
         crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
     )
@@ -64,11 +57,12 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
     ))?;
 
     let certificate =
-        super::load_file(app, &cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
+        super::load_file(&cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
 
     let ssl_certificate = SslCertificate::new(private_key, certificate)?;
 
-    app.ssl_certificates_cache
+    crate::app::APP_CTX
+        .ssl_certificates_cache
         .write(|config| {
             config
                 .ssl_certs

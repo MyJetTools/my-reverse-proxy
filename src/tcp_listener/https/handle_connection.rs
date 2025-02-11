@@ -7,8 +7,6 @@ use tokio::net::TcpStream;
 
 use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
-use crate::app::AppContext;
-
 use crate::configurations::*;
 use crate::http_proxy_pass::{HttpListenPortInfo, HttpProxyPass};
 use crate::tcp_listener::http_request_handler::https::HttpsRequestsHandler;
@@ -95,19 +93,14 @@ async fn start_https_server_loop(
  */
 
 pub async fn handle_connection(
-    app: Arc<AppContext>,
     accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<HttpListenPortConfiguration>,
 ) {
     let listening_addr_str = Arc::new(format!("https://{}", listening_addr));
     let endpoint_port = listening_addr.port();
-    let future = lazy_accept_tcp_stream(
-        app.clone(),
-        endpoint_port,
-        accepted_connection.tcp_stream,
-        configuration,
-    );
+    let future =
+        lazy_accept_tcp_stream(endpoint_port, accepted_connection.tcp_stream, configuration);
 
     let result = tokio::time::timeout(Duration::from_secs(10), future).await;
 
@@ -124,7 +117,7 @@ pub async fn handle_connection(
     let (mut tls_stream, endpoint_info, cn_user_name) = result.unwrap();
 
     if let Some(ip_list_id) = endpoint_info.whitelisted_ip_list_id.as_ref() {
-        let is_whitelisted = app
+        let is_whitelisted = crate::app::APP_CTX
             .current_configuration
             .get(|config| {
                 config
@@ -141,7 +134,6 @@ pub async fn handle_connection(
 
     if endpoint_info.listen_endpoint_type.is_http1() {
         kick_off_https1(
-            app,
             listening_addr_str.clone(),
             accepted_connection.addr,
             endpoint_info,
@@ -152,7 +144,6 @@ pub async fn handle_connection(
         .await;
     } else {
         kick_off_https2(
-            app,
             listening_addr_str.clone(),
             accepted_connection.addr,
             endpoint_info,
@@ -165,7 +156,6 @@ pub async fn handle_connection(
 }
 
 async fn lazy_accept_tcp_stream(
-    app: Arc<AppContext>,
     endpoint_port: u16,
     tcp_stream: TcpStream,
     configuration: Arc<HttpListenPortConfiguration>,
@@ -191,13 +181,9 @@ async fn lazy_accept_tcp_stream(
                     return Err("Unknown server name detecting from client hello".to_string());
                 };
 
-                let config_result = super::tls_acceptor::create_config(
-                    app.clone(),
-                    configuration,
-                    server_name,
-                    endpoint_port,
-                )
-                .await;
+                let config_result =
+                    super::tls_acceptor::create_config(configuration, server_name, endpoint_port)
+                        .await;
 
                 if let Err(err) = &config_result {
                     return Err(format!("Failed to create tls config. Err: {err:#}"));
@@ -243,7 +229,6 @@ async fn lazy_accept_tcp_stream(
 }
 
 async fn kick_off_https1(
-    app: Arc<AppContext>,
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
@@ -255,10 +240,12 @@ async fn kick_off_https1(
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
-    app.prometheus
+    crate::app::APP_CTX
+        .prometheus
         .inc_http1_server_connections(endpoint_name.as_str());
 
-    app.metrics
+    crate::app::APP_CTX
+        .metrics
         .update(|itm| itm.connection_by_port.inc(&endpoint_port))
         .await;
 
@@ -267,16 +254,10 @@ async fn kick_off_https1(
             endpoint_type: endpoint_info.listen_endpoint_type,
             socket_addr,
         };
-        let http_proxy_pass = HttpProxyPass::new(
-            &app,
-            endpoint_info.clone(),
-            listening_port_info,
-            cn_user_name,
-        )
-        .await;
+        let http_proxy_pass =
+            HttpProxyPass::new(endpoint_info.clone(), listening_port_info, cn_user_name).await;
 
-        let https_requests_handler =
-            HttpsRequestsHandler::new(app.clone(), http_proxy_pass, socket_addr);
+        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, socket_addr);
 
         let https_requests_handler = Arc::new(https_requests_handler);
 
@@ -296,10 +277,12 @@ async fn kick_off_https1(
             .with_upgrades()
             .await;
 
-        app.prometheus
+        crate::app::APP_CTX
+            .prometheus
             .dec_http1_server_connections(endpoint_name.as_str());
 
-        app.metrics
+        crate::app::APP_CTX
+            .metrics
             .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
 
@@ -308,7 +291,6 @@ async fn kick_off_https1(
 }
 
 async fn kick_off_https2(
-    app: Arc<AppContext>,
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
@@ -321,10 +303,12 @@ async fn kick_off_https2(
 
     use hyper_util::rt::TokioExecutor;
 
-    app.prometheus
+    crate::app::APP_CTX
+        .prometheus
         .inc_http2_server_connections(endpoint_name.as_str());
 
-    app.metrics
+    crate::app::APP_CTX
+        .metrics
         .update(|itm| itm.connection_by_port.inc(&endpoint_port))
         .await;
 
@@ -337,15 +321,13 @@ async fn kick_off_https2(
         };
 
         let http_proxy_pass = HttpProxyPass::new(
-            &app,
             endpoint_info.clone(),
             listening_port_info,
             client_certificate,
         )
         .await;
 
-        let https_requests_handler =
-            HttpsRequestsHandler::new(app.clone(), http_proxy_pass, socket_addr);
+        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, socket_addr);
 
         let https_requests_handler = Arc::new(https_requests_handler);
 
@@ -364,10 +346,12 @@ async fn kick_off_https2(
             )
             .await;
 
-        app.prometheus
+        crate::app::APP_CTX
+            .prometheus
             .dec_http2_server_connections(endpoint_name.as_str());
 
-        app.metrics
+        crate::app::APP_CTX
+            .metrics
             .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
 

@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use my_http_server::{
     macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput, WebContentType,
@@ -19,24 +19,19 @@ const RIGHT_BADGE_STYLE: &str = "border-radius: 0 5px 5px 0;";
     method: "GET",
     route: "/",
 )]
-pub struct IndexAction {
-    app: Arc<AppContext>,
-}
+pub struct IndexAction;
 
-impl IndexAction {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
 async fn handle_request(
-    action: &IndexAction,
+    _action: &IndexAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let config = CurrentConfigurationHttpModel::new(&action.app).await;
+    let config = CurrentConfigurationHttpModel::new().await;
     HttpOutput::Content {
         headers: None,
         content_type: WebContentType::Html.into(),
-        content: create_html_content(&action.app, config).await.into_bytes(),
+        content: create_html_content(&crate::app::APP_CTX, config)
+            .await
+            .into_bytes(),
         set_cookies: None,
     }
     .into_ok_result(false)

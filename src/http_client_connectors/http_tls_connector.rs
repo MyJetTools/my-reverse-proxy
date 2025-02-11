@@ -9,7 +9,7 @@ use tokio::{
 };
 
 pub struct HttpTlsConnector {
-    pub remote_endpoint: RemoteEndpointOwned,
+    pub remote_endpoint: Arc<RemoteEndpointOwned>,
     pub domain_name: Option<String>,
     pub debug: bool,
 }

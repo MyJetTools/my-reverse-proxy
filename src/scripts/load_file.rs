@@ -7,10 +7,9 @@ use my_settings_reader::flurl::FlUrl;
 use my_ssh::{ssh_settings::OverSshConnectionSettings, SshCredentials};
 use rust_extensions::remote_endpoint::RemoteEndpoint;
 
-use crate::{app::AppContext, configurations::LocalFilePath};
+use crate::configurations::LocalFilePath;
 
 pub async fn load_file(
-    app: &Arc<AppContext>,
     content_source: &OverSshConnectionSettings,
     connect_timeout: Duration,
 ) -> Result<Vec<u8>, String> {
@@ -18,7 +17,6 @@ pub async fn load_file(
         match scheme {
             rust_extensions::remote_endpoint::Scheme::Http => {
                 load_from_http_or_https(
-                    app,
                     content_source.get_remote_endpoint(),
                     content_source.ssh_credentials.as_ref(),
                     connect_timeout,
@@ -27,7 +25,6 @@ pub async fn load_file(
             }
             rust_extensions::remote_endpoint::Scheme::Https => {
                 load_from_http_or_https(
-                    app,
                     content_source.get_remote_endpoint(),
                     content_source.ssh_credentials.as_ref(),
                     connect_timeout,
@@ -43,12 +40,8 @@ pub async fn load_file(
         }
     } else {
         if let Some(ssh_credentials) = content_source.ssh_credentials.as_ref() {
-            return loading_file_from_ssh(
-                app,
-                ssh_credentials,
-                content_source.get_remote_endpoint(),
-            )
-            .await;
+            return loading_file_from_ssh(ssh_credentials, content_source.get_remote_endpoint())
+                .await;
         } else {
             let file_name = LocalFilePath::new(content_source.remote_resource_string.to_string());
 
@@ -68,19 +61,13 @@ pub async fn load_file(
 }
 
 async fn load_from_http_or_https<'s>(
-    app: &Arc<AppContext>,
     remote_endpoint: RemoteEndpoint<'s>,
     ssh_credentials: Option<&Arc<SshCredentials>>,
     connect_timeout: Duration,
 ) -> Result<Vec<u8>, String> {
     if let Some(ssh_credentials) = ssh_credentials {
-        return load_content_from_http_via_ssh(
-            app,
-            ssh_credentials,
-            remote_endpoint,
-            connect_timeout,
-        )
-        .await;
+        return load_content_from_http_via_ssh(ssh_credentials, remote_endpoint, connect_timeout)
+            .await;
     }
 
     let response = FlUrl::new(remote_endpoint.as_str())
@@ -97,11 +84,10 @@ async fn load_from_http_or_https<'s>(
 }
 
 async fn loading_file_from_ssh<'s>(
-    app: &Arc<AppContext>,
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: RemoteEndpoint<'s>,
 ) -> Result<Vec<u8>, String> {
-    let ssh_session = super::ssh::get_ssh_session(app, ssh_credentials).await?;
+    let ssh_session = super::ssh::get_ssh_session(ssh_credentials).await?;
 
     let result = ssh_session
         .download_remote_file(remote_endpoint.as_str(), Duration::from_secs(5))
@@ -122,7 +108,6 @@ async fn loading_file_from_ssh<'s>(
 }
 
 async fn load_content_from_http_via_ssh<'s>(
-    app: &Arc<AppContext>,
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: RemoteEndpoint<'s>,
     connect_timeout: Duration,
@@ -130,7 +115,7 @@ async fn load_content_from_http_via_ssh<'s>(
     use crate::http_client_connectors::HttpOverSshConnector;
     use my_ssh::*;
 
-    let ssh_session = super::ssh::get_ssh_session(app, ssh_credentials).await?;
+    let ssh_session = super::ssh::get_ssh_session(ssh_credentials).await?;
 
     let connector = HttpOverSshConnector {
         ssh_session,

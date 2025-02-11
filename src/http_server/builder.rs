@@ -2,14 +2,10 @@ use std::sync::Arc;
 
 use my_http_server::controllers::ControllersMiddleware;
 
-use crate::app::AppContext;
-
-pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
+pub fn build_controllers() -> ControllersMiddleware {
     let mut result = ControllersMiddleware::new(None, None);
 
-    result.register_get_action(Arc::new(super::controllers::home::IndexAction::new(
-        app.clone(),
-    )));
+    result.register_get_action(Arc::new(super::controllers::home::IndexAction));
 
     //result.register_get_action(Arc::new(
     //    super::controllers::configuration::TestConfigurationAction::new(app.clone()),
@@ -20,44 +16,38 @@ pub fn build_controllers(app: &Arc<AppContext>) -> ControllersMiddleware {
     //));
 
     result.register_get_action(Arc::new(
-        super::controllers::configuration::GetCurrentConfigAction::new(app.clone()),
+        super::controllers::configuration::GetCurrentConfigAction,
     ));
 
     result.register_post_action(Arc::new(
-        super::controllers::configuration::ReloadEndpointAction::new(app.clone()),
+        super::controllers::configuration::ReloadEndpointAction,
     ));
 
     result.register_post_action(Arc::new(
-        super::controllers::configuration::ReloadPortAction::new(app.clone()),
+        super::controllers::configuration::ReloadPortAction,
     ));
 
     result.register_post_action(Arc::new(
-        super::controllers::configuration::RefreshSslCertificateAction::new(app.clone()),
+        super::controllers::configuration::RefreshSslCertificateAction,
+    ));
+
+    result.register_post_action(Arc::new(super::controllers::configuration::RefreshCaAction));
+
+    result.register_post_action(Arc::new(
+        super::controllers::configuration::RefreshUsersListAction,
     ));
 
     result.register_post_action(Arc::new(
-        super::controllers::configuration::RefreshCaAction::new(app.clone()),
+        super::controllers::configuration::RefreshIpListAction,
     ));
 
-    result.register_post_action(Arc::new(
-        super::controllers::configuration::RefreshUsersListAction::new(app.clone()),
-    ));
-
-    result.register_post_action(Arc::new(
-        super::controllers::configuration::RefreshIpListAction::new(app.clone()),
-    ));
+    result.register_get_action(Arc::new(super::controllers::prometheus::GetMetricsAction));
 
     result.register_get_action(Arc::new(
-        super::controllers::prometheus::GetMetricsAction::new(app.clone()),
+        super::controllers::ssl_certificates::GetCurrentSslCertificatesAction,
     ));
 
-    result.register_get_action(Arc::new(
-        super::controllers::ssl_certificates::GetCurrentSslCertificatesAction::new(app.clone()),
-    ));
-
-    result.register_post_action(Arc::new(super::controllers::ssh::InitPassKeyAction::new(
-        app.clone(),
-    )));
+    result.register_post_action(Arc::new(super::controllers::ssh::InitPassKeyAction));
 
     result
 }

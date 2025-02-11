@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
 use my_http_server::{macros::http_route, HttpContext, HttpFailResult, HttpOkResult, HttpOutput};
 
 use super::contracts::*;
-use crate::app::AppContext;
 
 #[http_route(
     method: "GET",
@@ -15,19 +12,12 @@ use crate::app::AppContext;
         {status_code: 200, description: "Ok response", model:"CurrentConfigurationHttpModel"},
     ]
 )]
-pub struct GetCurrentConfigAction {
-    app: Arc<AppContext>,
-}
+pub struct GetCurrentConfigAction;
 
-impl GetCurrentConfigAction {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
 async fn handle_request(
-    action: &GetCurrentConfigAction,
+    _action: &GetCurrentConfigAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let result = CurrentConfigurationHttpModel::new(&action.app).await;
+    let result = CurrentConfigurationHttpModel::new().await;
     HttpOutput::as_json(result).into_ok_result(true).into()
 }

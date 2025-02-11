@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use my_ssh::{SshCredentials, SshSession};
 
-use crate::app::AppContext;
-
 pub async fn get_ssh_session(
-    app: &Arc<AppContext>,
     ssh_credentials: &Arc<SshCredentials>,
 ) -> Result<Arc<SshSession>, String> {
-    let ssh_config = app.ssh_config_list.get(ssh_credentials).await;
+    let ssh_config = crate::app::APP_CTX
+        .ssh_config_list
+        .get(ssh_credentials)
+        .await;
 
     let ssh_credentials = if let Some(ssh_config) = ssh_config {
         match ssh_config.as_ref() {
@@ -18,7 +18,10 @@ pub async fn get_ssh_session(
             } => {
                 let (host, port) = ssh_credentials.get_host_port();
                 let passphrase = if pass_phrase.is_none() {
-                    let ssh_pass_key = app.ssh_cert_pass_keys.get(ssh_credentials.as_ref()).await;
+                    let ssh_pass_key = crate::app::APP_CTX
+                        .ssh_cert_pass_keys
+                        .get(ssh_credentials.as_ref())
+                        .await;
                     ssh_pass_key
                 } else {
                     pass_phrase.clone()

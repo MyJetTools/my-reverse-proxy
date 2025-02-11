@@ -13,7 +13,7 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct TcpConnectionInner {
     pub connection: Mutex<Option<OwnedWriteHalf>>,
     pub buffer: Mutex<SendBuffer>,
-    sender: tokio::sync::mpsc::Sender<()>,
+    sender: Arc<tokio::sync::mpsc::Sender<()>>,
     is_connected: AtomicBool,
     pub aes_key: Arc<AesKey>,
 }
@@ -27,7 +27,7 @@ impl TcpConnectionInner {
         let result = Self {
             connection: Mutex::new(Some(connection)),
             buffer: Mutex::new(SendBuffer::new()),
-            sender,
+            sender: Arc::new(sender),
             is_connected: AtomicBool::new(true),
             aes_key,
         };
@@ -46,7 +46,11 @@ impl TcpConnectionInner {
             buffer_access.push(payload);
         }
 
-        let _ = self.sender.send(()).await;
+        let sender = self.sender.clone();
+
+        tokio::spawn(async move {
+            let _ = sender.send(()).await;
+        });
 
         true
     }

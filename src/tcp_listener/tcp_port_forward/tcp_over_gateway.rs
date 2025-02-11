@@ -6,31 +6,31 @@ use tokio::{
     net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 
+use tokio::io::{ReadHalf, WriteHalf};
+
 use crate::{
-    app::AppContext,
     configurations::TcpEndpointHostConfig,
-    tcp_gateway::{forwarded_connection::TcpGatewayProxyForwardedConnection, TcpGatewayConnection},
+    tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
     tcp_listener::AcceptedTcpConnection,
 };
 
 pub async fn handle_connection(
-    app: Arc<AppContext>,
     mut accepted_server_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
     gateway_id: Arc<String>,
-    remote_host: Arc<RemoteEndpointOwned>,
+    remote_endpoint: Arc<RemoteEndpointOwned>,
 ) {
     if configuration.debug {
         println!(
             "Accepted connection forwarded to {}->{}",
             gateway_id.as_str(),
-            remote_host.as_str()
+            remote_endpoint.as_str()
         );
     }
 
     if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
-        let ip_white_list = app
+        let ip_white_list = crate::app::APP_CTX
             .current_configuration
             .get(|config| config.white_list_ip_list.get(ip_white_list_id))
             .await;
@@ -65,7 +65,7 @@ pub async fn handle_connection(
         }
     }
 
-    let gateway_connection = app
+    let gateway_connection = crate::app::APP_CTX
         .get_gateway_by_id_with_next_connection_id(&gateway_id)
         .await;
 
@@ -73,7 +73,7 @@ pub async fn handle_connection(
         if configuration.debug {
             println!(
                 "Error connecting to remote tcp {} server. Gateway connection [{}] is not found. Closing incoming connection: {}",
-                remote_host.as_str(),
+                remote_endpoint.as_str(),
                 gateway_id.as_str(),
                 accepted_server_connection.addr
             );
@@ -86,7 +86,7 @@ pub async fn handle_connection(
 
     let connection_result = gateway_connection
         .connect_to_forward_proxy_connection(
-            remote_host.as_str(),
+            remote_endpoint.clone(),
             Duration::from_secs(5),
             connection_id,
         )
@@ -96,7 +96,7 @@ pub async fn handle_connection(
         if configuration.debug {
             println!(
                 "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
-                remote_host.as_str(),
+                remote_endpoint.as_str(),
                 err,
                 accepted_server_connection.addr
             );
@@ -107,44 +107,52 @@ pub async fn handle_connection(
 
     let proxy_connection = connection_result.unwrap();
 
+    let (proxy_read, proxy_write) = tokio::io::split(proxy_connection);
+
     if configuration.debug {
         println!(
             "Accepted connection to {}->{}. Connection_id: {}",
             gateway_id,
-            proxy_connection.remote_endpoint.as_str(),
-            proxy_connection.connection_id,
+            remote_endpoint.as_str(),
+            connection_id,
         );
     }
 
-    let (read, write) = accepted_server_connection.tcp_stream.into_split();
+    let (server_read, server_write) = accepted_server_connection.tcp_stream.into_split();
 
     tokio::spawn(copy_from_connection_to_gateway(
-        read,
-        gateway_connection.clone(),
-        proxy_connection.clone(),
+        server_read,
+        proxy_write,
         listening_addr,
+        gateway_id.clone(),
+        connection_id,
+        remote_endpoint.clone(),
         configuration.debug,
     ));
     tokio::spawn(copy_from_gateway_to_connection(
-        write,
-        gateway_connection,
-        proxy_connection,
+        server_write,
+        proxy_read,
         listening_addr,
+        gateway_id,
+        connection_id,
+        remote_endpoint,
         configuration.debug,
     ));
 }
 
 async fn copy_from_connection_to_gateway(
-    mut read: OwnedReadHalf,
-    gateway_connection: Arc<TcpGatewayConnection>,
-    proxy_connection: Arc<TcpGatewayProxyForwardedConnection>,
+    mut server_read: OwnedReadHalf,
+    mut proxy_write: WriteHalf<TcpGatewayProxyForwardStream>,
     listening_addr: SocketAddr,
+    gateway_id: Arc<String>,
+    connection_id: u32,
+    remote_endpoint: Arc<RemoteEndpointOwned>,
     debug: bool,
 ) {
     let mut buffer = crate::tcp_utils::allocated_read_buffer(None);
 
     loop {
-        let read_result = read.read(&mut buffer).await;
+        let read_result = server_read.read(&mut buffer).await;
 
         let read_size = match read_result {
             Ok(size) => size,
@@ -152,8 +160,8 @@ async fn copy_from_connection_to_gateway(
                 let err = format!(
                     "Error reading from {}. Closing connection {} on gateway {}. Err: {:?}",
                     listening_addr,
-                    proxy_connection.connection_id,
-                    proxy_connection.get_gateway_id(),
+                    connection_id,
+                    gateway_id.as_str(),
                     err
                 );
 
@@ -161,9 +169,7 @@ async fn copy_from_connection_to_gateway(
                     println!("{}", err);
                 }
 
-                gateway_connection
-                    .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
-                    .await;
+                let _ = proxy_write.shutdown().await;
                 break;
             }
         };
@@ -172,41 +178,58 @@ async fn copy_from_connection_to_gateway(
             let err = format!(
                 "Reading from {} is closed. Closing connection {} on gateway {}",
                 listening_addr,
-                proxy_connection.connection_id,
-                proxy_connection.get_gateway_id(),
+                connection_id,
+                gateway_id.as_str(),
             );
 
             if debug {
                 println!("{}", err);
             }
-            gateway_connection
-                .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
-                .await;
+            let _ = proxy_write.shutdown().await;
             break;
         }
 
-        proxy_connection.send_payload(&buffer[..read_size]).await;
+        let result = proxy_write.write_all(&buffer[..read_size]).await;
+
+        if let Err(err) = result {
+            let err = format!(
+                "Error writing to proxy connection {}-{} width id {}. Err: {:?}",
+                gateway_id.as_str(),
+                remote_endpoint.as_str(),
+                connection_id,
+                err
+            );
+
+            if debug {
+                println!("{}", err);
+            }
+            let _ = proxy_write.shutdown().await;
+            break;
+        }
     }
 }
 
 async fn copy_from_gateway_to_connection(
-    mut write: OwnedWriteHalf,
-    gateway_connection: Arc<TcpGatewayConnection>,
-    proxy_connection: Arc<TcpGatewayProxyForwardedConnection>,
+    mut server_write: OwnedWriteHalf,
+    mut proxy_read: ReadHalf<TcpGatewayProxyForwardStream>,
     listening_addr: SocketAddr,
+    gateway_id: Arc<String>,
+    connection_id: u32,
+    remote_endpoint: Arc<RemoteEndpointOwned>,
     debug: bool,
 ) {
+    let mut buffer = crate::tcp_utils::allocated_read_buffer(None);
     loop {
-        let read_result = proxy_connection.receive_payload().await;
+        let read_result = proxy_read.read(&mut buffer).await;
 
-        let payload = match read_result {
+        let payload_size = match read_result {
             Ok(size) => size,
             Err(err) => {
                 let err = format!(
                     "Error reading from gateway:{}->{} with connection id {}. Err: {}",
-                    proxy_connection.get_gateway_id(),
-                    proxy_connection.remote_endpoint,
-                    proxy_connection.connection_id,
+                    gateway_id.as_str(),
+                    remote_endpoint.as_str(),
+                    connection_id,
                     err
                 );
 
@@ -214,24 +237,24 @@ async fn copy_from_gateway_to_connection(
                     println!("{}", err);
                 }
 
-                gateway_connection
-                    .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
-                    .await;
-
                 break;
             }
         };
 
-        let write_future = write.write_all(payload.as_slice());
+        if payload_size == 0 {
+            break;
+        }
+
+        let write_future = server_write.write_all(&buffer[..payload_size]);
 
         let result = tokio::time::timeout(Duration::from_secs(30), write_future).await;
 
         if result.is_err() {
             let err = format!(
                 "Write from gateway:{}->{} with connection id {} to {} is ended with timeout. Closing connection",
-                proxy_connection.get_gateway_id(),
-                proxy_connection.remote_endpoint,
-                proxy_connection.connection_id,
+                gateway_id.as_str(),
+                remote_endpoint.as_str(),
+                connection_id,
                 listening_addr
             );
 
@@ -239,9 +262,6 @@ async fn copy_from_gateway_to_connection(
                 println!("{}", err);
             }
 
-            gateway_connection
-                .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
-                .await;
             break;
         }
 
@@ -250,9 +270,9 @@ async fn copy_from_gateway_to_connection(
         if let Err(err) = result {
             let err = format!(
                 "Write from gateway:{}->{} with connection id {} to {} is ended with error: {:?}. Closing connection",
-                proxy_connection.get_gateway_id(),
-                proxy_connection.remote_endpoint,
-                proxy_connection.connection_id,
+                gateway_id.as_str(),
+                remote_endpoint.as_str(),
+                connection_id,
                 listening_addr,
                 err
             );
@@ -261,9 +281,6 @@ async fn copy_from_gateway_to_connection(
                 println!("{}", err);
             }
 
-            gateway_connection
-                .disconnect_forward_proxy_connection(proxy_connection.connection_id, &err)
-                .await;
             break;
         }
     }

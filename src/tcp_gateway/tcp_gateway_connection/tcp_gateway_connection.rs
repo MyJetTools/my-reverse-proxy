@@ -8,16 +8,12 @@ use encryption::aes::AesKey;
 
 use rust_extensions::{
     date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds},
+    remote_endpoint::RemoteEndpointOwned,
     AtomicDuration, AtomicStopWatch, SliceOrVec,
 };
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
-use super::{
-    super::forwarded_connection::{
-        TcpGatewayForwardConnection, TcpGatewayProxyForwardedConnection,
-    },
-    super::*,
-};
+use super::{super::forwarded_connection::*, super::*};
 
 pub struct TcpGatewayConnection {
     gateway_id: Mutex<Arc<String>>,
@@ -25,7 +21,7 @@ pub struct TcpGatewayConnection {
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
-    forward_proxy_connections: Mutex<HashMap<u32, Arc<TcpGatewayProxyForwardedConnection>>>,
+    forward_proxy_handlers: Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -46,7 +42,7 @@ impl TcpGatewayConnection {
             addr,
             inner: inner.clone(),
             forward_connections: Mutex::default(),
-            forward_proxy_connections: Mutex::default(),
+            forward_proxy_handlers: Mutex::default(),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             support_compression: AtomicBool::new(supported_connection),
             ping_stop_watch: AtomicStopWatch::new(),
@@ -126,28 +122,29 @@ impl TcpGatewayConnection {
 
     pub async fn connect_to_forward_proxy_connection(
         &self,
-        remote_endpoint: &str,
+        remote_endpoint: Arc<RemoteEndpointOwned>,
         timeout: Duration,
         connection_id: u32,
-    ) -> Result<Arc<TcpGatewayProxyForwardedConnection>, String> {
+    ) -> Result<TcpGatewayProxyForwardStream, String> {
         let gateway_id = self.get_gateway_id().await;
-        let connection = Arc::new(TcpGatewayProxyForwardedConnection::new(
-            connection_id,
-            gateway_id.clone(),
-            self.inner.clone(),
-            remote_endpoint.to_string(),
-            self.get_supported_compression(),
-        ));
-        {
-            let mut write_access = self.forward_proxy_connections.lock().await;
 
-            write_access.insert(connection_id, connection.clone());
+        let connection = TcpGatewayProxyForwardConnectionHandler::new(
+            connection_id,
+            self.inner.clone(),
+            self.get_supported_compression(),
+        );
+
+        {
+            let mut write_access = self.forward_proxy_handlers.lock().await;
+            write_access.insert(connection_id, connection);
         }
+
+        let host_port = remote_endpoint.get_host_port();
 
         let connect_contract = TcpGatewayContract::Connect {
             connection_id,
             timeout,
-            remote_host: remote_endpoint,
+            remote_host: host_port.as_str(),
         };
 
         if !self.send_payload(&connect_contract).await {
@@ -161,13 +158,23 @@ impl TcpGatewayConnection {
         while self.is_gateway_connected() {
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            match connection.get_status().await {
-                forwarded_connection::TcpGatewayProxyConnectionStatus::AwaitingConnection => {}
-                forwarded_connection::TcpGatewayProxyConnectionStatus::Connected => {
-                    return Ok(connection);
+            let connections_access = self.forward_proxy_handlers.lock().await;
+
+            let connection = connections_access.get(&connection_id);
+
+            if connection.is_none() {
+                return Err("Connection closed".to_string());
+            }
+
+            let connection = connection.unwrap();
+
+            match connection.get_status() {
+                TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection => {}
+                TcpGatewayProxyForwardedConnectionStatus::Connected => {
+                    return Ok(connection.get_connection());
                 }
-                forwarded_connection::TcpGatewayProxyConnectionStatus::Disconnected(err) => {
-                    return Err(err);
+                TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
+                    return Err(err.as_str().to_string());
                 }
             }
         }
@@ -176,15 +183,15 @@ impl TcpGatewayConnection {
             "Gateway {} connection to endpoint {} is lost during awaiting forward to {} connecting result",
             gateway_id,
             self.addr.as_str(),
-            remote_endpoint
+            host_port.as_str()
         ));
     }
 
     pub async fn notify_forward_proxy_connection_accepted(&self, connection_id: u32) {
-        let connection = self.get_forward_proxy_connection(connection_id).await;
+        let mut write_access = self.forward_proxy_handlers.lock().await;
 
-        if let Some(connection) = connection {
-            connection.set_connected().await;
+        if let Some(connection) = write_access.get_mut(&connection_id) {
+            connection.set_connected();
         }
     }
 
@@ -237,26 +244,29 @@ impl TcpGatewayConnection {
         }
     }
 
-    pub async fn notify_incoming_payload(&self, connection_id: u32, payload: &[u8]) {
-        let proxy_connection = self.get_forward_proxy_connection(connection_id).await;
+    pub async fn incoming_payload_for_proxy_connection(&self, connection_id: u32, payload: &[u8]) {
+        let mut proxy_connection_access = self.forward_proxy_handlers.lock().await;
+
+        let proxy_connection = proxy_connection_access.get_mut(&connection_id);
 
         if proxy_connection.is_none() {
+            println!("Proxy connection with id {} not found", connection_id);
             return;
         }
 
         let proxy_connection = proxy_connection.unwrap();
 
-        let status = proxy_connection.get_status().await;
+        let status = proxy_connection.get_status();
 
         match status {
-            forwarded_connection::TcpGatewayProxyConnectionStatus::AwaitingConnection => {
+            TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection => {
                 let gateway_id = self.get_gateway_id().await;
                 println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is not connected yet", payload.len(), connection_id, gateway_id.as_str());
             }
-            forwarded_connection::TcpGatewayProxyConnectionStatus::Connected => {
-                proxy_connection.enqueue_receive_payload(payload).await;
+            TcpGatewayProxyForwardedConnectionStatus::Connected => {
+                proxy_connection.enqueue_receive_payload(payload);
             }
-            forwarded_connection::TcpGatewayProxyConnectionStatus::Disconnected(err) => {
+            TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
                 let gateway_id = self.get_gateway_id().await;
                 println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is disconnected with err: {}", payload.len(), connection_id, gateway_id.as_str(), err);
             }
@@ -277,30 +287,15 @@ impl TcpGatewayConnection {
         self.last_incoming_payload_time.as_date_time()
     }
 
-    async fn get_forward_proxy_connection(
-        &self,
-        connection_id: u32,
-    ) -> Option<Arc<TcpGatewayProxyForwardedConnection>> {
-        let write_access = self.forward_proxy_connections.lock().await;
-        write_access.get(&connection_id).cloned()
-    }
-
-    pub async fn remove_forward_proxy_connection(
-        &self,
-        connection_id: u32,
-    ) -> Option<Arc<TcpGatewayProxyForwardedConnection>> {
-        let mut write_access = self.forward_proxy_connections.lock().await;
-        write_access.remove(&connection_id)
-    }
-
     pub async fn get_forward_proxy_connections_amount(&self) -> usize {
-        let write_access = self.forward_proxy_connections.lock().await;
+        let write_access = self.forward_proxy_handlers.lock().await;
         write_access.len()
     }
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
-        if let Some(connection) = self.remove_forward_proxy_connection(connection_id).await {
-            connection.disconnect(message.into()).await;
+        let mut write_access = self.forward_proxy_handlers.lock().await;
+        if let Some(mut connection) = write_access.remove(&connection_id) {
+            connection.set_connection_error(message.into());
         }
     }
 }

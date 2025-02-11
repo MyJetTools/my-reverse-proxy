@@ -19,7 +19,10 @@ use crate::{
     http_client_pool::HttpClientPool,
     settings::{ConnectionsSettingsModel, SettingsModel},
     ssl::CertificatesCache,
-    tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer, TcpGatewayConnection},
+    tcp_gateway::{
+        client::TcpGatewayClient, forwarded_connection::TcpGatewayProxyForwardStream,
+        server::TcpGatewayServer, TcpGatewayConnection,
+    },
 };
 
 use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
@@ -27,12 +30,27 @@ use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+lazy_static::lazy_static! {
+    pub static ref APP_CTX: Arc<AppContext> = {
+
+   let settings_model = crate::settings::SettingsModel::load().unwrap();
+
+    let app = AppContext::new(settings_model);
+
+            Arc::new(app)
+    };
+}
+
 pub struct AppContext {
     pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
+    pub http_over_gateway_clients_pool:
+        HttpClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
+    pub http2_over_gateway_clients_pool:
+        Http2ClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
@@ -59,10 +77,12 @@ pub struct AppContext {
 
     pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
+    pub http_control_port: Option<u16>,
 }
 
 impl AppContext {
     pub fn new(settings_model: SettingsModel) -> Self {
+        let http_control_port = settings_model.get_http_control_port();
         let connection_settings = settings_model.get_connections_settings();
 
         let token_secret_key = if let Some(session_key) = settings_model.get_session_key() {
@@ -121,13 +141,18 @@ impl AppContext {
             allowed_users_list: AllowedUsersList::new(),
             ssh_cert_pass_keys: CertPassKeys::new(),
             http_clients_pool: HttpClientPool::new(),
+            http_over_gateway_clients_pool: HttpClientPool::new(),
+            http_over_ssh_clients_pool: HttpClientPool::new(),
+
             https_clients_pool: HttpClientPool::new(),
             http2_clients_pool: Http2ClientPool::new(),
             https2_clients_pool: Http2ClientPool::new(),
-            http_over_ssh_clients_pool: HttpClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
+            http2_over_gateway_clients_pool: Http2ClientPool::new(),
+
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
+            http_control_port,
         }
     }
 

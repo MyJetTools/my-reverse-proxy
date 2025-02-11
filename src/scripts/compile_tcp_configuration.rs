@@ -1,7 +1,4 @@
-use std::sync::Arc;
-
 use crate::{
-    app::AppContext,
     configurations::{
         EndpointHttpHostString, ListenConfiguration, MyReverseProxyRemoteEndpoint,
         TcpEndpointHostConfig,
@@ -10,7 +7,6 @@ use crate::{
 };
 
 pub async fn compile_tcp_configuration(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     host_endpoint: EndpointHttpHostString,
     host_settings: &HostSettings,
@@ -33,7 +29,7 @@ pub async fn compile_tcp_configuration(
     };
 
     let ip_white_list_id =
-        super::get_endpoint_white_listed_ip(app, settings_model, host_settings).await?;
+        super::get_endpoint_white_listed_ip(settings_model, host_settings).await?;
 
     let remote_host =
         MyReverseProxyRemoteEndpoint::try_parse(remote_host.as_str(), settings_model).await?;

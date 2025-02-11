@@ -1,7 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
+
+use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    app::AppContext,
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
@@ -48,7 +49,6 @@ impl ProxyPassLocationConfig {
 
     pub async fn create_data_source(
         &self,
-        app: &Arc<AppContext>,
         debug: bool,
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
@@ -60,46 +60,54 @@ impl ProxyPassLocationConfig {
                     static_content_model.body.clone(),
                 ))
             }
-            ProxyPassTo::Http1(proxy_pass) => {
-                if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+            ProxyPassTo::Http1(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    return HttpProxyPassContentSource::Http1OverGateway {
+                        gateway_id: id.clone(),
+                        remote_endpoint: remote_host.clone(),
+                    }
+                }
+                MyReverseProxyRemoteEndpoint::OverSsh {
+                    ssh_credentials,
+                    remote_host,
+                } => {
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(&ssh_credentials)
                         .await
                         .unwrap();
 
                     HttpProxyPassContentSource::Http1OverSsh {
-                        app: app.clone(),
-                        over_ssh: proxy_pass.remote_host.clone(),
-                        ssh_session: ssh_session.clone(),
+                        over_ssh: OverSshConnectionSettings {
+                            ssh_credentials: ssh_credentials.clone().into(),
+                            remote_resource_string: remote_host.as_str().to_string(),
+                        },
+                        ssh_session,
                         debug,
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
                     }
-                } else {
-                    let remote_endpoint = proxy_pass.remote_host.get_remote_endpoint();
-
-                    let remote_endpoint_scheme = remote_endpoint.get_scheme();
+                }
+                MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    let remote_endpoint_scheme = remote_host.get_scheme();
 
                     if remote_endpoint_scheme.is_none() {
                         panic!(
                             "Scheme is not set for remote resource {}",
-                            remote_endpoint.as_str()
+                            remote_host.as_str()
                         );
                     }
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            HttpProxyPassContentSource::Http1 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Http1 {
+                                remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            HttpProxyPassContentSource::Https1 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Https1 {
+                                remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -107,18 +115,16 @@ impl ProxyPassLocationConfig {
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            HttpProxyPassContentSource::Http1 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Http1 {
+                                remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            HttpProxyPassContentSource::Https1 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Https1 {
+                                remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -130,48 +136,56 @@ impl ProxyPassLocationConfig {
                         }
                     }
                 }
-            }
+            },
 
-            ProxyPassTo::Http2(proxy_pass) => {
-                if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+            ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    return HttpProxyPassContentSource::Http2OverGateway {
+                        gateway_id: id.clone(),
+                        remote_endpoint: remote_host.clone(),
+                    }
+                }
+                MyReverseProxyRemoteEndpoint::OverSsh {
+                    ssh_credentials,
+                    remote_host,
+                } => {
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(ssh_credentials)
                         .await
                         .unwrap();
 
-                    HttpProxyPassContentSource::Http2OverSsh {
-                        app: app.clone(),
-                        over_ssh: proxy_pass.remote_host.clone(),
+                    return HttpProxyPassContentSource::Http2OverSsh {
+                        over_ssh: OverSshConnectionSettings {
+                            ssh_credentials: ssh_credentials.clone().into(),
+                            remote_resource_string: remote_host.as_str().to_string(),
+                        },
                         ssh_session: ssh_session.clone(),
                         debug,
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
-                    }
-                } else {
-                    let remote_endpoint = proxy_pass.remote_host.get_remote_endpoint();
-
-                    let remote_endpoint_scheme = remote_endpoint.get_scheme();
+                    };
+                }
+                MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    let remote_endpoint_scheme = remote_host.get_scheme();
 
                     if remote_endpoint_scheme.is_none() {
                         panic!(
                             "Scheme is not set for remote resource {}",
-                            remote_endpoint.as_str()
+                            remote_host.as_str()
                         );
                     }
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            HttpProxyPassContentSource::Http2 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Http2 {
+                                remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            HttpProxyPassContentSource::Https2 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Https2 {
+                                remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -179,18 +193,16 @@ impl ProxyPassLocationConfig {
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            HttpProxyPassContentSource::Http2 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Http2 {
+                                remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            HttpProxyPassContentSource::Https2 {
-                                app: app.clone(),
-                                remote_endpoint: remote_endpoint.to_owned(),
+                            return HttpProxyPassContentSource::Https2 {
+                                remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -202,7 +214,7 @@ impl ProxyPassLocationConfig {
                         }
                     }
                 }
-            }
+            },
             ProxyPassTo::FilesPath(model) => match &model.files_path {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     HttpProxyPassContentSource::PathOverGateway {
@@ -215,7 +227,7 @@ impl ProxyPassLocationConfig {
                     ssh_credentials,
                     remote_host,
                 } => {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(ssh_credentials)
                         .await
                         .unwrap();
                     let src = PathOverSshContentSource::new(

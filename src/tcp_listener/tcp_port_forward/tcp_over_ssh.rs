@@ -6,10 +6,9 @@ use rust_extensions::{
 };
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
-use crate::{app::AppContext, configurations::*, tcp_listener::AcceptedTcpConnection};
+use crate::{configurations::*, tcp_listener::AcceptedTcpConnection};
 
 pub async fn handle_connection(
-    app: Arc<AppContext>,
     mut accepted_server_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
@@ -36,7 +35,9 @@ pub async fn handle_connection(
         .connect_to_remote_host(
             remote_endpoint.get_host(),
             remote_port.unwrap(),
-            app.connection_settings.remote_connect_timeout,
+            crate::app::APP_CTX
+                .connection_settings
+                .remote_connect_timeout,
         )
         .await;
 
@@ -62,7 +63,7 @@ pub async fn handle_connection(
         remote_host,
         accepted_server_connection.tcp_stream,
         ssh_channel.unwrap(),
-        app.connection_settings.buffer_size,
+        crate::app::APP_CTX.connection_settings.buffer_size,
         configuration.debug,
     ));
 }

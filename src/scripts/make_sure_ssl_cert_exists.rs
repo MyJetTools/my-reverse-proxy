@@ -1,13 +1,9 @@
-use std::sync::Arc;
-
 use crate::{
-    app::AppContext,
     configurations::{SslCertificateId, SslCertificateIdRef},
     settings::*,
 };
 
 pub async fn make_sure_ssl_cert_exists(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     host_settings: &HostSettings,
 ) -> Result<SslCertificateId, String> {
@@ -27,7 +23,7 @@ pub async fn make_sure_ssl_cert_exists(
         return Ok(ssl_cert_id.into());
     }
 
-    let ssl_cert_is_loaded = app
+    let ssl_cert_is_loaded = crate::app::APP_CTX
         .ssl_certificates_cache
         .read(|config| config.ssl_certs.has_certificate(ssl_cert_id))
         .await;
@@ -36,7 +32,7 @@ pub async fn make_sure_ssl_cert_exists(
         return Ok(ssl_cert_id.into());
     }
 
-    super::refresh_ssl_certs_from_sources(app, settings_model, ssl_cert_id).await?;
+    super::refresh_ssl_certs_from_sources(settings_model, ssl_cert_id).await?;
 
     Ok(ssl_cert_id.into())
 }

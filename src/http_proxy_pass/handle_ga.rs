@@ -2,7 +2,6 @@ use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 
 use crate::{
-    app::AppContext,
     google_auth::{AUTHORIZED_PATH, LOGOUT_PATH},
     types::Email,
 };
@@ -18,7 +17,7 @@ pub enum GoogleAuthResult {
 impl HttpProxyPass {
     pub(crate) async fn handle_auth_with_g_auth(
         &self,
-        app: &AppContext,
+
         req: &HttpRequestBuilder,
     ) -> GoogleAuthResult {
         if self.endpoint_info.g_auth.is_none() {
@@ -27,7 +26,7 @@ impl HttpProxyPass {
 
         let g_auth_settings = self.endpoint_info.g_auth.as_ref().unwrap();
 
-        let google_auth_credentials = app
+        let google_auth_credentials = crate::app::APP_CTX
             .current_configuration
             .get(|config| config.google_auth_credentials.get(g_auth_settings))
             .await;
@@ -54,7 +53,7 @@ impl HttpProxyPass {
 
         if req.uri().path() == AUTHORIZED_PATH {
             if let Some(token) = req.get_authorization_token() {
-                if let Some(email) = crate::google_auth::token::resolve(app, token) {
+                if let Some(email) = crate::google_auth::token::resolve(token) {
                     if !google_auth_credentials.domain_is_allowed(&email) {
                         let body = Full::from(Bytes::from(
                             crate::google_auth::generate_logout_page(
@@ -119,7 +118,7 @@ impl HttpProxyPass {
                 crate::google_auth::generate_authorized_page(req, email.as_str()).into_bytes(),
             ));
 
-            let token = crate::google_auth::token::generate(app, email.as_str());
+            let token = crate::google_auth::token::generate(email.as_str());
 
             return GoogleAuthResult::Content(Ok(hyper::Response::builder()
                 .status(200)
@@ -132,7 +131,7 @@ impl HttpProxyPass {
         }
 
         if let Some(token) = req.get_authorization_token() {
-            if let Some(email) = crate::google_auth::token::resolve(app, token) {
+            if let Some(email) = crate::google_auth::token::resolve(token) {
                 if !google_auth_credentials.domain_is_allowed(&email) {
                     return GoogleAuthResult::DomainIsNotAuthorized;
                 }

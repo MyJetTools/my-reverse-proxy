@@ -3,26 +3,16 @@ use std::sync::Arc;
 use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
 
 use crate::{
-    app::AppContext,
     configurations::SslCertificateId,
     ssl::{SslCertificate, SslCertificateHolder},
 };
 
-pub struct SslCertsRefreshTimer {
-    app: Arc<AppContext>,
-}
-
-impl SslCertsRefreshTimer {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
+pub struct SslCertsRefreshTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for SslCertsRefreshTimer {
     async fn tick(&self) {
-        let ssl_certs = self
-            .app
+        let ssl_certs = crate::app::APP_CTX
             .ssl_certificates_cache
             .read(|itm| itm.ssl_certs.get_list())
             .await;
@@ -33,13 +23,12 @@ impl MyTimerTick for SslCertsRefreshTimer {
 
         let now = DateTimeAsMicroseconds::now();
         for (cert_id, ssl_cert) in ssl_certs {
-            try_renew_cert(&self.app, cert_id.into(), ssl_cert, now).await;
+            try_renew_cert(cert_id.into(), ssl_cert, now).await;
         }
     }
 }
 
 async fn try_renew_cert(
-    app: &Arc<AppContext>,
     cert_id: SslCertificateId,
     ssl_holder: Arc<SslCertificateHolder>,
     now: DateTimeAsMicroseconds,
@@ -59,7 +48,6 @@ async fn try_renew_cert(
     }
 
     let certificates_content = crate::scripts::load_file(
-        app,
         &ssl_holder.cert_src,
         crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
     )
@@ -77,7 +65,6 @@ async fn try_renew_cert(
     let certificates_content = certificates_content.unwrap();
 
     let private_key_content = crate::scripts::load_file(
-        app,
         &ssl_holder.private_key_src,
         crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
     )
@@ -106,7 +93,8 @@ async fn try_renew_cert(
 
     let ssl_cert = ssl_cert.unwrap();
 
-    app.ssl_certificates_cache
+    crate::app::APP_CTX
+        .ssl_certificates_cache
         .write(|config| {
             config.ssl_certs.add_or_update(
                 cert_id.as_ref(),

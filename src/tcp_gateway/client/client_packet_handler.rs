@@ -67,9 +67,12 @@ impl TcpGatewayClientPacketHandler {
                 connection_id,
                 error,
             } => {
-                if self.debug {
-                    println!("Got ConnectionError {}. Message: {}", connection_id, error);
-                }
+                println!(
+                    "Gateway: [{}]. Connection error with id {}. Message: {}",
+                    gateway_connection.get_gateway_id().await,
+                    connection_id,
+                    error
+                );
 
                 gateway_connection
                     .disconnect_forward_proxy_connection(connection_id, error)
@@ -93,7 +96,7 @@ impl TcpGatewayClientPacketHandler {
                 payload,
             } => {
                 gateway_connection
-                    .notify_incoming_payload(connection_id, payload.as_slice())
+                    .incoming_payload_for_proxy_connection(connection_id, payload.as_slice())
                     .await;
             }
             TcpGatewayContract::Ping => {}

@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, configurations::GoogleAuthCredentials, settings::*};
+use crate::{configurations::GoogleAuthCredentials, settings::*};
 
 pub async fn get_google_auth_credentials(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
@@ -20,7 +17,7 @@ pub async fn get_google_auth_credentials(
 
     let google_auth_id = google_auth_id.unwrap();
 
-    if app
+    if crate::app::APP_CTX
         .current_configuration
         .get(|config| {
             config
@@ -50,7 +47,8 @@ pub async fn get_google_auth_credentials(
                 whitelisted_domains: g_auth_settings.whitelisted_domains.clone(), // make domains_check
             };
 
-            app.current_configuration
+            crate::app::APP_CTX
+                .current_configuration
                 .write(|config| {
                     config
                         .google_auth_credentials

@@ -8,12 +8,11 @@ use tokio_rustls::rustls::{
 };
 
 use super::*;
-use crate::{app::AppContext, configurations::*};
+use crate::configurations::*;
 
 use super::MyClientCertVerifier;
 
 pub async fn create_config(
-    app: Arc<AppContext>,
     configuration: Arc<HttpListenPortConfiguration>,
     server_name: &str,
     endpoint_port: u16,
@@ -39,7 +38,7 @@ pub async fn create_config(
     let (ssl_cert_key, client_cert_ca) = if ssl_cert_id.as_str()
         == crate::self_signed_cert::SELF_SIGNED_CERT_NAME
     {
-        let client_ca = app
+        let client_ca = crate::app::APP_CTX
             .ssl_certificates_cache
             .read(|app_config| {
                 let client_cert_ca = if let Some(client_cert_ca_id) =
@@ -66,7 +65,8 @@ pub async fn create_config(
         let certified_key = Arc::new(crate::self_signed_cert::generate(server_name.to_string())?);
         (certified_key, client_ca)
     } else {
-        app.ssl_certificates_cache
+        crate::app::APP_CTX
+            .ssl_certificates_cache
             .read(|app_config| {
                 let ssl_cert = app_config.ssl_certs.get(ssl_cert_id);
 

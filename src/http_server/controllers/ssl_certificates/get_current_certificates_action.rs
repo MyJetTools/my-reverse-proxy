@@ -1,12 +1,8 @@
-use std::sync::Arc;
-
 use my_http_server::{
     macros::{http_route, MyHttpObjectStructure},
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
 use serde::Serialize;
-
-use crate::app::AppContext;
 
 #[http_route(
     method: "GET",
@@ -18,21 +14,13 @@ use crate::app::AppContext;
         {status_code: 200, description: "Ok response", model:"Vec<CurrentSslCertificateHttpModel>"},
     ]
 )]
-pub struct GetCurrentSslCertificatesAction {
-    app: Arc<AppContext>,
-}
+pub struct GetCurrentSslCertificatesAction;
 
-impl GetCurrentSslCertificatesAction {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
 async fn handle_request(
-    action: &GetCurrentSslCertificatesAction,
+    _action: &GetCurrentSslCertificatesAction,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    let config = action
-        .app
+    let config = crate::app::APP_CTX
         .ssl_certificates_cache
         .read(|inner| inner.ssl_certs.get_list().clone())
         .await;

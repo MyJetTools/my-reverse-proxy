@@ -1,9 +1,5 @@
-use std::sync::Arc;
-
-use crate::app::AppContext;
-
-pub async fn sync_tcp_endpoints(app: &Arc<AppContext>) {
-    let ports_to_be_listened = app
+pub async fn sync_tcp_endpoints() {
+    let ports_to_be_listened = crate::app::APP_CTX
         .current_configuration
         .get(|config| {
             let result: Vec<_> = config.listen_endpoints.keys().map(|port| *port).collect();
@@ -11,10 +7,10 @@ pub async fn sync_tcp_endpoints(app: &Arc<AppContext>) {
         })
         .await;
 
-    let mut listen_end_points = app.active_listen_ports.lock().await;
+    let mut listen_end_points = crate::app::APP_CTX.active_listen_ports.lock().await;
 
     for port_to_be_listened in &ports_to_be_listened {
-        listen_end_points.kick_it_if_needed(*port_to_be_listened, app);
+        listen_end_points.kick_it_if_needed(*port_to_be_listened);
     }
 
     let mut ports_to_stop = Vec::new();

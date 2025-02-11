@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use hyper::Uri;
 
-use crate::{app::AppContext, configurations::*};
+use crate::configurations::*;
 
 use super::{ProxyPassError, ProxyPassLocation};
 
@@ -17,11 +15,10 @@ pub struct ProxyPassLocations {
 }
 
 impl ProxyPassLocations {
-    pub async fn new(app: &Arc<AppContext>, endpoint_info: &HttpEndpointInfo) -> Self {
+    pub async fn new(endpoint_info: &HttpEndpointInfo) -> Self {
         let mut data = Vec::with_capacity(endpoint_info.locations.len());
         for location in &endpoint_info.locations {
             let location = ProxyPassLocation::new(
-                app,
                 location.clone(),
                 endpoint_info.debug,
                 location.compress,

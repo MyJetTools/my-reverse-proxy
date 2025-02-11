@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
-use crate::{app::AppContext, configurations::*};
+use crate::configurations::*;
 
 pub async fn merge_http_configuration_with_existing_port(
-    app: &Arc<AppContext>,
     http_endpoint_info: HttpEndpointInfo,
 ) -> Result<HttpListenPortConfiguration, String> {
     let port = http_endpoint_info.host_endpoint.get_port();
 
-    let configuration = app
+    let configuration = crate::app::APP_CTX
         .current_configuration
         .get(move |config| config.listen_endpoints.get(&port).cloned())
         .await;

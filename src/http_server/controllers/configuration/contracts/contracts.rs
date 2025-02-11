@@ -6,7 +6,7 @@ use std::{
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::{app::AppContext, configurations::*};
+use crate::configurations::*;
 
 use super::*;
 
@@ -22,8 +22,8 @@ pub struct CurrentConfigurationHttpModel {
 }
 
 impl CurrentConfigurationHttpModel {
-    pub async fn new(app: &AppContext) -> Self {
-        let (mut ports, ip_lists, errors) = app
+    pub async fn new() -> Self {
+        let (mut ports, ip_lists, errors) = crate::app::APP_CTX
             .current_configuration
             .get(|config| {
                 let mut ports = Vec::new();
@@ -44,7 +44,7 @@ impl CurrentConfigurationHttpModel {
         let mut users = BTreeMap::new();
 
         {
-            let users_access = app.allowed_users_list.data.read().await;
+            let users_access = crate::app::APP_CTX.allowed_users_list.data.read().await;
 
             for (id, list) in users_access.iter() {
                 users.insert(id.clone(), list.iter().cloned().collect());
@@ -55,23 +55,28 @@ impl CurrentConfigurationHttpModel {
 
         let mut remote_connections = HashMap::new();
 
-        app.http_clients_pool
+        crate::app::APP_CTX
+            .http_clients_pool
             .fill_connections_amount(&mut remote_connections)
             .await;
 
-        app.http2_clients_pool
+        crate::app::APP_CTX
+            .http2_clients_pool
             .fill_connections_amount(&mut remote_connections)
             .await;
 
-        app.https_clients_pool
+        crate::app::APP_CTX
+            .https_clients_pool
             .fill_connections_amount(&mut remote_connections)
             .await;
 
-        app.http_over_ssh_clients_pool
+        crate::app::APP_CTX
+            .http_over_ssh_clients_pool
             .fill_connections_amount(&mut remote_connections)
             .await;
 
-        app.http2_over_ssh_clients_pool
+        crate::app::APP_CTX
+            .http2_over_ssh_clients_pool
             .fill_connections_amount(&mut remote_connections)
             .await;
 
@@ -81,8 +86,8 @@ impl CurrentConfigurationHttpModel {
             ip_lists,
             errors,
             remote_connections,
-            gateway_server: GatewayServerStatus::new(app).await,
-            gateway_clients: GatewayClientStatus::new(app).await,
+            gateway_server: GatewayServerStatus::new().await,
+            gateway_clients: GatewayClientStatus::new().await,
         }
     }
 }
