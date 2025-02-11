@@ -26,7 +26,6 @@ pub struct TcpGatewayConnection {
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>,
     forward_proxy_connections: Mutex<HashMap<u32, Arc<TcpGatewayProxyForwardedConnection>>>,
-    pub aes_key: Arc<AesKey>,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -40,7 +39,7 @@ impl TcpGatewayConnection {
         aes_key: Arc<AesKey>,
         supported_connection: bool,
     ) -> Self {
-        let (inner, receiver) = TcpConnectionInner::new(write_half);
+        let (inner, receiver) = TcpConnectionInner::new(write_half, aes_key);
         let inner = Arc::new(inner);
         let result = Self {
             gateway_id: Mutex::new(Arc::new(String::new())),
@@ -49,7 +48,6 @@ impl TcpGatewayConnection {
             forward_connections: Mutex::default(),
             forward_proxy_connections: Mutex::default(),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
-            aes_key,
             support_compression: AtomicBool::new(supported_connection),
             ping_stop_watch: AtomicStopWatch::new(),
             last_ping_duration: AtomicDuration::from_micros(0),
@@ -59,6 +57,10 @@ impl TcpGatewayConnection {
         super::super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
+    }
+
+    pub fn get_aes_key(&self) -> &Arc<AesKey> {
+        &self.inner.aes_key
     }
 
     pub fn get_supported_compression(&self) -> bool {
@@ -263,7 +265,7 @@ impl TcpGatewayConnection {
 
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
         let supported_compression = self.get_supported_compression();
-        let vec = payload.to_vec(&self.aes_key, supported_compression);
+        let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
         self.inner.send_payload(vec.as_slice()).await
     }
 
@@ -298,7 +300,7 @@ impl TcpGatewayConnection {
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
         if let Some(connection) = self.remove_forward_proxy_connection(connection_id).await {
-            connection.disconnect(message, &self.aes_key).await;
+            connection.disconnect(message.into()).await;
         }
     }
 }

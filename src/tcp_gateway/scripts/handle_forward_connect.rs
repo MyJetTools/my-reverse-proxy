@@ -25,7 +25,8 @@ pub async fn handle_forward_connect(
         connection_id,
         gateway_connection.clone(),
         Arc::new(remote_host.to_string()),
-        timeout
+        timeout,
+        gateway_connection.get_aes_key().clone()
     ).await;
 
     match connection_result{

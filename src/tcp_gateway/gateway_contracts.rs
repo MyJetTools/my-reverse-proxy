@@ -242,21 +242,21 @@ impl<'s> TcpGatewayContract<'s> {
                 remote_host,
             } => {
                 result.push(CONNECT_PACKET_ID);
-                result.extend_from_slice(&connection_id.to_le_bytes());
+                push_u32(&mut result, *connection_id);
                 result.push(timeout.as_secs() as u8);
                 result.extend_from_slice(remote_host.as_bytes());
             }
 
             Self::Connected { connection_id } => {
                 result.push(CONNECT_OK_PACKET_ID);
-                result.extend_from_slice(&connection_id.to_le_bytes());
+                push_u32(&mut result, *connection_id);
             }
             Self::ConnectionError {
                 connection_id,
                 error,
             } => {
                 result.push(CONNECTION_ERROR_PACKET_ID);
-                result.extend_from_slice(&connection_id.to_le_bytes());
+                push_u32(&mut result, *connection_id);
                 result.extend_from_slice(error.as_bytes());
             }
 
@@ -265,8 +265,7 @@ impl<'s> TcpGatewayContract<'s> {
                 payload,
             } => {
                 result.push(SEND_PAYLOAD_PACKET_ID);
-                result.extend_from_slice(&connection_id.to_le_bytes());
-
+                push_u32(&mut result, *connection_id);
                 push_content(&mut result, payload.as_slice(), support_compression);
             }
             Self::BackwardPayload {
@@ -274,7 +273,7 @@ impl<'s> TcpGatewayContract<'s> {
                 payload,
             } => {
                 result.push(RECEIVE_PAYLOAD_PACKET_ID);
-                result.extend_from_slice(&connection_id.to_le_bytes());
+                push_u32(&mut result, *connection_id);
 
                 push_content(&mut result, payload.as_slice(), support_compression);
             }
@@ -336,6 +335,10 @@ fn push_content(result: &mut Vec<u8>, payload: &[u8], support_compression: bool)
     if payload.get_len() > 0 {
         result.extend_from_slice(payload.as_slice());
     }
+}
+
+fn push_u32(result: &mut Vec<u8>, value: u32) {
+    result.extend_from_slice(value.to_le_bytes().as_slice());
 }
 
 fn extract_content(payload: &[u8]) -> Result<SliceOrVec<'_, u8>, String> {

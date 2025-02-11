@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use encryption::aes::AesKey;
 use tokio::sync::Mutex;
 
 use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayContract};
@@ -87,7 +86,7 @@ impl TcpGatewayProxyForwardedConnection {
         }
     }
 
-    pub async fn disconnect(&self, error: &str, aes_key: &AesKey) -> bool {
+    pub async fn disconnect(&self, error: &str) -> bool {
         {
             let mut inner = self.inner.lock().await;
 
@@ -104,7 +103,9 @@ impl TcpGatewayProxyForwardedConnection {
         };
 
         self.connection_inner
-            .send_payload(&connection_error.to_vec(aes_key, self.support_compression))
+            .send_payload(
+                &connection_error.to_vec(&self.connection_inner.aes_key, self.support_compression),
+            )
             .await;
 
         let mut receive_buffer = self.receive_buffer.lock().await;
@@ -113,12 +114,12 @@ impl TcpGatewayProxyForwardedConnection {
         true
     }
 
-    pub async fn send_payload(&self, payload: &[u8], aes_key: &AesKey) {
+    pub async fn send_payload(&self, payload: &[u8]) {
         let send_payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
             payload: payload.into(),
         }
-        .to_vec(aes_key, self.support_compression);
+        .to_vec(&self.connection_inner.aes_key, self.support_compression);
 
         self.connection_inner.send_payload(&send_payload).await;
     }

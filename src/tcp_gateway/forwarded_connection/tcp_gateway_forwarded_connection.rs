@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use encryption::aes::AesKey;
 use tokio::{
     io::AsyncReadExt,
     net::{tcp::OwnedReadHalf, TcpStream},
@@ -17,6 +18,7 @@ impl TcpGatewayForwardConnection {
         gateway_connection: Arc<TcpGatewayConnection>,
         remote_endpoint: Arc<String>,
         timeout: Duration,
+        aes_key: Arc<AesKey>,
     ) -> Result<Self, String> {
         let connect_future = TcpStream::connect(remote_endpoint.as_str());
 
@@ -47,7 +49,7 @@ impl TcpGatewayForwardConnection {
 
         let (read, write) = tcp_stream.into_split();
 
-        let (inner, receiver) = TcpConnectionInner::new(write);
+        let (inner, receiver) = TcpConnectionInner::new(write, aes_key);
 
         let inner = Arc::new(inner);
 

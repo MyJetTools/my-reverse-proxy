@@ -1,5 +1,9 @@
-use std::{sync::atomic::AtomicBool, time::Duration};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
+use encryption::aes::AesKey;
 use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::Mutex};
 
 use super::SendBuffer;
@@ -11,16 +15,21 @@ pub struct TcpConnectionInner {
     pub buffer: Mutex<SendBuffer>,
     sender: tokio::sync::mpsc::Sender<()>,
     is_connected: AtomicBool,
+    pub aes_key: Arc<AesKey>,
 }
 
 impl TcpConnectionInner {
-    pub fn new(connection: OwnedWriteHalf) -> (Self, tokio::sync::mpsc::Receiver<()>) {
+    pub fn new(
+        connection: OwnedWriteHalf,
+        aes_key: Arc<AesKey>,
+    ) -> (Self, tokio::sync::mpsc::Receiver<()>) {
         let (sender, receiver) = tokio::sync::mpsc::channel(1024);
         let result = Self {
             connection: Mutex::new(Some(connection)),
             buffer: Mutex::new(SendBuffer::new()),
             sender,
             is_connected: AtomicBool::new(true),
+            aes_key,
         };
 
         (result, receiver)
