@@ -1,20 +1,7 @@
-use std::sync::Arc;
-
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::app::AppContext;
-
-pub async fn update_crl(
-    app: &Arc<AppContext>,
-    id: String,
-    file_source: &OverSshConnectionSettings,
-) {
-    let crl = super::load_file(
-        app,
-        &file_source,
-        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-    )
-    .await;
+pub async fn update_crl(id: String, file_source: &OverSshConnectionSettings) {
+    let crl = super::load_file(&file_source, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await;
 
     if let Err(err) = &crl {
         println!("Error loading CRL file: {}", err);
@@ -31,7 +18,8 @@ pub async fn update_crl(
         }
     };
 
-    app.ssl_certificates_cache
+    crate::app::APP_CTX
+        .ssl_certificates_cache
         .write(|config| config.client_ca.update_crl(id, crl))
         .await;
 }

@@ -1,10 +1,9 @@
-use std::sync::Arc;
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::{app::AppContext, configurations::SshConfig, settings::*};
+use crate::{configurations::SshConfig, settings::*};
 
-pub async fn update_ssh_config_list(app: &Arc<AppContext>, settings_model: &SettingsModel) {
+pub async fn update_ssh_config_list(settings_model: &SettingsModel) {
     let mut to_add = Vec::new();
 
     match settings_model.ssh.as_ref() {
@@ -52,7 +51,7 @@ pub async fn update_ssh_config_list(app: &Arc<AppContext>, settings_model: &Sett
                         }
                     };
 
-                    match super::load_file(app, &file_source,        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await {
+                    match super::load_file(&file_source,        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await {
                         Ok(private_key) => {
                             let private_key = match String::from_utf8(private_key) {
                                 Ok(private_key) => private_key,
@@ -89,5 +88,5 @@ pub async fn update_ssh_config_list(app: &Arc<AppContext>, settings_model: &Sett
         None => {}
     }
 
-    app.ssh_config_list.clear_and_init(to_add.into_iter()).await;
+    crate::app::APP_CTX.ssh_config_list.clear_and_init(to_add.into_iter()).await;
 }

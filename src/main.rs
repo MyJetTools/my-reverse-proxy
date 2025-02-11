@@ -1,7 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use app::AppContext;
-
 use timers::{CrlRefresherTimer, GcConnectionsTimer, SslCertsRefreshTimer};
 
 mod app;
@@ -37,42 +35,34 @@ pub fn to_hyper_error(e: std::convert::Infallible) -> String {
 
 #[tokio::main]
 async fn main() {
-    my_tls::install_default_crypto_providers();
-    let settings_model = settings::SettingsModel::load(".my-reverse-proxy")
-        .await
-        .unwrap();
+    crate::http_server::start();
 
-    let control_port = settings_model.get_http_control_port();
-
-    let app = AppContext::new(settings_model);
-
-    let app = Arc::new(app);
-
-    crate::http_server::start(&app, control_port);
-
-    crate::flows::load_everything_from_settings(&app).await;
+    crate::flows::load_everything_from_settings().await;
 
     let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
 
-    my_timer.register_timer("CRL Refresh", Arc::new(CrlRefresherTimer::new(app.clone())));
+    my_timer.register_timer("CRL Refresh", Arc::new(CrlRefresherTimer));
 
-    my_timer.register_timer(
-        "SSL Certs Refresh",
-        Arc::new(SslCertsRefreshTimer::new(app.clone())),
+    my_timer.register_timer("SSL Certs Refresh", Arc::new(SslCertsRefreshTimer));
+
+    my_timer.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
     );
-
-    my_timer.start(app.states.clone(), my_logger::LOGGER.clone());
 
     let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60));
 
     gc_connections_time.register_timer(
         "GcConnections",
-        Arc::new(GcConnectionsTimer::new(app.clone())),
+        Arc::new(GcConnectionsTimer::new(crate::app::APP_CTX.clone())),
     );
 
-    gc_connections_time.start(app.states.clone(), my_logger::LOGGER.clone());
+    gc_connections_time.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
+    );
 
-    app.states.wait_until_shutdown().await;
+    crate::app::APP_CTX.states.wait_until_shutdown().await;
 
     println!("Shutting down...");
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hyper::Uri;
 
-use crate::{app::AppContext, configurations::*, http_proxy_pass::HttpProxyPassContentSource};
+use crate::{configurations::*, http_proxy_pass::HttpProxyPassContentSource};
 
 pub struct ProxyPassLocation {
     pub content_source: Arc<HttpProxyPassContentSource>,
@@ -14,7 +14,6 @@ pub struct ProxyPassLocation {
 
 impl ProxyPassLocation {
     pub async fn new(
-        app: &Arc<AppContext>,
         config: Arc<ProxyPassLocationConfig>,
         debug: bool,
         compress: bool,
@@ -24,7 +23,7 @@ impl ProxyPassLocation {
         //let is_http1 = content_source.is_http1();
 
         let content_source = config
-            .create_data_source(app, debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
+            .create_data_source(debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
             .await;
         let result = Self {
             content_source: Arc::new(content_source),

@@ -27,6 +27,17 @@ use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+lazy_static::lazy_static! {
+    pub static ref APP_CTX: Arc<AppContext> = {
+
+   let settings_model = crate::settings::SettingsModel::load().unwrap();
+
+    let app = AppContext::new(settings_model);
+
+            Arc::new(app)
+    };
+}
+
 pub struct AppContext {
     pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
@@ -59,10 +70,12 @@ pub struct AppContext {
 
     pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
+    pub http_control_port: Option<u16>,
 }
 
 impl AppContext {
     pub fn new(settings_model: SettingsModel) -> Self {
+        let http_control_port = settings_model.get_http_control_port();
         let connection_settings = settings_model.get_connections_settings();
 
         let token_secret_key = if let Some(session_key) = settings_model.get_session_key() {
@@ -128,6 +141,7 @@ impl AppContext {
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
+            http_control_port,
         }
     }
 

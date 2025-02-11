@@ -3,7 +3,7 @@ use std::sync::Arc;
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
-use crate::{app::AppContext, tcp_gateway::TcpGatewayConnection};
+use crate::tcp_gateway::TcpGatewayConnection;
 
 #[derive(MyHttpObjectStructure, Serialize, Debug)]
 pub struct GatewayServerStatus {
@@ -11,8 +11,8 @@ pub struct GatewayServerStatus {
 }
 
 impl GatewayServerStatus {
-    pub async fn new(app: &AppContext) -> Option<Self> {
-        let server_gateway = app.gateway_server.as_ref()?;
+    pub async fn new() -> Option<Self> {
+        let server_gateway = crate::app::APP_CTX.gateway_server.as_ref()?;
 
         let result = Self {
             connections: GatewayConnection::new(

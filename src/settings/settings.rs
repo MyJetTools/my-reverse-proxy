@@ -6,7 +6,7 @@ use super::*;
 use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
 
-#[derive(my_settings_reader::SettingsModel, Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, HostSettings>,
     pub variables: Option<HashMap<String, String>>,
@@ -23,6 +23,42 @@ pub struct SettingsModel {
 }
 
 impl SettingsModel {
+    pub async fn load_async() -> Result<Self, String> {
+        let file_name = format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy");
+        let file_result = tokio::fs::read(file_name.as_str()).await;
+        if file_result.is_err() {
+            return Err(format!("Can not read settings from file: {}", file_name));
+        }
+
+        let file_content = file_result.unwrap();
+
+        match my_settings_reader::serde_yaml::from_slice(&file_content) {
+            Ok(result) => Ok(result),
+            Err(err) => Err(format!(
+                "Invalid yaml format of file: {}. Err: {}",
+                file_name, err
+            )),
+        }
+    }
+
+    pub fn load() -> Result<Self, String> {
+        let file_name = format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy");
+        let file_result = std::fs::read(file_name.as_str());
+        if file_result.is_err() {
+            return Err(format!("Can not read settings from file: {}", file_name));
+        }
+
+        let file_content = file_result.unwrap();
+
+        match my_settings_reader::serde_yaml::from_slice(&file_content) {
+            Ok(result) => Ok(result),
+            Err(err) => Err(format!(
+                "Invalid yaml format of file: {}. Err: {}",
+                file_name, err
+            )),
+        }
+    }
+
     pub fn get_http_control_port(&self) -> Option<u16> {
         if let Some(global_settings) = self.global_settings.as_ref() {
             return global_settings.http_control_port;

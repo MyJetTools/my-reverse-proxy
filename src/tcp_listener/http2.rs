@@ -8,7 +8,6 @@ use crate::{app::AppContext, configurations::HttpListenPortConfiguration};
 use super::{http_request_handler::http::HttpRequestHandler, AcceptedTcpConnection};
 
 pub async fn handle_connection(
-    app: Arc<AppContext>,
     accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<HttpListenPortConfiguration>,
@@ -21,22 +20,24 @@ pub async fn handle_connection(
 
     let builder = http2_builder.clone();
 
-    app.prometheus
+    crate::app::APP_CTX
+        .prometheus
         .inc_http1_server_connections(listening_addr_str.as_str());
 
-    app.metrics
+    crate::app::APP_CTX
+        .metrics
         .update(|itm| itm.connection_by_port.inc(&listening_addr.port()))
         .await;
 
     let listening_addr_str = listening_addr_str.clone();
 
-    app.prometheus
+    crate::app::APP_CTX
+        .prometheus
         .inc_http2_server_connections(listening_addr_str.as_str());
     tokio::spawn(async move {
         let io = TokioIo::new(accepted_connection.tcp_stream);
 
-        let http_request_handler =
-            HttpRequestHandler::new(app.clone(), accepted_connection.addr, configuration);
+        let http_request_handler = HttpRequestHandler::new(accepted_connection.addr, configuration);
 
         let http_request_handler = Arc::new(http_request_handler);
 
@@ -60,11 +61,13 @@ pub async fn handle_connection(
             );
         }
 
-        app.metrics
+        crate::app::APP_CTX
+            .metrics
             .update(|itm| itm.connection_by_port.dec(&listening_addr.port()))
             .await;
 
-        app.prometheus
+        crate::app::APP_CTX
+            .prometheus
             .dec_http2_server_connections(listening_addr_str.as_str());
         http_request_handler_to_dispose.dispose().await;
     });

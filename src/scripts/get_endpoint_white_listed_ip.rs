@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, settings::*};
+use crate::settings::*;
 
 pub async fn get_endpoint_white_listed_ip(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
@@ -20,7 +17,7 @@ pub async fn get_endpoint_white_listed_ip(
 
     let white_list_ip_id = white_list_ip_id.unwrap();
 
-    super::refresh_ip_list_from_settings(app, settings_model, white_list_ip_id).await?;
+    super::refresh_ip_list_from_settings(settings_model, white_list_ip_id).await?;
 
     Ok(Some(white_list_ip_id.to_string()))
 }

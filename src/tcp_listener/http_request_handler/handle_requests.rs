@@ -1,13 +1,12 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use rust_extensions::StopWatch;
 
-use crate::{app::AppContext, http_proxy_pass::HttpProxyPass};
+use crate::http_proxy_pass::HttpProxyPass;
 
 pub async fn handle_requests(
-    app: &Arc<AppContext>,
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
     socket_addr: &SocketAddr,
@@ -31,7 +30,7 @@ pub async fn handle_requests(
         None
     };
 
-    match proxy_pass.send_payload(&app, req, socket_addr).await {
+    match proxy_pass.send_payload(req, socket_addr).await {
         Ok(response) => {
             match response.as_ref() {
                 Ok(response) => {
@@ -72,7 +71,7 @@ pub async fn handle_requests(
             }
             return Ok(super::utils::generate_tech_page(
                 err,
-                app.show_error_description.get_value(),
+                crate::app::APP_CTX.show_error_description.get_value(),
             ));
         }
     }

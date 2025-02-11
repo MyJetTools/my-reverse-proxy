@@ -6,7 +6,6 @@ use my_ssh::{ssh_settings::OverSshConnectionSettings, SshAsyncChannel, SshSessio
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
-    app::AppContext,
     http_client_connectors::{HttpConnector, HttpOverSshConnector, HttpTlsConnector},
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
 };
@@ -16,14 +15,12 @@ use my_http_client::{http1::*, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
     Http1 {
-        app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         debug: bool,
         request_timeout: std::time::Duration,
         connect_timeout: std::time::Duration,
     },
     Https1 {
-        app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         domain_name: Option<String>,
         debug: bool,
@@ -31,14 +28,12 @@ pub enum HttpProxyPassContentSource {
         connect_timeout: std::time::Duration,
     },
     Http2 {
-        app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         debug: bool,
         request_timeout: std::time::Duration,
         connect_timeout: std::time::Duration,
     },
     Https2 {
-        app: Arc<AppContext>,
         remote_endpoint: RemoteEndpointOwned,
         domain_name: Option<String>,
         debug: bool,
@@ -46,7 +41,6 @@ pub enum HttpProxyPassContentSource {
         connect_timeout: std::time::Duration,
     },
     Http1OverSsh {
-        app: Arc<AppContext>,
         over_ssh: OverSshConnectionSettings,
         ssh_session: Arc<SshSession>,
         debug: bool,
@@ -54,7 +48,6 @@ pub enum HttpProxyPassContentSource {
         connect_timeout: std::time::Duration,
     },
     Http2OverSsh {
-        app: Arc<AppContext>,
         over_ssh: OverSshConnectionSettings,
         ssh_session: Arc<SshSession>,
         debug: bool,
@@ -74,18 +67,16 @@ pub enum HttpProxyPassContentSource {
 impl HttpProxyPassContentSource {
     pub async fn send_request(
         &self,
-        app: &Arc<AppContext>,
         req: hyper::Request<Full<Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
         match self {
             HttpProxyPassContentSource::Http1 {
-                app,
                 remote_endpoint,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let mut http_client = app
+                let mut http_client = crate::app::APP_CTX
                     .http_clients_pool
                     .get(remote_endpoint.as_str().into(), *connect_timeout, || {
                         HttpConnector {
@@ -117,14 +108,13 @@ impl HttpProxyPassContentSource {
             }
 
             HttpProxyPassContentSource::Https1 {
-                app,
                 remote_endpoint,
                 domain_name,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let mut http_client = app
+                let mut http_client = crate::app::APP_CTX
                     .https_clients_pool
                     .get(remote_endpoint.as_str().into(), *connect_timeout, || {
                         HttpTlsConnector {
@@ -157,13 +147,12 @@ impl HttpProxyPassContentSource {
             }
 
             HttpProxyPassContentSource::Http2 {
-                app,
                 remote_endpoint,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let http_client = app
+                let http_client = crate::app::APP_CTX
                     .http2_clients_pool
                     .get(remote_endpoint.as_str().into(), *connect_timeout, || {
                         (
@@ -171,7 +160,7 @@ impl HttpProxyPassContentSource {
                                 remote_endpoint: remote_endpoint.clone(),
                                 debug: *debug,
                             },
-                            app.prometheus.clone(),
+                            crate::app::APP_CTX.prometheus.clone(),
                         )
                     })
                     .await;
@@ -180,14 +169,13 @@ impl HttpProxyPassContentSource {
                 return Ok(HttpResponse::Response(response));
             }
             HttpProxyPassContentSource::Https2 {
-                app,
                 remote_endpoint,
                 domain_name,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let http_client = app
+                let http_client = crate::app::APP_CTX
                     .https2_clients_pool
                     .get(remote_endpoint.as_str().into(), *connect_timeout, || {
                         (
@@ -196,7 +184,7 @@ impl HttpProxyPassContentSource {
                                 debug: *debug,
                                 domain_name: domain_name.clone(),
                             },
-                            app.prometheus.clone(),
+                            crate::app::APP_CTX.prometheus.clone(),
                         )
                     })
                     .await;
@@ -205,14 +193,13 @@ impl HttpProxyPassContentSource {
                 return Ok(HttpResponse::Response(response));
             }
             HttpProxyPassContentSource::Http1OverSsh {
-                app,
                 over_ssh,
                 ssh_session,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let mut http_client = app
+                let mut http_client = crate::app::APP_CTX
                     .http_over_ssh_clients_pool
                     .get(over_ssh.to_string().into(), *connect_timeout, || {
                         HttpOverSshConnector {
@@ -245,14 +232,13 @@ impl HttpProxyPassContentSource {
                 }
             }
             HttpProxyPassContentSource::Http2OverSsh {
-                app,
                 over_ssh,
                 ssh_session,
                 debug,
                 request_timeout,
                 connect_timeout,
             } => {
-                let http_client = app
+                let http_client = crate::app::APP_CTX
                     .http2_over_ssh_clients_pool
                     .get(over_ssh.to_string().into(), *connect_timeout, || {
                         (
@@ -262,7 +248,7 @@ impl HttpProxyPassContentSource {
                                 ssh_session: ssh_session.clone(),
                                 connect_timeout: *connect_timeout,
                             },
-                            app.prometheus.clone(),
+                            crate::app::APP_CTX.prometheus.clone(),
                         )
                     })
                     .await;
@@ -287,7 +273,6 @@ impl HttpProxyPassContentSource {
                 default_file,
             } => {
                 let result = super::executors::get_file_from_gateway(
-                    app,
                     gateway_id,
                     path.as_str(),
                     default_file,

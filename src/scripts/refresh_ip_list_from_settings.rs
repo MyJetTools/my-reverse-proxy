@@ -1,9 +1,6 @@
-use std::sync::Arc;
-
-use crate::{app::AppContext, settings::SettingsModel, types::WhiteListedIpList};
+use crate::{settings::SettingsModel, types::WhiteListedIpList};
 
 pub async fn refresh_ip_list_from_settings(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     white_list_ip_id: &str,
 ) -> Result<(), String> {
@@ -23,7 +20,8 @@ pub async fn refresh_ip_list_from_settings(
 
     let white_list_ip_list = WhiteListedIpList::new(ip_list);
 
-    app.current_configuration
+    crate::app::APP_CTX
+        .current_configuration
         .write(|config| {
             config
                 .white_list_ip_list

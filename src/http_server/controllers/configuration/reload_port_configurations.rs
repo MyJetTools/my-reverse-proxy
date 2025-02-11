@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
 use my_http_server::{
     macros::{http_route, MyHttpInput},
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
-
-use crate::app::AppContext;
 
 #[http_route(
     method: "POST",
@@ -18,21 +14,14 @@ use crate::app::AppContext;
         {status_code: 200, description: "Ok response"},
     ]
 )]
-pub struct ReloadPortAction {
-    app: Arc<AppContext>,
-}
+pub struct ReloadPortAction;
 
-impl ReloadPortAction {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
 async fn handle_request(
-    action: &ReloadPortAction,
+    _action: &ReloadPortAction,
     input_data: ReloadPortHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    match crate::flows::reload_port_configurations(&action.app, input_data.port).await {
+    match crate::flows::reload_port_configurations(input_data.port).await {
         Ok(result) => HttpOutput::as_text(result).into_ok_result(true),
         Err(err) => Err(HttpFailResult::as_validation_error(err)),
     }

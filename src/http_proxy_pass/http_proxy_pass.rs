@@ -5,7 +5,7 @@ use http_body_util::combinators::BoxBody;
 use my_http_client::utils::into_full_body_response;
 use tokio::sync::Mutex;
 
-use crate::{app::AppContext, configurations::*, tcp_listener::https::ClientCertificateData};
+use crate::{configurations::*, tcp_listener::https::ClientCertificateData};
 
 use super::{
     GoogleAuthResult, HttpListenPortInfo, HttpProxyPassIdentity, HttpProxyPassInner,
@@ -20,12 +20,11 @@ pub struct HttpProxyPass {
 
 impl HttpProxyPass {
     pub async fn new(
-        app: &Arc<AppContext>,
         endpoint_info: Arc<HttpEndpointInfo>,
         listening_port_info: HttpListenPortInfo,
         client_cert: Option<Arc<ClientCertificateData>>,
     ) -> Self {
-        let locations = ProxyPassLocations::new(app, &endpoint_info).await;
+        let locations = ProxyPassLocations::new(&endpoint_info).await;
         Self {
             inner: Mutex::new(
                 HttpProxyPassInner::new(
@@ -43,7 +42,6 @@ impl HttpProxyPass {
 
     pub async fn send_payload(
         &self,
-        app: &Arc<AppContext>,
         req: hyper::Request<hyper::body::Incoming>,
         connection_addr: &SocketAddr,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
@@ -65,7 +63,7 @@ impl HttpProxyPass {
             }
 
             let inner = inner.as_mut().unwrap();
-            match self.handle_auth_with_g_auth(app, &req).await {
+            match self.handle_auth_with_g_auth(&req).await {
                 GoogleAuthResult::Passed(user) => inner.identity.ga_user = user,
                 GoogleAuthResult::Content(content) => return Ok(content),
                 GoogleAuthResult::DomainIsNotAuthorized => {
@@ -75,7 +73,7 @@ impl HttpProxyPass {
 
             if let Some(allowed_user_list_id) = self.endpoint_info.allowed_user_list_id.as_ref() {
                 if let Some(identity) = inner.identity.get_identity() {
-                    if !app
+                    if !crate::app::APP_CTX
                         .allowed_users_list
                         .is_allowed(allowed_user_list_id, identity)
                         .await
@@ -100,7 +98,7 @@ impl HttpProxyPass {
             }
 
             if let Some(white_list_ip) = proxy_pass_location.config.ip_white_list_id.as_ref() {
-                if !app
+                if !crate::app::APP_CTX
                     .current_configuration
                     .get(|itm| {
                         itm.white_list_ip_list
@@ -134,7 +132,7 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source.send_request(app, request.request).await?;
+        let result = content_source.send_request(request.request).await?;
 
         let mut response = match result {
             super::HttpResponse::Response(response) => {

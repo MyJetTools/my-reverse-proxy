@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
 use my_http_server::{
     macros::{http_route, MyHttpInput},
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
-
-use crate::app::AppContext;
 
 #[http_route(
     method: "POST",
@@ -18,21 +14,14 @@ use crate::app::AppContext;
         {status_code: 204, description: "Ok response"},
     ]
 )]
-pub struct RefreshIpListAction {
-    app: Arc<AppContext>,
-}
+pub struct RefreshIpListAction;
 
-impl RefreshIpListAction {
-    pub fn new(app: Arc<AppContext>) -> Self {
-        Self { app }
-    }
-}
 async fn handle_request(
-    action: &RefreshIpListAction,
+    _action: &RefreshIpListAction,
     input_data: ReloadWhiteListedIpListHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    match crate::flows::refresh_ip_list_from_settings(&action.app, &input_data.ip_list_id).await {
+    match crate::flows::refresh_ip_list_from_settings(&input_data.ip_list_id).await {
         Ok(_) => HttpOutput::Empty.into_ok_result(true),
         Err(err) => Err(HttpFailResult::as_validation_error(err)),
     }

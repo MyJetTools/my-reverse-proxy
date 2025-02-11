@@ -1,7 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use crate::{
-    app::AppContext,
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
@@ -48,7 +47,6 @@ impl ProxyPassLocationConfig {
 
     pub async fn create_data_source(
         &self,
-        app: &Arc<AppContext>,
         debug: bool,
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
@@ -62,12 +60,11 @@ impl ProxyPassLocationConfig {
             }
             ProxyPassTo::Http1(proxy_pass) => {
                 if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(ssh_credentials)
                         .await
                         .unwrap();
 
                     HttpProxyPassContentSource::Http1OverSsh {
-                        app: app.clone(),
                         over_ssh: proxy_pass.remote_host.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
@@ -89,7 +86,6 @@ impl ProxyPassLocationConfig {
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
                             HttpProxyPassContentSource::Http1 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -98,7 +94,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
                             HttpProxyPassContentSource::Https1 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
@@ -108,7 +103,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
                             HttpProxyPassContentSource::Http1 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -117,7 +111,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
                             HttpProxyPassContentSource::Https1 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
@@ -134,12 +127,11 @@ impl ProxyPassLocationConfig {
 
             ProxyPassTo::Http2(proxy_pass) => {
                 if let Some(ssh_credentials) = proxy_pass.remote_host.ssh_credentials.as_ref() {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(ssh_credentials)
                         .await
                         .unwrap();
 
                     HttpProxyPassContentSource::Http2OverSsh {
-                        app: app.clone(),
                         over_ssh: proxy_pass.remote_host.clone(),
                         ssh_session: ssh_session.clone(),
                         debug,
@@ -161,7 +153,6 @@ impl ProxyPassLocationConfig {
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
                             HttpProxyPassContentSource::Http2 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -170,7 +161,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
                             HttpProxyPassContentSource::Https2 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
@@ -180,7 +170,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
                             HttpProxyPassContentSource::Http2 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -189,7 +178,6 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
                             HttpProxyPassContentSource::Https2 {
-                                app: app.clone(),
                                 remote_endpoint: remote_endpoint.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
@@ -215,7 +203,7 @@ impl ProxyPassLocationConfig {
                     ssh_credentials,
                     remote_host,
                 } => {
-                    let ssh_session = crate::scripts::ssh::get_ssh_session(app, ssh_credentials)
+                    let ssh_session = crate::scripts::ssh::get_ssh_session(ssh_credentials)
                         .await
                         .unwrap();
                     let src = PathOverSshContentSource::new(

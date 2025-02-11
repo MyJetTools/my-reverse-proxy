@@ -3,14 +3,12 @@ use std::sync::Arc;
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    app::AppContext,
     configurations::SslCertificateIdRef,
     settings::{ClientCertificateCaSettings, SettingsModel},
     tcp_listener::https::ClientCertificateCa,
 };
 
 pub async fn refresh_ca_from_sources<'s>(
-    app: &Arc<AppContext>,
     settings_model: &SettingsModel,
     ca_id: SslCertificateIdRef<'s>,
 ) -> Result<(), String> {
@@ -48,12 +46,7 @@ pub async fn refresh_ca_from_sources<'s>(
         file_src.as_str()
     ))?;
 
-    let ca = super::load_file(
-        app,
-        &ca_file_src,
-        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-    )
-    .await?;
+    let ca = super::load_file(&ca_file_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
 
     let crl = if let Some(crl_file_path) = client_certificate.revocation_list.as_ref() {
         let crl_file_path = super::apply_variables(settings_model, crl_file_path)?;
@@ -63,12 +56,8 @@ pub async fn refresh_ca_from_sources<'s>(
                 crl_file_path.as_str()
             ))?;
 
-        let crl = super::load_file(
-            app,
-            &crl_file_src,
-            crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-        )
-        .await?;
+        let crl =
+            super::load_file(&crl_file_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
 
         let crl = my_tls::crl::read(crl.as_slice())?;
 
@@ -81,7 +70,8 @@ pub async fn refresh_ca_from_sources<'s>(
 
     let client_cert = Arc::new(client_cert);
 
-    app.ssl_certificates_cache
+    crate::app::APP_CTX
+        .ssl_certificates_cache
         .write(move |config| {
             config.client_ca.insert(ca_id, client_cert);
         })

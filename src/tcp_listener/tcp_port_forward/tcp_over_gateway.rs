@@ -7,14 +7,12 @@ use tokio::{
 };
 
 use crate::{
-    app::AppContext,
     configurations::TcpEndpointHostConfig,
     tcp_gateway::forwarded_connection::{ProxyConnectionReadHalf, ProxyConnectionWriteHalf},
     tcp_listener::AcceptedTcpConnection,
 };
 
 pub async fn handle_connection(
-    app: Arc<AppContext>,
     mut accepted_server_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
@@ -30,7 +28,7 @@ pub async fn handle_connection(
     }
 
     if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
-        let ip_white_list = app
+        let ip_white_list = crate::app::APP_CTX
             .current_configuration
             .get(|config| config.white_list_ip_list.get(ip_white_list_id))
             .await;
@@ -65,7 +63,7 @@ pub async fn handle_connection(
         }
     }
 
-    let gateway_connection = app
+    let gateway_connection = crate::app::APP_CTX
         .get_gateway_by_id_with_next_connection_id(&gateway_id)
         .await;
 
