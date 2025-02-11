@@ -254,6 +254,7 @@ impl TcpGatewayConnection {
         let proxy_connection = proxy_connection_access.get_mut(&connection_id);
 
         if proxy_connection.is_none() {
+            println!("Proxy connection with id {} not found", connection_id);
             return;
         }
 
