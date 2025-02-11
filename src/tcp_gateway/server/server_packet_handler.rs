@@ -72,6 +72,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
 
                 payload,
             } => {
+                println!("Getting payload {}", connection_id);
                 crate::tcp_gateway::scripts::forward_payload(
                     gateway_connection,
                     connection_id,
