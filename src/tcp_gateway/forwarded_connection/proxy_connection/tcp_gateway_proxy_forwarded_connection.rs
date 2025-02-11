@@ -86,6 +86,7 @@ impl TcpGatewayProxyForwardedConnection {
             connection_id: self.connection_id,
             gateway_connection_inner: self.connection_inner.clone(),
             support_compression: self.support_compression,
+            receive_buffer: self.receive_buffer.clone(),
         };
         (read_half, write_half)
     }

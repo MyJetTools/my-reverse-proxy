@@ -2,12 +2,15 @@ use std::sync::Arc;
 
 use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayContract};
 
+use super::ProxyReceiveBuffer;
+
 pub struct ProxyConnectionWriteHalf {
     pub gateway_id: Arc<String>,
     pub remote_host: Arc<String>,
     pub connection_id: u32,
     pub gateway_connection_inner: Arc<TcpConnectionInner>,
     pub support_compression: bool,
+    pub receive_buffer: Arc<ProxyReceiveBuffer>,
 }
 
 impl ProxyConnectionWriteHalf {
@@ -29,6 +32,9 @@ impl ProxyConnectionWriteHalf {
     }
 
     pub fn disconnect(&self) {
+        if self.receive_buffer.disconnect() {
+            return;
+        }
         let payload = TcpGatewayContract::ConnectionError {
             connection_id: self.connection_id,
             error: "disconnect",
