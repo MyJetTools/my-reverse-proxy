@@ -92,11 +92,6 @@ impl TcpGatewayClientPacketHandler {
                 connection_id,
                 payload,
             } => {
-                println!(
-                    "Backward payload: {}. Len: {}",
-                    connection_id,
-                    payload.get_len()
-                );
                 gateway_connection
                     .incoming_payload_for_proxy_connection(connection_id, payload.as_slice())
                     .await;
