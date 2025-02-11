@@ -51,7 +51,6 @@ x509-parser = { version = "*", features = ["verify"] }
 my-tls = { tag = "0.1.5", git = "https://github.com/MyJetTools/my-tls.git", features = [
     "crl",
 ] }
-pin-project = "*"
 async-trait = "*"
 hyper-tungstenite = "*"
 uuid = { version = "*", features = ["v4"] }

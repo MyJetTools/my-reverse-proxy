@@ -530,8 +530,14 @@ hosts:
     locations:
     - proxy_pass_to: gateway:gateway_name->192.168.1.1:5123
 
+  5203:
+    endpoint:
+      type: http
+    locations:
+    - proxy_pass_to: gateway:gateway_name->http://localhost:8000
+    
 ```
 
-For now TCP Traffic can be forwarded only. HTTP traffic is on development
+
 
 encryption_key - is mandatory and recommended to be 48 symbols and random as possible
