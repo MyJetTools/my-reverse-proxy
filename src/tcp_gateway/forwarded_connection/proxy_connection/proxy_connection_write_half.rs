@@ -58,11 +58,6 @@ impl tokio::io::AsyncWrite for ProxyConnectionWriteHalf {
         _cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        println!(
-            "Sending payload {} to {}",
-            buf.len(),
-            self.remote_host.as_str()
-        );
         self.send_payload(buf);
 
         std::task::Poll::Ready(Ok(buf.len()))
