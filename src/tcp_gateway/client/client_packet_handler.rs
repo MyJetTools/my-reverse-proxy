@@ -93,7 +93,7 @@ impl TcpGatewayClientPacketHandler {
                 payload,
             } => {
                 gateway_connection
-                    .notify_incoming_payload(connection_id, payload.as_slice())
+                    .incoming_payload_for_proxy_connection(connection_id, payload.as_slice())
                     .await;
             }
             TcpGatewayContract::Ping => {}
