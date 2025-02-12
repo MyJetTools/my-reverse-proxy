@@ -89,6 +89,13 @@ impl tokio::io::AsyncWrite for TcpGatewayProxyForwardStream {
         _cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        if self.receive_buffer.is_disconnected() {
+            return Poll::Ready(Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "Disconnected",
+            )));
+        }
+
         self.send_payload(buf);
 
         std::task::Poll::Ready(Ok(buf.len()))
