@@ -27,15 +27,51 @@ pub fn render_graph(items: &[usize]) -> String {
 
             let y1 = 50.0 - itm / HEIGHT * itm;
 
-            html.push_str(format!(r#"<line x1="{}" y1="50" x2="{}" y2="{y1}" style="stroke:darkgray;stroke-width:2"></line>"#, x, x+1).as_str());
+            html.push_str(format!(r#"<line x1="{x}" y1="50" x2="{x}" y2="{y1}" style="stroke:darkgray;stroke-width:2"></line>"#).as_str());
             x += 2;
         }
 
-        html.push_str(format!(r#"<text fill="white" x="1" y="13">{max}</text>"#).as_str());
-        html.push_str(format!(r#"<text fill="green" x="0" y="12">{max}</text>"#).as_str());
+        let max_str = bytes_to_string(max);
+
+        html.push_str(
+            format!(
+                r#"<text fill="white" x="1" y="13">{}</text>"#,
+                max_str.as_str()
+            )
+            .as_str(),
+        );
+        html.push_str(
+            format!(
+                r#"<text fill="green" x="0" y="12">{}</text>"#,
+                max_str.as_str()
+            )
+            .as_str(),
+        );
     }
 
     html.push_str("</svg>");
 
     html
+}
+
+fn bytes_to_string(bytes: usize) -> String {
+    if bytes < 1024 {
+        return format!("{}", bytes);
+    }
+
+    let bytes = bytes / 1024;
+
+    if bytes < 1024 {
+        return format!("{}Kb", bytes);
+    }
+
+    let bytes = bytes / 1024;
+
+    if bytes < 1024 {
+        return format!("{}Mb", bytes);
+    }
+
+    let bytes = bytes / 1024;
+
+    return format!("{}Gb", bytes);
 }
