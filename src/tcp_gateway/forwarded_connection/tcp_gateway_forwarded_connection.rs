@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
 use encryption::aes::AesKey;
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 use tokio::{
     io::AsyncReadExt,
     net::{tcp::OwnedReadHalf, TcpStream},
@@ -99,7 +98,6 @@ async fn read_loop(
                 write.disconnect().await;
                 let err = format!(
                     "ReadLoop. Can not read from connection {} with id {connection_id} using gateway [{}]  ConnectionError: {:?}",
-
                     remote_host.as_str(),
                     gateway_connection.get_gateway_id().await,
                     err
@@ -117,7 +115,8 @@ async fn read_loop(
 
         if read_size == 0 {
             let err = format!(
-                "ReadLoop. Connection {connection_id} using gateway [{}] id disconnected",
+                "ReadLoop. Connection to {} with {connection_id} using gateway [{}] id disconnected",
+                remote_host.as_str(),
                 gateway_connection.get_gateway_id().await,
             );
 
