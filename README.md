@@ -535,9 +535,11 @@ hosts:
       type: http
     locations:
     - proxy_pass_to: gateway:gateway_name->http://localhost:8000
-    
+      allow_incoming_forward_connections: true
 ```
 
 
 
 encryption_key - is mandatory and recommended to be 48 symbols and random as possible
+
+allow_incoming_forward_connections  - is optional. Without this parameters - no Forward connections are allowed through gateway from Server side to Client side.
