@@ -28,7 +28,7 @@ impl TcpGatewayClientPacketHandler {
                 timestamp,
             } => {
                 let timestamp = DateTimeAsMicroseconds::new(timestamp);
-
+                gateway_connection.set_connection_timestamp(timestamp);
                 println!(
                     "Got handshake confirm from server gateway with id {} and timestamp {}",
                     gateway_name,

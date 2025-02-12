@@ -96,10 +96,13 @@ async fn read_loop(
             Ok(read_size) => read_size,
             Err(err) => {
                 write.disconnect().await;
+
+                let dt = gateway_connection.get_connection_timestamp();
                 let err = format!(
-                    "ReadLoop. Can not read from connection {} with id {connection_id} using gateway [{}]  ConnectionError: {:?}",
+                    "ReadLoop. Can not read from connection {} with id {connection_id} using gateway [{}] created at: {} ConnectionError: {:?}",
                     remote_host.as_str(),
                     gateway_connection.get_gateway_id().await,
+                    dt.to_rfc3339(),
                     err
                 );
                 crate::tcp_gateway::scripts::send_connection_error(

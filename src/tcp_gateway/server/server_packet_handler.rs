@@ -37,6 +37,8 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     return Err(format!("Handshake packet is too old. {:?}", loading_packet));
                 }
 
+                gateway_connection.set_connection_timestamp(timestamp);
+
                 gateway_connection.set_gateway_id(gateway_name).await;
                 tcp_gateway
                     .set_gateway_connection(gateway_name, gateway_connection.clone().into())

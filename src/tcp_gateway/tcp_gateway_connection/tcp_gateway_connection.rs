@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicI64},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -32,6 +35,7 @@ pub struct TcpGatewayConnection {
     pub metrics: Mutex<GatewayConnectionMetrics>,
     pub in_per_second: PerSecondAccumulator,
     pub out_per_second: PerSecondAccumulator,
+    connection_timestamp: AtomicI64,
 }
 
 impl TcpGatewayConnection {
@@ -59,11 +63,27 @@ impl TcpGatewayConnection {
             metrics: Mutex::default(),
             in_per_second: PerSecondAccumulator::new(),
             out_per_second: PerSecondAccumulator::new(),
+            connection_timestamp: AtomicI64::new(0),
         };
 
         super::super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
+    }
+
+    pub fn set_connection_timestamp(&self, value: DateTimeAsMicroseconds) {
+        self.connection_timestamp.store(
+            value.unix_microseconds,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+
+    pub fn get_connection_timestamp(&self) -> DateTimeAsMicroseconds {
+        let result = self
+            .connection_timestamp
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        DateTimeAsMicroseconds::new(result)
     }
 
     pub async fn one_second_timer_tick(&self) {
