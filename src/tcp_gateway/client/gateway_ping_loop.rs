@@ -28,15 +28,13 @@ pub async fn gateway_ping_loop(gateway_connection: Arc<TcpGatewayConnection>, de
             break;
         }
 
-        if incoming_interval.get_full_seconds() > 3 {
-            gateway_connection.ping_stop_watch.reset_and_start();
-            let sent_ok = gateway_connection
-                .send_payload(&TcpGatewayContract::Ping)
-                .await;
+        gateway_connection.ping_stop_watch.reset_and_start();
+        let sent_ok = gateway_connection
+            .send_payload(&TcpGatewayContract::Ping)
+            .await;
 
-            if !sent_ok {
-                break;
-            }
+        if !sent_ok {
+            break;
         }
     }
 }
