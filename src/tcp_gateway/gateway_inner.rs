@@ -14,16 +14,23 @@ pub struct TcpGatewayInner {
     running: AtomicBool,
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
     pub encryption: Arc<AesKey>,
+    pub allow_incoming_forward_connections: bool,
 }
 
 impl TcpGatewayInner {
-    pub fn new(gateway_id: String, addr: String, encryption: AesKey) -> Self {
+    pub fn new(
+        gateway_id: String,
+        addr: String,
+        allow_incoming_forward_connections: bool,
+        encryption: AesKey,
+    ) -> Self {
         Self {
             gateway_id: Arc::new(gateway_id),
             addr: Arc::new(addr),
             running: AtomicBool::new(true),
             connection: Mutex::default(),
             encryption: Arc::new(encryption),
+            allow_incoming_forward_connections,
         }
     }
 

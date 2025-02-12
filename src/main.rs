@@ -35,6 +35,7 @@ pub fn to_hyper_error(e: std::convert::Infallible) -> String {
 
 #[tokio::main]
 async fn main() {
+    my_tls::install_default_crypto_providers();
     crate::http_server::start();
 
     crate::flows::load_everything_from_settings().await;

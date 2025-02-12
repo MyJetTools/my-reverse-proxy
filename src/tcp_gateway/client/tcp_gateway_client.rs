@@ -20,9 +20,15 @@ impl TcpGatewayClient {
         remote_endpoint: String,
         encryption: AesKey,
         supported_compression: bool,
+        allow_incoming_forward_connections: bool,
         debug: bool,
     ) -> Self {
-        let inner = Arc::new(TcpGatewayInner::new(id, remote_endpoint, encryption));
+        let inner = Arc::new(TcpGatewayInner::new(
+            id,
+            remote_endpoint,
+            allow_incoming_forward_connections,
+            encryption,
+        ));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
@@ -139,6 +145,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: boo
             write,
             inner.encryption.clone(),
             supported_compression,
+            inner.allow_incoming_forward_connections,
         );
 
         let gateway_connection = Arc::new(gateway_connection);

@@ -22,6 +22,7 @@ pub struct TcpGatewayConnection {
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Arc<Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>>,
     forward_proxy_handlers: Arc<Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
+    allow_incoming_forward_connection: bool,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -33,7 +34,8 @@ impl TcpGatewayConnection {
         addr: Arc<String>,
         write_half: OwnedWriteHalf,
         aes_key: Arc<AesKey>,
-        supported_connection: bool,
+        supported_compression: bool,
+        allow_incoming_forward_connection: bool,
     ) -> Self {
         let (inner, receiver) = TcpConnectionInner::new(write_half, aes_key);
         let inner = Arc::new(inner);
@@ -44,10 +46,11 @@ impl TcpGatewayConnection {
             forward_connections: Arc::new(Mutex::default()),
             forward_proxy_handlers: Arc::new(Mutex::default()),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
-            support_compression: AtomicBool::new(supported_connection),
+            support_compression: AtomicBool::new(supported_compression),
             ping_stop_watch: AtomicStopWatch::new(),
             last_ping_duration: AtomicDuration::from_micros(0),
             file_requests: FileRequests::new(),
+            allow_incoming_forward_connection,
         };
 
         super::super::tcp_connection_inner::start_write_loop(inner, receiver);
@@ -232,6 +235,10 @@ impl TcpGatewayConnection {
 
     pub fn is_gateway_connected(&self) -> bool {
         self.inner.is_connected()
+    }
+
+    pub fn is_incoming_forward_connection_allowed(&self) -> bool {
+        self.allow_incoming_forward_connection
     }
 
     pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {

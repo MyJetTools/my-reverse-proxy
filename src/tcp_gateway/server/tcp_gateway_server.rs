@@ -18,6 +18,7 @@ impl TcpGatewayServer {
         let inner = Arc::new(TcpGatewayInner::new(
             "ServerGateway".to_string(),
             listen,
+            true,
             encryption,
         ));
         let result = Self {
@@ -135,6 +136,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             tcp_gateway.addr.clone(),
             write,
             tcp_gateway.encryption.clone(),
+            true,
             false,
         );
 

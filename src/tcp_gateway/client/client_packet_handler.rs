@@ -45,6 +45,17 @@ impl TcpGatewayClientPacketHandler {
                 timeout,
                 remote_host,
             } => {
+                if !gateway_connection.is_incoming_forward_connection_allowed() {
+                    crate::tcp_gateway::scripts::send_connection_error(
+                        gateway_connection.as_ref(),
+                        connection_id,
+                        "Forward connections are disabled this way to gateway",
+                        false,
+                    )
+                    .await;
+                    return;
+                }
+
                 let remote_host = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
                 tokio::spawn(crate::tcp_gateway::scripts::handle_forward_connect(

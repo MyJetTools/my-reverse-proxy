@@ -214,6 +214,7 @@ mod tests {
                 encryption_key: String::new(),
                 debug: None,
                 compress: None,
+                allow_incoming_forward_connections: None,
             },
         );
 

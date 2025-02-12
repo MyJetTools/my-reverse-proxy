@@ -8,6 +8,7 @@ pub struct GatewayClientSettings {
     pub compress: Option<bool>,
 
     pub debug: Option<bool>,
+    pub allow_incoming_forward_connections: Option<bool>,
 }
 
 impl GatewayClientSettings {
@@ -17,6 +18,10 @@ impl GatewayClientSettings {
 
     pub fn get_supported_compression(&self) -> bool {
         self.compress.unwrap_or(false)
+    }
+
+    pub fn get_allow_incoming_forward_connections(&self) -> bool {
+        self.allow_incoming_forward_connections.unwrap_or(false)
     }
 
     pub fn get_encryption_key(&self) -> Result<AesKey, String> {
