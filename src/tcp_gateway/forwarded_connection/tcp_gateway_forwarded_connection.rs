@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use encryption::aes::AesKey;
+use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 use tokio::{
     io::AsyncReadExt,
     net::{tcp::OwnedReadHalf, TcpStream},
@@ -59,7 +60,13 @@ impl TcpGatewayForwardConnection {
 
         super::super::tcp_connection_inner::start_write_loop(inner.clone(), receiver);
 
-        tokio::spawn(read_loop(read, gateway_connection, inner, connection_id));
+        tokio::spawn(read_loop(
+            read,
+            gateway_connection,
+            inner,
+            connection_id,
+            remote_endpoint.clone(),
+        ));
         Ok(result)
     }
 
@@ -81,6 +88,7 @@ async fn read_loop(
     gateway_connection: Arc<TcpGatewayConnection>,
     write: Arc<TcpConnectionInner>,
     connection_id: u32,
+    remote_host: Arc<String>,
 ) {
     let mut buf = crate::tcp_utils::allocated_read_buffer(None);
 
@@ -90,7 +98,9 @@ async fn read_loop(
             Err(err) => {
                 write.disconnect().await;
                 let err = format!(
-                    "ReadLoop. Can not read from connection {connection_id} using gateway [{}]  ConnectionError: {:?}",
+                    "ReadLoop. Can not read from connection {} with id {connection_id} using gateway [{}]  ConnectionError: {:?}",
+
+                    remote_host.as_str(),
                     gateway_connection.get_gateway_id().await,
                     err
                 );
