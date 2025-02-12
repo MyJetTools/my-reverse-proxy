@@ -21,9 +21,6 @@ pub async fn read_loop(
         let mut payload_size = [0u8; 4];
         let read_result = read.read_exact(&mut payload_size).await;
 
-        let now = DateTimeAsMicroseconds::now();
-        gateway_connection.set_last_incoming_payload_time(now);
-
         match read_result {
             Ok(result) => {
                 if result != payload_size.len() {
@@ -60,15 +57,22 @@ pub async fn read_loop(
                 let mut dynamic_buffer =
                     crate::tcp_utils::allocated_read_buffer(Some(payload_size));
 
-                if !read_buffer(&mut read, &mut dynamic_buffer, debug).await {
+                let read_amount = read_buffer(&mut read, &mut dynamic_buffer, debug).await;
+                if read_amount == 0 {
                     break;
+                } else {
+                    gateway_connection.in_per_second.add(read_amount);
                 }
 
                 let aes_encrypted_data = AesEncryptedDataRef::new(&dynamic_buffer);
                 tcp_gateway.encryption.decrypt(&aes_encrypted_data)
             } else {
-                if !read_buffer(&mut read, &mut buf[0..payload_size], debug).await {
+                let read_amount = read_buffer(&mut read, &mut buf[0..payload_size], debug).await;
+
+                if read_amount == 0 {
                     break;
+                } else {
+                    gateway_connection.in_per_second.add(read_amount);
                 }
 
                 let aes_encrypted_data = AesEncryptedDataRef::new(&buf[0..payload_size]);
@@ -117,7 +121,7 @@ pub async fn read_loop(
     gateway_connection.disconnect_gateway().await;
 }
 
-async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -> bool {
+async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -> usize {
     let read_result = read.read_exact(buffer).await;
 
     match read_result {
@@ -127,8 +131,10 @@ async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -
                     println!("[2] TCP Gateway is disconnected");
                 }
 
-                return false;
+                return 0;
             }
+
+            return result + 4;
         }
         Err(err) => {
             if debug {
@@ -138,9 +144,7 @@ async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -
                 );
             }
 
-            return false;
+            return 0;
         }
     };
-
-    true
 }

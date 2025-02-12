@@ -7,6 +7,8 @@ pub fn build_controllers() -> ControllersMiddleware {
 
     result.register_get_action(Arc::new(super::controllers::home::IndexAction));
 
+    result.register_get_action(Arc::new(super::controllers::home::GetContentAction));
+
     //result.register_get_action(Arc::new(
     //    super::controllers::configuration::TestConfigurationAction::new(app.clone()),
     //));

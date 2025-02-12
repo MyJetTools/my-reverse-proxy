@@ -32,6 +32,8 @@ pub struct GatewayConnection {
     pub proxy_connections: usize,
     pub ping_time: String,
     pub is_incoming_forward_connection_allowed: bool,
+    pub in_history: Vec<usize>,
+    pub out_history: Vec<usize>,
 }
 
 impl GatewayConnection {
@@ -40,6 +42,14 @@ impl GatewayConnection {
 
         for connection in connections {
             let ping = connection.last_ping_duration.to_duration();
+
+            let (in_history, out_history) = {
+                let metrics_access = connection.metrics.lock().await;
+                let in_history = metrics_access.in_per_second.get_metrics();
+                let out_history = metrics_access.out_per_second.get_metrics();
+                (in_history, out_history)
+            };
+
             result.push(Self {
                 name: connection.get_gateway_id().await.to_string(),
                 forward_connections: connection.get_forward_connections_amount().await,
@@ -47,6 +57,8 @@ impl GatewayConnection {
                 ping_time: format!("{:?}", ping),
                 is_incoming_forward_connection_allowed: connection
                     .is_incoming_forward_connection_allowed(),
+                in_history,
+                out_history,
             });
         }
 

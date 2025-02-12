@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
-use timers::{CrlRefresherTimer, GcConnectionsTimer, SslCertsRefreshTimer};
+use rust_extensions::MyTimer;
+use timers::{CrlRefresherTimer, GcConnectionsTimer, MetricsTimer, SslCertsRefreshTimer};
 
 mod app;
 mod flows;
@@ -24,6 +25,7 @@ mod scripts;
 
 mod http2_client_pool;
 mod http_client_pool;
+mod metrics;
 mod ssl;
 mod tcp_gateway;
 mod timers;
@@ -40,13 +42,22 @@ async fn main() {
 
     crate::flows::load_everything_from_settings().await;
 
-    let mut my_timer = rust_extensions::MyTimer::new(Duration::from_secs(3600));
+    let mut my_timer = MyTimer::new(Duration::from_secs(3600));
 
     my_timer.register_timer("CRL Refresh", Arc::new(CrlRefresherTimer));
 
     my_timer.register_timer("SSL Certs Refresh", Arc::new(SslCertsRefreshTimer));
 
     my_timer.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
+    );
+
+    let mut metrics_timer = MyTimer::new(Duration::from_secs(1));
+
+    metrics_timer.register_timer("Metrics", Arc::new(MetricsTimer));
+
+    metrics_timer.start(
         crate::app::APP_CTX.states.clone(),
         my_logger::LOGGER.clone(),
     );

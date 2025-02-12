@@ -13,6 +13,8 @@ use rust_extensions::{
 };
 use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
 
+use crate::metrics::PerSecondAccumulator;
+
 use super::{super::forwarded_connection::*, super::*};
 
 pub struct TcpGatewayConnection {
@@ -27,6 +29,9 @@ pub struct TcpGatewayConnection {
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
     pub file_requests: FileRequests,
+    pub metrics: Mutex<GatewayConnectionMetrics>,
+    pub in_per_second: PerSecondAccumulator,
+    pub out_per_second: PerSecondAccumulator,
 }
 
 impl TcpGatewayConnection {
@@ -51,11 +56,23 @@ impl TcpGatewayConnection {
             last_ping_duration: AtomicDuration::from_micros(0),
             file_requests: FileRequests::new(),
             allow_incoming_forward_connection,
+            metrics: Mutex::default(),
+            in_per_second: PerSecondAccumulator::new(),
+            out_per_second: PerSecondAccumulator::new(),
         };
 
         super::super::tcp_connection_inner::start_write_loop(inner, receiver);
 
         result
+    }
+
+    pub async fn one_second_timer_tick(&self) {
+        let in_per_second = self.in_per_second.get_per_second();
+        let out_per_second = self.out_per_second.get_per_second();
+
+        let mut write_access = self.metrics.lock().await;
+        write_access.in_per_second.add(in_per_second);
+        write_access.out_per_second.add(out_per_second);
     }
 
     pub fn get_aes_key(&self) -> &Arc<AesKey> {
@@ -283,7 +300,13 @@ impl TcpGatewayConnection {
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
         let supported_compression = self.get_supported_compression();
         let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
-        self.inner.send_payload(vec.as_slice()).await
+
+        if self.inner.send_payload(vec.as_slice()).await {
+            self.out_per_second.add(vec.len());
+            return true;
+        }
+
+        false
     }
 
     pub fn set_last_incoming_payload_time(&self, time: DateTimeAsMicroseconds) {

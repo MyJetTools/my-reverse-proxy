@@ -47,42 +47,11 @@ impl TcpGatewayServer {
         self.inner.get_gateway_connections().await
     }
 
-    /*
-    pub async fn connect_to_forward_proxy_connection(
-        &self,
-        gateway_id: &str,
-        remote_endpoint: &str,
-        debug: bool,
-    ) -> Option<(
-        Arc<TcpGatewayProxyForwardedConnection>,
-        Arc<TcpGatewayConnection>,
-    )> {
-        let gateway_connection = self.inner.get_gateway_connection(gateway_id).await?;
-
-        let connection_id = self.get_next_connection_id();
-
-        if debug {
-            println!(
-                "Connecting to {} with id {} ",
-                remote_endpoint, connection_id
-            );
+    pub async fn timer_1s(&self) {
+        for connection in self.get_gateway_connections().await {
+            connection.one_second_timer_tick().await;
         }
-
-        let result = gateway_connection
-            .connect_to_forward_proxy_connection(
-                remote_endpoint,
-                Duration::from_secs(5),
-                connection_id,
-            )
-            .await;
-
-        if result.is_err() {
-            return None;
-        }
-
-        Some((result.unwrap(), gateway_connection))
     }
-     */
 }
 
 impl Drop for TcpGatewayServer {
