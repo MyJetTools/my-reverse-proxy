@@ -33,11 +33,13 @@ pub async fn read_loop(
                 }
             }
             Err(err) => {
-                println!(
-                    "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                    tcp_gateway.addr.as_str(),
-                    err
-                );
+                if debug {
+                    println!(
+                        "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
+                        tcp_gateway.addr.as_str(),
+                        err
+                    );
+                }
 
                 break;
             }
