@@ -31,6 +31,7 @@ pub struct GatewayConnection {
     pub forward_connections: usize,
     pub proxy_connections: usize,
     pub ping_time: String,
+    pub is_incoming_forward_connection_allowed: bool,
 }
 
 impl GatewayConnection {
@@ -44,6 +45,8 @@ impl GatewayConnection {
                 forward_connections: connection.get_forward_connections_amount().await,
                 proxy_connections: connection.get_forward_proxy_connections_amount().await,
                 ping_time: format!("{:?}", ping),
+                is_incoming_forward_connection_allowed: connection
+                    .is_incoming_forward_connection_allowed(),
             });
         }
 

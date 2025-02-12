@@ -304,10 +304,12 @@ fn render_server_gateway(html: &mut String, gateway_server_status: Option<&Gatew
     if let Some(gateway_server_status) = gateway_server_status {
         html.push_str("<h1>GATEWAY SERVER</h1>");
 
+        html.push_str("<table  class=\"table table-striped\"><thead><tr><th>Connection name</th><th>Forward connections</th><th>Proxy connections</th><th>Ping time</th></tr></thead><tbody>");
+
         for connection in gateway_server_status.connections.as_slice() {
             html.push_str(
                 format!(
-                    "<div>{} Forwarded connections: {}. Proxy connections: {}. PingTime: {}</div>",
+                    "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
                     connection.name.as_str(),
                     connection.forward_connections,
                     connection.proxy_connections,
@@ -316,6 +318,8 @@ fn render_server_gateway(html: &mut String, gateway_server_status: Option<&Gatew
                 .as_str(),
             );
         }
+
+        html.push_str("</tbody></table>");
     }
 }
 
@@ -326,13 +330,22 @@ fn render_client_gateway(html: &mut String, gateway_client_status: &[GatewayClie
 
     html.push_str("<h1>GATEWAY CLIENTS</h1>");
 
+    html.push_str("<table  class=\"table table-striped\"><thead><tr><th>Connection name</th><th>Forward connections</th><th>Proxy connections</th><th>Ping time</th></tr></thead><tbody>");
+
     for gateway_client in gateway_client_status {
         for connection in gateway_client.connections.as_slice() {
+            let forward_connections: StrOrString =
+                if connection.is_incoming_forward_connection_allowed {
+                    connection.forward_connections.to_string().into()
+                } else {
+                    "Not Allowed".into()
+                };
+
             html.push_str(
                 format!(
-                    "<div>{} Forwarded connections: {}. Proxy connections: {}. PingTime: {}</div>",
+                    "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
                     connection.name.as_str(),
-                    connection.forward_connections,
+                    forward_connections,
                     connection.proxy_connections,
                     connection.ping_time
                 )
@@ -340,4 +353,6 @@ fn render_client_gateway(html: &mut String, gateway_client_status: &[GatewayClie
             );
         }
     }
+
+    html.push_str("</tbody></table>");
 }
