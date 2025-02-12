@@ -171,7 +171,7 @@ impl TcpGatewayConnection {
             return Err(format!(
                 "Gateway {} connection to endpoint {} is lost",
                 gateway_id.as_str(),
-                self.addr.as_str()
+                host_port.as_str()
             ));
         }
 
@@ -194,16 +194,19 @@ impl TcpGatewayConnection {
                     return Ok(connection.get_connection());
                 }
                 TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
-                    return Err(err.as_str().to_string());
+                    return Err(format!(
+                        "Can not establish connection to {}. Err: {}",
+                        host_port.as_str(),
+                        err.as_str()
+                    ))
                 }
             }
         }
 
         return Err(format!(
-            "Gateway {} connection to endpoint {} is lost during awaiting forward to {} connecting result",
+            "Gateway {} connection to endpoint {} is lost",
             gateway_id,
-            self.addr.as_str(),
-            host_port.as_str()
+            host_port.as_str(),
         ));
     }
 
