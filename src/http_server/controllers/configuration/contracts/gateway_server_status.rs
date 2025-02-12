@@ -34,6 +34,7 @@ pub struct GatewayConnection {
     pub is_incoming_forward_connection_allowed: bool,
     pub in_history: Vec<usize>,
     pub out_history: Vec<usize>,
+    pub timestamp: String,
 }
 
 impl GatewayConnection {
@@ -59,6 +60,7 @@ impl GatewayConnection {
                     .is_incoming_forward_connection_allowed(),
                 in_history,
                 out_history,
+                timestamp: connection.get_connection_timestamp().to_rfc3339(),
             });
         }
 
