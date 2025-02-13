@@ -14,9 +14,9 @@ const CONNECT_OK_PACKET_ID: u8 = 4;
 const CONNECTION_ERROR_PACKET_ID: u8 = 5;
 const SEND_PAYLOAD_PACKET_ID: u8 = 6;
 const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
-const UPDATE_PING_TIME: u8 = 8;
-const GET_FILE_REQUEST: u8 = 9;
-const GET_FILE_RESPONSE: u8 = 10;
+const UPDATE_PING_TIME_PACKET_ID: u8 = 8;
+const GET_FILE_REQUEST_PACKET_ID: u8 = 9;
+const GET_FILE_RESPONSE_PACKET_ID: u8 = 10;
 
 #[derive(Debug)]
 pub enum GetFileStatus {
@@ -95,9 +95,9 @@ impl<'s> TcpGatewayContract<'s> {
                 ]);
 
                 let support_compression = payload[8] == 1;
-                let gateway_name = std::str::from_utf8(&payload[9..]).map_err(|_| {
-                    format!("Can not convert client_name to string during parsing Handshake")
-                })?;
+
+                let gateway_name = convert_to_string(&payload[9..], "HANDSHAKE")?;
+
                 return Ok(Self::Handshake {
                     gateway_name,
                     support_compression,
@@ -111,9 +111,8 @@ impl<'s> TcpGatewayContract<'s> {
 
                 let timeout = payload[4];
 
-                let remote_host = std::str::from_utf8(&payload[5..]).map_err(|_| {
-                    format!("Can not convert remote_host to string during parsing Connect.")
-                })?;
+                let remote_host = convert_to_string(&payload[5..], "CONNECT")?;
+
                 return Ok(Self::Connect {
                     connection_id,
                     remote_host,
@@ -130,9 +129,7 @@ impl<'s> TcpGatewayContract<'s> {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let error = std::str::from_utf8(&payload[4..]).map_err(|_| {
-                    format!("Can not convert remote_host to string during parsing Connect.")
-                })?;
+                let error = convert_to_string(&payload[4..], "CONNECTION")?;
                 return Ok(Self::ConnectionError {
                     connection_id,
                     error,
@@ -166,7 +163,7 @@ impl<'s> TcpGatewayContract<'s> {
                 });
             }
 
-            UPDATE_PING_TIME => {
+            UPDATE_PING_TIME_PACKET_ID => {
                 let micros = u64::from_le_bytes([
                     payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
                     payload[6], payload[7],
@@ -177,18 +174,16 @@ impl<'s> TcpGatewayContract<'s> {
                 return Ok(Self::UpdatePingTime { duration });
             }
 
-            GET_FILE_REQUEST => {
+            GET_FILE_REQUEST_PACKET_ID => {
                 let request_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let path = std::str::from_utf8(&payload[4..]).map_err(|_| {
-                    format!("Can not convert path to string during parsing GET_FILE_REQUEST.")
-                })?;
+                let path = convert_to_string(&payload[4..], "GET_FILE_REQUEST")?;
 
                 return Ok(Self::GetFileRequest { path, request_id });
             }
 
-            GET_FILE_RESPONSE => {
+            GET_FILE_RESPONSE_PACKET_ID => {
                 let request_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
@@ -280,11 +275,11 @@ impl<'s> TcpGatewayContract<'s> {
 
             Self::UpdatePingTime { duration } => {
                 let miros = duration.as_micros() as u64;
-                result.push(UPDATE_PING_TIME);
+                result.push(UPDATE_PING_TIME_PACKET_ID);
                 result.extend_from_slice(&miros.to_le_bytes());
             }
             Self::GetFileRequest { path, request_id } => {
-                result.push(GET_FILE_REQUEST);
+                result.push(GET_FILE_REQUEST_PACKET_ID);
                 result.extend_from_slice(request_id.to_le_bytes().as_slice());
                 result.extend_from_slice(path.as_bytes());
             }
@@ -293,7 +288,7 @@ impl<'s> TcpGatewayContract<'s> {
                 status,
                 content,
             } => {
-                result.push(GET_FILE_RESPONSE);
+                result.push(GET_FILE_RESPONSE_PACKET_ID);
                 result.extend_from_slice(request_id.to_le_bytes().as_slice());
                 result.push(status.as_u8());
                 push_content(&mut result, content.as_slice(), support_compression);
@@ -368,6 +363,15 @@ pub fn compress_payload_if_require<'s>(
     }
 
     (false, SliceOrVec::AsSlice(payload))
+}
+
+fn convert_to_string<'s>(payload: &'s [u8], packet_type: &str) -> Result<&'s str, String> {
+    if payload.len() == 0 {
+        return Ok("");
+    }
+
+    std::str::from_utf8(&payload[4..])
+        .map_err(|_| format!("Can not convert path to string during parsing [{packet_type}]."))
 }
 
 pub fn decompress_payload<'s>(

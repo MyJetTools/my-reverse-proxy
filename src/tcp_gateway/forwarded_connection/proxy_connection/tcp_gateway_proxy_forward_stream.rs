@@ -35,7 +35,7 @@ impl TcpGatewayProxyForwardStream {
         }
         let payload = TcpGatewayContract::ConnectionError {
             connection_id: self.connection_id,
-            error: "disconnect",
+            error: "",
         }
         .to_vec(
             &self.gateway_connection_inner.aes_key,
