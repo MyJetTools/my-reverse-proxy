@@ -107,15 +107,14 @@ impl TryInto<MyReverseProxyRemoteEndpoint> for OverSshConnectionSettings {
 }
 
 fn get_gateway_id(src: &str) -> Result<&str, String> {
-    let mut splitted = src.split(":");
-
-    let _ = splitted.next().unwrap();
-
-    let next = splitted.next();
-
-    if next.is_none() {
+    let index = src.find(":");
+    if index.is_none() {
         return Err(format!("Can not extract id from gateway prefix: '{}'", src));
     }
 
-    Ok(next.unwrap())
+    let index = index.unwrap();
+
+    let result = &src[index + 1..];
+
+    Ok(result)
 }

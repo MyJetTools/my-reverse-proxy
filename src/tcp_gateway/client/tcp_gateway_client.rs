@@ -71,18 +71,18 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: boo
     while inner.is_running() {
         inner.set_gateway_connection(&inner.gateway_id, None).await;
         println!(
-            "Connecting to remote gateway '{}' with addr '{}'",
-            inner.get_id(),
-            inner.addr.as_str()
+            "Connecting to remote gateway '{}' with host '{}'",
+            inner.get_gateway_id(),
+            inner.gateway_host.as_str()
         );
-        let tcp_stream = TcpStream::connect(inner.addr.as_str()).await;
+        let tcp_stream = TcpStream::connect(inner.gateway_host.as_str()).await;
 
         let tcp_stream = match tcp_stream {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 println!(
                     "Can not connect to remote gateway {}. Err: {:?}",
-                    inner.get_id(),
+                    inner.get_gateway_id(),
                     err
                 );
 
@@ -95,7 +95,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: boo
         let (read, write) = tcp_stream.into_split();
 
         let gateway_connection = TcpGatewayConnection::new(
-            inner.addr.clone(),
+            inner.gateway_host.clone(),
             write,
             inner.encryption.clone(),
             supported_compression,
@@ -115,10 +115,15 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: boo
             debug,
         ));
 
+        println!(
+            "Sending handshake with gateway_id: {}",
+            inner.gateway_id.as_str()
+        );
+
         let handshake_contract = TcpGatewayContract::Handshake {
             timestamp: gateway_connection.created_at.unix_microseconds,
             support_compression: supported_compression,
-            gateway_name: inner.get_id(),
+            gateway_name: inner.get_gateway_id(),
         };
 
         gateway_connection.send_payload(&handshake_contract).await;

@@ -58,19 +58,19 @@ impl Drop for TcpGatewayServer {
     fn drop(&mut self) {
         println!(
             "Stopping TCP Gateway Server at address: {}",
-            self.inner.addr
+            self.inner.gateway_host
         );
         self.inner.stop();
     }
 }
 
 async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
-    let listener = TcpListener::bind(tcp_gateway.addr.as_str()).await;
+    let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
 
     if let Err(err) = &listener {
         panic!(
             "Failed to start listening socket to serve TCP Gateway at address: {}. Err: {:?}",
-            tcp_gateway.addr, err
+            tcp_gateway.gateway_host, err
         );
     }
 
@@ -84,7 +84,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             Err(err) => {
                 println!(
                     "Failed to accept connection at {} for. Err: {:?}",
-                    tcp_gateway.addr.as_str(),
+                    tcp_gateway.gateway_host.as_str(),
                     err
                 );
                 continue;
@@ -94,7 +94,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         if debug {
             println!(
                 "Gateway {} connection {} is accepted",
-                tcp_gateway.get_id(),
+                tcp_gateway.get_gateway_id(),
                 socket_addr
             );
         }
@@ -102,7 +102,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         let (read, write) = tcp_stream.into_split();
 
         let tcp_gateway_connection = TcpGatewayConnection::new(
-            tcp_gateway.addr.clone(),
+            tcp_gateway.gateway_host.clone(),
             write,
             tcp_gateway.encryption.clone(),
             true,

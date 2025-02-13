@@ -10,7 +10,7 @@ use super::TcpGatewayConnection;
 
 pub struct TcpGatewayInner {
     pub gateway_id: Arc<String>,
-    pub addr: Arc<String>,
+    pub gateway_host: Arc<String>,
     running: AtomicBool,
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
     pub encryption: Arc<AesKey>,
@@ -26,7 +26,7 @@ impl TcpGatewayInner {
     ) -> Self {
         Self {
             gateway_id: Arc::new(gateway_id),
-            addr: Arc::new(addr),
+            gateway_host: Arc::new(addr),
             running: AtomicBool::new(true),
             connection: Mutex::default(),
             encryption: Arc::new(encryption),
@@ -61,7 +61,7 @@ impl TcpGatewayInner {
         connection_access.values().cloned().collect()
     }
 
-    pub fn get_id(&self) -> &str {
+    pub fn get_gateway_id(&self) -> &str {
         &self.gateway_id
     }
 

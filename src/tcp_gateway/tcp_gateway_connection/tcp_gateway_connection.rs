@@ -177,14 +177,23 @@ impl TcpGatewayConnection {
         connection_id: u32,
     ) -> Result<TcpGatewayProxyForwardStream, String> {
         if !self.has_handshake() {
+            println!("No Handshake");
             return Err(format!(
-                "Failed establishing connection to {}. Reason: Tcp gateway connection created at {} is not handshaked yet",
+                "Failed establishing connection to {}. Reason: Tcp gateway connection created at {} did not do handshake yet",
                 remote_endpoint.as_str(),
                 self.created_at.to_rfc3339()
             ));
         }
 
         let gateway_id = self.get_gateway_id().await;
+
+        println!(
+            "Connecting to {}->{} with timeout {:?} and id {}",
+            gateway_id,
+            remote_endpoint.as_str(),
+            timeout,
+            connection_id
+        );
 
         let connection = TcpGatewayProxyForwardConnectionHandler::new(
             connection_id,

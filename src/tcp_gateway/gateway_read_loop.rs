@@ -33,7 +33,7 @@ pub async fn read_loop(
                 if debug {
                     println!(
                         "[1] Failed to read payload size from TCP Gateway at {}. Err: {:?}",
-                        tcp_gateway.addr.as_str(),
+                        tcp_gateway.gateway_host.as_str(),
                         err
                     );
                 }
@@ -48,7 +48,7 @@ pub async fn read_loop(
             if payload_size > MAX_PAYLOAD_SIZE {
                 println!(
                     "[1] Failed to read payload size from TCP Gateway at {}. Max payload size is overflows, PayloadSize: {payload_size}",
-                    tcp_gateway.addr.as_str(),
+                    tcp_gateway.gateway_host.as_str(),
                 );
 
                 break;
@@ -97,7 +97,7 @@ pub async fn read_loop(
                 {
                     println!(
                         "Failed to handle packet from TCP Gateway at {}. Err: {}",
-                        tcp_gateway.addr.as_str(),
+                        tcp_gateway.gateway_host.as_str(),
                         err
                     );
                     break;
@@ -106,7 +106,7 @@ pub async fn read_loop(
             Err(err) => {
                 println!(
                     "Failed to parse packet from TCP Gateway at {}. Err: {:?}",
-                    tcp_gateway.addr.as_str(),
+                    tcp_gateway.gateway_host.as_str(),
                     err
                 );
                 break;

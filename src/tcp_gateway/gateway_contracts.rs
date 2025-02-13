@@ -370,7 +370,7 @@ fn convert_to_string<'s>(payload: &'s [u8], packet_type: &str) -> Result<&'s str
         return Ok("");
     }
 
-    std::str::from_utf8(&payload[4..])
+    std::str::from_utf8(payload)
         .map_err(|_| format!("Can not convert path to string during parsing [{packet_type}]."))
 }
 
