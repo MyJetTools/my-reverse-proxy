@@ -36,6 +36,7 @@ pub struct TcpGatewayConnection {
     pub in_per_second: PerSecondAccumulator,
     pub out_per_second: PerSecondAccumulator,
     connection_timestamp: AtomicI64,
+    pub created_at: DateTimeAsMicroseconds,
 }
 
 impl TcpGatewayConnection {
@@ -64,6 +65,7 @@ impl TcpGatewayConnection {
             in_per_second: PerSecondAccumulator::new(),
             out_per_second: PerSecondAccumulator::new(),
             connection_timestamp: AtomicI64::new(0),
+            created_at: DateTimeAsMicroseconds::now(),
         };
 
         super::super::tcp_connection_inner::start_write_loop(inner, receiver);
@@ -84,6 +86,14 @@ impl TcpGatewayConnection {
             .load(std::sync::atomic::Ordering::Relaxed);
 
         DateTimeAsMicroseconds::new(result)
+    }
+
+    pub fn has_handshake(&self) -> bool {
+        let result = self
+            .connection_timestamp
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        result > 0
     }
 
     pub async fn one_second_timer_tick(&self) {
@@ -166,6 +176,14 @@ impl TcpGatewayConnection {
         timeout: Duration,
         connection_id: u32,
     ) -> Result<TcpGatewayProxyForwardStream, String> {
+        if !self.has_handshake() {
+            return Err(format!(
+                "Failed establishing connection to {}. Reason: Tcp gateway connection created at {} is not handshaked yet",
+                remote_endpoint.as_str(),
+                self.created_at.to_rfc3339()
+            ));
+        }
+
         let gateway_id = self.get_gateway_id().await;
 
         let connection = TcpGatewayProxyForwardConnectionHandler::new(
@@ -239,6 +257,10 @@ impl TcpGatewayConnection {
     }
 
     pub async fn request_file(&self, path: &str) -> Result<Vec<u8>, FileRequestError> {
+        if !self.has_handshake() {
+            return Err(FileRequestError::GatewayDisconnected);
+        }
+
         let (task_completion, request_id) = self.file_requests.start_request().await;
 
         {

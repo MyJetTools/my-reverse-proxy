@@ -4,7 +4,6 @@ use std::{
 };
 
 use encryption::aes::AesKey;
-use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
 use crate::tcp_gateway::{client::*, *};
@@ -117,7 +116,7 @@ async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: boo
         ));
 
         let handshake_contract = TcpGatewayContract::Handshake {
-            timestamp: DateTimeAsMicroseconds::now().unix_microseconds,
+            timestamp: gateway_connection.created_at.unix_microseconds,
             support_compression: supported_compression,
             gateway_name: inner.get_id(),
         };
