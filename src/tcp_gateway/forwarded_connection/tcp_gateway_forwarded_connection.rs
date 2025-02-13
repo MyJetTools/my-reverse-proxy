@@ -20,15 +20,22 @@ impl TcpGatewayForwardConnection {
         timeout: Duration,
         aes_key: Arc<AesKey>,
     ) -> Result<Self, String> {
+        println!(
+            "Gateway [{}]. Establishing Forwarded connection to endpoint {} with id {}",
+            gateway_connection.get_gateway_id().await,
+            remote_endpoint.as_str(),
+            connection_id
+        );
         let connect_future = TcpStream::connect(remote_endpoint.as_str());
 
         let result = tokio::time::timeout(timeout, connect_future).await;
 
         if result.is_err() {
             return Err(format!(
-                "Can not connect to {} using gateway [{}]. Err: Timeout {:?}",
-                remote_endpoint.as_str(),
+                "Gateway [{}]. Can not connect to {} with id {}. Err: Timeout {:?}",
                 gateway_connection.get_gateway_id().await,
+                remote_endpoint.as_str(),
+                connection_id,
                 timeout
             ));
         }
@@ -39,9 +46,10 @@ impl TcpGatewayForwardConnection {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 return Err(format!(
-                    "Can not connect to {} using gateway [{}]. Err: {:?}",
-                    remote_endpoint.as_str(),
+                    "Gateway [{}]. Can not connect to {} with id {}. Err: {:?}",
                     gateway_connection.get_gateway_id().await,
+                    remote_endpoint.as_str(),
+                    connection_id,
                     err
                 ));
             }
