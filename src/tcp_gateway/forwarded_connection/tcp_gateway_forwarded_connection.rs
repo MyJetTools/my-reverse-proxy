@@ -21,7 +21,7 @@ impl TcpGatewayForwardConnection {
         aes_key: Arc<AesKey>,
     ) -> Result<Self, String> {
         println!(
-            "Gateway [{}]. Establishing Forwarded connection to endpoint {} with id {}",
+            "Gateway:[{}]. Establishing Forwarded connection to endpoint {} with id {}",
             gateway_connection.get_gateway_id().await,
             remote_endpoint.as_str(),
             connection_id
@@ -32,7 +32,7 @@ impl TcpGatewayForwardConnection {
 
         if result.is_err() {
             return Err(format!(
-                "Gateway [{}]. Can not connect to {} with id {}. Err: Timeout {:?}",
+                "Gateway:[{}]. Can not connect to {} with id {}. Err: Timeout {:?}",
                 gateway_connection.get_gateway_id().await,
                 remote_endpoint.as_str(),
                 connection_id,
@@ -46,7 +46,7 @@ impl TcpGatewayForwardConnection {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 return Err(format!(
-                    "Gateway [{}]. Can not connect to {} with id {}. Err: {:?}",
+                    "Gateway:[{}]. Can not connect to {} with id {}. Err: {:?}",
                     gateway_connection.get_gateway_id().await,
                     remote_endpoint.as_str(),
                     connection_id,
@@ -107,9 +107,9 @@ async fn read_loop(
 
                 let dt = gateway_connection.get_connection_timestamp();
                 let err = format!(
-                    "ReadLoop. Can not read from connection {} with id {connection_id} using gateway [{}] created at: {} ConnectionError: {:?}",
-                    remote_host.as_str(),
+                    "Gateway:[{}]. ReadLoop. Can not read from connection {} with id {connection_id} created at: {} ConnectionError: {:?}",
                     gateway_connection.get_gateway_id().await,
+                    remote_host.as_str(),
                     dt.to_rfc3339(),
                     err
                 );
@@ -126,9 +126,9 @@ async fn read_loop(
 
         if read_size == 0 {
             let err = format!(
-                "ReadLoop. Connection to {} with {connection_id} using gateway [{}] id disconnected",
-                remote_host.as_str(),
+                "Gateway:[{}]. ReadLoop. Connection to {} with id:{connection_id} is disconnected",
                 gateway_connection.get_gateway_id().await,
+                remote_host.as_str(),
             );
 
             crate::tcp_gateway::scripts::send_connection_error(

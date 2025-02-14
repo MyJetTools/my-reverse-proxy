@@ -8,7 +8,7 @@ use super::{ProxyReceiveBuffer, TcpGatewayProxyForwardStream};
 
 #[derive(Clone)]
 pub enum TcpGatewayProxyForwardedConnectionStatus {
-    AwaitingConnection,
+    AcknowledgingConnection,
     Connected,
     Disconnected(StrOrString<'static>),
 }
@@ -16,7 +16,7 @@ pub enum TcpGatewayProxyForwardedConnectionStatus {
 impl TcpGatewayProxyForwardedConnectionStatus {
     pub fn is_awaiting_connection(&self) -> bool {
         match self {
-            Self::AwaitingConnection => true,
+            Self::AcknowledgingConnection => true,
             _ => false,
         }
     }
@@ -38,7 +38,7 @@ impl TcpGatewayProxyForwardConnectionHandler {
         support_compression: bool,
     ) -> Self {
         Self {
-            status: TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection,
+            status: TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection,
             connection_id,
             connection_inner,
             receive_buffer: ProxyReceiveBuffer::new().into(),

@@ -206,55 +206,71 @@ impl TcpGatewayConnection {
             write_access.insert(connection_id, connection);
         }
 
-        let host_port = remote_endpoint.get_host_port();
+        let remote_host_port = remote_endpoint.get_host_port();
 
         let connect_contract = TcpGatewayContract::Connect {
             connection_id,
             timeout,
-            remote_host: host_port.as_str(),
+            remote_host: remote_host_port.as_str(),
         };
 
         if !self.send_payload(&connect_contract).await {
             return Err(format!(
-                "Gateway {} connection to endpoint {} is lost",
-                gateway_id.as_str(),
-                host_port.as_str()
+                "Connection to endpoint {} is lost",
+                remote_host_port.as_str()
             ));
         }
 
-        while self.is_gateway_connected() {
+        match self
+            .ack_connection(remote_host_port.as_str(), connection_id)
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                let mut connections_access = self.forward_proxy_handlers.lock().await;
+                connections_access.remove(&connection_id);
+                Err(err)
+            }
+        }
+    }
+
+    async fn ack_connection(
+        &self,
+        remote_host_port: &str,
+        connection_id: u32,
+    ) -> Result<TcpGatewayProxyForwardStream, String> {
+        loop {
+            if !self.is_gateway_connected() {
+                return Err(format!(
+                    "Cannot connect to {}. Gateway connection is lost",
+                    remote_host_port
+                ));
+            }
+
             tokio::time::sleep(Duration::from_millis(100)).await;
 
             let connections_access = self.forward_proxy_handlers.lock().await;
-
             let connection = connections_access.get(&connection_id);
 
             if connection.is_none() {
-                return Err("Connection closed".to_string());
+                return Err(format!(
+                    "Connection to {} is somehow closed",
+                    remote_host_port
+                ));
             }
 
             let connection = connection.unwrap();
 
             match connection.get_status() {
-                TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection => {}
+                TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection => {}
                 TcpGatewayProxyForwardedConnectionStatus::Connected => {
                     return Ok(connection.get_connection());
                 }
                 TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
-                    return Err(format!(
-                        "Can not establish connection to {}. Err: {}",
-                        host_port.as_str(),
-                        err.as_str()
-                    ))
+                    return Err(err.to_string());
                 }
             }
         }
-
-        return Err(format!(
-            "Gateway {} connection to endpoint {} is lost",
-            gateway_id,
-            host_port.as_str(),
-        ));
     }
 
     pub async fn notify_forward_proxy_connection_accepted(&self, connection_id: u32) {
@@ -328,7 +344,11 @@ impl TcpGatewayConnection {
         let proxy_connection = proxy_connection_access.get_mut(&connection_id);
 
         if proxy_connection.is_none() {
-            println!("Proxy connection with id {} not found", connection_id);
+            let gateway_id = self.get_gateway_id().await;
+            println!(
+                "Gateway:[{}]. Proxy connection with id {} not found",
+                gateway_id, connection_id
+            );
             return;
         }
 
@@ -337,16 +357,16 @@ impl TcpGatewayConnection {
         let status = proxy_connection.get_status();
 
         match status {
-            TcpGatewayProxyForwardedConnectionStatus::AwaitingConnection => {
+            TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection => {
                 let gateway_id = self.get_gateway_id().await;
-                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is not connected yet", payload.len(), connection_id, gateway_id.as_str());
+                println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is not acknowledged yet", gateway_id.as_str(), payload.len(), connection_id);
             }
             TcpGatewayProxyForwardedConnectionStatus::Connected => {
                 proxy_connection.enqueue_receive_payload(payload);
             }
             TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
                 let gateway_id = self.get_gateway_id().await;
-                println!("Can not accept payload with size: {} to connection {}  through gateway {}. Connection is disconnected with err: {}", payload.len(), connection_id, gateway_id.as_str(), err);
+                println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is disconnected with err: {}", gateway_id.as_str(), payload.len(), connection_id,  err);
             }
         }
     }
