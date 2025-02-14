@@ -10,9 +10,14 @@ pub async fn forward_payload(
         .await
     {
         if !forward_connection.send_payload(payload).await {
-            gateway_connection
-                .disconnect_forward_connection(connection_id)
-                .await;
+            super::send_connection_error(
+                gateway_connection,
+                connection_id,
+                "Disconnected",
+                false,
+                false,
+            )
+            .await;
         }
     }
 }

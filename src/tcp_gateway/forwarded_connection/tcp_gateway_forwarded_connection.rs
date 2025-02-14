@@ -32,8 +32,7 @@ impl TcpGatewayForwardConnection {
 
         if result.is_err() {
             return Err(format!(
-                "Gateway:[{}]. Can not connect to {} with id {}. Err: Timeout {:?}",
-                gateway_connection.get_gateway_id().await,
+                "Can not connect to {} with id {}. Err: Timeout {:?}",
                 remote_endpoint.as_str(),
                 connection_id,
                 timeout
@@ -46,8 +45,7 @@ impl TcpGatewayForwardConnection {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 return Err(format!(
-                    "Gateway:[{}]. Can not connect to {} with id {}. Err: {:?}",
-                    gateway_connection.get_gateway_id().await,
+                    "Can not connect to {} with id {}. Err: {:?}",
                     remote_endpoint.as_str(),
                     connection_id,
                     err
@@ -117,6 +115,7 @@ async fn read_loop(
                     gateway_connection.as_ref(),
                     connection_id,
                     err.as_str(),
+                    false,
                     true,
                 )
                 .await;
@@ -126,8 +125,7 @@ async fn read_loop(
 
         if read_size == 0 {
             let err = format!(
-                "Gateway:[{}]. ReadLoop. Connection to {} with id:{connection_id} is disconnected",
-                gateway_connection.get_gateway_id().await,
+                "ReadLoop. Connection to {} with id:{connection_id} is disconnected",
                 remote_host.as_str(),
             );
 
@@ -135,6 +133,7 @@ async fn read_loop(
                 gateway_connection.as_ref(),
                 connection_id,
                 err.as_str(),
+                false,
                 false,
             )
             .await;

@@ -50,6 +50,7 @@ impl TcpGatewayClientPacketHandler {
                         gateway_connection.as_ref(),
                         connection_id,
                         "Forward connections are disabled this way to gateway",
+                        true,
                         false,
                     )
                     .await;

@@ -17,7 +17,7 @@ pub async fn handle_forward_connect(
         let err = 
         format!("Attempt to establish client forward connection is fail. ConnectionId {} is already has a connection", connection_id);
 
-        crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
+        crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true, true).await;
         return;
     }
 
@@ -40,7 +40,7 @@ pub async fn handle_forward_connect(
   
         },
         Err(err) => {
-            crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true).await;
+            crate::tcp_gateway::scripts::send_connection_error(gateway_connection.as_ref(), connection_id, err.as_str(), true,true).await;
         },
     }
 }

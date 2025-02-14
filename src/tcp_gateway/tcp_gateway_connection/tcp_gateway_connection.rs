@@ -164,12 +164,6 @@ impl TcpGatewayConnection {
         write_access.remove(&connection_id)
     }
 
-    pub async fn disconnect_forward_connection(&self, connection_id: u32) {
-        if let Some(forward_connection) = self.remove_forward_connection(connection_id).await {
-            forward_connection.disconnect().await;
-        }
-    }
-
     pub async fn connect_to_forward_proxy_connection(
         &self,
         remote_endpoint: Arc<RemoteEndpointOwned>,
