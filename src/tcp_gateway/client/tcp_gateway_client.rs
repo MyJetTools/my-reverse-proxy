@@ -20,6 +20,7 @@ impl TcpGatewayClient {
         encryption: AesKey,
         supported_compression: bool,
         allow_incoming_forward_connections: bool,
+        connect_timeout: Duration,
         debug: bool,
     ) -> Self {
         let inner = Arc::new(TcpGatewayInner::new(
@@ -33,7 +34,12 @@ impl TcpGatewayClient {
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner.clone(), supported_compression, debug));
+        tokio::spawn(connection_loop(
+            inner.clone(),
+            supported_compression,
+            connect_timeout,
+            debug,
+        ));
 
         result
     }
@@ -67,17 +73,34 @@ impl Drop for TcpGatewayClient {
     }
 }
 
-async fn connection_loop(inner: Arc<TcpGatewayInner>, supported_compression: bool, debug: bool) {
+async fn connection_loop(
+    inner: Arc<TcpGatewayInner>,
+    supported_compression: bool,
+    connect_timeout: Duration,
+    debug: bool,
+) {
     while inner.is_running() {
         inner.set_gateway_connection(&inner.gateway_id, None).await;
         println!(
-            "Gateway:[{}] Connecting to remote gateway with host '{}'",
+            "Gateway:[{}] Connecting to remote gateway with host '{}' and with timeout: {:?}",
             inner.get_gateway_id(),
-            inner.gateway_host.as_str()
+            inner.gateway_host.as_str(),
+            connect_timeout
         );
-        let tcp_stream = TcpStream::connect(inner.gateway_host.as_str()).await;
+        let connect_feature = TcpStream::connect(inner.gateway_host.as_str());
 
-        let tcp_stream = match tcp_stream {
+        let connect_timeout = tokio::time::timeout(connect_timeout, connect_feature).await;
+
+        if connect_timeout.is_err() {
+            println!(
+                "Gateway:[{}] Can not connect to Gateway Server with host '{}'. Timeout: {:?}",
+                inner.get_gateway_id(),
+                inner.gateway_host.as_str(),
+                connect_timeout
+            );
+        }
+
+        let tcp_stream = match connect_timeout.unwrap() {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 println!(

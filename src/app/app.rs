@@ -114,6 +114,7 @@ impl AppContext {
                     encryption,
                     client_settings.get_supported_compression(),
                     client_settings.get_allow_incoming_forward_connections(),
+                    client_settings.get_connect_timeout(),
                     client_settings.is_debug(),
                 );
 

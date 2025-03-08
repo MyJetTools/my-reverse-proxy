@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use encryption::aes::AesKey;
 use serde::*;
 
@@ -9,6 +11,7 @@ pub struct GatewayClientSettings {
 
     pub debug: Option<bool>,
     pub allow_incoming_forward_connections: Option<bool>,
+    pub connect_timeout_seconds: Option<u64>,
 }
 
 impl GatewayClientSettings {
@@ -22,6 +25,10 @@ impl GatewayClientSettings {
 
     pub fn get_allow_incoming_forward_connections(&self) -> bool {
         self.allow_incoming_forward_connections.unwrap_or(false)
+    }
+
+    pub fn get_connect_timeout(&self) -> Duration {
+        Duration::from_secs(self.connect_timeout_seconds.unwrap_or(5))
     }
 
     pub fn get_encryption_key(&self) -> Result<AesKey, String> {

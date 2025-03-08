@@ -215,6 +215,7 @@ mod tests {
                 debug: None,
                 compress: None,
                 allow_incoming_forward_connections: None,
+                connect_timeout_seconds: None,
             },
         );
 
