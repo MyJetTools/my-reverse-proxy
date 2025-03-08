@@ -516,9 +516,11 @@ gateway_clients:
   gateway_name:
     remote_host: 10.0.0.0:30000
     encryption_key: 12345678901234567890
+    connect_timeout_seconds: 5
     compress: true 
 ```
 
+* connect_timeout_seconds - is optional. By default - connect to gateway timeout is 5 seconds;
 * compress parameter is optional. Omitting the parameter leads to the compress: false value
 
 To Setup location through gateway
