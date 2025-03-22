@@ -545,3 +545,15 @@ hosts:
 encryption_key - is mandatory and recommended to be 48 symbols and random as possible
 
 allow_incoming_forward_connections  - is optional. Without this parameters - no Forward connections are allowed through gateway from Server side to Client side.
+
+
+
+## Include other files
+
+You can split config files into several config files and include them to .my_reverse_proxy file
+
+```yaml
+include:
+- ~/other_config_file.yaml
+- ~/other_config_file2.yaml
+```
