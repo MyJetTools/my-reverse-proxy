@@ -1,7 +1,9 @@
-use crate::{configurations::GoogleAuthCredentials, settings::*};
+use crate::{
+    configurations::GoogleAuthCredentials, settings::*, settings_compiled::SettingsCompiled,
+};
 
 pub async fn get_google_auth_credentials(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
     let google_auth_id = super::get_from_host_or_templates(
@@ -29,17 +31,7 @@ pub async fn get_google_auth_credentials(
         return Ok(Some(google_auth_id.to_string()));
     }
 
-    let g_auth_list = match settings_model.g_auth.as_ref() {
-        Some(g_auth_list) => g_auth_list,
-        None => {
-            return Err(format!(
-                "Google Auth Credentials {} not found",
-                google_auth_id
-            ));
-        }
-    };
-
-    match g_auth_list.get(google_auth_id) {
+    match settings_model.g_auth.get(google_auth_id) {
         Some(g_auth_settings) => {
             let google_auth_credentials = GoogleAuthCredentials {
                 client_id: g_auth_settings.client_id.to_string(),

@@ -1,7 +1,7 @@
-use crate::settings::*;
+use crate::{settings::*, settings_compiled::SettingsCompiled};
 
 pub async fn get_endpoint_white_listed_ip(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_settings: &HostSettings,
 ) -> Result<Option<String>, String> {
     let white_list_ip_id = super::get_from_host_or_templates(

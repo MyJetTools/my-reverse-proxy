@@ -1,22 +1,12 @@
 use std::collections::HashSet;
 
-use crate::settings::SettingsModel;
+use crate::settings_compiled::SettingsCompiled;
 
 pub async fn refresh_users_list_from_settings(
-    settings_model: &SettingsModel,
+    settings: &SettingsCompiled,
     users_list_id: &str,
 ) -> Result<(), String> {
-    let allowed_users_dict = if let Some(allowed_users_dict) = settings_model.allowed_users.as_ref()
-    {
-        allowed_users_dict
-    } else {
-        return Err(format!(
-            "User list with id '{}' is not found",
-            users_list_id
-        ));
-    };
-
-    let user_list = if let Some(user_list) = allowed_users_dict.get(users_list_id) {
+    let user_list = if let Some(user_list) = settings.allowed_users.get(users_list_id) {
         user_list
     } else {
         return Err(format!("User list with id {} is not found", users_list_id));
@@ -25,7 +15,7 @@ pub async fn refresh_users_list_from_settings(
     let mut users = HashSet::new();
 
     for user in user_list {
-        users.insert(super::apply_variables(settings_model, user)?.to_string());
+        users.insert(user.to_string());
     }
 
     crate::app::APP_CTX

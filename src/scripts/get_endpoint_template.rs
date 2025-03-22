@@ -1,7 +1,7 @@
-use crate::settings::*;
+use crate::{settings::*, settings_compiled::SettingsCompiled};
 
 pub fn get_endpoint_template<'s>(
-    settings_model: &'s SettingsModel,
+    settings_model: &'s SettingsCompiled,
     host_settings: &'s HostSettings,
 ) -> Result<Option<&'s EndpointTemplateSettings>, String> {
     let template_id = match host_settings.endpoint.template_id.as_ref() {
@@ -11,14 +11,7 @@ pub fn get_endpoint_template<'s>(
         }
     };
 
-    let endpoint_templates = match settings_model.endpoint_templates.as_ref() {
-        Some(endpoint_templates) => endpoint_templates,
-        None => {
-            return Err(format!("Template with id '{}' not found", template_id,));
-        }
-    };
-
-    match endpoint_templates.get(template_id) {
+    match settings_model.endpoint_templates.get(template_id) {
         Some(endpoint_template_settings) => Ok(Some(endpoint_template_settings)),
         None => {
             return Err(format!("Template with id '{}' not found", template_id,));

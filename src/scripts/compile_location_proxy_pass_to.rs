@@ -3,39 +3,37 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 use crate::{
     configurations::{MyReverseProxyRemoteEndpoint, ProxyPassLocationConfig},
     settings::*,
+    settings_compiled::SettingsCompiled,
 };
 
 pub async fn compile_location_proxy_pass_to(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     location_settings: &LocationSettings,
 ) -> Result<ProxyPassLocationConfig, String> {
-    let path = match location_settings.path.as_ref() {
-        Some(path) => super::apply_variables(settings_model, path)?,
-        None => "/".into(),
-    };
-
-    let proxy_pass_to = match location_settings.proxy_pass_to.as_ref() {
-        Some(proxy_pass_to) => {
-            let proxy_pass_to = super::apply_variables(settings_model, proxy_pass_to)?;
-            Some(proxy_pass_to)
-        }
-        None => None,
-    };
+    let path = location_settings
+        .path
+        .as_ref()
+        .map(|itm| itm.as_str())
+        .unwrap_or("/")
+        .to_string();
 
     let location_type = match location_settings.get_location_type()? {
         Some(location_type) => location_type,
-        None => {
-            LocationType::detect_from_proxy_pass_to(proxy_pass_to.as_ref().map(|itm| itm.as_str()))?
-        }
+        None => LocationType::detect_from_proxy_pass_to(
+            location_settings
+                .proxy_pass_to
+                .as_ref()
+                .map(|itm| itm.as_str()),
+        )?,
     };
 
     let proxy_pass_to = match location_type {
         LocationType::Http => {
-            if proxy_pass_to.is_none() {
+            if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for http location type".to_string());
             }
 
-            let proxy_pass_to = proxy_pass_to.unwrap();
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
             ProxyPassTo::Http1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
@@ -48,11 +46,11 @@ pub async fn compile_location_proxy_pass_to(
             })
         }
         LocationType::Http2 => {
-            if proxy_pass_to.is_none() {
+            if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for http2 location type".to_string());
             }
 
-            let proxy_pass_to = proxy_pass_to.unwrap();
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
             ProxyPassTo::Http2(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
@@ -65,11 +63,11 @@ pub async fn compile_location_proxy_pass_to(
             })
         }
         LocationType::Https1 => {
-            if proxy_pass_to.is_none() {
+            if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for http2 location type".to_string());
             }
 
-            let proxy_pass_to = proxy_pass_to.unwrap();
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
             ProxyPassTo::Http1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
@@ -82,11 +80,11 @@ pub async fn compile_location_proxy_pass_to(
             })
         }
         LocationType::Https2 => {
-            if proxy_pass_to.is_none() {
+            if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for http2 location type".to_string());
             }
 
-            let proxy_pass_to = proxy_pass_to.unwrap();
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
             ProxyPassTo::Http2(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
@@ -99,11 +97,11 @@ pub async fn compile_location_proxy_pass_to(
             })
         }
         LocationType::Files => {
-            if proxy_pass_to.is_none() {
+            if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for files location type".to_string());
             }
 
-            let proxy_pass_to = proxy_pass_to.unwrap();
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
             let files_path =
                 MyReverseProxyRemoteEndpoint::try_parse(proxy_pass_to.as_str(), settings_model)
                     .await?;
@@ -118,7 +116,7 @@ pub async fn compile_location_proxy_pass_to(
         LocationType::StaticContent => {
             let body = location_settings.body.clone().unwrap_or_default();
 
-            let body = get_static_content_body(settings_model, body).await?;
+            let body = get_static_content_body(body).await?;
             let model: StaticContentModel = StaticContentModel {
                 status_code: location_settings.status_code.unwrap_or(200),
                 content_type: location_settings.content_type.clone(),
@@ -131,7 +129,7 @@ pub async fn compile_location_proxy_pass_to(
 
     let result = ProxyPassLocationConfig::new(
         crate::app::APP_CTX.get_next_id(),
-        path.to_string(),
+        path,
         location_settings.modify_http_headers.clone(),
         location_settings.whitelisted_ip.clone(),
         proxy_pass_to,
@@ -143,10 +141,7 @@ pub async fn compile_location_proxy_pass_to(
     Ok(result)
 }
 
-async fn get_static_content_body(
-    settings_model: &SettingsModel,
-    body: String,
-) -> Result<Vec<u8>, String> {
+async fn get_static_content_body(body: String) -> Result<Vec<u8>, String> {
     if body.is_empty() {
         return Ok(Vec::new());
     }
@@ -160,8 +155,7 @@ async fn get_static_content_body(
                 return Ok(body.into_bytes());
             }
 
-            let remote_resource = super::apply_variables(settings_model, body.as_str())?;
-            match OverSshConnectionSettings::try_parse(remote_resource.as_str()) {
+            match OverSshConnectionSettings::try_parse(body.as_str()) {
                 Some(data_source) => {
                     super::load_file(&data_source, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
                         .await

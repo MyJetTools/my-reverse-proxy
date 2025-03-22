@@ -17,6 +17,7 @@ mod http_proxy_pass;
 mod http_server;
 mod self_signed_cert;
 mod settings;
+mod settings_compiled;
 mod tcp_listener;
 mod tcp_utils;
 //mod ssh_to_http_port_forward;
@@ -64,10 +65,7 @@ async fn main() {
 
     let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60));
 
-    gc_connections_time.register_timer(
-        "GcConnections",
-        Arc::new(GcConnectionsTimer::new(crate::app::APP_CTX.clone())),
-    );
+    gc_connections_time.register_timer("GcConnections", Arc::new(GcConnectionsTimer));
 
     gc_connections_time.start(
         crate::app::APP_CTX.states.clone(),
@@ -83,4 +81,20 @@ async fn main() {
     tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     println!("Stopped...");
+}
+
+fn format_mem(size: usize) -> String {
+    if size < 1024 {
+        return format!("{}B", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    if size < 1024.0 {
+        return format!("{:.2}KB", size);
+    }
+
+    let size = size as f64 / 1024.0;
+
+    return format!("{:.2}Mb", size);
 }

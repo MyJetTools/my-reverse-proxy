@@ -1,5 +1,7 @@
+use crate::settings_compiled::SettingsCompiled;
+
 pub async fn reload_port_configurations(port_to_refresh: u16) -> Result<String, String> {
-    let settings_model = crate::scripts::load_settings().await?;
+    let settings_model = SettingsCompiled::load_settings().await?;
 
     let mut updated_endpoints = 0;
     for (host_id, host_settings) in &settings_model.hosts {

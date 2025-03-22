@@ -1,11 +1,9 @@
-use crate::configurations::EndpointHttpHostString;
+use crate::{configurations::EndpointHttpHostString, settings_compiled::SettingsCompiled};
 
 pub async fn reload_endpoint_configuration(host_id_to_refresh: &str) -> Result<String, String> {
-    let settings_model = crate::scripts::load_settings().await?;
+    let settings_model = SettingsCompiled::load_settings().await?;
 
     for (host_id, host_settings) in &settings_model.hosts {
-        let host_id = crate::scripts::apply_variables(&settings_model, host_id)?;
-
         if rust_extensions::str_utils::compare_strings_case_insensitive(
             host_id.as_str(),
             host_id_to_refresh,

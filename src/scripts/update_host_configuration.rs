@@ -1,7 +1,9 @@
-use crate::{configurations::EndpointHttpHostString, settings::*};
+use crate::{
+    configurations::EndpointHttpHostString, settings::*, settings_compiled::SettingsCompiled,
+};
 
 pub async fn update_host_configuration(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_endpoint: EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<(), String> {

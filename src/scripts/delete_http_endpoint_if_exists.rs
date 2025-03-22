@@ -1,7 +1,7 @@
-use crate::{configurations::ListenConfiguration, settings::*};
+use crate::{configurations::ListenConfiguration, settings_compiled::SettingsCompiled};
 
 pub async fn delete_http_endpoint_if_exists(
-    settings: &SettingsModel,
+    settings: &SettingsCompiled,
     endpoint_id: &str,
 ) -> Result<(), String> {
     let host_endpoint = settings.get_endpoint_host_string(endpoint_id)?;

@@ -3,11 +3,12 @@ use crate::{
         EndpointHttpHostString, ListenConfiguration, MyReverseProxyRemoteEndpoint,
         TcpEndpointHostConfig,
     },
-    settings::{HostSettings, SettingsModel},
+    settings::HostSettings,
+    settings_compiled::SettingsCompiled,
 };
 
 pub async fn compile_tcp_configuration(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_endpoint: EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<ListenConfiguration, String> {
@@ -15,12 +16,8 @@ pub async fn compile_tcp_configuration(
         if location_settings.proxy_pass_to.is_none() {
             return Err("proxy_pass_to is required for tcp location type".to_string());
         }
-        let proxy_pass_to = super::apply_variables(
-            settings_model,
-            location_settings.proxy_pass_to.as_ref().unwrap(),
-        )?;
 
-        proxy_pass_to
+        location_settings.proxy_pass_to.as_ref().unwrap()
     } else {
         return Err(format!(
             "No location found for tcp host {}",

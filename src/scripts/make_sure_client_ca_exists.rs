@@ -1,10 +1,11 @@
 use crate::{
     configurations::{SslCertificateId, SslCertificateIdRef},
     settings::*,
+    settings_compiled::SettingsCompiled,
 };
 
 pub async fn make_sure_client_ca_exists<'s>(
-    settings_model: &'s SettingsModel,
+    settings_model: &'s SettingsCompiled,
     host_settings: &'s HostSettings,
 ) -> Result<Option<SslCertificateId>, String> {
     let client_ca_id = super::get_from_host_or_templates(

@@ -1,24 +1,16 @@
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::{configurations::SslCertificateIdRef, settings::SettingsModel, ssl::SslCertificate};
+use crate::{
+    configurations::SslCertificateIdRef, settings_compiled::SettingsCompiled, ssl::SslCertificate,
+};
 
 pub async fn refresh_ssl_certs_from_sources<'s>(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     ssl_cert_id: SslCertificateIdRef<'s>,
 ) -> Result<(), String> {
-    let ssl_certificates = match settings_model.ssl_certificates.as_ref() {
-        Some(ssl_certificates) => ssl_certificates,
-        None => {
-            return Err(format!(
-                "SSL certificate with id '{}' not found",
-                ssl_cert_id.as_str()
-            ));
-        }
-    };
-
     let mut found_certificate = None;
 
-    for ssl_certificate in ssl_certificates {
+    for ssl_certificate in settings_model.ssl_certificates.iter() {
         if ssl_certificate.id.as_str() == ssl_cert_id.as_str() {
             found_certificate = Some(ssl_certificate);
             break;
@@ -34,14 +26,13 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
 
     let ssl_certificate = found_certificate.unwrap();
 
-    let private_key_file_src =
-        super::apply_variables(settings_model, ssl_certificate.private_key.as_str())?;
-
-    let private_key_src = OverSshConnectionSettings::try_parse(private_key_file_src.as_str())
-        .ok_or(format!(
-            "Invalid TLS Private Key file source {}",
-            private_key_file_src.as_str()
-        ))?;
+    let private_key_src = OverSshConnectionSettings::try_parse(
+        ssl_certificate.private_key.as_str(),
+    )
+    .ok_or(format!(
+        "Invalid TLS Private Key file source {}",
+        ssl_certificate.private_key.as_str()
+    ))?;
 
     let private_key = super::load_file(
         &private_key_src,
@@ -49,12 +40,11 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
     )
     .await?;
 
-    let cert_src = super::apply_variables(settings_model, ssl_certificate.certificate.as_str())?;
-
-    let cert_src = OverSshConnectionSettings::try_parse(cert_src.as_str()).ok_or(format!(
-        "Invalid TLS Certificate Key file source {}",
-        cert_src.as_str()
-    ))?;
+    let cert_src = OverSshConnectionSettings::try_parse(ssl_certificate.certificate.as_str())
+        .ok_or(format!(
+            "Invalid TLS Certificate Key file source {}",
+            ssl_certificate.certificate.as_str()
+        ))?;
 
     let certificate =
         super::load_file(&cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;

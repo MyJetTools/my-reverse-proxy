@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 
-use crate::configurations::EndpointHttpHostString;
-
 use super::*;
-use rust_extensions::duration_utils::DurationExtensions;
 use serde::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SettingsModel {
     pub hosts: HashMap<String, HostSettings>,
+    pub include: Option<Vec<String>>,
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
@@ -23,8 +21,13 @@ pub struct SettingsModel {
 }
 
 impl SettingsModel {
-    pub async fn load_async() -> Result<Self, String> {
-        let file_name = format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy");
+    pub async fn load_async(file_name: Option<&str>) -> Result<Self, String> {
+        let file_name = if let Some(file_name) = file_name {
+            rust_extensions::file_utils::format_path(file_name).to_string()
+        } else {
+            format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy")
+        };
+
         let file_result = tokio::fs::read(file_name.as_str()).await;
         if file_result.is_err() {
             return Err(format!("Can not read settings from file: {}", file_name));
@@ -41,8 +44,13 @@ impl SettingsModel {
         }
     }
 
-    pub fn load() -> Result<Self, String> {
-        let file_name = format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy");
+    pub fn load(file_name: Option<&str>) -> Result<Self, String> {
+        let file_name = if let Some(file_name) = file_name {
+            rust_extensions::file_utils::format_path(file_name).to_string()
+        } else {
+            format!("{}/{}", std::env::var("HOME").unwrap(), ".my-reverse-proxy")
+        };
+
         let file_result = std::fs::read(file_name.as_str());
         if file_result.is_err() {
             return Err(format!("Can not read settings from file: {}", file_name));
@@ -58,86 +66,6 @@ impl SettingsModel {
             )),
         }
     }
-
-    pub fn get_http_control_port(&self) -> Option<u16> {
-        if let Some(global_settings) = self.global_settings.as_ref() {
-            return global_settings.http_control_port;
-        }
-
-        None
-    }
-
-    pub fn get_gateway_server(&self) -> Option<&GatewayServerSettings> {
-        self.gateway_server.as_ref()
-    }
-
-    pub fn get_show_error_description_on_error_page(&self) -> bool {
-        if let Some(global_settings) = self.global_settings.as_ref() {
-            if let Some(show_error_description_on_error_page) =
-                global_settings.show_error_description_on_error_page
-            {
-                return show_error_description_on_error_page;
-            }
-        }
-
-        false
-    }
-    pub fn get_connections_settings(&self) -> ConnectionsSettingsModel {
-        let result = if let Some(global_settings) = self.global_settings.as_ref() {
-            match global_settings.connection_settings.as_ref() {
-                Some(connection_settings) => ConnectionsSettingsModel::new(connection_settings),
-                None => ConnectionsSettingsModel::default(),
-            }
-        } else {
-            ConnectionsSettingsModel::default()
-        };
-
-        println!(
-            "Each connection is going to use buffer: {}",
-            format_mem(result.buffer_size)
-        );
-
-        println!(
-            "Timeout to connect to remote endpoint is: {}",
-            result.remote_connect_timeout.format_to_string()
-        );
-
-        result
-    }
-
-    pub fn get_session_key(&self) -> Option<String> {
-        if let Some(global_settings) = self.global_settings.as_ref() {
-            if let Some(connection_settings) = global_settings.connection_settings.as_ref() {
-                return connection_settings.session_key.clone();
-            }
-        }
-
-        None
-    }
-
-    pub fn get_endpoint_host_string(
-        &self,
-        host_id: &str,
-    ) -> Result<EndpointHttpHostString, String> {
-        let host_id = crate::scripts::apply_variables(self, host_id)?;
-        EndpointHttpHostString::new(host_id.to_string())
-    }
-}
-
-fn format_mem(size: usize) -> String {
-    if size < 1024 {
-        return format!("{}B", size);
-    }
-
-    let size = size as f64 / 1024.0;
-
-    if size < 1024.0 {
-        return format!("{:.2}KB", size);
-    }
-
-    let size = size as f64 / 1024.0;
-
-    return format!("{:.2}Mb", size);
 }
 
 #[cfg(test)]
@@ -222,6 +150,7 @@ mod tests {
         let model = SettingsModel {
             hosts,
             global_settings: None,
+            include: None,
             variables: None,
             ssl_certificates: None,
             client_certificate_ca: None,

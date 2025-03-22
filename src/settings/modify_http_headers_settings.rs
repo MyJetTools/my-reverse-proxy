@@ -1,6 +1,6 @@
 use serde::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct ModifyHttpHeadersSettings {
     pub add: Option<AddHttpHeadersSettings>,
     pub remove: Option<RemoveHttpHeadersSettings>,

@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use crate::{
     configurations::{EndpointHttpHostString, HttpEndpointInfo, ListenHttpEndpointType},
-    settings::{HostSettings, SettingsModel},
+    settings::HostSettings,
+    settings_compiled::SettingsCompiled,
 };
 
 pub async fn compile_http_configuration(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_endpoint: EndpointHttpHostString,
     host_settings: &HostSettings,
     http_type: ListenHttpEndpointType,

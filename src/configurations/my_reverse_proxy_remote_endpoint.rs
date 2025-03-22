@@ -3,7 +3,7 @@ use std::sync::Arc;
 use my_ssh::{ssh_settings::OverSshConnectionSettings, SshCredentials};
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::settings::SettingsModel;
+use crate::settings_compiled::SettingsCompiled;
 
 pub const GATEWAY_PREFIX: &str = "gateway:";
 
@@ -24,7 +24,7 @@ pub enum MyReverseProxyRemoteEndpoint {
 impl MyReverseProxyRemoteEndpoint {
     pub async fn try_parse(
         remote_host: &str,
-        settings_model: &SettingsModel,
+        settings_model: &SettingsCompiled,
     ) -> Result<Self, String> {
         if remote_host.starts_with(GATEWAY_PREFIX) {
             MyReverseProxyRemoteEndpoint::try_parse_gateway_source(remote_host)

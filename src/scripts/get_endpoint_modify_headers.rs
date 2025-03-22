@@ -1,7 +1,7 @@
-use crate::settings::*;
+use crate::{settings::*, settings_compiled::SettingsCompiled};
 
 pub fn get_endpoint_modify_headers(
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
     host_settings: &HostSettings,
 ) -> HttpEndpointModifyHeadersSettings {
     let result = HttpEndpointModifyHeadersSettings {
@@ -12,7 +12,9 @@ pub fn get_endpoint_modify_headers(
     result
 }
 
-fn get_global_modify_headers(settings_model: &SettingsModel) -> Option<ModifyHttpHeadersSettings> {
+fn get_global_modify_headers(
+    settings_model: &SettingsCompiled,
+) -> Option<ModifyHttpHeadersSettings> {
     let global_settings = settings_model.global_settings.as_ref()?;
 
     let all_endpoints_global_settings = global_settings.all_http_endpoints.as_ref()?;

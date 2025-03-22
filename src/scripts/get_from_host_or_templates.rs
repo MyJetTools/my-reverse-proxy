@@ -1,7 +1,7 @@
-use crate::settings::*;
+use crate::{settings::*, settings_compiled::*};
 
 pub fn get_from_host_or_templates<'s, TResult>(
-    settings_model: &'s SettingsModel,
+    settings_model: &'s SettingsCompiled,
     host_settings: &'s HostSettings,
     get_from_host_settings: fn(&'s HostSettings) -> Option<&'s TResult>,
     get_from_templates: fn(&'s EndpointTemplateSettings) -> Option<&'s TResult>,

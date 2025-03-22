@@ -1,5 +1,7 @@
+use crate::settings_compiled::SettingsCompiled;
+
 pub async fn load_everything_from_settings() {
-    let settings_model = crate::scripts::load_settings().await.unwrap();
+    let settings_model = SettingsCompiled::load_settings().await.unwrap();
 
     crate::scripts::update_ssh_config_list(&settings_model).await;
 

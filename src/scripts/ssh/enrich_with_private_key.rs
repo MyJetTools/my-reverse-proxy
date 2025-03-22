@@ -2,40 +2,38 @@ use std::sync::Arc;
 
 use my_ssh::{ssh_settings::OverSshConnectionSettings, SshCredentials};
 
-use crate::settings::{SettingsModel, SshConfigSettings};
+use crate::{settings::SshConfigSettings, settings_compiled::SettingsCompiled};
 
 pub async fn enrich_with_private_key_or_password(
     over_ssh_connection: OverSshConnectionSettings,
-    settings_model: &SettingsModel,
+    settings_model: &SettingsCompiled,
 ) -> Result<OverSshConnectionSettings, String> {
     let ssh_credentials = match over_ssh_connection.ssh_credentials {
         Some(ssh_credentials) => ssh_credentials,
         None => return Ok(over_ssh_connection),
     };
 
-    if let Some(ssh_config) = &settings_model.ssh {
-        let ssh_credentials_as_string = ssh_credentials.to_string();
+    //if let Some(ssh_config) = &settings_model.ssh {
+    let ssh_credentials_as_string = ssh_credentials.to_string();
 
-        if let Some(config) = ssh_config.get(ssh_credentials_as_string.as_str()) {
+    if let Some(config) = settings_model.ssh.get(ssh_credentials_as_string.as_str()) {
+        return apply_ssh_config(
+            ssh_credentials,
+            config,
+            over_ssh_connection.remote_resource_string,
+        )
+        .await;
+    }
+
+    if ssh_credentials_as_string.as_str().ends_with(":22") {
+        let without_22 = &ssh_credentials_as_string.as_str()[..ssh_credentials_as_string.len() - 3];
+        if let Some(config) = settings_model.ssh.get(without_22) {
             return apply_ssh_config(
                 ssh_credentials,
                 config,
                 over_ssh_connection.remote_resource_string,
             )
             .await;
-        }
-
-        if ssh_credentials_as_string.as_str().ends_with(":22") {
-            let without_22 =
-                &ssh_credentials_as_string.as_str()[..ssh_credentials_as_string.len() - 3];
-            if let Some(config) = ssh_config.get(without_22) {
-                return apply_ssh_config(
-                    ssh_credentials,
-                    config,
-                    over_ssh_connection.remote_resource_string,
-                )
-                .await;
-            }
         }
     }
 

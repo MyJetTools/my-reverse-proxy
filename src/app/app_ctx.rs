@@ -17,7 +17,8 @@ use crate::{
     http2_client_pool::Http2ClientPool,
     http_client_connectors::*,
     http_client_pool::HttpClientPool,
-    settings::{ConnectionsSettingsModel, SettingsModel},
+    settings::ConnectionsSettingsModel,
+    settings_compiled::SettingsCompiled,
     ssl::CertificatesCache,
     tcp_gateway::{
         client::TcpGatewayClient, forwarded_connection::TcpGatewayProxyForwardStream,
@@ -31,13 +32,9 @@ pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
 lazy_static::lazy_static! {
-    pub static ref APP_CTX: Arc<AppContext> = {
-
-   let settings_model = crate::settings::SettingsModel::load().unwrap();
-
-    let app = AppContext::new(settings_model);
-
-            Arc::new(app)
+    pub static ref APP_CTX: AppContext = {
+        let settings_model = SettingsCompiled::load_settings_block().unwrap();
+        AppContext::new(settings_model)
     };
 }
 
@@ -81,7 +78,7 @@ pub struct AppContext {
 }
 
 impl AppContext {
-    pub fn new(settings_model: SettingsModel) -> Self {
+    pub fn new(settings_model: SettingsCompiled) -> Self {
         let http_control_port = settings_model.get_http_control_port();
         let connection_settings = settings_model.get_connections_settings();
 
@@ -105,21 +102,19 @@ impl AppContext {
 
         let mut gateway_clients = HashMap::new();
 
-        if let Some(clients_settings) = &settings_model.gateway_clients {
-            for (id, client_settings) in clients_settings.iter() {
-                let encryption = client_settings.get_encryption_key().unwrap();
-                let client = TcpGatewayClient::new(
-                    id.to_string(),
-                    client_settings.remote_host.to_string(),
-                    encryption,
-                    client_settings.get_supported_compression(),
-                    client_settings.get_allow_incoming_forward_connections(),
-                    client_settings.get_connect_timeout(),
-                    client_settings.is_debug(),
-                );
+        for (id, client_settings) in settings_model.gateway_clients.iter() {
+            let encryption = client_settings.get_encryption_key().unwrap();
+            let client = TcpGatewayClient::new(
+                id.to_string(),
+                client_settings.remote_host.to_string(),
+                encryption,
+                client_settings.get_supported_compression(),
+                client_settings.get_allow_incoming_forward_connections(),
+                client_settings.get_connect_timeout(),
+                client_settings.is_debug(),
+            );
 
-                gateway_clients.insert(id.clone(), client);
-            }
+            gateway_clients.insert(id.clone(), client);
         }
 
         Self {
