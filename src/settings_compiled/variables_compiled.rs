@@ -47,23 +47,24 @@ impl VariablesCompiled {
                     result.push_str(text);
                 }
                 ContentToken::Placeholder(placeholder) => {
-                    if placeholder
-                        .chars()
-                        .all(|itm| itm.is_uppercase() || itm == '_')
-                    {
-                        result.push_str("${");
-                        result.push_str(placeholder);
-                        result.push('}');
-                        continue;
-                    }
-                    if let Some(value) = self.data.get(placeholder) {
-                        result.push_str(value.as_str());
-                        continue;
-                    }
+                    match name_characteristics(placeholder)? {
+                        VariableNameType::Reserved => {
+                            result.push_str("${");
+                            result.push_str(placeholder);
+                            result.push('}');
+                            continue;
+                        }
+                        VariableNameType::Variable => {
+                            if let Some(value) = self.data.get(placeholder) {
+                                result.push_str(value.as_str());
+                                continue;
+                            }
 
-                    if let Ok(value) = std::env::var(placeholder) {
-                        result.push_str(value.as_str());
-                        continue;
+                            if let Ok(value) = std::env::var(placeholder) {
+                                result.push_str(value.as_str());
+                                continue;
+                            }
+                        }
                     }
 
                     return Err(format!("Variable {} not found", placeholder));
@@ -73,4 +74,35 @@ impl VariablesCompiled {
 
         Ok(result)
     }
+}
+
+pub enum VariableNameType {
+    Reserved,
+    Variable,
+}
+
+fn name_characteristics(src: &str) -> Result<VariableNameType, String> {
+    let mut has_upper_case = false;
+    let mut has_lower_case = false;
+
+    for c in src.chars() {
+        if c.is_ascii_uppercase() {
+            has_upper_case = true;
+        } else if c.is_ascii_lowercase() {
+            has_lower_case = true;
+        }
+
+        if has_upper_case && has_lower_case {
+            return Err(format!(
+                "Env variable {} has to be ether UPPER_CASED or lower_cased",
+                src
+            ));
+        }
+    }
+
+    if has_upper_case {
+        return Ok(VariableNameType::Reserved);
+    }
+
+    Ok(VariableNameType::Variable)
 }
