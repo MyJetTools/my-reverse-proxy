@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicU64, Arc};
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
-use rcgen::Certificate;
+
 use rustls_pki_types::CertificateDer;
 use x509_parser::{
     certificate::X509Certificate, der_parser::asn1_rs::FromDer, num_bigint::BigUint,
@@ -21,7 +21,7 @@ pub struct ClientCertificateCa {
     pub ca_file_source: OverSshConnectionSettings,
     pub crl_list: Vec<CrlRecord>,
     pub crl_file_source: Option<OverSshConnectionSettings>,
-    pub cert_data: Arc<ClientCertificateData>,
+    cert_serial: Arc<AtomicU64>,
 }
 
 impl ClientCertificateCa {
@@ -65,18 +65,21 @@ impl ClientCertificateCa {
             names.push(issuer.as_raw().to_vec().into());
         }
 
-        let cert_data = get_cert_data(certs[0].clone(), &certs[0])?;
-
         let resut = Self {
             ca_content: certs.remove(0),
             names,
             ca_file_source,
             crl_list,
             crl_file_source,
-            cert_data: cert_data.into(),
+            cert_serial: Default::default(),
         };
 
         Ok(resut)
+    }
+
+    fn update_serial(&self, serial: &BigUint) {
+        let as_bytes = serial.to_bytes_le();
+        println!("As Bytes: {:?}", as_bytes);
     }
 
     pub fn verify_cert(
@@ -87,17 +90,27 @@ impl ClientCertificateCa {
 
         let (_, cert_to_check) = X509Certificate::from_der(certificate_to_check.as_ref()).unwrap();
 
-        println!("Cert subject: {}", cert_to_check.subject());
-
-        for cn in cert_to_check.subject().iter_common_name() {
-            println!("CN: {}", cn.as_str().unwrap());
-        }
+        let cn = cert_to_check
+            .subject()
+            .iter_common_name()
+            .next()
+            .map(|cn| cn.as_str().unwrap().to_string())
+            .unwrap_or_default();
 
         if cert_to_check
             .verify_signature(Some(issuer.public_key()))
             .is_ok()
         {
-            return Some(self.cert_data.clone());
+            let cert_data = ClientCertificateData {
+                cn,
+                serial: cert_to_check.serial.clone(),
+            };
+
+            let cert_data = Arc::new(cert_data);
+
+            self.update_serial(&cert_data.serial);
+
+            return Some(cert_data);
         }
 
         None
@@ -114,13 +127,19 @@ impl ClientCertificateCa {
             ca_file_source: self.ca_file_source.clone(),
             crl_list: crl,
             crl_file_source: self.crl_file_source.clone(),
-            cert_data: self.cert_data.clone(),
+            cert_serial: self.cert_serial.clone(),
         }
     }
 
     pub fn is_revoked(&self) -> bool {
+        let serial = self.cert_serial.load(std::sync::atomic::Ordering::Relaxed);
+
+        let serial = serial.to_le_bytes();
+
+        let serial = BigUint::from_bytes_le(&serial);
+
         for record in self.crl_list.iter() {
-            if record.serial == self.cert_data.serial {
+            if record.serial == serial {
                 return true;
             }
         }
@@ -129,6 +148,7 @@ impl ClientCertificateCa {
     }
 }
 
+/*
 pub fn get_cert_data(
     ca_content: CertificateDer<'static>,
     certificate_to_check: &rustls_pki_types::CertificateDer,
@@ -150,3 +170,4 @@ pub fn get_cert_data(
 
     return Err("No certificate data found".to_string());
 }
+ */
