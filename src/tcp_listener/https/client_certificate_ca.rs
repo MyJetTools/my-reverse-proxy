@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
+use rcgen::Certificate;
 use rustls_pki_types::CertificateDer;
 use x509_parser::{
     certificate::X509Certificate, der_parser::asn1_rs::FromDer, num_bigint::BigUint,
@@ -138,9 +139,7 @@ pub fn get_cert_data(
         .verify_signature(Some(issuer.public_key()))
         .map_err(|err| format!("{:?}", err))?;
 
-    println!("{:?}", cert_to_check);
-
-    for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
+    for itm in issuer.tbs_certificate.subject().iter_common_name() {
         println!("CN: {}", itm.as_str().unwrap());
     }
 
