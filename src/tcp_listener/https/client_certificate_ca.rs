@@ -120,6 +120,10 @@ impl ClientCertificateCa {
 
         false
     }
+
+    pub fn to_string(&self) -> String {
+        format!("{:?}", self.cert_data.as_ref())
+    }
 }
 
 pub fn get_cert_data(
