@@ -141,7 +141,11 @@ pub fn get_cert_data(
 
     for itm in cert_to_check.subject().iter() {
         for itm in itm.iter() {
-            println!("Type: {}. Item as Str: {:?}", itm.attr_type(), itm.as_str());
+            println!(
+                "Type: {}. Item as Str: {:?}",
+                itm.attr_type().to_id_string(),
+                itm.as_str()
+            );
         }
     }
 
