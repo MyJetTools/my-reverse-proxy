@@ -139,8 +139,8 @@ pub fn get_cert_data(
         .verify_signature(Some(issuer.public_key()))
         .map_err(|err| format!("{:?}", err))?;
 
-    for itm in issuer.tbs_certificate.subject().iter_common_name() {
-        println!("CN: {}", itm.as_str().unwrap());
+    for itm in issuer.tbs_certificate.subject().iter() {
+        println!("Cert item: {:?}", itm);
     }
 
     for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
