@@ -89,6 +89,10 @@ impl ClientCertificateCa {
 
         println!("Cert subject: {}", cert_to_check.subject());
 
+        for cn in cert_to_check.subject().iter_common_name() {
+            println!("CN: {}", cn.as_str().unwrap());
+        }
+
         if cert_to_check
             .verify_signature(Some(issuer.public_key()))
             .is_ok()
