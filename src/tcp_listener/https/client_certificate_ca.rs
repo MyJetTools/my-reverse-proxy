@@ -139,24 +139,6 @@ pub fn get_cert_data(
         .verify_signature(Some(issuer.public_key()))
         .map_err(|err| format!("{:?}", err))?;
 
-    for itm in cert_to_check.subject().iter() {
-        for itm in itm.iter() {
-            println!(
-                "Type: {}. Item as Str: {:?}",
-                itm.attr_type().to_id_string(),
-                itm.as_str()
-            );
-        }
-    }
-
-    println!("------");
-
-    for itm in cert_to_check.tbs_certificate.subject().iter() {
-        for itm in itm.iter() {
-            println!("Type: {}. Item as Str: {:?}", itm.attr_type(), itm.as_str());
-        }
-    }
-
     for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
         return Ok(ClientCertificateData {
             cn: itm.as_str().unwrap().to_string(),
