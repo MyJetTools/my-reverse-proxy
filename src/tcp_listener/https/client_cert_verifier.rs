@@ -74,8 +74,6 @@ impl ClientCertVerifier for MyClientCertVerifier {
         my_tls::tokio_rustls::rustls::Error,
     > {
         if let Some(client_certificate) = self.ca.verify_cert(end_entity) {
-            println!("Client Cert CN: {:?}", client_certificate.cn.as_str());
-
             self.client_cert_cell.set(client_certificate);
 
             return Ok(

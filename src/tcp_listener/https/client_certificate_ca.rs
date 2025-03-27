@@ -87,6 +87,8 @@ impl ClientCertificateCa {
 
         let (_, cert_to_check) = X509Certificate::from_der(certificate_to_check.as_ref()).unwrap();
 
+        println!("Cert subject: {}", cert_to_check.subject());
+
         if cert_to_check
             .verify_signature(Some(issuer.public_key()))
             .is_ok()
@@ -120,10 +122,6 @@ impl ClientCertificateCa {
         }
 
         false
-    }
-
-    pub fn to_string(&self) -> String {
-        format!("{:?}", self.cert_data.as_ref())
     }
 }
 
