@@ -46,7 +46,6 @@ pub async fn create_config(
                 {
                     if let Some(client_cert_ca) = app_config.client_ca.get(client_cert_ca_id.into())
                     {
-                        println!("Debug client cert: {:?}", client_cert_ca.to_string());
                         Some(client_cert_ca)
                     } else {
                         return Err(format!(
