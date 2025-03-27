@@ -167,19 +167,41 @@ async fn lazy_accept_tcp_stream(
     ),
     String,
 > {
-    let result = tokio::spawn(async move {
+    let result: Result<
+        Result<
+            (
+                my_tls::tokio_rustls::server::TlsStream<TcpStream>,
+                Arc<HttpEndpointInfo>,
+                Option<Arc<ClientCertificateData>>,
+            ),
+            String,
+        >,
+        tokio::task::JoinError,
+    > = tokio::spawn(async move {
         let lazy_acceptor = LazyConfigAcceptor::new(Acceptor::default(), tcp_stream);
 
         tokio::pin!(lazy_acceptor);
 
         let (tls_stream, endpoint_info, client_certificate) = match lazy_acceptor.as_mut().await {
-            Ok(start) => {
-                let client_hello = start.client_hello();
+            Ok(start_handshake) => {
+                let client_hello = start_handshake.client_hello();
                 let server_name = if let Some(server_name) = client_hello.server_name() {
                     server_name
                 } else {
                     return Err("Unknown server name detecting from client hello".to_string());
                 };
+
+                if let Some(client_cert) = client_hello.client_cert_types() {
+                    for client_cert in client_cert {
+                        println!("Client_CERT: {:?}", client_cert.as_str());
+                    }
+                }
+
+                if let Some(ca) = client_hello.certificate_authorities() {
+                    for cn in ca {
+                        println!("DistName: {:?}", cn);
+                    }
+                }
 
                 let config_result =
                     super::tls_acceptor::create_config(configuration, server_name, endpoint_port)
@@ -193,7 +215,7 @@ async fn lazy_accept_tcp_stream(
 
                 //println!("Created config");
 
-                let tls_stream = start.into_stream(config.into()).await;
+                let tls_stream = start_handshake.into_stream(config.into()).await;
 
                 if let Err(err) = &tls_stream {
                     return Err(format!("failed to perform tls handshake: {err:#}"));
