@@ -139,10 +139,17 @@ pub fn get_cert_data(
         .verify_signature(Some(issuer.public_key()))
         .map_err(|err| format!("{:?}", err))?;
 
-    for itm in issuer.tbs_certificate.subject().iter() {
+    for itm in cert_to_check.subject().iter() {
         for itm in itm.iter() {
-            println!("Item as Str: {:?}", itm.as_str());
-            println!("Item as AttrValue: {:?}", itm.attr_value());
+            println!("Type: {}. Item as Str: {:?}", itm.attr_type(), itm.as_str());
+        }
+    }
+
+    println!("------");
+
+    for itm in cert_to_check.tbs_certificate.subject().iter() {
+        for itm in itm.iter() {
+            println!("Type: {}. Item as Str: {:?}", itm.attr_type(), itm.as_str());
         }
     }
 
