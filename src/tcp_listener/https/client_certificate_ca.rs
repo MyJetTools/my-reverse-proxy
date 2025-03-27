@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::{Arc, Mutex};
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
@@ -21,7 +21,7 @@ pub struct ClientCertificateCa {
     pub ca_file_source: OverSshConnectionSettings,
     pub crl_list: Vec<CrlRecord>,
     pub crl_file_source: Option<OverSshConnectionSettings>,
-    cert_serial: Arc<AtomicU64>,
+    cert_serial: Arc<Mutex<Option<BigUint>>>,
 }
 
 impl ClientCertificateCa {
@@ -77,9 +77,9 @@ impl ClientCertificateCa {
         Ok(resut)
     }
 
-    fn update_serial(&self, serial: &BigUint) {
-        let as_bytes = serial.to_bytes_le();
-        println!("As Bytes: {:?}", as_bytes);
+    fn update_serial(&self, serial: BigUint) {
+        let mut write_access = self.cert_serial.lock().unwrap();
+        *write_access = Some(serial);
     }
 
     pub fn verify_cert(
@@ -108,7 +108,7 @@ impl ClientCertificateCa {
 
             let cert_data = Arc::new(cert_data);
 
-            self.update_serial(&cert_data.serial);
+            self.update_serial(cert_data.serial.clone());
 
             return Some(cert_data);
         }
@@ -132,15 +132,13 @@ impl ClientCertificateCa {
     }
 
     pub fn is_revoked(&self) -> bool {
-        let serial = self.cert_serial.load(std::sync::atomic::Ordering::Relaxed);
+        let cert_access = self.cert_serial.lock().unwrap();
 
-        let serial = serial.to_le_bytes();
-
-        let serial = BigUint::from_bytes_le(&serial);
-
-        for record in self.crl_list.iter() {
-            if record.serial == serial {
-                return true;
+        if let Some(cert) = cert_access.as_ref() {
+            for record in self.crl_list.iter() {
+                if &record.serial == cert {
+                    return true;
+                }
             }
         }
 
