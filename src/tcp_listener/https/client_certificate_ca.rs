@@ -1,18 +1,15 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use rustls_pki_types::CertificateDer;
-use x509_parser::{
-    certificate::X509Certificate, der_parser::asn1_rs::FromDer, num_bigint::BigUint,
-};
+use x509_parser::{certificate::X509Certificate, der_parser::asn1_rs::FromDer};
 
 use my_tls::{crl::CrlRecord, tokio_rustls::rustls};
 
 #[derive(Debug, Clone)]
 pub struct ClientCertificateData {
     pub cn: String,
-    pub serial: BigUint,
 }
 
 pub struct ClientCertificateCa {
@@ -21,7 +18,6 @@ pub struct ClientCertificateCa {
     pub ca_file_source: OverSshConnectionSettings,
     pub crl_list: Vec<CrlRecord>,
     pub crl_file_source: Option<OverSshConnectionSettings>,
-    cert_serial: Arc<Mutex<Option<BigUint>>>,
 }
 
 impl ClientCertificateCa {
@@ -71,15 +67,9 @@ impl ClientCertificateCa {
             ca_file_source,
             crl_list,
             crl_file_source,
-            cert_serial: Default::default(),
         };
 
         Ok(resut)
-    }
-
-    fn update_serial(&self, serial: BigUint) {
-        let mut write_access = self.cert_serial.lock().unwrap();
-        *write_access = Some(serial);
     }
 
     pub fn verify_cert(
@@ -101,14 +91,15 @@ impl ClientCertificateCa {
             .verify_signature(Some(issuer.public_key()))
             .is_ok()
         {
-            let cert_data = ClientCertificateData {
-                cn,
-                serial: cert_to_check.serial.clone(),
-            };
+            for crl_record in self.crl_list.iter() {
+                if crl_record.serial == cert_to_check.serial {
+                    return None;
+                }
+            }
+
+            let cert_data = ClientCertificateData { cn };
 
             let cert_data = Arc::new(cert_data);
-
-            self.update_serial(cert_data.serial.clone());
 
             return Some(cert_data);
         }
@@ -127,22 +118,7 @@ impl ClientCertificateCa {
             ca_file_source: self.ca_file_source.clone(),
             crl_list: crl,
             crl_file_source: self.crl_file_source.clone(),
-            cert_serial: self.cert_serial.clone(),
         }
-    }
-
-    pub fn is_revoked(&self) -> bool {
-        let cert_access = self.cert_serial.lock().unwrap();
-
-        if let Some(cert) = cert_access.as_ref() {
-            for record in self.crl_list.iter() {
-                if &record.serial == cert {
-                    return true;
-                }
-            }
-        }
-
-        false
     }
 }
 

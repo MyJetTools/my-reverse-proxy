@@ -84,11 +84,7 @@ pub async fn create_config(
                 {
                     if let Some(client_cert_ca) = app_config.client_ca.get(client_cert_ca_id.into())
                     {
-                        if client_cert_ca.is_revoked() {
-                            None
-                        } else {
-                            Some(client_cert_ca)
-                        }
+                        Some(client_cert_ca)
                     } else {
                         return Err(format!(
                             "Client certificate ca [{}] not found for endpoint: {}",
