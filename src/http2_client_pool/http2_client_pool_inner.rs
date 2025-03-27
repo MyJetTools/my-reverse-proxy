@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use my_http_client::{
-    http2::{MyHttp2Client, MyHttp2ClientMetrics},
-    MyHttpClientConnector,
+    http2::MyHttp2Client, hyper::MyHttpHyperClientMetrics, MyHttpClientConnector,
 };
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::sync::Mutex;
@@ -41,7 +40,7 @@ impl<
         connect_timeout: std::time::Duration,
         create_connector: impl Fn() -> (
             TConnector,
-            Arc<dyn MyHttp2ClientMetrics + Send + Sync + 'static>,
+            Arc<dyn MyHttpHyperClientMetrics + Send + Sync + 'static>,
         ),
     ) -> MyHttp2Client<TStream, TConnector> {
         let mut items_access = self.items.lock().await;
@@ -50,7 +49,7 @@ impl<
             Some(pool) => {
                 let (connector, metrics) = create_connector();
                 if pool.is_empty() {
-                    let mut result = MyHttp2Client::new(connector, metrics);
+                    let mut result = MyHttp2Client::new_with_metrics(connector, metrics);
                     result.set_connect_timeout(connect_timeout);
                     return result;
                 }
@@ -59,7 +58,7 @@ impl<
             }
             None => {
                 let (connector, metrics) = create_connector();
-                let mut result = MyHttp2Client::new(connector, metrics);
+                let mut result = MyHttp2Client::new_with_metrics(connector, metrics);
 
                 result.set_connect_timeout(connect_timeout);
                 result

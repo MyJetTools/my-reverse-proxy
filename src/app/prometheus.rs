@@ -200,7 +200,7 @@ impl my_http_client::http1::MyHttpClientMetrics for Prometheus {
     }
 }
 
-impl my_http_client::http2::MyHttp2ClientMetrics for Prometheus {
+impl my_http_client::hyper::MyHttpHyperClientMetrics for Prometheus {
     fn instance_created(&self, name: &str) {
         self.http2_client_instances.with_label_values(&[name]).inc();
     }

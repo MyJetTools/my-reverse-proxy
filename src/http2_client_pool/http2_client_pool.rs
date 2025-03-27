@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use my_http_client::{http2::MyHttp2ClientMetrics, MyHttpClientConnector};
+use my_http_client::{hyper::MyHttpHyperClientMetrics, MyHttpClientConnector};
 use rust_extensions::StrOrString;
 
 use super::{Http2ClientPoolInner, Http2ClientPoolItem};
@@ -37,7 +37,7 @@ impl<
 
         create_connector: impl Fn() -> (
             TConnector,
-            Arc<dyn MyHttp2ClientMetrics + Send + Sync + 'static>,
+            Arc<dyn MyHttpHyperClientMetrics + Send + Sync + 'static>,
         ),
     ) -> Http2ClientPoolItem<TStream, TConnector> {
         let my_http_client = self
