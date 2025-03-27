@@ -140,7 +140,10 @@ pub fn get_cert_data(
         .map_err(|err| format!("{:?}", err))?;
 
     for itm in issuer.tbs_certificate.subject().iter() {
-        println!("Cert item: {:?}", itm);
+        for itm in itm.iter() {
+            println!("Item as Str: {:?}", itm.as_str());
+            println!("Item as AttrValue: {:?}", itm.attr_value());
+        }
     }
 
     for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
