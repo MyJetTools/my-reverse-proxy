@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures::{
     stream::{SplitSink, SplitStream},
@@ -63,8 +63,24 @@ async fn web_socket_loop<
 
             let mut have_traced_message = false;
 
-            while let Some(message) = from_remote_read.next().await {
-                let message = message;
+            let read_timeout = Duration::from_secs(60);
+
+            loop {
+                let future = from_remote_read.next();
+
+                let result = tokio::time::timeout(read_timeout, future).await;
+
+                if result.is_err() {
+                    break;
+                }
+
+                let result = result.unwrap();
+
+                if result.is_none() {
+                    break;
+                }
+
+                let message = result.unwrap();
 
                 if message.is_err() {
                     if debug {
@@ -113,7 +129,25 @@ async fn serve_from_server_to_client<
     }
 
     let mut have_traced_message = false;
-    while let Some(message) = websocket.next().await {
+
+    let read_timeout = Duration::from_secs(60);
+    loop {
+        let future = websocket.next();
+
+        let result = tokio::time::timeout(read_timeout, future).await;
+
+        if result.is_err() {
+            break;
+        }
+
+        let next_one = result.unwrap();
+
+        if next_one.is_none() {
+            break;
+        }
+
+        let message = next_one.unwrap();
+
         let msg: Message = message?;
 
         if trace_payload {
