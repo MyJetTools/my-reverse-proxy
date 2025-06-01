@@ -211,6 +211,14 @@ impl<'s> TcpGatewayContract<'s> {
         }
     }
 
+    pub fn is_ping_or_pong(&self) -> bool {
+        match self {
+            Self::Ping => true,
+            Self::Pong => true,
+            _ => false,
+        }
+    }
+
     pub fn to_vec(&self, aes_key: &AesKey, support_compression: bool) -> Vec<u8> {
         let mut result = Vec::new();
 
