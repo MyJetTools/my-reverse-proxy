@@ -278,6 +278,7 @@ impl SettingsCompiled {
         if let Some(itm) = settings_model.gateway_server.take() {
             self.gateway_server = Some(GatewayServerSettings {
                 port: itm.port,
+                allowed_ip: itm.allowed_ip.clone(),
                 encryption_key: variables.apply_variables(itm.encryption_key)?,
                 debug: itm.debug,
             });

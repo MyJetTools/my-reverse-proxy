@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
@@ -13,7 +14,12 @@ pub struct TcpGatewayServer {
 }
 
 impl TcpGatewayServer {
-    pub fn new(listen: String, encryption: AesKey, debug: bool) -> Self {
+    pub fn new(
+        listen: String,
+        encryption: AesKey,
+        debug: bool,
+        allowed_ip_list: Option<HashSet<String>>,
+    ) -> Self {
         println!("Starting TCP Gateway Server at address: {}", listen);
         let inner = Arc::new(TcpGatewayInner::new(
             "ServerGateway".to_string(),
@@ -26,7 +32,7 @@ impl TcpGatewayServer {
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner, debug));
+        tokio::spawn(connection_loop(inner, allowed_ip_list, debug));
 
         result
     }
@@ -64,7 +70,11 @@ impl Drop for TcpGatewayServer {
     }
 }
 
-async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
+async fn connection_loop(
+    tcp_gateway: Arc<TcpGatewayInner>,
+    ip_whitelist: Option<HashSet<String>>,
+    debug: bool,
+) {
     let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
 
     if let Err(err) = &listener {

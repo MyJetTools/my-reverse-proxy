@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use encryption::aes::AesKey;
 use serde::*;
 
@@ -5,6 +7,7 @@ use serde::*;
 pub struct GatewayServerSettings {
     pub port: u16,
     pub encryption_key: String,
+    pub allowed_ip: Option<Vec<String>>,
     pub debug: Option<bool>,
 }
 
@@ -31,5 +34,17 @@ impl GatewayServerSettings {
         }
 
         Ok(AesKey::new(result.as_slice()))
+    }
+
+    pub fn get_allowed_ip_list(&self) -> Option<HashSet<String>> {
+        let items = self.allowed_ip.as_ref()?;
+
+        let mut result = HashSet::new();
+
+        for itm in items {
+            result.insert(itm.to_string());
+        }
+
+        Some(result)
     }
 }
