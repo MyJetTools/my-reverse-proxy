@@ -79,7 +79,7 @@ impl TcpGatewayForwardConnection {
     pub async fn send_payload(&self, payload: &[u8]) -> bool {
         if !self.inner.send_payload(payload).await {
             println!(
-                "Connection: {}. Send Forward {}",
+                "Connection: {}. Send to Forward Connection {}",
                 self.connection_id,
                 payload.len()
             );
