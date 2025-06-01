@@ -373,6 +373,8 @@ impl TcpGatewayConnection {
     }
 
     pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
+        println!("Gateway. Send payload {:?}", payload);
+
         let supported_compression = self.get_supported_compression();
         let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
 
