@@ -13,6 +13,12 @@ pub struct TcpGatewayProxyForwardStream {
 
 impl TcpGatewayProxyForwardStream {
     pub fn send_payload(&self, payload: &[u8]) {
+        println!(
+            "Connection: {} Forwarding Payload to remote host. Len:{}",
+            self.connection_id,
+            payload.len()
+        );
+
         let payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
             payload: payload.into(),
