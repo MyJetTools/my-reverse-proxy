@@ -121,7 +121,7 @@ async fn connection_loop(
 
         let tcp_gateway_connection = Arc::new(tcp_gateway_connection);
 
-        tokio::spawn(crate::tcp_gateway::read_loop(
+        tokio::spawn(crate::tcp_gateway::gateway_read_loop(
             tcp_gateway.clone(),
             read,
             tcp_gateway_connection,

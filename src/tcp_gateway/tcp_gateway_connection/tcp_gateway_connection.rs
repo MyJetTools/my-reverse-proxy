@@ -405,6 +405,7 @@ impl TcpGatewayConnection {
         let mut write_access = self.forward_proxy_handlers.lock().await;
         if let Some(mut connection) = write_access.remove(&connection_id) {
             connection.set_connection_error(message.into());
+            connection.disconnect();
         }
     }
 }

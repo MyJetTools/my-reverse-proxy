@@ -8,7 +8,7 @@ use super::*;
 
 const MAX_PAYLOAD_SIZE: usize = 1024 * 1024 * 5;
 
-pub async fn read_loop(
+pub async fn gateway_read_loop(
     tcp_gateway: Arc<TcpGatewayInner>,
     mut read: OwnedReadHalf,
     gateway_connection: Arc<TcpGatewayConnection>,

@@ -130,7 +130,7 @@ async fn connection_loop(
             .set_gateway_connection(&inner.gateway_id, gateway_connection.clone().into())
             .await;
 
-        tokio::spawn(crate::tcp_gateway::gateway_read_loop::read_loop(
+        tokio::spawn(crate::tcp_gateway::gateway_read_loop(
             inner.clone(),
             read,
             gateway_connection.clone(),
