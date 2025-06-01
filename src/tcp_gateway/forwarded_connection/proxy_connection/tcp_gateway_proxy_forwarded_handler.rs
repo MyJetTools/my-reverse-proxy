@@ -57,8 +57,14 @@ impl TcpGatewayProxyForwardConnectionHandler {
     }
 
     pub fn set_connection_error(&mut self, error: String) {
-        if self.status.is_awaiting_connection() {
-            self.status = TcpGatewayProxyForwardedConnectionStatus::Disconnected(error.into());
+        match self.status {
+            TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection => {
+                self.status = TcpGatewayProxyForwardedConnectionStatus::Disconnected(error.into());
+            }
+            TcpGatewayProxyForwardedConnectionStatus::Connected => {
+                self.status = TcpGatewayProxyForwardedConnectionStatus::Disconnected(error.into());
+            }
+            TcpGatewayProxyForwardedConnectionStatus::Disconnected(_) => {}
         }
     }
 
