@@ -11,6 +11,10 @@ use crate::tcp_gateway::*;
 pub struct TcpGatewayForwardConnection {
     inner: Arc<TcpConnectionInner>,
     connection_id: u32,
+    receiver: Option<tokio::sync::mpsc::Receiver<()>>,
+    read: Option<OwnedReadHalf>,
+    gateway_connection: Arc<TcpGatewayConnection>,
+    remote_endpoint: Arc<String>,
 }
 
 impl TcpGatewayForwardConnection {
@@ -63,17 +67,12 @@ impl TcpGatewayForwardConnection {
         let result = Self {
             connection_id,
             inner: inner.clone(),
+            receiver: Some(receiver),
+            read: Some(read),
+            gateway_connection,
+            remote_endpoint,
         };
 
-        super::super::tcp_connection_inner::start_write_loop(inner.clone(), receiver);
-
-        tokio::spawn(read_loop(
-            read,
-            gateway_connection,
-            inner,
-            connection_id,
-            remote_endpoint.clone(),
-        ));
         Ok(result)
     }
 
@@ -92,6 +91,23 @@ impl TcpGatewayForwardConnection {
 
     pub async fn disconnect(&self) {
         self.inner.disconnect().await;
+    }
+
+    pub fn start(&mut self) {
+        super::super::tcp_connection_inner::start_write_loop(
+            self.inner.clone(),
+            self.receiver.take().unwrap(),
+        );
+
+        let read = self.read.take().unwrap();
+
+        tokio::spawn(read_loop(
+            read,
+            self.gateway_connection.clone(),
+            self.inner.clone(),
+            self.connection_id,
+            self.remote_endpoint.clone(),
+        ));
     }
 }
 
