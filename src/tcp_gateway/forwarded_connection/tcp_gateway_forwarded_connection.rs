@@ -10,6 +10,7 @@ use crate::tcp_gateway::*;
 
 pub struct TcpGatewayForwardConnection {
     inner: Arc<TcpConnectionInner>,
+    connection_id: u32,
 }
 
 impl TcpGatewayForwardConnection {
@@ -60,6 +61,7 @@ impl TcpGatewayForwardConnection {
         let inner = Arc::new(inner);
 
         let result = Self {
+            connection_id,
             inner: inner.clone(),
         };
 
@@ -77,6 +79,11 @@ impl TcpGatewayForwardConnection {
 
     pub async fn send_payload(&self, payload: &[u8]) -> bool {
         if !self.inner.send_payload(payload).await {
+            println!(
+                "Connection: {}. Send Forward {}",
+                self.connection_id,
+                payload.len()
+            );
             self.inner.disconnect().await;
             return false;
         }
