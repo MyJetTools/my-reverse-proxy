@@ -215,6 +215,7 @@ impl<'s> TcpGatewayContract<'s> {
         match self {
             Self::Ping => true,
             Self::Pong => true,
+            Self::UpdatePingTime { .. } => true,
             _ => false,
         }
     }
