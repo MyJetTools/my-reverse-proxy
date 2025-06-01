@@ -89,6 +89,7 @@ pub async fn read_loop(
 
         match TcpGatewayContract::parse(decrypted.as_slice()) {
             Ok(packet) => {
+                println!("Gateway Packet: {:?}", packet);
                 let now = DateTimeAsMicroseconds::now();
                 gateway_connection.set_last_incoming_payload_time(now);
                 if let Err(err) = packet_handler
