@@ -518,10 +518,11 @@ gateway_clients:
     encryption_key: 12345678901234567890
     connect_timeout_seconds: 5
     compress: true 
+    allow_incoming_forward_connections: true 
 ```
 
-* connect_timeout_seconds - is optional. By default - connect to gateway timeout is 5 seconds;
-* compress parameter is optional. Omitting the parameter leads to the compress: false value
+- allow_incoming_forward_connections - is optional. Without this parameters - no Forward connections are allowed through gateway from Client side to Server side.
+
 
 To Setup location through gateway
 ```yaml
