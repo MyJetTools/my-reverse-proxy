@@ -92,6 +92,7 @@ impl SettingsCompiled {
     ) -> Result<(), String> {
         let hosts = std::mem::take(&mut settings_model.hosts);
         for (host_id, host_settings) in hosts {
+            let host_id = variables.apply_variables(host_id)?;
             let locations = compile_locations(host_settings.locations, variables)?;
 
             let host_settings = HostSettings {
