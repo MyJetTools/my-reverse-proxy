@@ -271,6 +271,7 @@ impl HttpProxyPassContentSource {
                 return Ok(HttpResponse::Response(response));
             }
             Self::LocalPath(src) => {
+                println!("Executing as local path");
                 let request_executor = src.get_request_executor(&req.uri())?;
                 let result = request_executor.execute_request().await?;
                 Ok(HttpResponse::Response(result.into()))
