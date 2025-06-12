@@ -38,9 +38,17 @@ impl ProxyPassLocations {
     ) -> Result<LocationIndex, ProxyPassError> {
         for (index, proxy_pass_location) in self.data.iter().enumerate() {
             if debug {
-                println!("{} {}", index, proxy_pass_location.config.path.as_str());
+                println!(
+                    "{} ProxyPass path: [{}] UriPath: [{}]",
+                    index,
+                    proxy_pass_location.config.path.as_str(),
+                    uri.path()
+                );
             }
             if proxy_pass_location.is_my_uri(uri) {
+                if debug {
+                    println!("Found location")
+                }
                 return Ok(LocationIndex {
                     index,
                     id: proxy_pass_location.config.id,
