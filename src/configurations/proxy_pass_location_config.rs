@@ -32,6 +32,8 @@ impl ProxyPassLocationConfig {
         compress: bool,
         trace_payload: bool,
     ) -> Self {
+        println!("Created location to {:?}", proxy_pass_to);
+
         Self {
             path,
             id,

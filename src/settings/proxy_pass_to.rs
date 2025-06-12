@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use crate::configurations::MyReverseProxyRemoteEndpoint;
 
+#[derive(Debug)]
 pub struct StaticContentModel {
     pub status_code: u16,
     pub content_type: Option<String>,
@@ -18,7 +19,7 @@ impl StaticContentModel {
         )
     }
 }
-
+#[derive(Debug)]
 pub struct ProxyPassFilesPathModel {
     pub files_path: MyReverseProxyRemoteEndpoint,
     pub default_file: Option<String>,
@@ -30,12 +31,14 @@ impl ProxyPassFilesPathModel {
     }
 }
 
+#[derive(Debug)]
 pub struct ProxyPassToModel {
     pub remote_host: MyReverseProxyRemoteEndpoint,
     pub request_timeout: Duration,
     pub connect_timeout: Duration,
 }
 
+#[derive(Debug)]
 pub enum ProxyPassTo {
     Http1(ProxyPassToModel),
     Http2(ProxyPassToModel),
