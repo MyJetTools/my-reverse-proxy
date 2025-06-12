@@ -47,7 +47,7 @@ impl HttpProxyPass {
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
             println!(
-                "Request: {}. Uri: {}. Headers{:?}",
+                "Request. Endpoint [{}] Uri: [{}] Headers: {:?}",
                 self.endpoint_info.host_endpoint.as_str(),
                 req.uri(),
                 req.headers()
@@ -111,18 +111,6 @@ impl HttpProxyPass {
                     ));
                 }
             }
-
-            /*
-            if !proxy_pass_location
-                .config
-                .whitelisted_ip
-                .is_whitelisted(&self.listening_port_info.socket_addr.ip())
-            {
-                return Err(ProxyPassError::IpRestricted(
-                    self.listening_port_info.socket_addr.ip().to_string(),
-                ));
-            }
-             */
 
             (
                 request,

@@ -367,6 +367,7 @@ impl HttpProxyPassContentSource {
                 Ok(HttpResponse::Response(result.into()))
             }
             Self::Static(src) => {
+                println!("Executing static request");
                 let request_executor = src.get_request_executor()?;
                 let result = request_executor.execute_request().await?;
                 Ok(HttpResponse::Response(result.into()))
