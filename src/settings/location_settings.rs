@@ -14,9 +14,15 @@ pub enum LocationType {
 }
 
 impl LocationType {
-    pub fn detect_from_proxy_pass_to(src: Option<&str>) -> Result<Self, String> {
-        match src {
+    pub fn detect_from_location_settings(
+        location_settings: &LocationSettings,
+    ) -> Result<Self, String> {
+        match location_settings.proxy_pass_to.as_ref() {
             Some(src) => {
+                if src.eq_ignore_ascii_case("static") {
+                    return Ok(Self::StaticContent);
+                }
+
                 let mut splitted = src.split("->");
 
                 let mut left_part = splitted.next().unwrap();

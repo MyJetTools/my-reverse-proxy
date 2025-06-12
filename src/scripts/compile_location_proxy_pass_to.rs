@@ -19,12 +19,7 @@ pub async fn compile_location_proxy_pass_to(
 
     let location_type = match location_settings.get_location_type()? {
         Some(location_type) => location_type,
-        None => LocationType::detect_from_proxy_pass_to(
-            location_settings
-                .proxy_pass_to
-                .as_ref()
-                .map(|itm| itm.as_str()),
-        )?,
+        None => LocationType::detect_from_location_settings(location_settings)?,
     };
 
     let proxy_pass_to = match location_type {
