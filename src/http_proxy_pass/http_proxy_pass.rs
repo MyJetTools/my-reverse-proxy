@@ -44,6 +44,7 @@ impl HttpProxyPass {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
         connection_addr: &SocketAddr,
+        debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
             println!(
@@ -83,7 +84,7 @@ impl HttpProxyPass {
                 }
             }
 
-            let location_index = inner.locations.find_location_index(req.uri())?;
+            let location_index = inner.locations.find_location_index(req.uri(), debug)?;
 
             let proxy_pass_location = inner.locations.find(&location_index);
 

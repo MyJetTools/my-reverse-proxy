@@ -30,7 +30,10 @@ pub async fn handle_requests(
         None
     };
 
-    match proxy_pass.send_payload(req, socket_addr).await {
+    match proxy_pass
+        .send_payload(req, socket_addr, proxy_pass.endpoint_info.debug)
+        .await
+    {
         Ok(response) => {
             match response.as_ref() {
                 Ok(response) => {

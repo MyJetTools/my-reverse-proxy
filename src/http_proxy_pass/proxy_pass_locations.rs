@@ -31,12 +31,19 @@ impl ProxyPassLocations {
         Self { data }
     }
 
-    pub fn find_location_index(&self, uri: &Uri) -> Result<LocationIndex, ProxyPassError> {
-        for (index, proxy_pass) in self.data.iter().enumerate() {
-            if proxy_pass.is_my_uri(uri) {
+    pub fn find_location_index(
+        &self,
+        uri: &Uri,
+        debug: bool,
+    ) -> Result<LocationIndex, ProxyPassError> {
+        for (index, proxy_pass_location) in self.data.iter().enumerate() {
+            if debug {
+                println!("{} {}", index, proxy_pass_location.config.path.as_str());
+            }
+            if proxy_pass_location.is_my_uri(uri) {
                 return Ok(LocationIndex {
                     index,
-                    id: proxy_pass.config.id,
+                    id: proxy_pass_location.config.id,
                 });
             }
         }
