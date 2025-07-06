@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 
-use crate::configurations::HttpListenPortConfiguration;
+use crate::{configurations::HttpListenPortConfiguration, tcp_or_unix::*};
 
 use super::{http_request_handler::http::HttpRequestHandler, AcceptedTcpConnection};
 
@@ -14,7 +14,22 @@ pub async fn handle_connection(
 ) {
     let listening_addr_str = format!("http://{}", listening_addr);
 
-    let io = TokioIo::new(accepted_connection.tcp_stream);
+    let io = match accepted_connection.network_stream {
+        MyNetworkStream::Tcp(tcp_stream) => {
+            let io = TokioIo::new(tcp_stream);
+            TcpOrUnixSocket::Tcp(io)
+        }
+        #[cfg(unix)]
+        MyNetworkStream::UnixSocket(unix_stream) => {
+            let io = TokioIo::new(unix_stream);
+            TcpOrUnixSocket::Unix(io)
+        }
+
+        #[cfg(unix)]
+        MyNetworkStream::Ssh(_) => {
+            panic!("Http server does not work with ssh network stream");
+        }
+    };
 
     let http_request_handler = HttpRequestHandler::new(accepted_connection.addr, configuration);
 
@@ -25,14 +40,40 @@ pub async fn handle_connection(
     let mut http1 = http1::Builder::new();
     http1.keep_alive(true);
 
-    let connection = http1
-        .serve_connection(
-            io,
-            service_fn(move |req| {
-                super::http_request_handler::http::handle_request(http_request_handler.clone(), req)
-            }),
-        )
-        .with_upgrades();
+    let connection = match io {
+        TcpOrUnixSocket::Tcp(io) => {
+            let tcp_connection = http1
+                .serve_connection(
+                    io,
+                    service_fn(move |req| {
+                        super::http_request_handler::http::handle_request(
+                            http_request_handler.clone(),
+                            req,
+                        )
+                    }),
+                )
+                .with_upgrades()
+                .into();
+            TcpOrUnixSocket::Tcp(tcp_connection)
+        }
+        #[cfg(unix)]
+        TcpOrUnixSocket::Unix(io) => {
+            let unix_connection = http1
+                .serve_connection(
+                    io,
+                    service_fn(move |req| {
+                        super::http_request_handler::http::handle_request(
+                            http_request_handler.clone(),
+                            req,
+                        )
+                    }),
+                )
+                .with_upgrades()
+                .into();
+
+            TcpOrUnixSocket::Unix(unix_connection)
+        }
+    };
 
     crate::app::APP_CTX
         .prometheus
@@ -46,12 +87,30 @@ pub async fn handle_connection(
     let listening_addr_str = listening_addr_str.clone();
 
     tokio::task::spawn(async move {
-        if let Err(err) = connection.await {
-            println!(
-                "{}. Error serving connection: {:?}",
-                rust_extensions::date_time::DateTimeAsMicroseconds::now().to_rfc3339(),
-                err
-            );
+        match connection {
+            TcpOrUnixSocket::Tcp(tcp) => {
+                if let Some(tcp) = tcp {
+                    if let Err(err) = tcp.await {
+                        println!(
+                            "{}. Error serving connection: {:?}",
+                            rust_extensions::date_time::DateTimeAsMicroseconds::now().to_rfc3339(),
+                            err
+                        );
+                    }
+                }
+            }
+            #[cfg(unix)]
+            TcpOrUnixSocket::Unix(unix) => {
+                if let Some(unix) = unix {
+                    if let Err(err) = unix.await {
+                        println!(
+                            "{}. Error serving connection: {:?}",
+                            rust_extensions::date_time::DateTimeAsMicroseconds::now().to_rfc3339(),
+                            err
+                        );
+                    }
+                }
+            }
         }
 
         crate::app::APP_CTX

@@ -1,15 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
-use my_ssh::SshAsyncChannel;
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::Mutex,
-};
+use tokio::sync::Mutex;
+
+use crate::tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf};
 
 pub async fn copy_loop(
-    mut reader: impl AsyncReadExt + Unpin,
-    writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
+    mut reader: MyOwnedReadHalf,
+    writer: Arc<Mutex<MyOwnedWriteHalf>>,
     incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
     buffer_size: usize,
     debug: bool,
@@ -56,17 +54,12 @@ pub async fn copy_loop(
         let result = result.unwrap();
 
         if result.is_err() {
-            let err = writer_access.shutdown().await;
-
-            if debug {
-                if let Err(err) = err {
-                    println!("Timeout on Shutting down tcp socket: {:?}", err);
-                }
-            }
+            writer_access.shutdown().await;
         }
     }
 }
 
+/*
 pub async fn copy_to_ssh_loop(
     mut reader: impl AsyncReadExt + Unpin,
     writer: Arc<Mutex<futures::io::WriteHalf<SshAsyncChannel>>>,
@@ -168,7 +161,7 @@ pub async fn copy_from_ssh_loop(
         }
     }
 }
-
+ */
 /*
 pub async fn copy_from_remote_loop(
     mut remote_reader: impl AsyncReadExt + Unpin,
@@ -205,8 +198,8 @@ pub async fn copy_from_remote_loop(
 }
  */
 pub async fn await_while_alive(
-    local_writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
-    remote_writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
+    local_writer: Arc<Mutex<MyOwnedWriteHalf>>,
+    remote_writer: Arc<Mutex<MyOwnedWriteHalf>>,
     incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
 
     print_detected: impl Fn() -> (),
@@ -227,13 +220,13 @@ pub async fn await_while_alive(
             print_detected();
 
             {
-                let mut remote_writer = remote_writer.lock().await;
-                let _ = remote_writer.shutdown().await;
+                let mut remote_writer_access = remote_writer.lock().await;
+                remote_writer_access.shutdown().await;
             }
 
             {
-                let mut local_writer = local_writer.lock().await;
-                let _ = local_writer.shutdown().await;
+                let mut remote_writer_access = local_writer.lock().await;
+                remote_writer_access.shutdown().await;
             }
 
             break;
@@ -241,6 +234,7 @@ pub async fn await_while_alive(
     }
 }
 
+/*
 pub async fn await_while_alive_with_ssh(
     local_writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
     remote_writer: Arc<Mutex<futures::io::WriteHalf<SshAsyncChannel>>>,
@@ -278,3 +272,4 @@ pub async fn await_while_alive_with_ssh(
         }
     }
 }
+ */

@@ -50,7 +50,7 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
         .get()
         .await
         .unwrap()
-        .body_as_str()
+        .get_body_as_str()
         .await
         .unwrap()
         .to_string();

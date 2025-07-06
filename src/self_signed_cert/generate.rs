@@ -18,7 +18,7 @@ fn generate_pk(cn_name: String) -> (CertificateDer<'static>, String) {
 
     let cert = certified_key.cert.der().clone();
 
-    let key_pair = certified_key.key_pair.serialize_pem();
+    let key_pair = certified_key.signing_key.serialize_pem();
 
     (cert, key_pair)
 }

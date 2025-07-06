@@ -1,10 +1,7 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
-};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tokio::io::{ReadHalf, WriteHalf};
 
@@ -12,6 +9,7 @@ use crate::{
     configurations::TcpEndpointHostConfig,
     tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
     tcp_listener::AcceptedTcpConnection,
+    tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf},
 };
 
 pub async fn handle_connection(
@@ -60,7 +58,7 @@ pub async fn handle_connection(
             }
         }
         if shut_down_connection {
-            let _ = accepted_server_connection.tcp_stream.shutdown().await;
+            let _ = accepted_server_connection.network_stream.shutdown().await;
             return;
         }
     }
@@ -78,7 +76,7 @@ pub async fn handle_connection(
                 accepted_server_connection.addr
             );
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
@@ -101,7 +99,7 @@ pub async fn handle_connection(
                 accepted_server_connection.addr
             );
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
@@ -118,7 +116,7 @@ pub async fn handle_connection(
         );
     }
 
-    let (server_read, server_write) = accepted_server_connection.tcp_stream.into_split();
+    let (server_read, server_write) = accepted_server_connection.network_stream.into_split();
 
     tokio::spawn(copy_from_connection_to_gateway(
         server_read,
@@ -141,7 +139,7 @@ pub async fn handle_connection(
 }
 
 async fn copy_from_connection_to_gateway(
-    mut server_read: OwnedReadHalf,
+    mut server_read: MyOwnedReadHalf,
     mut proxy_write: WriteHalf<TcpGatewayProxyForwardStream>,
     listening_addr: SocketAddr,
     gateway_id: Arc<String>,
@@ -210,7 +208,7 @@ async fn copy_from_connection_to_gateway(
 }
 
 async fn copy_from_gateway_to_connection(
-    mut server_write: OwnedWriteHalf,
+    mut server_write: MyOwnedWriteHalf,
     mut proxy_read: ReadHalf<TcpGatewayProxyForwardStream>,
     listening_addr: SocketAddr,
     gateway_id: Arc<String>,

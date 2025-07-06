@@ -139,7 +139,6 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
-
             ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     return HttpProxyPassContentSource::Http2OverGateway {
@@ -195,7 +194,7 @@ impl ProxyPassLocationConfig {
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            return HttpProxyPassContentSource::Http2 {
+                            return HttpProxyPassContentSource::Http1 {
                                 remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
@@ -203,7 +202,7 @@ impl ProxyPassLocationConfig {
                             }
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            return HttpProxyPassContentSource::Https2 {
+                            return HttpProxyPassContentSource::Https1 {
                                 remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
@@ -247,6 +246,61 @@ impl ProxyPassLocationConfig {
                         &local_file_path,
                         model.default_file.clone(),
                     ))
+                }
+            },
+            ProxyPassTo::UnixHttp1(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    panic!(
+                        "Unix+Http is not supported  over gateway. Id: {}. RemoteHost: {}",
+                        id.as_str(),
+                        remote_host.as_str()
+                    );
+                }
+                MyReverseProxyRemoteEndpoint::OverSsh {
+                    ssh_credentials,
+                    remote_host,
+                } => {
+                    panic!(
+                        "Unix+Http is not supported  over ssh. host_port: {}:{}. Remote_host: {}",
+                        ssh_credentials.get_host_port().0,
+                        ssh_credentials.get_host_port().1,
+                        remote_host.as_str()
+                    );
+                }
+                MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    return HttpProxyPassContentSource::UnixHttp1 {
+                        remote_endpoint: remote_host.to_owned(),
+                        debug,
+                        request_timeout: proxy_pass.request_timeout,
+                        connect_timeout: proxy_pass.connect_timeout,
+                    }
+                }
+            },
+            ProxyPassTo::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                    panic!(
+                        "Unix+Http2 is not supported  over gateway. Id:{}. RemoteHost: {}",
+                        id.as_str(),
+                        remote_host.as_str()
+                    );
+                }
+                MyReverseProxyRemoteEndpoint::OverSsh {
+                    ssh_credentials,
+                    remote_host,
+                } => {
+                    panic!(
+                        "Unix+Http2 is not supported  over ssh. HostPort: {}. RemoteHost: {}",
+                        ssh_credentials.get_host_port_as_string(),
+                        remote_host.as_str()
+                    );
+                }
+                MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    return HttpProxyPassContentSource::UnixHttp2 {
+                        remote_endpoint: remote_host.to_owned(),
+                        debug,
+                        request_timeout: proxy_pass.request_timeout,
+                        connect_timeout: proxy_pass.connect_timeout,
+                    }
                 }
             },
         };

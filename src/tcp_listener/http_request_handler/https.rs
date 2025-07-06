@@ -8,16 +8,16 @@ use crate::http_proxy_pass::HttpProxyPass;
 pub struct HttpsRequestsHandler {
     proxy_pass: HttpProxyPass,
     socket_addr: SocketAddr,
+    connection_id: i64,
 }
 
 impl HttpsRequestsHandler {
     pub fn new(proxy_pass: HttpProxyPass, socket_addr: SocketAddr) -> Self {
-        crate::app::APP_CTX
-            .http_connections
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let connection_id: i64 = crate::app::APP_CTX.get_next_id();
         Self {
             proxy_pass,
             socket_addr,
+            connection_id,
         }
     }
 
@@ -25,7 +25,13 @@ impl HttpsRequestsHandler {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
-        super::handle_requests::handle_requests(req, &self.proxy_pass, &self.socket_addr).await
+        super::handle_requests::handle_requests(
+            req,
+            &self.proxy_pass,
+            &self.socket_addr,
+            self.connection_id,
+        )
+        .await
     }
 
     pub async fn dispose(&self) {

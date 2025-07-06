@@ -3,9 +3,9 @@ use std::{net::SocketAddr, sync::Arc};
 use rust_extensions::{
     date_time::AtomicDateTimeAsMicroseconds, remote_endpoint::RemoteEndpointOwned,
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
+use tokio::{net::TcpStream, sync::Mutex};
 
-use crate::{configurations::*, tcp_listener::AcceptedTcpConnection};
+use crate::{configurations::*, tcp_listener::AcceptedTcpConnection, tcp_or_unix::*};
 
 pub async fn handle_connection(
     mut accepted_server_connection: AcceptedTcpConnection,
@@ -44,7 +44,7 @@ pub async fn handle_connection(
             }
         }
         if shut_down_connection {
-            let _ = accepted_server_connection.tcp_stream.shutdown().await;
+            let _ = accepted_server_connection.network_stream.shutdown().await;
             return;
         }
     }
@@ -65,7 +65,7 @@ pub async fn handle_connection(
                 accepted_server_connection.addr
             );
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
@@ -80,15 +80,15 @@ pub async fn handle_connection(
                 accepted_server_connection.addr
             );
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
     tokio::spawn(handle_port_forward(
         listening_addr,
         remote_host,
-        accepted_server_connection.tcp_stream,
-        remote_tcp_connection_result.unwrap(),
+        accepted_server_connection.network_stream,
+        remote_tcp_connection_result.unwrap().into(),
         crate::app::APP_CTX.connection_settings.buffer_size,
         configuration.debug,
     ));
@@ -97,30 +97,30 @@ pub async fn handle_connection(
 async fn handle_port_forward(
     listen_addr: std::net::SocketAddr,
     remote_host: Arc<RemoteEndpointOwned>,
-    server_stream: TcpStream,
-    remote_stream: TcpStream,
+    server_stream: MyNetworkStream,
+    remote_stream: MyNetworkStream,
     buffer_size: usize,
     debug: bool,
 ) {
-    let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
+    let (server_reader, server_writer) = server_stream.into_split();
 
-    let (remote_tcp_read, remote_tcp_writer) = remote_stream.into_split();
+    let (remote_reader, remote_writer) = remote_stream.into_split();
 
-    let tcp_server_writer = Arc::new(Mutex::new(tcp_server_writer));
+    let tcp_server_writer = Arc::new(Mutex::new(server_writer));
 
-    let remote_tcp_writer = Arc::new(Mutex::new(remote_tcp_writer));
+    let remote_tcp_writer = Arc::new(Mutex::new(remote_writer));
 
     let incoming_traffic_moment = Arc::new(AtomicDateTimeAsMicroseconds::now());
 
     tokio::spawn(super::forwards::copy_loop(
-        tcp_server_reader,
+        server_reader,
         remote_tcp_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
         debug,
     ));
     tokio::spawn(super::forwards::copy_loop(
-        remote_tcp_read,
+        remote_reader,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,

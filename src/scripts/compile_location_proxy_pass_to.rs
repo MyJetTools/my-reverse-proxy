@@ -23,6 +23,40 @@ pub async fn compile_location_proxy_pass_to(
     };
 
     let proxy_pass_to = match location_type {
+        LocationType::UnixSocketHttp => {
+            if location_settings.proxy_pass_to.is_none() {
+                return Err("proxy_pass_to is required for http location type".to_string());
+            }
+
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
+
+            ProxyPassTo::UnixHttp1(ProxyPassToModel {
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
+        }
+        LocationType::UnixSocketHttp2 => {
+            if location_settings.proxy_pass_to.is_none() {
+                return Err("proxy_pass_to is required for http location type".to_string());
+            }
+
+            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
+
+            ProxyPassTo::UnixHttp2(ProxyPassToModel {
+                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+                    proxy_pass_to.as_str(),
+                    settings_model,
+                )
+                .await?,
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+            })
+        }
         LocationType::Http => {
             if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for http location type".to_string());

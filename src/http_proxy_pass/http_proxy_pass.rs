@@ -44,6 +44,7 @@ impl HttpProxyPass {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
         connection_addr: &SocketAddr,
+        connection_id: i64,
         debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
@@ -121,7 +122,9 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source.send_request(request.request).await?;
+        let result = content_source
+            .send_request(connection_id, request.request)
+            .await?;
 
         let mut response = match result {
             super::HttpResponse::Response(response) => {
@@ -149,6 +152,45 @@ impl HttpProxyPass {
                             tokio::spawn(super::start_web_socket_loop(
                                 server_web_socket,
                                 tcp_stream,
+                                self.endpoint_info.debug,
+                                disconnection,
+                                trace_payload,
+                            ));
+
+                            into_full_body_response(web_socket_upgrade.upgrade_response)
+                        } else {
+                            response
+                        }
+                    }
+
+                    /*
+                                       super::WebSocketUpgradeStream::UnixSocket(tcp_stream) => {
+                                           if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                                               let server_web_socket = web_socket_upgrade.server_web_socket;
+
+                                               tokio::spawn(super::start_web_socket_loop(
+                                                   server_web_socket,
+                                                   tcp_stream,
+                                                   self.endpoint_info.debug,
+                                                   disconnection,
+                                                   trace_payload,
+                                               ));
+
+                                               into_full_body_response(web_socket_upgrade.upgrade_response)
+                                           } else {
+                                               response
+                                           }
+                                       }
+                    */
+                    super::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
+                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                            let server_web_socket = web_socket_upgrade.server_web_socket;
+
+                            let web_socket = hyper_web_socket.await.unwrap();
+
+                            tokio::spawn(super::start_hyper_web_socket_loop(
+                                server_web_socket,
+                                web_socket,
                                 self.endpoint_info.debug,
                                 disconnection,
                                 trace_payload,

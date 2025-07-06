@@ -1,13 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use tokio::io::AsyncWriteExt;
-
-use crate::configurations::ListenConfiguration;
+use crate::{configurations::ListenConfiguration, tcp_or_unix::*};
 
 use super::ListenServerHandler;
 
 pub struct AcceptedTcpConnection {
-    pub tcp_stream: tokio::net::TcpStream,
+    pub network_stream: MyNetworkStream,
     pub addr: SocketAddr,
 }
 
@@ -48,7 +46,7 @@ async fn accept_connections_loop(
                 let (tcp_stream, addr) = accepted_connection.unwrap();
 
                 let accepted_connection = AcceptedTcpConnection{
-                    tcp_stream,
+                    network_stream : MyNetworkStream::Tcp(tcp_stream),
                     addr
                 };
 
@@ -93,7 +91,7 @@ async fn handle_accepted_connection(
         .await;
 
     if endpoint_type.is_none() {
-        let _ = accepted_connection.tcp_stream.shutdown().await;
+        let _ = accepted_connection.network_stream.shutdown().await;
         return;
     }
 

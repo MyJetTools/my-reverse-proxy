@@ -28,3 +28,6 @@ pub use http_listen_port_info::*;
 //mod http_proxy_pass_remote_endpoint;
 //pub use http_proxy_pass_remote_endpoint::*;
 pub mod executors;
+
+mod web_socket_hyper;
+pub use web_socket_hyper::*;

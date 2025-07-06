@@ -11,6 +11,8 @@ pub enum LocationType {
     Https2,
     Files,
     StaticContent,
+    UnixSocketHttp,
+    UnixSocketHttp2,
 }
 
 impl LocationType {
@@ -30,6 +32,14 @@ impl LocationType {
                 if let Some(right_part) = splitted.next() {
                     left_part = right_part;
                 }
+
+                if left_part.starts_with("unix+http") {
+                    return Ok(Self::UnixSocketHttp);
+                };
+
+                if left_part.starts_with("unix+http2") {
+                    return Ok(Self::UnixSocketHttp2);
+                };
 
                 if left_part.starts_with("https") {
                     return Ok(Self::Https1);
@@ -69,6 +79,8 @@ impl LocationSettings {
     pub fn get_location_type(&self) -> Result<Option<LocationType>, String> {
         if let Some(location_type) = self.location_type.as_ref() {
             match location_type.as_str() {
+                "unix+http" => return Ok(LocationType::UnixSocketHttp.into()),
+                "unix+http2" => return Ok(LocationType::UnixSocketHttp2.into()),
                 "http" => return Ok(LocationType::Http.into()),
                 "http2" => return Ok(LocationType::Http2.into()),
                 "https" => return Ok(LocationType::Https1.into()),

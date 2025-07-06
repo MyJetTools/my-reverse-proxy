@@ -1,12 +1,12 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use my_ssh::{SshAsyncChannel, SshCredentials};
+use my_ssh::SshCredentials;
 use rust_extensions::{
     date_time::AtomicDateTimeAsMicroseconds, remote_endpoint::RemoteEndpointOwned,
 };
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
+use tokio::sync::Mutex;
 
-use crate::{configurations::*, tcp_listener::AcceptedTcpConnection};
+use crate::{configurations::*, tcp_listener::AcceptedTcpConnection, tcp_or_unix::MyNetworkStream};
 
 pub async fn handle_connection(
     mut accepted_server_connection: AcceptedTcpConnection,
@@ -27,7 +27,7 @@ pub async fn handle_connection(
             configuration.host_endpoint.as_str(),
             accepted_server_connection.addr
         );
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
@@ -51,7 +51,7 @@ pub async fn handle_connection(
                     err
                 );
         }
-        let _ = accepted_server_connection.tcp_stream.shutdown().await;
+        let _ = accepted_server_connection.network_stream.shutdown().await;
         return;
     }
 
@@ -61,8 +61,8 @@ pub async fn handle_connection(
         listening_addr,
         ssh_credentials.clone(),
         remote_host,
-        accepted_server_connection.tcp_stream,
-        ssh_channel.unwrap(),
+        accepted_server_connection.network_stream,
+        ssh_channel.unwrap().into(),
         crate::app::APP_CTX.connection_settings.buffer_size,
         configuration.debug,
     ));
@@ -72,35 +72,37 @@ async fn connection_loop(
     listen_addr: SocketAddr,
     ssh_credentials: Arc<SshCredentials>,
     remote_host: Arc<String>,
-    server_stream: TcpStream,
-    remote_stream: SshAsyncChannel,
+    server_stream: MyNetworkStream,
+    remote_stream: MyNetworkStream,
     buffer_size: usize,
     debug: bool,
 ) {
     let (tcp_server_reader, tcp_server_writer) = server_stream.into_split();
 
-    let (remote_ssh_read, remote_ssh_writer) = futures::AsyncReadExt::split(remote_stream);
+    let (remote_reader, remote_writer) = remote_stream.into_split();
 
     let tcp_server_writer = Arc::new(Mutex::new(tcp_server_writer));
 
-    let remote_ssh_writer = Arc::new(Mutex::new(remote_ssh_writer));
+    let remote_ssh_writer = Arc::new(Mutex::new(remote_writer));
 
     let incoming_traffic_moment = Arc::new(AtomicDateTimeAsMicroseconds::now());
 
-    tokio::spawn(super::forwards::copy_to_ssh_loop(
+    tokio::spawn(super::forwards::copy_loop(
         tcp_server_reader,
         remote_ssh_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
+        debug,
     ));
-    tokio::spawn(super::forwards::copy_from_ssh_loop(
-        remote_ssh_read,
+    tokio::spawn(super::forwards::copy_loop(
+        remote_reader,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
+        debug,
     ));
 
-    super::forwards::await_while_alive_with_ssh(
+    super::forwards::await_while_alive(
         tcp_server_writer,
         remote_ssh_writer,
         incoming_traffic_moment,

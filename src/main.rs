@@ -25,9 +25,11 @@ mod scripts;
 
 mod http2_client_pool;
 mod http_client_pool;
+mod http_clients;
 mod metrics;
 mod ssl;
 mod tcp_gateway;
+mod tcp_or_unix;
 mod timers;
 mod types;
 

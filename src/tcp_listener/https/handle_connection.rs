@@ -3,7 +3,6 @@ use std::{net::SocketAddr, sync::Arc};
 
 use hyper_util::rt::TokioIo;
 use tokio::io::AsyncWriteExt;
-use tokio::net::TcpStream;
 
 use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
@@ -11,6 +10,7 @@ use crate::configurations::*;
 use crate::http_proxy_pass::{HttpListenPortInfo, HttpProxyPass};
 use crate::tcp_listener::http_request_handler::https::HttpsRequestsHandler;
 use crate::tcp_listener::AcceptedTcpConnection;
+use crate::tcp_or_unix::MyNetworkStream;
 
 use super::ClientCertificateData;
 
@@ -99,8 +99,11 @@ pub async fn handle_connection(
 ) {
     let listening_addr_str = Arc::new(format!("https://{}", listening_addr));
     let endpoint_port = listening_addr.port();
-    let future =
-        lazy_accept_tcp_stream(endpoint_port, accepted_connection.tcp_stream, configuration);
+    let future = lazy_accept_tcp_stream(
+        endpoint_port,
+        accepted_connection.network_stream,
+        configuration,
+    );
 
     let result = tokio::time::timeout(Duration::from_secs(10), future).await;
 
@@ -157,7 +160,7 @@ pub async fn handle_connection(
 
 async fn lazy_accept_tcp_stream(
     endpoint_port: u16,
-    tcp_stream: TcpStream,
+    socket_stream: MyNetworkStream,
     configuration: Arc<HttpListenPortConfiguration>,
 ) -> Result<
     (
@@ -167,10 +170,20 @@ async fn lazy_accept_tcp_stream(
     ),
     String,
 > {
+    let tcp_stream = match socket_stream {
+        MyNetworkStream::Tcp(tcp_stream) => tcp_stream,
+        MyNetworkStream::UnixSocket(_) => {
+            panic!("TLS does not support unix sockets");
+        }
+        MyNetworkStream::Ssh(_) => {
+            panic!("TLS does not support Ssh sockets");
+        }
+    };
+
     let result: Result<
         Result<
             (
-                my_tls::tokio_rustls::server::TlsStream<TcpStream>,
+                my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
                 Arc<HttpEndpointInfo>,
                 Option<Arc<ClientCertificateData>>,
             ),

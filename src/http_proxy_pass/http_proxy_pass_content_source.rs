@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::{combinators::BoxBody, Full};
+use hyper_tungstenite::HyperWebsocket;
 use my_ssh::{ssh_settings::OverSshConnectionSettings, SshAsyncChannel, SshSession};
 use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
 
@@ -9,6 +10,7 @@ use crate::{
     consts::{DEFAULT_HTTP_CONNECT_TIMEOUT, DEFAULT_HTTP_REQUEST_TIMEOUT},
     http_client_connectors::{
         HttpConnector, HttpOverGatewayConnector, HttpOverSshConnector, HttpTlsConnector,
+        UnixSocketHttpConnector,
     },
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
@@ -18,6 +20,12 @@ use super::ProxyPassError;
 use my_http_client::{http1::*, MyHttpClientDisconnect};
 
 pub enum HttpProxyPassContentSource {
+    UnixHttp1 {
+        remote_endpoint: Arc<RemoteEndpointOwned>,
+        debug: bool,
+        request_timeout: std::time::Duration,
+        connect_timeout: std::time::Duration,
+    },
     Http1 {
         remote_endpoint: Arc<RemoteEndpointOwned>,
         debug: bool,
@@ -32,6 +40,12 @@ pub enum HttpProxyPassContentSource {
         connect_timeout: std::time::Duration,
     },
     Http2 {
+        remote_endpoint: Arc<RemoteEndpointOwned>,
+        debug: bool,
+        request_timeout: std::time::Duration,
+        connect_timeout: std::time::Duration,
+    },
+    UnixHttp2 {
         remote_endpoint: Arc<RemoteEndpointOwned>,
         debug: bool,
         request_timeout: std::time::Duration,
@@ -81,10 +95,85 @@ pub enum HttpProxyPassContentSource {
 impl HttpProxyPassContentSource {
     pub async fn send_request(
         &self,
+        connection_id: i64,
         req: hyper::Request<Full<Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
         match self {
             HttpProxyPassContentSource::Http1 {
+                remote_endpoint,
+                debug,
+                request_timeout,
+                connect_timeout,
+            } => {
+                let http_client = crate::app::APP_CTX
+                    .unix_sockets_per_connection
+                    .get_or_create(connection_id, || {
+                        let mut result: my_http_client::http1_hyper::MyHttpHyperClient<
+                            tokio::net::UnixStream,
+                            UnixSocketHttpConnector,
+                        > = UnixSocketHttpConnector {
+                            remote_endpoint: remote_endpoint.to_owned(),
+                            debug: *debug,
+                        }
+                        .into();
+
+                        result.set_connect_timeout(*connect_timeout);
+
+                        result
+                    })
+                    .await;
+
+                let response = http_client
+                    .do_request(req.clone(), *request_timeout)
+                    .await?;
+
+                match response {
+                    my_http_client::http1_hyper::HyperHttpResponse::Response(response) => {
+                        return Ok(HttpResponse::Response(response));
+                    }
+                    my_http_client::http1_hyper::HyperHttpResponse::WebSocketUpgrade {
+                        response,
+                        web_socket,
+                    } => {
+                        return Ok(HttpResponse::WebSocketUpgrade {
+                            stream: WebSocketUpgradeStream::Hyper(web_socket),
+                            response,
+                            disconnection: http_client,
+                        });
+                    }
+                }
+            }
+
+            HttpProxyPassContentSource::UnixHttp2 {
+                remote_endpoint,
+                debug,
+                request_timeout,
+                connect_timeout,
+            } => {
+                let h2_client = crate::app::APP_CTX
+                    .unix_socket_h2_socket_per_connection
+                    .get_or_create(connection_id, || {
+                        let mut result: my_http_client::http2::MyHttp2Client<
+                            tokio::net::UnixStream,
+                            UnixSocketHttpConnector,
+                        > = UnixSocketHttpConnector {
+                            remote_endpoint: remote_endpoint.to_owned(),
+                            debug: *debug,
+                        }
+                        .into();
+
+                        result.set_connect_timeout(*connect_timeout);
+
+                        result
+                    })
+                    .await;
+
+                let http_response = h2_client.do_request(req, *request_timeout).await?;
+
+                Ok(HttpResponse::Response(http_response))
+            }
+
+            HttpProxyPassContentSource::UnixHttp1 {
                 remote_endpoint,
                 debug,
                 request_timeout,
@@ -391,4 +480,5 @@ pub enum WebSocketUpgradeStream {
     TlsStream(my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
     SshChannel(SshAsyncChannel),
     HttpOverGatewayStream(TcpGatewayProxyForwardStream),
+    Hyper(HyperWebsocket),
 }

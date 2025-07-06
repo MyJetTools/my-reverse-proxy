@@ -42,6 +42,8 @@ pub struct ProxyPassToModel {
 pub enum ProxyPassTo {
     Http1(ProxyPassToModel),
     Http2(ProxyPassToModel),
+    UnixHttp1(ProxyPassToModel),
+    UnixHttp2(ProxyPassToModel),
     FilesPath(ProxyPassFilesPathModel),
     Static(StaticContentModel),
 }
@@ -50,6 +52,8 @@ impl ProxyPassTo {
     pub fn to_string(&self) -> String {
         match self {
             ProxyPassTo::Http1(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassTo::UnixHttp1(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassTo::UnixHttp2(proxy_pass) => proxy_pass.remote_host.to_string(),
             ProxyPassTo::Http2(proxy_pass) => proxy_pass.remote_host.to_string(),
             ProxyPassTo::FilesPath(model) => model.to_string(),
             ProxyPassTo::Static(model) => model.to_string(),
@@ -58,6 +62,8 @@ impl ProxyPassTo {
 
     pub fn get_type_as_str(&self) -> &'static str {
         match self {
+            ProxyPassTo::UnixHttp1(_) => "unix+http1",
+            ProxyPassTo::UnixHttp2(_) => "unix+http2",
             ProxyPassTo::Http1(_) => "http1",
             ProxyPassTo::Http2(_) => "http2",
             ProxyPassTo::FilesPath(_) => "files_path",

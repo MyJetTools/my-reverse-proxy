@@ -10,11 +10,8 @@ pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
     socket_addr: &SocketAddr,
+    connection_id: i64,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
-    let mut sw = StopWatch::new();
-
-    sw.start();
-
     let debug = if proxy_pass.endpoint_info.debug {
         let req_str: String = format!(
             "{}: [{}]{:?}",
@@ -22,8 +19,8 @@ pub async fn handle_requests(
             req.method(),
             req.uri()
         );
-        let mut sw = StopWatch::new();
-        sw.start();
+        let sw = StopWatch::new();
+
         println!("Req: {}", req_str);
         Some((req_str, sw))
     } else {
@@ -31,14 +28,18 @@ pub async fn handle_requests(
     };
 
     match proxy_pass
-        .send_payload(req, socket_addr, proxy_pass.endpoint_info.debug)
+        .send_payload(
+            req,
+            socket_addr,
+            connection_id,
+            proxy_pass.endpoint_info.debug,
+        )
         .await
     {
         Ok(response) => {
             match response.as_ref() {
                 Ok(response) => {
-                    if let Some((req_str, mut sw)) = debug {
-                        sw.pause();
+                    if let Some((req_str, sw)) = debug {
                         println!(
                             "Response: {}->{} {}",
                             req_str,
@@ -48,8 +49,7 @@ pub async fn handle_requests(
                     }
                 }
                 Err(err) => {
-                    if let Some((req_str, mut sw)) = debug {
-                        sw.pause();
+                    if let Some((req_str, sw)) = debug {
                         println!(
                             "Response Error: {}->{} {}",
                             req_str,
@@ -63,8 +63,7 @@ pub async fn handle_requests(
             return response;
         }
         Err(err) => {
-            if let Some((req_str, mut sw)) = debug {
-                sw.pause();
+            if let Some((req_str, sw)) = debug {
                 println!(
                     "Tech Resp: {}->{:?} {}",
                     req_str,

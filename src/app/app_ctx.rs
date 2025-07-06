@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{AtomicI64, AtomicIsize, Ordering},
+        atomic::{AtomicI64, Ordering},
         Arc,
     },
 };
@@ -17,6 +17,7 @@ use crate::{
     http2_client_pool::Http2ClientPool,
     http_client_connectors::*,
     http_client_pool::HttpClientPool,
+    http_clients::{Http2Clients, HttpClients},
     settings::ConnectionsSettingsModel,
     settings_compiled::SettingsCompiled,
     ssl::CertificatesCache,
@@ -43,6 +44,19 @@ pub struct AppContext {
     pub http_over_gateway_clients_pool:
         HttpClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
+
+    pub unix_sockets_per_connection: HttpClients<tokio::net::UnixStream, UnixSocketHttpConnector>,
+
+    pub unix_socket_h2_socket_per_connection:
+        Http2Clients<tokio::net::UnixStream, UnixSocketHttpConnector>,
+
+    /*
+    pub unix_socket_http_clients_pool:
+        HttpClientPool<tokio::net::UnixStream, UnixSocketHttpConnector>,
+
+    pub unix_socket_http2_clients_pool:
+        Http2ClientPool<tokio::net::UnixStream, UnixSocketHttpConnector>,
+         */
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
@@ -51,7 +65,6 @@ pub struct AppContext {
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
-    pub http_connections: AtomicIsize,
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
 
@@ -119,7 +132,6 @@ impl AppContext {
         }
 
         Self {
-            http_connections: AtomicIsize::new(0),
             id: AtomicI64::new(0),
             connection_settings,
             // saved_client_certs: SavedClientCert::new(),
@@ -141,13 +153,16 @@ impl AppContext {
             http_clients_pool: HttpClientPool::new(),
             http_over_gateway_clients_pool: HttpClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
+            unix_socket_h2_socket_per_connection: Http2Clients::new(),
 
             https_clients_pool: HttpClientPool::new(),
             http2_clients_pool: Http2ClientPool::new(),
             https2_clients_pool: Http2ClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
             http2_over_gateway_clients_pool: Http2ClientPool::new(),
-
+            unix_sockets_per_connection: HttpClients::new(),
+            //unix_socket_http_clients_pool: HttpClientPool::new(),
+            //unix_socket_http2_clients_pool: Http2ClientPool::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,
