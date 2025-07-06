@@ -25,13 +25,7 @@ impl HttpsRequestsHandler {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
-        super::handle_requests::handle_requests(
-            req,
-            &self.proxy_pass,
-            &self.socket_addr,
-            self.connection_id,
-        )
-        .await
+        super::handle_requests::handle_requests(req, &self.proxy_pass, &self.socket_addr).await
     }
 
     pub async fn dispose(&self) {

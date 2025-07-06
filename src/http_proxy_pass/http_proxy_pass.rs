@@ -44,7 +44,6 @@ impl HttpProxyPass {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
         connection_addr: &SocketAddr,
-        connection_id: i64,
         debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
@@ -123,7 +122,7 @@ impl HttpProxyPass {
         };
 
         let result = content_source
-            .send_request(connection_id, request.request)
+            .send_request(location_index.id, request.request)
             .await?;
 
         let mut response = match result {

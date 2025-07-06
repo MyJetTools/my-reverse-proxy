@@ -44,4 +44,9 @@ impl<
 
         client
     }
+
+    pub async fn remove(&self, id: i64) {
+        let mut write_access = self.data.lock().await;
+        write_access.remove(&id);
+    }
 }

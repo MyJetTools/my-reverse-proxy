@@ -10,7 +10,6 @@ pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
     proxy_pass: &HttpProxyPass,
     socket_addr: &SocketAddr,
-    connection_id: i64,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
     let debug = if proxy_pass.endpoint_info.debug {
         let req_str: String = format!(
@@ -28,12 +27,7 @@ pub async fn handle_requests(
     };
 
     match proxy_pass
-        .send_payload(
-            req,
-            socket_addr,
-            connection_id,
-            proxy_pass.endpoint_info.debug,
-        )
+        .send_payload(req, socket_addr, proxy_pass.endpoint_info.debug)
         .await
     {
         Ok(response) => {

@@ -6,7 +6,6 @@ use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use tokio::sync::Mutex;
 
 use crate::{
-    app::APP_CTX,
     configurations::HttpListenPortConfiguration,
     http_proxy_pass::{HostPort, HttpListenPortInfo, HttpProxyPass},
 };
@@ -15,7 +14,6 @@ pub struct HttpRequestHandler {
     proxy_pass: Mutex<Option<Arc<HttpProxyPass>>>,
     socket_addr: SocketAddr,
     listen_port_config: Arc<HttpListenPortConfiguration>,
-    connection_id: i64,
 }
 
 impl HttpRequestHandler {
@@ -23,13 +21,10 @@ impl HttpRequestHandler {
         socket_addr: SocketAddr,
         listen_port_config: Arc<HttpListenPortConfiguration>,
     ) -> Self {
-        let connection_id = APP_CTX.get_next_id();
         Self {
             proxy_pass: Mutex::new(None),
-
             socket_addr,
             listen_port_config,
-            connection_id,
         }
     }
 
@@ -96,13 +91,7 @@ impl HttpRequestHandler {
     ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
         match self.get_http_proxy_pass(&req).await {
             Ok(proxy_pass) => {
-                super::handle_requests::handle_requests(
-                    req,
-                    &proxy_pass,
-                    &self.socket_addr,
-                    self.connection_id,
-                )
-                .await
+                super::handle_requests::handle_requests(req, &proxy_pass, &self.socket_addr).await
             }
             Err(err) => err,
         }

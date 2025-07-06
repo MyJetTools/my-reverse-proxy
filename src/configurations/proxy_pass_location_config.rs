@@ -3,6 +3,7 @@ use std::time::Duration;
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
+    app::APP_CTX,
     http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::HttpProxyPassContentSource,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
@@ -23,7 +24,6 @@ pub struct ProxyPassLocationConfig {
 
 impl ProxyPassLocationConfig {
     pub fn new(
-        id: i64,
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
         ip_white_list_id: Option<String>,
@@ -36,7 +36,7 @@ impl ProxyPassLocationConfig {
 
         Self {
             path,
-            id,
+            id: APP_CTX.get_next_id(),
             modify_headers,
             ip_white_list_id,
             proxy_pass_to,
@@ -314,5 +314,22 @@ impl ProxyPassLocationConfig {
             ProxyPassTo::Http2(_) => Some(false),
             _ => None,
         }
+    }
+}
+
+impl Drop for ProxyPassLocationConfig {
+    fn drop(&mut self) {
+        let location_id = self.id;
+
+        tokio::spawn(async move {
+            APP_CTX
+                .unix_sockets_per_connection
+                .remove(location_id)
+                .await;
+            APP_CTX
+                .unix_socket_h2_socket_per_connection
+                .remove(location_id)
+                .await;
+        });
     }
 }

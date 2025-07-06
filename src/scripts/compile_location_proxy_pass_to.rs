@@ -157,7 +157,6 @@ pub async fn compile_location_proxy_pass_to(
     };
 
     let result = ProxyPassLocationConfig::new(
-        crate::app::APP_CTX.get_next_id(),
         path,
         location_settings.modify_http_headers.clone(),
         location_settings.whitelisted_ip.clone(),
