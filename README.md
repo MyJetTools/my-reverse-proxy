@@ -293,6 +293,68 @@ hosts:
       type: tcp
 ```
 
+## Location types
+
+None tls connections can not infer which type of HTTP protocol endpoint supports (HTTP/1.1 or HTTP2). For this reason it is possible to specify type of location explicitly.
+
+### Http
+
+Used for http/1.1 connections
+
+```yaml
+localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: http
+      proxy_pass_to: http://remote_host:5123
+```
+
+### Http2
+
+Used for http/2 connections
+
+```yaml
+localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: http2
+      proxy_pass_to: http://remote_host:5123
+```
+
+### Unix+Http
+
+Used for http/1.1 connections through unix socket
+
+Unix socket address must be started with '/' or '~'
+
+```yaml
+localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: unix+http
+      proxy_pass_to: /socket.sock
+```
+
+### Unix+Http2
+
+Used for http/2 connections
+
+Unix socket address must be started with '/' or '~'
+
+```yaml
+localhost:8001:
+    endpoint:
+      type: http
+    locations:      
+    - type: unix+http2
+      proxy_pass_to: /socket.sock
+```
+
+
+
 ## Debugging endpoints
 
 Adding debug flag to endpoint will print all the traffic errors to the console
