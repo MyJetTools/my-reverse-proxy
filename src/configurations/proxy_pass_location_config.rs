@@ -4,8 +4,8 @@ use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
     app::APP_CTX,
-    http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
-    http_proxy_pass::HttpProxyPassContentSource,
+    http_content_source::*,
+    http_proxy_pass::content_source::*,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
 };
 
@@ -64,10 +64,11 @@ impl ProxyPassLocationConfig {
             }
             ProxyPassTo::Http1(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    return HttpProxyPassContentSource::Http1OverGateway {
+                    let model = Http1OverGatewayContentSource {
                         gateway_id: id.clone(),
                         remote_endpoint: remote_host.clone(),
-                    }
+                    };
+                    return HttpProxyPassContentSource::Http1OverGateway(model);
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -77,7 +78,7 @@ impl ProxyPassLocationConfig {
                         .await
                         .unwrap();
 
-                    HttpProxyPassContentSource::Http1OverSsh {
+                    let model = Http1OverSshContentSource {
                         over_ssh: OverSshConnectionSettings {
                             ssh_credentials: ssh_credentials.clone().into(),
                             remote_resource_string: remote_host.as_str().to_string(),
@@ -86,7 +87,9 @@ impl ProxyPassLocationConfig {
                         debug,
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
-                    }
+                    };
+
+                    HttpProxyPassContentSource::Http1OverSsh(model)
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     let remote_endpoint_scheme = remote_host.get_scheme();
@@ -100,38 +103,42 @@ impl ProxyPassLocationConfig {
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            return HttpProxyPassContentSource::Http1 {
+                            let model = Http1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Http1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            return HttpProxyPassContentSource::Https1 {
+                            let model = Https1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            return HttpProxyPassContentSource::Http1 {
+                            let model = Http1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Http1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            return HttpProxyPassContentSource::Https1 {
+                            let model = Https1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
                             panic!("HTTP1 UnixSocket is not supported as remote content source");
@@ -141,10 +148,11 @@ impl ProxyPassLocationConfig {
             },
             ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    return HttpProxyPassContentSource::Http2OverGateway {
+                    let model = Http2OverGatewayContentSource {
                         gateway_id: id.clone(),
                         remote_endpoint: remote_host.clone(),
-                    }
+                    };
+                    return HttpProxyPassContentSource::Http2OverGateway(model);
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -154,7 +162,7 @@ impl ProxyPassLocationConfig {
                         .await
                         .unwrap();
 
-                    return HttpProxyPassContentSource::Http2OverSsh {
+                    let model = Http2OverSshContentSource {
                         over_ssh: OverSshConnectionSettings {
                             ssh_credentials: ssh_credentials.clone().into(),
                             remote_resource_string: remote_host.as_str().to_string(),
@@ -164,6 +172,8 @@ impl ProxyPassLocationConfig {
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
                     };
+
+                    return HttpProxyPassContentSource::Http2OverSsh(model);
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     let remote_endpoint_scheme = remote_host.get_scheme();
@@ -177,38 +187,43 @@ impl ProxyPassLocationConfig {
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            return HttpProxyPassContentSource::Http2 {
+                            let model = Http2ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+
+                            return HttpProxyPassContentSource::Http2(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            return HttpProxyPassContentSource::Https2 {
+                            let model = Https2ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Https2(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            return HttpProxyPassContentSource::Http1 {
+                            let model = Http1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Http1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            return HttpProxyPassContentSource::Https1 {
+                            let model = Https1ContentSource {
                                 remote_endpoint: remote_host.to_owned(),
                                 domain_name: self.domain_name.clone(),
                                 debug,
                                 request_timeout: proxy_pass.request_timeout,
                                 connect_timeout: proxy_pass.connect_timeout,
-                            }
+                            };
+                            return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
                             panic!("HTTP2 UnixSocket is not supported as remote content source");
@@ -218,11 +233,12 @@ impl ProxyPassLocationConfig {
             },
             ProxyPassTo::FilesPath(model) => match &model.files_path {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    HttpProxyPassContentSource::PathOverGateway {
+                    let model = PathOverGatewayContentSource {
                         gateway_id: id.clone(),
                         path: remote_host.clone(),
                         default_file: model.default_file.clone(),
-                    }
+                    };
+                    HttpProxyPassContentSource::PathOverGateway(model)
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -268,12 +284,14 @@ impl ProxyPassLocationConfig {
                     );
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                    return HttpProxyPassContentSource::UnixHttp1 {
+                    let model = UnixHttp1ContentSource {
                         remote_endpoint: remote_host.to_owned(),
                         debug,
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
-                    }
+                        connection_id: self.id,
+                    };
+                    return HttpProxyPassContentSource::UnixHttp1(model);
                 }
             },
             ProxyPassTo::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
@@ -295,12 +313,14 @@ impl ProxyPassLocationConfig {
                     );
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                    return HttpProxyPassContentSource::UnixHttp2 {
+                    let model = UnixHttp2ContentSource {
                         remote_endpoint: remote_host.to_owned(),
                         debug,
                         request_timeout: proxy_pass.request_timeout,
                         connect_timeout: proxy_pass.connect_timeout,
-                    }
+                        connection_id: self.id,
+                    };
+                    return HttpProxyPassContentSource::UnixHttp2(model);
                 }
             },
         };
@@ -314,22 +334,5 @@ impl ProxyPassLocationConfig {
             ProxyPassTo::Http2(_) => Some(false),
             _ => None,
         }
-    }
-}
-
-impl Drop for ProxyPassLocationConfig {
-    fn drop(&mut self) {
-        let location_id = self.id;
-
-        tokio::spawn(async move {
-            APP_CTX
-                .unix_sockets_per_connection
-                .remove(location_id)
-                .await;
-            APP_CTX
-                .unix_socket_h2_socket_per_connection
-                .remove(location_id)
-                .await;
-        });
     }
 }

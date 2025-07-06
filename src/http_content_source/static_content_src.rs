@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use my_http_server::WebContentType;
 
-use crate::http_proxy_pass::ProxyPassError;
+use crate::http_proxy_pass::{content_source::HttpResponse, ProxyPassError};
 
 use super::{RequestExecutor, RequestExecutorResult};
 
@@ -25,6 +25,16 @@ impl StaticContentSrc {
         &self,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
         Ok(self.inner.clone())
+    }
+
+    pub async fn execute(
+        &self,
+        _req: http::Request<http_body_util::Full<bytes::Bytes>>,
+    ) -> Result<HttpResponse, ProxyPassError> {
+        println!("Executing static request");
+        let request_executor = self.get_request_executor()?;
+        let result = request_executor.execute_request().await?;
+        Ok(HttpResponse::Response(result.into()))
     }
 }
 

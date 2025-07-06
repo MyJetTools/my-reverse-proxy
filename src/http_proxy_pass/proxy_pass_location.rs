@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use hyper::Uri;
 
-use crate::{configurations::*, http_proxy_pass::HttpProxyPassContentSource};
+use crate::{configurations::*, http_proxy_pass::content_source::*};
 
 pub struct ProxyPassLocation {
     pub content_source: Arc<HttpProxyPassContentSource>,

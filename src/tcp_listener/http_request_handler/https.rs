@@ -8,16 +8,13 @@ use crate::http_proxy_pass::HttpProxyPass;
 pub struct HttpsRequestsHandler {
     proxy_pass: HttpProxyPass,
     socket_addr: SocketAddr,
-    connection_id: i64,
 }
 
 impl HttpsRequestsHandler {
     pub fn new(proxy_pass: HttpProxyPass, socket_addr: SocketAddr) -> Self {
-        let connection_id: i64 = crate::app::APP_CTX.get_next_id();
         Self {
             proxy_pass,
             socket_addr,
-            connection_id,
         }
     }
 

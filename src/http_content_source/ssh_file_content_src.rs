@@ -5,7 +5,7 @@ use my_http_server::WebContentType;
 use my_ssh::SshSession;
 use tokio::sync::Mutex;
 
-use crate::http_proxy_pass::ProxyPassError;
+use crate::http_proxy_pass::{content_source::HttpResponse, ProxyPassError};
 
 use super::{RequestExecutor, RequestExecutorResult};
 
@@ -54,6 +54,15 @@ impl PathOverSshContentSource {
             execute_timeout: self.execute_timeout,
         };
         Ok(Arc::new(result))
+    }
+
+    pub async fn execute(
+        &self,
+        req: http::Request<http_body_util::Full<bytes::Bytes>>,
+    ) -> Result<HttpResponse, ProxyPassError> {
+        let request_executor = self.get_request_executor(&req.uri()).await?;
+        let result = request_executor.execute_request().await?;
+        Ok(HttpResponse::Response(result.into()))
     }
 }
 

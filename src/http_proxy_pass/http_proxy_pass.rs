@@ -121,18 +121,16 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source
-            .send_request(location_index.id, request.request)
-            .await?;
+        let result = content_source.send_request(request.request).await?;
 
         let mut response = match result {
-            super::HttpResponse::Response(response) => {
+            super::content_source::HttpResponse::Response(response) => {
                 if trace_payload {
                     println!("Response headers: {:?}", response.headers());
                 }
                 response
             }
-            super::HttpResponse::WebSocketUpgrade {
+            super::content_source::HttpResponse::WebSocketUpgrade {
                 stream,
                 response,
                 disconnection,
@@ -144,7 +142,7 @@ impl HttpProxyPass {
                     );
                 }
                 match stream {
-                    super::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
+                    super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
 
@@ -181,7 +179,7 @@ impl HttpProxyPass {
                                            }
                                        }
                     */
-                    super::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
+                    super::content_source::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
 
@@ -201,7 +199,7 @@ impl HttpProxyPass {
                         }
                     }
 
-                    super::WebSocketUpgradeStream::TlsStream(tls_stream) => {
+                    super::content_source::WebSocketUpgradeStream::TlsStream(tls_stream) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
                             tokio::spawn(super::start_web_socket_loop(
@@ -217,7 +215,7 @@ impl HttpProxyPass {
                             response
                         }
                     }
-                    super::WebSocketUpgradeStream::SshChannel(async_channel) => {
+                    super::content_source::WebSocketUpgradeStream::SshChannel(async_channel) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
                             tokio::spawn(super::start_web_socket_loop(
@@ -234,7 +232,9 @@ impl HttpProxyPass {
                         }
                     }
 
-                    super::WebSocketUpgradeStream::HttpOverGatewayStream(async_channel) => {
+                    super::content_source::WebSocketUpgradeStream::HttpOverGatewayStream(
+                        async_channel,
+                    ) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
                             tokio::spawn(super::start_web_socket_loop(
