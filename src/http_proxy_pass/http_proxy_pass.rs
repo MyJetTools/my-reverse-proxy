@@ -160,25 +160,24 @@ impl HttpProxyPass {
                         }
                     }
 
-                    /*
-                                       super::WebSocketUpgradeStream::UnixSocket(tcp_stream) => {
-                                           if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                                               let server_web_socket = web_socket_upgrade.server_web_socket;
+                    super::content_source::WebSocketUpgradeStream::UnixStream(tcp_stream) => {
+                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
+                            let server_web_socket = web_socket_upgrade.server_web_socket;
 
-                                               tokio::spawn(super::start_web_socket_loop(
-                                                   server_web_socket,
-                                                   tcp_stream,
-                                                   self.endpoint_info.debug,
-                                                   disconnection,
-                                                   trace_payload,
-                                               ));
+                            tokio::spawn(super::start_web_socket_loop(
+                                server_web_socket,
+                                tcp_stream,
+                                self.endpoint_info.debug,
+                                disconnection,
+                                trace_payload,
+                            ));
 
-                                               into_full_body_response(web_socket_upgrade.upgrade_response)
-                                           } else {
-                                               response
-                                           }
-                                       }
-                    */
+                            into_full_body_response(web_socket_upgrade.upgrade_response)
+                        } else {
+                            response
+                        }
+                    }
+
                     super::content_source::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;

@@ -24,3 +24,5 @@ mod http2_over_ssh;
 pub use http2_over_ssh::*;
 mod http1_over_ssh;
 pub use http1_over_ssh::*;
+mod local_path_content_source;
+pub use local_path_content_source::*;

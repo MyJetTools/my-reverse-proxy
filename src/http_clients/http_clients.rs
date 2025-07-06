@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
-use my_http_client::{http1_hyper::MyHttpHyperClient, MyHttpClientConnector};
+use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
 use tokio::sync::Mutex;
 
 pub struct HttpClients<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 > {
-    data: Mutex<HashMap<i64, Arc<MyHttpHyperClient<TStream, TConnector>>>>,
+    data: Mutex<HashMap<i64, Arc<MyHttpClient<TStream, TConnector>>>>,
 }
 
 impl<
@@ -24,8 +24,8 @@ impl<
     pub async fn get_or_create(
         &self,
         id: i64,
-        crate_client: impl Fn() -> MyHttpHyperClient<TStream, TConnector>,
-    ) -> Arc<MyHttpHyperClient<TStream, TConnector>> {
+        crate_client: impl Fn() -> MyHttpClient<TStream, TConnector>,
+    ) -> Arc<MyHttpClient<TStream, TConnector>> {
         {
             let read_access = self.data.lock().await;
 

@@ -3,11 +3,10 @@ use std::sync::Arc;
 use hyper::Uri;
 use my_http_server::WebContentType;
 
+use crate::http_content_source::{RequestExecutor, RequestExecutorResult};
 use crate::http_proxy_pass::{content_source::HttpResponse, ProxyPassError};
 
 use crate::configurations::*;
-
-use super::{RequestExecutor, RequestExecutorResult};
 
 pub struct LocalPathContentSrc {
     pub file_path: String,

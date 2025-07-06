@@ -2,7 +2,7 @@ use bytes::Bytes;
 use http_body_util::Full;
 
 use crate::{
-    http_content_source::{LocalPathContentSrc, PathOverSshContentSource, StaticContentSrc},
+    http_content_source::{PathOverSshContentSource, StaticContentSrc},
     http_proxy_pass::ProxyPassError,
 };
 

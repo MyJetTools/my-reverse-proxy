@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use my_http_client::http1::*;
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
 use crate::{
@@ -24,7 +25,7 @@ impl UnixHttp1ContentSource {
         let http_client = crate::app::APP_CTX
             .unix_sockets_per_connection
             .get_or_create(self.connection_id, || {
-                let mut http_client: my_http_client::http1_hyper::MyHttpHyperClient<
+                let mut http_client: my_http_client::http1::MyHttpClient<
                     tokio::net::UnixStream,
                     UnixSocketHttpConnector,
                 > = UnixSocketHttpConnector {
@@ -39,22 +40,21 @@ impl UnixHttp1ContentSource {
             })
             .await;
 
-        let response = http_client
-            .do_request(req.clone(), self.request_timeout)
-            .await?;
+        let req = MyHttpRequest::from_hyper_request(req).await;
 
-        match response {
-            my_http_client::http1_hyper::HyperHttpResponse::Response(response) => {
+        match http_client.do_request(&req, self.request_timeout).await? {
+            MyHttpResponse::Response(response) => {
                 return Ok(HttpResponse::Response(response));
             }
-            my_http_client::http1_hyper::HyperHttpResponse::WebSocketUpgrade {
+            MyHttpResponse::WebSocketUpgrade {
+                stream,
                 response,
-                web_socket,
+                disconnection,
             } => {
                 return Ok(HttpResponse::WebSocketUpgrade {
-                    stream: WebSocketUpgradeStream::Hyper(web_socket),
+                    stream: WebSocketUpgradeStream::UnixStream(stream),
                     response,
-                    disconnection: http_client,
+                    disconnection,
                 });
             }
         }
