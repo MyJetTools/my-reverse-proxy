@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
-use hyper_tungstenite::HyperWebsocket;
 use my_http_client::MyHttpClientDisconnect;
 use my_ssh::SshAsyncChannel;
 
@@ -23,5 +22,5 @@ pub enum WebSocketUpgradeStream {
     TlsStream(my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
     SshChannel(SshAsyncChannel),
     HttpOverGatewayStream(TcpGatewayProxyForwardStream),
-    Hyper(HyperWebsocket),
+    // Hyper(HyperWebsocket),
 }

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, mem};
 
-use rust_extensions::placeholders::ContentToken;
+use rust_common::placeholders::*;
 
 use crate::settings::SettingsModel;
 
@@ -39,7 +39,7 @@ impl VariablesCompiled {
         let mut result = String::new();
 
         let placeholders_iterator =
-            rust_extensions::placeholders::PlaceholdersIterator::new(&value, "${", "}");
+            rust_common::placeholders::PlaceholdersIterator::new(&value, "${", "}");
 
         for itm in placeholders_iterator {
             match itm {

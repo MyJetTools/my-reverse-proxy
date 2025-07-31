@@ -178,6 +178,7 @@ impl HttpProxyPass {
                         }
                     }
 
+                    /*
                     super::content_source::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
@@ -197,7 +198,7 @@ impl HttpProxyPass {
                             response
                         }
                     }
-
+                     */
                     super::content_source::WebSocketUpgradeStream::TlsStream(tls_stream) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
