@@ -124,7 +124,10 @@ impl HttpProxyPass {
                 .status(200)
                 .header(
                     "Set-Cookie",
-                    format!("{}={}; SameSite=None;", AUTHORIZED_COOKIE_NAME, token),
+                    format!(
+                        "{}={}; SameSite=None; Secure;",
+                        AUTHORIZED_COOKIE_NAME, token
+                    ),
                 )
                 .body(body.map_err(|e| crate::to_hyper_error(e)).boxed())
                 .unwrap()));
