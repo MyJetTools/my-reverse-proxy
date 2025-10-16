@@ -16,6 +16,7 @@ async fn handle_request(
 ) -> Result<HttpOkResult, HttpFailResult> {
     let config = CurrentConfigurationHttpModel::new().await;
     HttpOutput::Content {
+        status_code: 200,
         headers: None,
         content_type: WebContentType::Html.into(),
         content: create_html_content(config).await.into_bytes(),

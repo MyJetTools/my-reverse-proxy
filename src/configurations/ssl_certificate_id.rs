@@ -20,7 +20,7 @@ impl SslCertificateId {
         self.0.to_string()
     }
 
-    pub fn as_ref(&self) -> SslCertificateIdRef {
+    pub fn as_ref<'s>(&'s self) -> SslCertificateIdRef<'s> {
         SslCertificateIdRef::new(&self.0)
     }
 

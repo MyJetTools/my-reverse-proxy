@@ -70,10 +70,10 @@ impl HttpListenPortConfiguration {
            self.endpoint_info[0].listen_endpoint_type
        }
     */
-    pub fn get_ssl_certificate(
-        &self,
+    pub fn get_ssl_certificate<'s>(
+        &'s self,
         server_name: &str,
-    ) -> Option<(SslCertificateIdRef, Arc<HttpEndpointInfo>)> {
+    ) -> Option<(SslCertificateIdRef<'s>, Arc<HttpEndpointInfo>)> {
         for endpoint_info in &self.endpoints {
             if endpoint_info.is_my_endpoint(server_name) {
                 if let Some(ssl_id) = endpoint_info.ssl_certificate_id.as_ref() {

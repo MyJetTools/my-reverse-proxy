@@ -17,6 +17,7 @@ async fn handle_request(
     let config_model = CurrentConfigurationHttpModel::new().await;
     let content = super::render_content(&config_model).await;
     HttpOutput::Content {
+        status_code: 200,
         headers: None,
         content_type: WebContentType::Html.into(),
         content: content.into_bytes(),

@@ -1,4 +1,4 @@
-use my_settings_reader::flurl::FlUrl;
+use my_settings_reader::flurl::{body::FlUrlBody, FlUrl};
 use serde::*;
 
 use crate::{configurations::GoogleAuthCredentials, http_proxy_pass::HostPort, types::Email};
@@ -9,16 +9,19 @@ pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
     settings: &GoogleAuthCredentials,
     debug: bool,
 ) -> Result<Email, String> {
+    let json_data = GetData {
+        code: code.to_string(),
+        client_id: settings.client_id.to_string(),
+        client_secret: settings.client_secret.clone(),
+        redirect_uri: format!("https://{}", super::generate_redirect_url(req)),
+        grant_type: "authorization_code".to_string(),
+    };
+
+    let fl_url_body = FlUrlBody::as_json(&json_data);
+
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .do_not_reuse_connection()
-        .with_header("ContentType", "application/json")
-        .post_json(&GetData {
-            code: code.to_string(),
-            client_id: settings.client_id.to_string(),
-            client_secret: settings.client_secret.clone(),
-            redirect_uri: format!("https://{}", super::generate_redirect_url(req)),
-            grant_type: "authorization_code".to_string(),
-        })
+        .post(fl_url_body)
         .await
         .unwrap();
 

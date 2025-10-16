@@ -12,6 +12,7 @@ async fn handle_request(
     let content = crate::app::APP_CTX.prometheus.build();
 
     HttpOutput::Content {
+        status_code: 200,
         headers: None,
         content_type: None,
         content,

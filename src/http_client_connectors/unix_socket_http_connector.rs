@@ -11,7 +11,7 @@ pub struct UnixSocketHttpConnector {
 
 #[async_trait::async_trait]
 impl MyHttpClientConnector<tokio::net::UnixStream> for UnixSocketHttpConnector {
-    fn get_remote_endpoint(&self) -> RemoteEndpoint {
+    fn get_remote_endpoint<'s>(&'s self) -> RemoteEndpoint<'s> {
         self.remote_endpoint.to_ref()
     }
 

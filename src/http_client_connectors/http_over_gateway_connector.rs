@@ -42,7 +42,7 @@ impl MyHttpClientConnector<TcpGatewayProxyForwardStream> for HttpOverGatewayConn
             Err(err) => Err(MyHttpClientError::CanNotConnectToRemoteHost(err)),
         }
     }
-    fn get_remote_endpoint(&self) -> RemoteEndpoint {
+    fn get_remote_endpoint<'s>(&'s self) -> RemoteEndpoint<'s> {
         self.remote_endpoint.to_ref()
     }
     fn is_debug(&self) -> bool {
