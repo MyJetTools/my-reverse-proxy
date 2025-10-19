@@ -51,6 +51,11 @@ pub async fn compile_host_configuration(
             )
             .await?;
 
+            println!(
+                "Merging Https1 configuration {}",
+                http_endpoint_info.as_str()
+            );
+
             let config =
                 super::merge_http_configuration_with_existing_port(http_endpoint_info).await?;
 
