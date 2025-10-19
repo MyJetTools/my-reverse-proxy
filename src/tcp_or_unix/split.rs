@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use my_ssh::SshAsyncChannel;
 
 pub enum MyOwnedReadHalf {
@@ -22,6 +24,22 @@ impl MyOwnedReadHalf {
                 owned_read_half.read(buf).await
             }
         }
+    }
+
+    pub async fn read_with_timeout(
+        &mut self,
+        buf: &mut Vec<u8>,
+        timeout: Duration,
+    ) -> Result<usize, String> {
+        let future = self.read(buf);
+
+        let result = tokio::time::timeout(timeout, future).await;
+
+        let Ok(result) = result else {
+            return Err("Read timeout".to_string());
+        };
+
+        result.map_err(|err| format!("{:?}", err))
     }
 }
 
@@ -82,6 +100,22 @@ impl MyOwnedWriteHalf {
                 owned_write_half.write_all(buffer).await
             }
         }
+    }
+
+    pub async fn write_all_with_timeout(
+        &mut self,
+        buffer: &[u8],
+        timeout: Duration,
+    ) -> Result<(), String> {
+        let future = self.write_all(buffer);
+
+        let result = tokio::time::timeout(timeout, future).await;
+
+        let Ok(result) = result else {
+            return Err(format!("Write to remote host timeout: {:?}", timeout));
+        };
+
+        result.map_err(|err| format!("Write to remote host error: {:?}", err))
     }
 }
 

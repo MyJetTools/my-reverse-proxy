@@ -151,5 +151,21 @@ async fn handle_accepted_connection(
                 .await;
             }
         },
+
+        ListenConfiguration::Mpc(configuration) => match &configuration.remote_host {
+            crate::configurations::MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                todo!("Mcp to gateway is not supported yet");
+            }
+            crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials: _,
+                remote_host: _,
+            } => {
+                todo!("Mcp to ssh is not supported yet");
+            }
+            crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                super::mcp::run_mcp_connection(accepted_connection, remote_host, &configuration)
+                    .await;
+            }
+        },
     }
 }

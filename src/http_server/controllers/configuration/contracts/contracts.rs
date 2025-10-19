@@ -114,6 +114,10 @@ impl PortConfigurationHttpModel {
                 endpoints.push(HttpEndpointInfoModel::from_tcp_config(config.as_ref()));
                 "tcp"
             }
+            ListenConfiguration::Mpc(config) => {
+                endpoints.push(HttpEndpointInfoModel::from_mcp_endpoint(config.as_ref()));
+                "mcp"
+            }
         };
 
         Self {
@@ -178,6 +182,24 @@ impl HttpEndpointInfoModel {
                 path: "".to_string(),
                 to: config.remote_host.to_string(),
                 r#type: "tcp".to_string(),
+            }],
+            allowed_user_list_id: None,
+            ssl_cert_id: None,
+            client_cert_id: None,
+            g_auth: None,
+        }
+    }
+
+    pub fn from_mcp_endpoint(config: &McpEndpointHostConfig) -> Self {
+        Self {
+            host: config.host_endpoint.as_str().to_string(),
+            r#type: "mcp".to_string(),
+            debug: config.debug,
+            ip_list: None,
+            locations: vec![HttpProxyPassLocationModel {
+                path: "".to_string(),
+                to: config.remote_host.to_string(),
+                r#type: "mcp".to_string(),
             }],
             allowed_user_list_id: None,
             ssl_cert_id: None,

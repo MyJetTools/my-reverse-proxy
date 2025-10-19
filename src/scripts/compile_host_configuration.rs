@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    configurations::{EndpointHttpHostString, ListenConfiguration, ListenHttpEndpointType},
+    configurations::{
+        EndpointHttpHostString, ListenConfiguration, ListenHttpEndpointType, TcpEndpointHostConfig,
+    },
     settings::{EndpointTypeSettings, HostSettings},
     settings_compiled::SettingsCompiled,
 };
@@ -72,11 +74,14 @@ pub async fn compile_host_configuration(
             return Ok(ListenConfiguration::Http(config.into()));
         }
         EndpointTypeSettings::Tcp => {
-            let listen_configuration =
-                super::compile_tcp_configuration(settings_model, host_endpoint, host_settings)
-                    .await?;
+            let tcp_configuration =
+                TcpEndpointHostConfig::new(settings_model, host_endpoint, host_settings).await?;
 
-            return Ok(listen_configuration);
+            return Ok(ListenConfiguration::Tcp(tcp_configuration.into()));
+        }
+
+        EndpointTypeSettings::Mcp => {
+            todo!("Implement")
         }
     }
 }

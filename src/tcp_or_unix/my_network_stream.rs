@@ -1,4 +1,4 @@
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::*;
 
@@ -11,6 +11,23 @@ pub enum MyNetworkStream {
 }
 
 impl MyNetworkStream {
+    pub async fn read(&mut self, buf: &mut [u8]) -> Result<usize, String> {
+        match self {
+            MyNetworkStream::Tcp(tcp_stream) => tcp_stream
+                .read(buf)
+                .await
+                .map_err(|err| format!("{:?}", err)),
+            MyNetworkStream::UnixSocket(unix_stream) => unix_stream
+                .read(buf)
+                .await
+                .map_err(|err| format!("{:?}", err)),
+            MyNetworkStream::Ssh(async_channel) => async_channel
+                .read(buf)
+                .await
+                .map_err(|err| format!("{:?}", err)),
+        }
+    }
+
     pub async fn shutdown(&mut self) {
         match self {
             MyNetworkStream::Tcp(tcp_stream) => {

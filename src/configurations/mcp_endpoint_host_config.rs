@@ -1,17 +1,14 @@
-use std::sync::Arc;
-
 use crate::{settings::HostSettings, settings_compiled::SettingsCompiled};
 
 use super::*;
 
-pub struct TcpEndpointHostConfig {
+pub struct McpEndpointHostConfig {
     pub host_endpoint: EndpointHttpHostString,
-    pub remote_host: Arc<MyReverseProxyRemoteEndpoint>,
     pub debug: bool,
-    pub ip_white_list_id: Option<String>,
+    pub remote_host: MyReverseProxyRemoteEndpoint,
 }
 
-impl TcpEndpointHostConfig {
+impl McpEndpointHostConfig {
     pub async fn new(
         settings_model: &SettingsCompiled,
         host_endpoint: EndpointHttpHostString,
@@ -30,17 +27,13 @@ impl TcpEndpointHostConfig {
             ));
         };
 
-        let ip_white_list_id =
-            crate::scripts::get_endpoint_white_listed_ip(settings_model, host_settings).await?;
-
         let remote_host =
             MyReverseProxyRemoteEndpoint::try_parse(remote_host.as_str(), settings_model).await?;
 
         let result = Self {
             host_endpoint,
-            remote_host: remote_host.into(),
             debug: host_settings.endpoint.get_debug(),
-            ip_white_list_id,
+            remote_host,
         };
 
         Ok(result)

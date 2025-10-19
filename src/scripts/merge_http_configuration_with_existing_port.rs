@@ -34,6 +34,13 @@ pub async fn merge_http_configuration_with_existing_port(
                 port
             ));
         }
+        ListenConfiguration::Mpc(_) => {
+            return Err(format!(
+                "Can not apply endpoint {}. Port {} is already configured as MCP.",
+                http_endpoint_info.host_endpoint.as_str(),
+                port
+            ));
+        }
     }
 }
 

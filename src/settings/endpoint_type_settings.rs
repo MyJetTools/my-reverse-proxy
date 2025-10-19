@@ -4,4 +4,5 @@ pub enum EndpointTypeSettings {
     Https1,
     Https2,
     Tcp,
+    Mcp,
 }

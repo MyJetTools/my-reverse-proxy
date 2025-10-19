@@ -18,8 +18,6 @@ mod compile_host_configuration;
 pub use compile_host_configuration::*;
 mod merge_http_configuration_with_existing_port;
 pub use merge_http_configuration_with_existing_port::*;
-mod compile_tcp_configuration;
-pub use compile_tcp_configuration::*;
 
 mod make_sure_ssl_cert_exists;
 pub use make_sure_ssl_cert_exists::*;
