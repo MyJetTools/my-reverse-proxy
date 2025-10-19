@@ -1,12 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
+use tokio::io::AsyncWriteExt;
 
-use crate::{
-    configurations::McpEndpointHostConfig,
-    tcp_listener::AcceptedTcpConnection,
-    tcp_or_unix::{MyNetworkStream, MyOwnedReadHalf, MyOwnedWriteHalf},
-};
+use crate::{configurations::HttpEndpointInfo, tcp_or_unix::*};
 
 const BUFFER_LEN: usize = 512 * 1024;
 
@@ -15,13 +11,21 @@ const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub async fn run_mcp_connection(
-    mut accepted_tcp_connection: AcceptedTcpConnection,
-    remote_host: &Arc<RemoteEndpointOwned>,
-    configuration: &Arc<McpEndpointHostConfig>,
+    mut tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+    http_endpoint_info: &HttpEndpointInfo,
 ) {
-    if configuration.debug {
-        println!("Accepted mcp connection forwarded to",);
+    if http_endpoint_info.debug {
+        println!("Accepted mcp connection",);
     }
+
+    let remote_host = http_endpoint_info
+        .locations
+        .get(0)
+        .unwrap()
+        .proxy_pass_to
+        .to_string();
+
+    println!("Connecting mcp to remote host: {}", remote_host);
 
     let connect_result = tokio::net::TcpStream::connect(remote_host.as_str()).await;
 
@@ -33,17 +37,14 @@ pub async fn run_mcp_connection(
                 remote_host.as_str(),
                 err
             );
-            accepted_tcp_connection.network_stream.shutdown().await;
+            let _ = tls_stream.shutdown().await;
             return;
         }
     };
 
-    let remote_host = MyNetworkStream::Tcp(tcp_stream);
+    let (read_remote_host, write_remote_host) = tokio::io::split(tcp_stream);
 
-    let (read_remote_host, write_remote_host) = remote_host.into_split();
-
-    let (accepted_connection_read, accepted_connection_write) =
-        accepted_tcp_connection.network_stream.into_split();
+    let (accepted_connection_read, accepted_connection_write) = tokio::io::split(tls_stream);
 
     tokio::spawn(link_tcp_streams(
         accepted_connection_read,
@@ -69,8 +70,8 @@ pub async fn run_mcp_connection(
 }
 
 async fn link_tcp_streams(
-    mut read_stream: MyOwnedReadHalf,
-    mut write_stream: MyOwnedWriteHalf,
+    mut read_stream: impl NetworkStreamReadPart + Send + Sync + 'static,
+    mut write_stream: impl NetworkStreamWritePart + Send + Sync + 'static,
     marker: &'static str,
 ) {
     let mut read_buffer = Vec::with_capacity(BUFFER_LEN);
@@ -86,7 +87,7 @@ async fn link_tcp_streams(
         let read_size = match read_result {
             Ok(read_size) => read_size,
             Err(err) => {
-                write_stream.shutdown().await;
+                write_stream.shutdown_socket().await;
                 println!("Mcp Read/Write loop is stopped. Error: {:?}", err);
                 return;
             }

@@ -115,8 +115,10 @@ impl PortConfigurationHttpModel {
                 "tcp"
             }
             ListenConfiguration::Mpc(config) => {
-                endpoints.push(HttpEndpointInfoModel::from_mcp_endpoint(config.as_ref()));
-                "mcp"
+                for endpoint in &config.endpoints {
+                    endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
+                }
+                config.listen_endpoint_type.as_str()
             }
         };
 
@@ -190,6 +192,7 @@ impl HttpEndpointInfoModel {
         }
     }
 
+    /*
     pub fn from_mcp_endpoint(config: &McpEndpointHostConfig) -> Self {
         Self {
             host: config.host_endpoint.as_str().to_string(),
@@ -207,6 +210,7 @@ impl HttpEndpointInfoModel {
             g_auth: None,
         }
     }
+     */
 }
 
 #[derive(MyHttpObjectStructure, Serialize, Debug)]

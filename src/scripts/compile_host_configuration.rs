@@ -79,10 +79,18 @@ pub async fn compile_host_configuration(
         }
 
         EndpointTypeSettings::Mcp => {
-            let mcp_configuration =
-                McpEndpointHostConfig::new(settings_model, host_endpoint, host_settings).await?;
+            let http_endpoint_info = crate::scripts::compile_http_configuration(
+                settings_model,
+                host_endpoint,
+                host_settings,
+                ListenHttpEndpointType::Mcp,
+            )
+            .await?;
 
-            return Ok(ListenConfiguration::Mpc(mcp_configuration.into()));
+            let config =
+                super::merge_http_configuration_with_existing_port(http_endpoint_info).await?;
+
+            return Ok(ListenConfiguration::Mpc(config.into()));
         }
     }
 }

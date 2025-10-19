@@ -9,7 +9,7 @@ use super::*;
 pub enum ListenConfiguration {
     Http(Arc<HttpListenPortConfiguration>),
     Tcp(Arc<TcpEndpointHostConfig>),
-    Mpc(Arc<McpEndpointHostConfig>),
+    Mpc(Arc<HttpListenPortConfiguration>),
 }
 
 impl ListenConfiguration {

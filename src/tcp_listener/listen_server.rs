@@ -115,6 +115,10 @@ async fn handle_accepted_connection(
                 super::https::handle_connection(accepted_connection, listening_addr, configuration)
                     .await;
             }
+            crate::configurations::ListenHttpEndpointType::Mcp => {
+                super::https::handle_connection(accepted_connection, listening_addr, configuration)
+                    .await;
+            }
         },
 
         ListenConfiguration::Tcp(configuration) => match configuration.remote_host.as_ref() {
@@ -152,20 +156,9 @@ async fn handle_accepted_connection(
             }
         },
 
-        ListenConfiguration::Mpc(configuration) => match &configuration.remote_host {
-            crate::configurations::MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                todo!("Mcp to gateway is not supported yet");
-            }
-            crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh {
-                ssh_credentials: _,
-                remote_host: _,
-            } => {
-                todo!("Mcp to ssh is not supported yet");
-            }
-            crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                super::mcp::run_mcp_connection(accepted_connection, remote_host, &configuration)
-                    .await;
-            }
-        },
+        ListenConfiguration::Mpc(configuration) => {
+            super::https::handle_connection(accepted_connection, listening_addr, configuration)
+                .await;
+        }
     }
 }

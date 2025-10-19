@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 use tokio::sync::Mutex;
 
-use crate::tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf};
+use crate::tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf, NetworkStreamWritePart};
 
 pub async fn copy_loop(
     mut reader: MyOwnedReadHalf,
@@ -26,35 +26,25 @@ pub async fn copy_loop(
         let mut writer_access = writer.lock().await;
 
         if read_result.is_err() {
-            let _ = writer_access.shutdown().await;
+            let _ = writer_access.shutdown_socket().await;
             break;
         }
 
         let n = read_result.unwrap();
 
         if n == 0 {
-            let _ = writer_access.shutdown().await;
+            let _ = writer_access.shutdown_socket().await;
             break;
         }
         incoming_traffic_moment.update(DateTimeAsMicroseconds::now());
 
-        let write_future = writer_access.write_all(&buf[0..n]);
+        let write_result = writer_access
+            .write_all_with_timeout(&buf[0..n], write_timeout)
+            .await;
 
-        let result = tokio::time::timeout(write_timeout, write_future).await;
-
-        //Got Timeout on writer
-        if result.is_err() {
-            let err = writer_access.shutdown().await;
-            if debug {
-                println!("Timeout on tcp: Shutdown socket got error: {:?}", err);
-            }
-            break;
-        }
-
-        let result = result.unwrap();
-
-        if result.is_err() {
-            writer_access.shutdown().await;
+        if write_result.is_err() {
+            writer_access.shutdown_socket().await;
+            return;
         }
     }
 }
@@ -221,12 +211,12 @@ pub async fn await_while_alive(
 
             {
                 let mut remote_writer_access = remote_writer.lock().await;
-                remote_writer_access.shutdown().await;
+                remote_writer_access.shutdown_socket().await;
             }
 
             {
                 let mut remote_writer_access = local_writer.lock().await;
-                remote_writer_access.shutdown().await;
+                remote_writer_access.shutdown_socket().await;
             }
 
             break;

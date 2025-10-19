@@ -78,3 +78,13 @@ impl Into<MyNetworkStream> for my_ssh::SshAsyncChannel {
         MyNetworkStream::Ssh(self)
     }
 }
+
+impl NetworkStreamWritePart for tokio::net::TcpStream {
+    async fn shutdown_socket(&mut self) {
+        let _ = self.shutdown().await;
+    }
+
+    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        self.write_all(buffer).await
+    }
+}

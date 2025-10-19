@@ -4,6 +4,7 @@ pub enum ListenHttpEndpointType {
     Http2,
     Https1,
     Https2,
+    Mcp,
 }
 
 impl ListenHttpEndpointType {
@@ -25,6 +26,10 @@ impl ListenHttpEndpointType {
             Self::Https2 => match other {
                 Self::Https1 => true,
                 Self::Https2 => true,
+                _ => false,
+            },
+            Self::Mcp => match other {
+                Self::Mcp => true,
                 _ => false,
             },
         }
@@ -61,6 +66,7 @@ impl ListenHttpEndpointType {
             Self::Http2 => "http2",
             Self::Https1 => "https",
             Self::Https2 => "https2",
+            Self::Mcp => "mcp",
         }
     }
 }

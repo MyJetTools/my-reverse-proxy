@@ -5,6 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tokio::io::{ReadHalf, WriteHalf};
 
+use crate::tcp_or_unix::NetworkStreamWritePart;
 use crate::{
     configurations::TcpEndpointHostConfig,
     tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
@@ -243,31 +244,13 @@ async fn copy_from_gateway_to_connection(
             break;
         }
 
-        let write_future = server_write.write_all(&buffer[..payload_size]);
+        let write_result = server_write
+            .write_all_with_timeout(&buffer[..payload_size], Duration::from_secs(30))
+            .await;
 
-        let result = tokio::time::timeout(Duration::from_secs(30), write_future).await;
-
-        if result.is_err() {
+        if let Err(err) = write_result {
             let err = format!(
-                "Write from gateway:{}->{} with connection id {} to {} is ended with timeout. Closing connection",
-                gateway_id.as_str(),
-                remote_endpoint.as_str(),
-                connection_id,
-                listening_addr
-            );
-
-            if debug {
-                println!("{}", err);
-            }
-
-            break;
-        }
-
-        let result = result.unwrap();
-
-        if let Err(err) = result {
-            let err = format!(
-                "Write from gateway:{}->{} with connection id {} to {} is ended with error: {:?}. Closing connection",
+                "Write from gateway:{}->{} with connection id {} to {} is ended with error: `{}`. Closing connection",
                 gateway_id.as_str(),
                 remote_endpoint.as_str(),
                 connection_id,
