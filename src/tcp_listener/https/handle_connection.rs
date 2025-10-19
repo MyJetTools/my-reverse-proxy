@@ -10,84 +10,6 @@ use crate::tcp_listener::AcceptedTcpConnection;
 
 use super::ClientCertificateData;
 
-/*
-pub fn start_https_server(
-    addr: SocketAddr,
-    app: Arc<AppContext>,
-    debug: bool,
-) -> Arc<ListenServerHandler> {
-    println!("Listening https://{}", addr);
-
-    let listen_server_handler = Arc::new(ListenServerHandler::new());
-    tokio::spawn(start_https_server_loop(
-        addr,
-        app,
-        debug,
-        listen_server_handler.clone(),
-    ));
-    listen_server_handler
-}
-
-async fn start_https_server_loop(
-    addr: SocketAddr,
-    app: Arc<AppContext>,
-    debug: bool,
-    listen_server_handler: Arc<ListenServerHandler>,
-) {
-    let endpoint_port = addr.port();
-    //let endpoint_info = Arc::new(endpoint_info);
-
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-
-    let endpoint_name = format!("https://{}", addr);
-    let endpoint_name = Arc::new(endpoint_name);
-
-    // Build TLS configuration.
-
-    loop {
-        // println!("Waiting to accept new connection");
-
-        let accepted_connection_future = listener.accept();
-
-        let stop_endpoint_feature = listen_server_handler.await_stop();
-
-        tokio::select! {
-        _ = stop_endpoint_feature => {
-           return
-        }
-        accepted_connection = accepted_connection_future => {
-            if let Err(err) = &accepted_connection {
-                println!("Error accepting connection {}. Err: {:?}", addr, err);
-                continue;
-            }
-
-            let (tcp_stream, socket_addr) = accepted_connection.unwrap();
-
-            if debug {
-                println!("Accepted connection from  {}", socket_addr);
-            }
-
-            let app = app.clone();
-            handle_connection(
-                app,
-                endpoint_name.clone(),
-                endpoint_port,
-                tcp_stream,
-                socket_addr,
-                debug,
-            )
-            .await;
-        }
-        }
-
-        if app.states.is_shutting_down() {
-            println!("Shutting down https server");
-            break;
-        }
-    }
-}
- */
-
 pub async fn handle_connection(
     accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
@@ -170,6 +92,7 @@ pub async fn handle_connection(
             .await;
         }
         ListenHttpEndpointType::Mcp => {
+            println!("New mcp connection");
             super::super::mcp::run_mcp_connection(tls_stream, &endpoint_info).await;
         }
     }

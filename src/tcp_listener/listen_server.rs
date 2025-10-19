@@ -116,6 +116,7 @@ async fn handle_accepted_connection(
                     .await;
             }
             crate::configurations::ListenHttpEndpointType::Mcp => {
+                println!("Serving MPC connection");
                 super::https::handle_connection(accepted_connection, listening_addr, configuration)
                     .await;
             }
