@@ -40,6 +40,13 @@ hosts:
     locations:      
     - proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
 
+  localhost:8004:
+    endpoint:
+      type: mcp
+      debug: true
+    locations:
+    - proxy_pass_to: remote_mcp_host:5123
+
   8005:
     endpoint:
       type: http2  
@@ -285,13 +292,39 @@ hosts:
       ssl_certificate: my_ssl_cert        
 ```
 
-### Https
+### Tcp
 ```yaml
 hosts:
   localhost:8000:
     endpoint:
       type: tcp
 ```
+
+### Mcp (Model Context Protocol)
+MCP endpoints provide TCP forwarding with enhanced debugging capabilities for Model Context Protocol connections.
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: mcp
+      debug: true  # Optional: enables debug logging for MCP connections
+    locations:
+    - proxy_pass_to: remote_host:5123
+```
+
+**MCP Endpoint Features:**
+- TCP connection forwarding to remote MCP servers
+- Debug logging to monitor MCP protocol traffic
+- Support for SSH tunneling: `ssh:user@host:port->remote_host:port`
+- Connection timeout and buffer management
+- Bidirectional data streaming with detailed logging
+
+**Debug Mode:**
+When `debug: true` is enabled, MCP endpoints will log:
+- Connection establishment details
+- Bidirectional data flow (Server to Client / Client to Server)
+- Protocol message content for troubleshooting
 
 ## Location types
 

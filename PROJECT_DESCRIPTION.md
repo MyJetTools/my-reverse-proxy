@@ -8,6 +8,7 @@ This is a **high-performance, feature-rich reverse proxy server** written in Rus
 - HTTP/1.1 and HTTP/2
 - HTTPS with TLS 1.2/1.3
 - Raw TCP connections
+- MCP (Model Context Protocol) with debugging
 - WebSocket support
 - Unix socket connections
 
@@ -116,6 +117,13 @@ hosts:
     - type: http
       proxy_pass_to: http://remote_host:5123
 
+  localhost:8002:
+    endpoint:
+      type: mcp
+      debug: true
+    locations:
+    - proxy_pass_to: remote_mcp_host:5123
+
 ssl_certificates:
   - id: my_ssl_cert
     certificate: ~/certs/cert.cer
@@ -172,6 +180,32 @@ modify_http_headers:
     response:
     - server-header
 ```
+
+### MCP (Model Context Protocol) Support
+The reverse proxy includes specialized support for MCP endpoints, providing TCP forwarding with enhanced debugging capabilities:
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: mcp
+      debug: true  # Enables detailed MCP protocol logging
+    locations:
+    - proxy_pass_to: remote_mcp_server:5123
+```
+
+**MCP Endpoint Features:**
+- **TCP Connection Forwarding**: Direct TCP passthrough to MCP servers
+- **Debug Logging**: Detailed protocol message logging when `debug: true`
+- **SSH Tunneling**: Support for SSH-based MCP connections
+- **Bidirectional Streaming**: Full duplex data forwarding with monitoring
+- **Connection Management**: Automatic connection pooling and timeout handling
+
+**Debug Mode Benefits:**
+- Monitor MCP protocol handshakes
+- Track bidirectional message flow
+- Troubleshoot connection issues
+- Analyze protocol compliance
 
 ### System Variables
 Built-in variables for dynamic configuration:
