@@ -87,6 +87,7 @@ pub async fn compile_host_configuration(
             )
             .await?;
 
+            println!("Merging MCP configuration");
             let config =
                 super::merge_http_configuration_with_existing_port(http_endpoint_info).await?;
 
