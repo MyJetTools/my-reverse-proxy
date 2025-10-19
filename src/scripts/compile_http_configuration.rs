@@ -23,7 +23,7 @@ pub async fn compile_http_configuration(
     let modify_endpoints_headers =
         crate::scripts::get_endpoint_modify_headers(settings_model, host_settings);
 
-    let (g_auth, ssl_cert_id, client_cert_ca) = if http_type.is_https() {
+    let (g_auth, ssl_cert_id, client_cert_ca) = if http_type.is_https_or_mcp() {
         let ssl_cert_id = super::make_sure_ssl_cert_exists(settings_model, host_settings).await?;
 
         let client_cert_ca =

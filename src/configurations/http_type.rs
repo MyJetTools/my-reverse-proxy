@@ -72,6 +72,15 @@ impl ListenHttpEndpointType {
         }
     }
 
+    pub fn is_https_or_mcp(&self) -> bool {
+        match self {
+            Self::Https1 => true,
+            Self::Https2 => true,
+            Self::Mcp => true,
+            _ => false,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Http1 => "http",
