@@ -101,13 +101,16 @@ async fn link_tcp_streams(
             Ok(read_size) => read_size,
             Err(err) => {
                 write_stream.shutdown_socket().await;
-                println!("Mcp Read/Write loop is stopped. Error: {:?}", err);
+                println!(
+                    "{connection_id} Mcp Read/Write loop is stopped. Error: {:?}",
+                    err
+                );
                 return;
             }
         };
 
         if read_size == 0 {
-            println!("Mcp Read/Write loop is stopped gracefully");
+            println!("{connection_id} Mcp Read/Write loop is stopped gracefully");
             return;
         }
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
