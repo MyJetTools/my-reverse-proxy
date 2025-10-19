@@ -118,7 +118,7 @@ pub async fn create_config(
         //.with_cert_resolver(Arc::new(MyCertResolver::new(certified_key)));
 
         server_config.alpn_protocols =
-            get_alpn_protocol(!http_endpoint_info.listen_endpoint_type.is_http1());
+            get_alpn_protocol(!http_endpoint_info.listen_endpoint_type.is_http1_or_mpc());
         return Ok((server_config, http_endpoint_info, Some(client_cert_cell)));
     }
 
@@ -128,7 +128,7 @@ pub async fn create_config(
             .with_cert_resolver(Arc::new(MyCertResolver::new(ssl_cert_key)));
 
     server_config.alpn_protocols =
-        get_alpn_protocol(!http_endpoint_info.listen_endpoint_type.is_http1());
+        get_alpn_protocol(!http_endpoint_info.listen_endpoint_type.is_http1_or_mpc());
 
     Ok((server_config, http_endpoint_info, None))
 }

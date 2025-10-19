@@ -43,6 +43,15 @@ impl ListenHttpEndpointType {
         }
     }
 
+    pub fn is_http1_or_mpc(&self) -> bool {
+        match self {
+            Self::Http1 => true,
+            Self::Https1 => true,
+            Self::Mcp => true,
+            _ => false,
+        }
+    }
+
     /*
        pub fn is_http2(&self) -> bool {
            match self {
