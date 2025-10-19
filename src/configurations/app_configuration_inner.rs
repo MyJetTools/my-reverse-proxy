@@ -20,6 +20,14 @@ impl ListenConfiguration {
             ListenConfiguration::Mpc(_) => None,
         }
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ListenConfiguration::Http(_) => "http",
+            ListenConfiguration::Tcp(_) => "tcp",
+            ListenConfiguration::Mpc(_) => "mcp",
+        }
+    }
 }
 
 pub struct AppConfigurationInner {

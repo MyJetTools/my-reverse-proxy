@@ -30,8 +30,6 @@ async fn accept_connections_loop(
 
         let stop_endpoint_feature = listen_server_handler.await_stop();
 
-        println!("New connection for {:?}", listening_addr);
-
         tokio::select! {
             accepted_connection = accepted_connection_feature => {
                 if let Err(err) = &accepted_connection {
@@ -95,11 +93,12 @@ async fn handle_accepted_connection(
 
     if endpoint_type.is_none() {
         let _ = accepted_connection.network_stream.shutdown().await;
-        println!("Can not find configuration for connection. Shutting down");
         return;
     }
 
     let endpoint_type = endpoint_type.unwrap();
+
+    println!("Endpoint type:{:?}", endpoint_type.as_str());
 
     match endpoint_type {
         ListenConfiguration::Http(configuration) => match configuration.listen_endpoint_type {
@@ -112,10 +111,12 @@ async fn handle_accepted_connection(
                     .await;
             }
             crate::configurations::ListenHttpEndpointType::Https1 => {
+                println!("Serving Https1 connection");
                 super::https::handle_connection(accepted_connection, listening_addr, configuration)
                     .await;
             }
             crate::configurations::ListenHttpEndpointType::Https2 => {
+                println!("Serving Https2 connection");
                 super::https::handle_connection(accepted_connection, listening_addr, configuration)
                     .await;
             }
