@@ -6,7 +6,7 @@ use crate::{configurations::HttpEndpointInfo, tcp_or_unix::*};
 
 const BUFFER_LEN: usize = 512 * 1024;
 
-const READ_TIMEOUT: Duration = Duration::from_secs(10);
+const READ_TIMEOUT: Duration = Duration::from_secs(60 * 3);
 
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
