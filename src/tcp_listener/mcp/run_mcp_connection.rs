@@ -101,6 +101,11 @@ async fn link_tcp_streams(
                 return;
             }
         };
+
+        if read_size == 0 {
+            println!("Mcp Read/Write loop is stopped gracefully");
+            return;
+        }
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
 
         println!("---{marker}--- Start");
