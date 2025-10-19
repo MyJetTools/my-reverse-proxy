@@ -30,6 +30,8 @@ async fn accept_connections_loop(
 
         let stop_endpoint_feature = listen_server_handler.await_stop();
 
+        println!("New connection for {:?}", listening_addr);
+
         tokio::select! {
             accepted_connection = accepted_connection_feature => {
                 if let Err(err) = &accepted_connection {
@@ -49,6 +51,7 @@ async fn accept_connections_loop(
                     network_stream : MyNetworkStream::Tcp(tcp_stream),
                     addr
                 };
+
 
                 handle_accepted_connection(accepted_connection, listening_addr).await;
 
@@ -92,6 +95,7 @@ async fn handle_accepted_connection(
 
     if endpoint_type.is_none() {
         let _ = accepted_connection.network_stream.shutdown().await;
+        println!("Can not find configuration for connection. Shutting down");
         return;
     }
 

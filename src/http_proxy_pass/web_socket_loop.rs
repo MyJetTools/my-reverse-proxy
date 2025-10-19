@@ -94,7 +94,7 @@ async fn web_socket_loop<
 
                 if trace_payload {
                     if !have_traced_message {
-                        println!("WS Message from remote: {:?}", message);
+                        //println!("WS Message from remote: {:?}", message);
                         have_traced_message = true;
                     }
                 }
