@@ -25,6 +25,8 @@ async fn accept_connections_loop(
 ) {
     let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
 
+    let mut connection_id: u64 = 0;
+
     while !crate::app::APP_CTX.states.is_shutting_down() {
         let accepted_connection_feature = listener.accept();
 
@@ -51,7 +53,8 @@ async fn accept_connections_loop(
                 };
 
 
-                handle_accepted_connection(accepted_connection, listening_addr).await;
+                connection_id += 1;
+                handle_accepted_connection(accepted_connection, listening_addr, connection_id).await;
 
             }
             _ = stop_endpoint_feature => {
@@ -68,6 +71,7 @@ async fn accept_connections_loop(
 async fn handle_accepted_connection(
     mut accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
+    connection_id: u64,
 ) {
     let listen_port = listening_addr.port();
 
@@ -112,18 +116,33 @@ async fn handle_accepted_connection(
             }
             crate::configurations::ListenHttpEndpointType::Https1 => {
                 println!("Serving Https1 connection");
-                super::https::handle_connection(accepted_connection, listening_addr, configuration)
-                    .await;
+                super::https::handle_connection(
+                    accepted_connection,
+                    listening_addr,
+                    configuration,
+                    connection_id,
+                )
+                .await;
             }
             crate::configurations::ListenHttpEndpointType::Https2 => {
                 println!("Serving Https2 connection");
-                super::https::handle_connection(accepted_connection, listening_addr, configuration)
-                    .await;
+                super::https::handle_connection(
+                    accepted_connection,
+                    listening_addr,
+                    configuration,
+                    connection_id,
+                )
+                .await;
             }
             crate::configurations::ListenHttpEndpointType::Mcp => {
                 println!("Serving MPC connection");
-                super::https::handle_connection(accepted_connection, listening_addr, configuration)
-                    .await;
+                super::https::handle_connection(
+                    accepted_connection,
+                    listening_addr,
+                    configuration,
+                    connection_id,
+                )
+                .await;
             }
         },
 
@@ -163,8 +182,13 @@ async fn handle_accepted_connection(
         },
 
         ListenConfiguration::Mpc(configuration) => {
-            super::https::handle_connection(accepted_connection, listening_addr, configuration)
-                .await;
+            super::https::handle_connection(
+                accepted_connection,
+                listening_addr,
+                configuration,
+                connection_id,
+            )
+            .await;
         }
     }
 }

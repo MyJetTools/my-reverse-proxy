@@ -14,6 +14,7 @@ pub async fn handle_connection(
     accepted_connection: AcceptedTcpConnection,
     listening_addr: SocketAddr,
     configuration: Arc<HttpListenPortConfiguration>,
+    connection_id: u64,
 ) {
     let listening_addr_str = Arc::new(format!("https://{}", listening_addr));
     let endpoint_port = listening_addr.port();
@@ -92,8 +93,8 @@ pub async fn handle_connection(
             .await;
         }
         ListenHttpEndpointType::Mcp => {
-            println!("New mcp connection");
-            super::super::mcp::run_mcp_connection(tls_stream, &endpoint_info).await;
+            println!("New mcp connection {}", connection_id);
+            super::super::mcp::run_mcp_connection(tls_stream, &endpoint_info, connection_id).await;
         }
     }
 }

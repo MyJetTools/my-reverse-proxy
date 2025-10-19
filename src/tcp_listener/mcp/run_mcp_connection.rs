@@ -13,6 +13,7 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 pub async fn run_mcp_connection(
     mut tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     http_endpoint_info: &HttpEndpointInfo,
+    connection_id: u64,
 ) {
     if http_endpoint_info.debug {
         println!("Accepted mcp connection",);
@@ -59,12 +60,14 @@ pub async fn run_mcp_connection(
         accepted_connection_read,
         write_remote_host,
         "Server to Client",
+        connection_id,
     ));
 
     tokio::spawn(link_tcp_streams(
         read_remote_host,
         accepted_connection_write,
         "Client to Server",
+        connection_id,
     ));
 
     /*
@@ -82,6 +85,7 @@ async fn link_tcp_streams(
     mut read_stream: impl NetworkStreamReadPart + Send + Sync + 'static,
     mut write_stream: impl NetworkStreamWritePart + Send + Sync + 'static,
     marker: &'static str,
+    connection_id: u64,
 ) {
     let mut read_buffer = Vec::with_capacity(BUFFER_LEN);
     unsafe {
@@ -108,9 +112,9 @@ async fn link_tcp_streams(
         }
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
 
-        println!("---{marker}--- Start");
+        println!("{connection_id} ---{marker}--- Start");
         println!("{:?}", std::str::from_utf8(buffer_to_write));
-        println!("---{marker}--- End");
+        println!("{connection_id} ---{marker}--- End");
 
         if write_stream
             .write_all_with_timeout(buffer_to_write, WRITE_TIMEOUT)
