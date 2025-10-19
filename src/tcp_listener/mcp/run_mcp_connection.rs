@@ -26,7 +26,7 @@ pub async fn run_mcp_connection(
         .to_string();
 
     let remote_host = if remote_host.starts_with("http://") {
-        &remote_host[7..1]
+        &remote_host[7..]
     } else if remote_host.starts_with("https://") {
         println!("Https does not support as remote host for mcp");
         let _ = tls_stream.shutdown().await;
