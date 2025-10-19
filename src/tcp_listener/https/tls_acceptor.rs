@@ -27,6 +27,7 @@ pub async fn create_config(
     let ssl_cert_result = configuration.get_ssl_certificate(server_name);
 
     if ssl_cert_result.is_none() {
+        println!("No ssl certificate found for server_name: {}", server_name);
         return Err(format!(
             "No ssl certificate found for server_name: {}",
             server_name
