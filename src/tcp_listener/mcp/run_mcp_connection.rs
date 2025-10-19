@@ -25,17 +25,26 @@ pub async fn run_mcp_connection(
         .proxy_pass_to
         .to_string();
 
+    let remote_host = if remote_host.starts_with("http://") {
+        &remote_host[7..1]
+    } else if remote_host.starts_with("https://") {
+        println!("Https does not support as remote host for mcp");
+        let _ = tls_stream.shutdown().await;
+        return;
+    } else {
+        &remote_host
+    };
+
     println!("Connecting mcp to remote host: {}", remote_host);
 
-    let connect_result = tokio::net::TcpStream::connect(remote_host.as_str()).await;
+    let connect_result = tokio::net::TcpStream::connect(remote_host).await;
 
     let tcp_stream = match connect_result {
         Ok(remote_host) => remote_host,
         Err(err) => {
             println!(
                 "Can not connect to mcp remote host `{}`. Err: {:?}",
-                remote_host.as_str(),
-                err
+                remote_host, err
             );
             let _ = tls_stream.shutdown().await;
             return;
