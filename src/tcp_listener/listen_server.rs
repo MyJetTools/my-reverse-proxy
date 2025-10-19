@@ -102,8 +102,6 @@ async fn handle_accepted_connection(
 
     let endpoint_type = endpoint_type.unwrap();
 
-    println!("Endpoint type:{:?}", endpoint_type.as_str());
-
     match endpoint_type {
         ListenConfiguration::Http(configuration) => match configuration.listen_endpoint_type {
             crate::configurations::ListenHttpEndpointType::Http1 => {
@@ -115,7 +113,6 @@ async fn handle_accepted_connection(
                     .await;
             }
             crate::configurations::ListenHttpEndpointType::Https1 => {
-                println!("Serving Https1 connection");
                 super::https::handle_connection(
                     accepted_connection,
                     listening_addr,
@@ -125,7 +122,6 @@ async fn handle_accepted_connection(
                 .await;
             }
             crate::configurations::ListenHttpEndpointType::Https2 => {
-                println!("Serving Https2 connection");
                 super::https::handle_connection(
                     accepted_connection,
                     listening_addr,
@@ -135,7 +131,6 @@ async fn handle_accepted_connection(
                 .await;
             }
             crate::configurations::ListenHttpEndpointType::Mcp => {
-                println!("Serving MPC connection");
                 super::https::handle_connection(
                     accepted_connection,
                     listening_addr,
