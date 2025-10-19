@@ -121,27 +121,3 @@ impl ClientCertificateCa {
         }
     }
 }
-
-/*
-pub fn get_cert_data(
-    ca_content: CertificateDer<'static>,
-    certificate_to_check: &rustls_pki_types::CertificateDer,
-) -> Result<ClientCertificateData, String> {
-    let (_, issuer) = X509Certificate::from_der(ca_content.as_ref()).unwrap();
-
-    let (_, cert_to_check) = X509Certificate::from_der(certificate_to_check.as_ref()).unwrap();
-
-    cert_to_check
-        .verify_signature(Some(issuer.public_key()))
-        .map_err(|err| format!("{:?}", err))?;
-
-    for itm in cert_to_check.tbs_certificate.subject().iter_common_name() {
-        return Ok(ClientCertificateData {
-            cn: itm.as_str().unwrap().to_string(),
-            serial: cert_to_check.serial.clone(),
-        });
-    }
-
-    return Err("No certificate data found".to_string());
-}
- */

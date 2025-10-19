@@ -21,6 +21,7 @@ impl ListenHttpEndpointType {
             Self::Https1 => match other {
                 Self::Https1 => true,
                 Self::Https2 => true,
+                Self::Mcp => true,
                 _ => false,
             },
             Self::Https2 => match other {
@@ -30,6 +31,8 @@ impl ListenHttpEndpointType {
             },
             Self::Mcp => match other {
                 Self::Mcp => true,
+                Self::Https1 => true,
+                Self::Https2 => true,
                 _ => false,
             },
         }
