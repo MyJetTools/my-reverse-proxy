@@ -5,12 +5,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tokio::io::{ReadHalf, WriteHalf};
 
-use crate::tcp_or_unix::NetworkStreamWritePart;
+use crate::network_stream::NetworkStreamWritePart;
 use crate::{
     configurations::TcpEndpointHostConfig,
+    network_stream::{MyOwnedReadHalf, MyOwnedWriteHalf},
     tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
     tcp_listener::AcceptedTcpConnection,
-    tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf},
 };
 
 pub async fn handle_connection(

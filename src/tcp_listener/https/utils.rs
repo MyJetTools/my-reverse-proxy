@@ -4,8 +4,8 @@ use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::{
     configurations::{HttpEndpointInfo, HttpListenPortConfiguration},
+    network_stream::MyNetworkStream,
     tcp_listener::https::ClientCertificateData,
-    tcp_or_unix::MyNetworkStream,
 };
 
 const RESOLVE_TLS_TIMEOUT: Duration = Duration::from_secs(10);

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
 use tokio::sync::Mutex;
 
-use crate::tcp_or_unix::{MyOwnedReadHalf, MyOwnedWriteHalf, NetworkStreamWritePart};
+use crate::network_stream::{MyOwnedReadHalf, MyOwnedWriteHalf, NetworkStreamWritePart};
 
 pub async fn copy_loop(
     mut reader: MyOwnedReadHalf,

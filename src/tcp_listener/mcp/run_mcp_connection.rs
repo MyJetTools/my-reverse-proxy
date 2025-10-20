@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tokio::io::AsyncWriteExt;
 
-use crate::{configurations::HttpEndpointInfo, tcp_or_unix::*};
+use crate::{configurations::HttpEndpointInfo, network_stream::*};
 
 const BUFFER_LEN: usize = 512 * 1024;
 
