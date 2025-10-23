@@ -59,14 +59,14 @@ pub async fn run_mcp_connection(
     tokio::spawn(link_tcp_streams(
         accepted_connection_read,
         write_remote_host,
-        "Server to Client",
+        "->To MCP Server->",
         connection_id,
     ));
 
     tokio::spawn(link_tcp_streams(
         read_remote_host,
         accepted_connection_write,
-        "Client to Server",
+        "<-From MCP Server<-",
         connection_id,
     ));
 
