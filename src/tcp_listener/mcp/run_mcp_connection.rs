@@ -116,7 +116,16 @@ async fn link_tcp_streams(
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
 
         println!("{connection_id} ---{marker}--- Start");
-        println!("{:?}", std::str::from_utf8(buffer_to_write));
+
+        match std::str::from_utf8(buffer_to_write) {
+            Ok(value) => {
+                println!("`{}`", value);
+            }
+            Err(_) => {
+                println!("BinaryPayloadLen: {}", buffer_to_write.len());
+            }
+        }
+
         println!("{connection_id} ---{marker}--- End");
 
         if write_stream
