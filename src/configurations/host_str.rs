@@ -32,17 +32,19 @@ impl EndpointHttpHostString {
         Ok(result)
     }
 
+    pub fn has_server_name(&self) -> bool {
+        self.index.is_some()
+    }
+
     pub fn get_server_name(&self) -> Option<&str> {
         let index = self.index?;
-        Some(&self.src[..index])
+        let result = &self.src[..index];
+        Some(result)
     }
 
     pub fn is_my_server_name(&self, server_name: &str) -> bool {
         match self.get_server_name() {
-            Some(my_server_name) => rust_extensions::str_utils::compare_strings_case_insensitive(
-                my_server_name,
-                server_name,
-            ),
+            Some(my_server_name) => my_server_name.eq_ignore_ascii_case(server_name),
             None => true,
         }
     }

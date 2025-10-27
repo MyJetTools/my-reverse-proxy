@@ -21,7 +21,7 @@ pub async fn handle_connection(
     let result = super::utils::lazy_accept_tcp_stream(
         endpoint_port,
         accepted_connection.network_stream,
-        configuration,
+        configuration.clone(),
     )
     .await;
 
@@ -49,15 +49,14 @@ pub async fn handle_connection(
 
     match endpoint_info.listen_endpoint_type {
         ListenHttpEndpointType::Http1 => {
-            kick_off_https1(
+            crate::h1_server::kick_h1_reverse_proxy_server(
                 listening_addr_str.clone(),
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
-                endpoint_port,
-            )
-            .await;
+                configuration,
+            );
         }
         ListenHttpEndpointType::Http2 => {
             kick_off_https2(
@@ -71,15 +70,14 @@ pub async fn handle_connection(
             .await;
         }
         ListenHttpEndpointType::Https1 => {
-            kick_off_https1(
+            crate::h1_server::kick_h1_reverse_proxy_server(
                 listening_addr_str.clone(),
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
-                endpoint_port,
-            )
-            .await;
+                configuration.clone(),
+            );
         }
         ListenHttpEndpointType::Https2 => {
             kick_off_https2(
@@ -99,6 +97,7 @@ pub async fn handle_connection(
     }
 }
 
+/*
 async fn kick_off_https1(
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,
@@ -160,7 +159,7 @@ async fn kick_off_https1(
         https_requests_handler_dispose.dispose().await;
     });
 }
-
+ */
 async fn kick_off_https2(
     endpoint_name: Arc<String>,
     socket_addr: SocketAddr,

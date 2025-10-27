@@ -39,3 +39,5 @@ mod allowed_users_list;
 pub use allowed_users_list::*;
 mod my_reverse_proxy_remote_endpoint;
 pub use my_reverse_proxy_remote_endpoint::*;
+mod modify_headers_config;
+pub use modify_headers_config::*;

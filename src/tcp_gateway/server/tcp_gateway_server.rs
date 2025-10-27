@@ -32,7 +32,7 @@ impl TcpGatewayServer {
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner, allowed_ip_list, debug));
+        tokio::spawn(connection_loop(inner, debug));
 
         result
     }
@@ -70,21 +70,18 @@ impl Drop for TcpGatewayServer {
     }
 }
 
-async fn connection_loop(
-    tcp_gateway: Arc<TcpGatewayInner>,
-    ip_whitelist: Option<HashSet<String>>,
-    debug: bool,
-) {
+async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
     let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
 
-    if let Err(err) = &listener {
-        panic!(
-            "Failed to start listening socket to serve TCP Gateway at address: {}. Err: {:?}",
-            tcp_gateway.gateway_host, err
-        );
-    }
-
-    let listener = listener.unwrap();
+    let listener = match listener {
+        Ok(listener) => listener,
+        Err(err) => {
+            panic!(
+                "Failed to start listening socket to serve TCP Gateway at address: {}. Err: {:?}",
+                tcp_gateway.gateway_host, err
+            );
+        }
+    };
 
     while tcp_gateway.is_running() {
         let accept_result = listener.accept().await;

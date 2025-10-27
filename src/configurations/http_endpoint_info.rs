@@ -13,7 +13,8 @@ pub struct HttpEndpointInfo {
     pub client_certificate_id: Option<SslCertificateId>,
     pub locations: Vec<Arc<ProxyPassLocationConfig>>,
     pub allowed_user_list_id: Option<String>,
-    pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
+    pub modify_request_headers: ModifyHeadersConfig,
+    pub modify_response_headers: ModifyHeadersConfig,
     pub whitelisted_ip_list_id: Option<String>,
 }
 
@@ -28,7 +29,7 @@ impl HttpEndpointInfo {
         whitelisted_ip_list_id: Option<String>,
         locations: Vec<Arc<ProxyPassLocationConfig>>,
         allowed_user_list_id: Option<String>,
-        modify_headers_settings: HttpEndpointModifyHeadersSettings,
+        mut modify_headers_settings: HttpEndpointModifyHeadersSettings,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -41,7 +42,10 @@ impl HttpEndpointInfo {
             client_certificate_id,
             locations,
             allowed_user_list_id,
-            modify_headers_settings,
+            modify_request_headers: ModifyHeadersConfig::new_request(&mut modify_headers_settings),
+            modify_response_headers: ModifyHeadersConfig::new_response(
+                &mut modify_headers_settings,
+            ),
             ssl_certificate_id,
             whitelisted_ip_list_id,
         }
@@ -53,5 +57,21 @@ impl HttpEndpointInfo {
 
     pub fn as_str(&self) -> &str {
         self.host_endpoint.as_str()
+    }
+
+    pub fn find_location(&self, path: &str) -> Option<&ProxyPassLocationConfig> {
+        for location in self.locations.iter() {
+            if location.path.len() > path.len() {
+                continue;
+            }
+
+            let path_prefix = &path[..location.path.len()];
+
+            if path_prefix.eq_ignore_ascii_case(&location.path) {
+                return Some(&location);
+            }
+        }
+
+        None
     }
 }

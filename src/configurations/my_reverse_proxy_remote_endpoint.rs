@@ -23,6 +23,18 @@ pub enum MyReverseProxyRemoteEndpoint {
 }
 
 impl MyReverseProxyRemoteEndpoint {
+    pub fn get_host(&self) -> Option<&str> {
+        match self {
+            MyReverseProxyRemoteEndpoint::Gateway { id: _, remote_host } => {
+                Some(remote_host.get_host())
+            }
+            MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials: _,
+                remote_host,
+            } => Some(remote_host.get_host()),
+            MyReverseProxyRemoteEndpoint::Direct { remote_host } => Some(remote_host.get_host()),
+        }
+    }
     pub async fn try_parse(
         remote_host: &str,
         settings_model: &SettingsCompiled,

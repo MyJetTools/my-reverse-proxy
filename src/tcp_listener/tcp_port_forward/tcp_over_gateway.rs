@@ -250,7 +250,7 @@ async fn copy_from_gateway_to_connection(
 
         if let Err(err) = write_result {
             let err = format!(
-                "Write from gateway:{}->{} with connection id {} to {} is ended with error: `{}`. Closing connection",
+                "Write from gateway:{}->{} with connection id {} to {} is ended with error: `{:?}`. Closing connection",
                 gateway_id.as_str(),
                 remote_endpoint.as_str(),
                 connection_id,

@@ -18,17 +18,17 @@ pub struct HttpOverGatewayConnector {
 #[async_trait::async_trait]
 impl MyHttpClientConnector<TcpGatewayProxyForwardStream> for HttpOverGatewayConnector {
     async fn connect(&self) -> Result<TcpGatewayProxyForwardStream, MyHttpClientError> {
-        let gateway = crate::app::APP_CTX
+        let Some(gateway) = crate::app::APP_CTX
             .get_gateway_by_id_with_next_connection_id(self.gateway_id.as_str())
-            .await;
-
-        if gateway.is_none() {
+            .await
+        else {
             return Err(MyHttpClientError::CanNotConnectToRemoteHost(format!(
                 "Gateway {} is not found",
                 self.gateway_id
             )));
-        }
-        let (gateway, connection_id) = gateway.unwrap();
+        };
+
+        let (gateway, connection_id) = gateway;
 
         match gateway
             .connect_to_forward_proxy_connection(

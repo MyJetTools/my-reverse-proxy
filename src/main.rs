@@ -23,11 +23,16 @@ mod tcp_utils;
 
 mod scripts;
 
+mod error_templates;
+mod h1_server;
+mod h1_utils;
 mod http2_client_pool;
 mod http_client_pool;
 mod http_clients;
+mod local_path;
 mod metrics;
 mod network_stream;
+mod remote_connection;
 mod ssl;
 mod tcp_gateway;
 mod timers;

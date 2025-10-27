@@ -6,6 +6,7 @@ use crate::{
     app::APP_CTX,
     http_content_source::*,
     http_proxy_pass::content_source::*,
+    local_path::LocalPathContentSrc,
     settings::{ModifyHttpHeadersSettings, ProxyPassTo},
 };
 
@@ -14,7 +15,8 @@ use super::*;
 pub struct ProxyPassLocationConfig {
     pub path: String,
     pub id: i64,
-    pub modify_headers: Option<ModifyHttpHeadersSettings>,
+    pub modify_request_headers: ModifyHeadersConfig,
+    pub modify_response_headers: ModifyHeadersConfig,
     pub ip_white_list_id: Option<String>,
     pub domain_name: Option<String>,
     pub proxy_pass_to: ProxyPassTo,
@@ -34,10 +36,19 @@ impl ProxyPassLocationConfig {
     ) -> Self {
         //println!("Created location to {:?}", proxy_pass_to);
 
+        let mut modify_request_headers = ModifyHeadersConfig::default();
+        let mut modify_response_headers = ModifyHeadersConfig::default();
+
+        if let Some(mut modify_headers) = modify_headers {
+            modify_request_headers.populate_request(&mut modify_headers);
+            modify_response_headers.populate_response(&mut modify_headers);
+        }
+
         Self {
             path,
             id: APP_CTX.get_next_id(),
-            modify_headers,
+            modify_request_headers,
+            modify_response_headers,
             ip_white_list_id,
             proxy_pass_to,
             domain_name,

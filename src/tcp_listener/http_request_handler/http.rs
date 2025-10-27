@@ -51,11 +51,10 @@ impl HttpRequestHandler {
                 "Unknown host".to_string().into_bytes(),
             ));
         }
-        let http_endpoint_info = self
-            .listen_port_config
-            .get_http_endpoint_info(host.unwrap());
+        let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(host);
         if http_endpoint_info.is_none() {
-            let content = super::utils::generate_layout(400, "No configuration found", None);
+            let content =
+                crate::error_templates::generate_layout(400, "No configuration found", None);
             return Err(create_err_response(StatusCode::BAD_REQUEST, content));
         }
 

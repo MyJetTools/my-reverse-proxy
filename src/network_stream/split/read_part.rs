@@ -3,24 +3,42 @@ use std::time::Duration;
 use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncReadExt;
 
+use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
+
+#[derive(Debug)]
+pub enum NetworkError {
+    Timeout(Duration),
+    Disconnected,
+    IoError(std::io::Error),
+}
+
 #[async_trait::async_trait]
 pub trait NetworkStreamReadPart {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error>;
 
     async fn read_with_timeout(
         &mut self,
-        buf: &mut Vec<u8>,
+        buf: &mut [u8],
         timeout: Duration,
-    ) -> Result<usize, String> {
+    ) -> Result<usize, NetworkError> {
         let future = self.read_from_socket(buf);
 
         let result = tokio::time::timeout(timeout, future).await;
 
         let Ok(result) = result else {
-            return Err("Read timeout".to_string());
+            return Err(NetworkError::Timeout(timeout));
         };
 
-        result.map_err(|err| format!("{:?}", err))
+        match result {
+            Ok(result) => {
+                if result == 0 {
+                    return Err(NetworkError::Disconnected);
+                }
+
+                return Ok(result);
+            }
+            Err(err) => Err(NetworkError::IoError(err)),
+        }
     }
 }
 
@@ -73,6 +91,16 @@ impl NetworkStreamReadPart for MyOwnedReadHalf {
         self.read(buf).await
     }
 }
+
+#[async_trait::async_trait]
+impl NetworkStreamReadPart
+    for tokio::io::ReadHalf<my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>>
+{
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        self.read(buf).await
+    }
+}
+
 #[async_trait::async_trait]
 impl NetworkStreamReadPart
     for tokio::io::ReadHalf<my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>>
@@ -84,6 +112,29 @@ impl NetworkStreamReadPart
 
 #[async_trait::async_trait]
 impl NetworkStreamReadPart for tokio::io::ReadHalf<tokio::net::TcpStream> {
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        self.read(buf).await
+    }
+}
+
+#[cfg(unix)]
+#[async_trait::async_trait]
+impl NetworkStreamReadPart for tokio::io::ReadHalf<tokio::net::UnixStream> {
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        self.read(buf).await
+    }
+}
+
+#[cfg(unix)]
+#[async_trait::async_trait]
+impl NetworkStreamReadPart for tokio::io::ReadHalf<my_ssh::SshAsyncChannel> {
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        self.read(buf).await
+    }
+}
+
+#[async_trait::async_trait]
+impl NetworkStreamReadPart for tokio::io::ReadHalf<TcpGatewayProxyForwardStream> {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
         self.read(buf).await
     }

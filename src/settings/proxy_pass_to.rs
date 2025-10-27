@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::configurations::MyReverseProxyRemoteEndpoint;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StaticContentModel {
     pub status_code: u16,
     pub content_type: Option<String>,
@@ -49,6 +49,21 @@ pub enum ProxyPassTo {
 }
 
 impl ProxyPassTo {
+    pub fn get_host(&self) -> Option<&str> {
+        match self {
+            ProxyPassTo::Http1(proxy_pass_to_model) => proxy_pass_to_model.remote_host.get_host(),
+            ProxyPassTo::Http2(proxy_pass_to_model) => proxy_pass_to_model.remote_host.get_host(),
+            ProxyPassTo::UnixHttp1(proxy_pass_to_model) => {
+                proxy_pass_to_model.remote_host.get_host()
+            }
+            ProxyPassTo::UnixHttp2(proxy_pass_to_model) => {
+                proxy_pass_to_model.remote_host.get_host()
+            }
+            ProxyPassTo::FilesPath(_) => None,
+            ProxyPassTo::Static(_) => None,
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             ProxyPassTo::Http1(proxy_pass) => proxy_pass.remote_host.to_string(),

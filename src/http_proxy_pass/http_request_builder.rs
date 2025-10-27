@@ -10,7 +10,7 @@ use hyper::{
 };
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 
-use crate::{configurations::*, settings::ModifyHttpHeadersSettings};
+use crate::configurations::*;
 
 use super::{HostPort, HttpProxyPass, HttpProxyPassInner, ProxyPassError, ProxyPassLocation};
 
@@ -273,27 +273,17 @@ impl HttpRequestBuilder {
         inner: &'s HttpProxyPassInner,
         location: &ProxyPassLocation,
     ) {
-        if let Some(modify_headers_settings) = proxy_pass
-            .endpoint_info
-            .modify_headers_settings
-            .global_modify_headers_settings
-            .as_ref()
-        {
-            modify_headers(inner, &mut self.parts, modify_headers_settings);
-        }
+        modify_headers(
+            inner,
+            &mut self.parts,
+            &location.config.modify_request_headers,
+        );
 
-        if let Some(modify_headers_settings) = proxy_pass
-            .endpoint_info
-            .modify_headers_settings
-            .endpoint_modify_headers_settings
-            .as_ref()
-        {
-            modify_headers(inner, &mut self.parts, modify_headers_settings);
-        }
-
-        if let Some(modify_headers_settings) = location.config.modify_headers.as_ref() {
-            modify_headers(inner, &mut self.parts, modify_headers_settings);
-        }
+        modify_headers(
+            inner,
+            &mut self.parts,
+            &proxy_pass.endpoint_info.modify_request_headers,
+        );
     }
 }
 
@@ -308,29 +298,20 @@ fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
 fn modify_headers<'s>(
     inner: &HttpProxyPassInner,
     parts: &mut Parts,
-    headers_settings: &ModifyHttpHeadersSettings,
+    modify_headers: &ModifyHeadersConfig,
 ) {
-    if let Some(remove_header) = headers_settings.remove.as_ref() {
-        if let Some(remove_headers) = remove_header.request.as_ref() {
-            for remove_header in remove_headers {
-                parts.headers.remove(remove_header.as_str());
-            }
-        }
+    for remove_header in modify_headers.iter_remove() {
+        parts.headers.remove(remove_header.as_str());
     }
 
-    if let Some(add_headers) = headers_settings.add.as_ref() {
-        if let Some(add_headers) = add_headers.request.as_ref() {
-            for add_header in add_headers {
-                let value = inner.populate_value(&add_header.value, parts);
-                if !value.as_str().is_empty() {
-                    let value = inner.populate_value(&add_header.value, parts);
-                    //println!("Adding Header: '{}'='{}'", add_header.name, value.as_str());
-                    parts.headers.insert(
-                        HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                        value.as_str().parse().unwrap(),
-                    );
-                }
-            }
+    for (header, value) in modify_headers.iter_add() {
+        if !value.as_str().is_empty() {
+            let value = inner.populate_value(value, parts);
+            //println!("Adding Header: '{}'='{}'", add_header.name, value.as_str());
+            parts.headers.insert(
+                HeaderName::from_bytes(header.as_bytes()).unwrap(),
+                value.as_str().parse().unwrap(),
+            );
         }
     }
 }

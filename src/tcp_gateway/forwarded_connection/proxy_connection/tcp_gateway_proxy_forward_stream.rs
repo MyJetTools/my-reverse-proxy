@@ -4,6 +4,7 @@ use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayContract};
 
 use super::ProxyReceiveBuffer;
 
+#[derive(Clone)]
 pub struct TcpGatewayProxyForwardStream {
     pub connection_id: u32,
     pub gateway_connection_inner: Arc<TcpConnectionInner>,
@@ -49,6 +50,7 @@ impl TcpGatewayProxyForwardStream {
         });
     }
 }
+
 impl tokio::io::AsyncRead for TcpGatewayProxyForwardStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,

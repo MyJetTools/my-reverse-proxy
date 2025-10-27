@@ -23,7 +23,15 @@ async fn accept_connections_loop(
     listening_addr: SocketAddr,
     listen_server_handler: Arc<ListenServerHandler>,
 ) {
-    let listener = tokio::net::TcpListener::bind(listening_addr).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(listening_addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            panic!(
+                "Can not start listening server `{}`. Err: {:?}",
+                listening_addr, err
+            )
+        }
+    };
 
     let mut connection_id: u64 = 0;
 
@@ -105,8 +113,12 @@ async fn handle_accepted_connection(
     match endpoint_type {
         ListenConfiguration::Http(configuration) => match configuration.listen_endpoint_type {
             crate::configurations::ListenHttpEndpointType::Http1 => {
-                super::http::handle_connection(accepted_connection, listening_addr, configuration)
-                    .await;
+                crate::h1_server::kick_h1_reverse_proxy_server_from_http(
+                    accepted_connection,
+                    configuration,
+                );
+                //super::http::handle_connection(accepted_connection, listening_addr, configuration)
+                //    .await;
             }
             crate::configurations::ListenHttpEndpointType::Http2 => {
                 super::http2::handle_connection(accepted_connection, listening_addr, configuration)
