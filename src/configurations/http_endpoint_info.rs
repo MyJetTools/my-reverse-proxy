@@ -101,14 +101,9 @@ impl HttpEndpointInfo {
             return false;
         };
 
-        if !crate::app::APP_CTX
+        crate::app::APP_CTX
             .allowed_users_list
             .is_allowed(allowed_user_list_id, identity.as_str())
             .await
-        {
-            return false;
-        }
-
-        true
     }
 }
