@@ -3,8 +3,8 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 use crate::configurations::*;
-use crate::h1_server::server_loop::HttpServerSingleThreadedPart;
-use crate::h1_server::HttpConnectionInfo;
+use crate::h1_proxy_server::server_loop::HttpServerSingleThreadedPart;
+use crate::h1_proxy_server::HttpConnectionInfo;
 
 use crate::{
     h1_utils::*, http_content_source::local_path::LocalPathContent, network_stream::*,

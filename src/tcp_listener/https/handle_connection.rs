@@ -48,7 +48,7 @@ pub async fn handle_connection(
 
     match endpoint_info.listen_endpoint_type {
         ListenHttpEndpointType::Http1 => {
-            crate::h1_server::kick_h1_reverse_proxy_server(
+            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
                 listening_addr,
                 accepted_connection.addr,
                 endpoint_info,
@@ -69,7 +69,7 @@ pub async fn handle_connection(
             .await;
         }
         ListenHttpEndpointType::Https1 => {
-            crate::h1_server::kick_h1_reverse_proxy_server(
+            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
                 listening_addr,
                 accepted_connection.addr,
                 endpoint_info,

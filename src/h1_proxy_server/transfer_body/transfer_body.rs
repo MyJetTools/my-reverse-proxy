@@ -1,5 +1,5 @@
 use crate::{
-    h1_server::{LoopBuffer, ProxyServerError},
+    h1_proxy_server::{LoopBuffer, ProxyServerError},
     network_stream::*,
 };
 

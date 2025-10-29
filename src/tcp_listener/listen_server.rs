@@ -113,7 +113,7 @@ async fn handle_accepted_connection(
     match endpoint_type {
         ListenConfiguration::Http(configuration) => match configuration.listen_endpoint_type {
             crate::configurations::ListenHttpEndpointType::Http1 => {
-                crate::h1_server::kick_h1_reverse_proxy_server_from_http(
+                crate::h1_proxy_server::kick_h1_reverse_proxy_server_from_http(
                     listening_addr,
                     accepted_connection,
                     configuration,

@@ -1,6 +1,8 @@
 use rust_extensions::StrOrString;
 use x509_parser::nom::AsBytes;
 
+//todo!("Add timeout");
+
 lazy_static::lazy_static! {
     pub static ref NOT_FOUND: Vec<u8> = {
        generate_layout(404, "Resource not found", None)

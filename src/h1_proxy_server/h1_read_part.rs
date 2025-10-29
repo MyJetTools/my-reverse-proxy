@@ -6,7 +6,7 @@ use crate::{
     configurations::{
         HttpEndpointInfo, HttpListenPortConfiguration, ModifyHeadersConfig, ProxyPassLocationConfig,
     },
-    h1_server::{HttpConnectionInfo, HttpHeadersReader, LoopBuffer, ProxyServerError},
+    h1_proxy_server::{HttpConnectionInfo, HttpHeadersReader, LoopBuffer, ProxyServerError},
     h1_utils::{Http1Headers, Http1HeadersBuilder, HttpContentLength},
     http_proxy_pass::HttpProxyPassIdentity,
     network_stream::{NetworkStreamReadPart, NetworkStreamWritePart},

@@ -4,7 +4,7 @@ use my_ssh::{SshCredentials, SshSession};
 use rust_extensions::{remote_endpoint::RemoteEndpointOwned, UnsafeValue};
 use tokio::sync::Mutex;
 
-use crate::{h1_server::H1ReadPart, network_stream::*};
+use crate::{h1_proxy_server::H1ReadPart, network_stream::*};
 
 pub struct H1RemoteConnectionReadPart<
     TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,

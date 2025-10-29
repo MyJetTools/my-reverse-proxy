@@ -1,4 +1,4 @@
-use crate::h1_server::ProxyServerError;
+use crate::h1_proxy_server::ProxyServerError;
 
 const BUFFER_CAPACITY: usize = 1024 * 1024;
 pub struct LoopBuffer {

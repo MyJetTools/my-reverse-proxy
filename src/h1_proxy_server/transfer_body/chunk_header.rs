@@ -58,7 +58,7 @@ fn parse_hex_digit(c: u8) -> Option<usize> {
 #[cfg(test)]
 mod test {
 
-    use crate::h1_server::transfer_body::ChunkHeader;
+    use crate::h1_proxy_server::transfer_body::ChunkHeader;
 
     #[test]
     fn test_211b() {

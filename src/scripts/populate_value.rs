@@ -2,7 +2,8 @@ use rust_common::placeholders::*;
 use rust_extensions::StrOrString;
 
 use crate::{
-    h1_server::HttpConnectionInfo, http_proxy_pass::HttpProxyPassIdentity, types::HttpRequestReader,
+    h1_proxy_server::HttpConnectionInfo, http_proxy_pass::HttpProxyPassIdentity,
+    types::HttpRequestReader,
 };
 
 pub fn populate_value<'s>(
