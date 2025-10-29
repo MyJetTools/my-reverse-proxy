@@ -1,4 +1,5 @@
-use crate::network_stream::NetworkError;
+#![allow(warnings)]
+use crate::{google_auth::GoogleAuthError, network_stream::NetworkError};
 
 #[derive(Debug)]
 pub enum ProxyServerError {
@@ -7,6 +8,12 @@ pub enum ProxyServerError {
     BufferAllocationFail,
     ChunkHeaderParseError,
     HeadersParseError(&'static str),
+    CanNotConnectToRemoteResource(String),
+    CanNotWriteContentToRemoteConnection(NetworkError),
+    HttpConfigurationIsNotFound,
+    LocationIsNotFound,
+    NotAuthorized,
+    HttpResponse(Vec<u8>),
 }
 
 impl From<NetworkError> for ProxyServerError {

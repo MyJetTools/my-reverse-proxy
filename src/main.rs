@@ -29,7 +29,7 @@ mod h1_utils;
 mod http2_client_pool;
 mod http_client_pool;
 mod http_clients;
-mod local_path;
+
 mod metrics;
 mod network_stream;
 mod remote_connection;
@@ -37,6 +37,7 @@ mod ssl;
 mod tcp_gateway;
 mod timers;
 mod types;
+mod utils;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {
     e.to_string()

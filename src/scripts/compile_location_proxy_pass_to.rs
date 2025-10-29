@@ -1,10 +1,6 @@
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
-use crate::{
-    configurations::{MyReverseProxyRemoteEndpoint, ProxyPassLocationConfig},
-    settings::*,
-    settings_compiled::SettingsCompiled,
-};
+use crate::{configurations::*, settings::*, settings_compiled::SettingsCompiled};
 
 pub async fn compile_location_proxy_pass_to(
     settings_model: &SettingsCompiled,
@@ -30,7 +26,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::UnixHttp1(ProxyPassToModel {
+            ProxyPassToConfig::UnixHttp1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -47,7 +43,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::UnixHttp2(ProxyPassToModel {
+            ProxyPassToConfig::UnixHttp2(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -64,7 +60,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::Http1(ProxyPassToModel {
+            ProxyPassToConfig::Http1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -81,7 +77,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::Http2(ProxyPassToModel {
+            ProxyPassToConfig::Http2(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -98,7 +94,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::Http1(ProxyPassToModel {
+            ProxyPassToConfig::Http1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -115,7 +111,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassTo::Http2(ProxyPassToModel {
+            ProxyPassToConfig::Http2(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -140,19 +136,19 @@ pub async fn compile_location_proxy_pass_to(
                 default_file: location_settings.default_file.clone(),
             };
 
-            ProxyPassTo::FilesPath(model)
+            ProxyPassToConfig::FilesPath(model)
         }
         LocationType::StaticContent => {
             let body = location_settings.body.clone().unwrap_or_default();
 
             let body = get_static_content_body(body).await?;
-            let model: StaticContentModel = StaticContentModel {
+            let model: StaticContentConfig = StaticContentConfig {
                 status_code: location_settings.status_code.unwrap_or(200),
                 content_type: location_settings.content_type.clone(),
                 body,
             };
 
-            ProxyPassTo::Static(model)
+            ProxyPassToConfig::Static(model.into())
         }
     };
 

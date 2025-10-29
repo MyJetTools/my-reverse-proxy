@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
-use crate::settings::HttpEndpointModifyHeadersSettings;
+use crate::{http_proxy_pass::HttpProxyPassIdentity, settings::HttpEndpointModifyHeadersSettings};
 
 use super::*;
+
+pub enum AuthorizationRequired<'s> {
+    GoogleAuth(&'s str),
+    ClientCertificate,
+}
 
 pub struct HttpEndpointInfo {
     pub host_endpoint: EndpointHttpHostString,
@@ -73,5 +78,37 @@ impl HttpEndpointInfo {
         }
 
         None
+    }
+
+    pub fn must_be_authorized<'s>(&'s self) -> Option<AuthorizationRequired<'s>> {
+        if let Some(g_auth) = self.g_auth.as_deref() {
+            return Some(AuthorizationRequired::GoogleAuth(g_auth));
+        }
+
+        if self.ssl_certificate_id.is_some() {
+            return Some(AuthorizationRequired::ClientCertificate);
+        }
+
+        None
+    }
+
+    pub async fn user_is_allowed(&self, identity: &Option<HttpProxyPassIdentity>) -> bool {
+        let Some(allowed_user_list_id) = self.allowed_user_list_id.as_ref() else {
+            return true;
+        };
+
+        let Some(identity) = identity else {
+            return false;
+        };
+
+        if !crate::app::APP_CTX
+            .allowed_users_list
+            .is_allowed(allowed_user_list_id, identity.as_str())
+            .await
+        {
+            return false;
+        }
+
+        true
     }
 }

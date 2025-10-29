@@ -3,18 +3,12 @@ use std::io::Write;
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http_body_util::{BodyExt, Full};
-use hyper::{
-    body::Incoming,
-    header::{HeaderName, HeaderValue, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE},
-    HeaderMap, Request, Uri,
-};
+use hyper::{body::Incoming, header::*, Request, Uri};
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 
-use crate::configurations::*;
+use crate::{configurations::*, types::*};
 
-use super::{HostPort, HttpProxyPass, HttpProxyPassInner, ProxyPassError, ProxyPassLocation};
-
-pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
+use super::{HttpProxyPass, HttpProxyPassInner, ProxyPassError, ProxyPassLocation};
 
 pub struct WebSocketUpgrade {
     pub upgrade_response: hyper::Response<Full<Bytes>>,
@@ -28,7 +22,7 @@ pub struct TransformedRequest {
 }
 
 pub struct HttpRequestBuilder {
-    parts: Parts,
+    pub parts: Parts,
     body: Incoming,
     src_http_type: ListenHttpEndpointType,
 }
@@ -121,7 +115,7 @@ impl HttpRequestBuilder {
             if let Some(host) = self.parts.uri.host() {
                 host.to_string()
             } else {
-                if let Some(host) = self.parts.get_headers().get("host") {
+                if let Some(host) = self.parts.headers.get("host") {
                     host.to_str().unwrap().to_string()
                 } else {
                     println!("Parts: {:?}", self.parts);
@@ -167,50 +161,39 @@ impl HttpRequestBuilder {
         &self.parts.uri
     }
 
-    pub fn get_from_query(&self, param: &str) -> Option<String> {
-        let query = self.get_uri().query()?;
+    /*
+       pub fn get_from_query(&self, param: &str) -> Option<String> {
+           let query = self.get_uri().query()?;
 
-        for itm in query.split("&") {
-            let mut parts = itm.split("=");
+           for itm in query.split("&") {
+               let mut parts = itm.split("=");
 
-            let left = parts.next().unwrap().trim();
+               let left = parts.next().unwrap().trim();
 
-            if let Some(right) = parts.next() {
-                if left == param {
-                    return Some(url_utils::decode_from_url_string(right.trim()).to_string());
-                }
-            }
-        }
+               if let Some(right) = parts.next() {
+                   if left == param {
+                       return Some(url_utils::decode_from_url_string(right.trim()).to_string());
+                   }
+               }
+           }
 
-        None
-    }
+           None
+       }
 
-    pub fn get_cookie(&self, cookie_name: &str) -> Option<&str> {
-        let auth_token = self.get_headers().get("Cookie")?;
+       pub fn get_cookie(&self, cookie_name: &str) -> Option<&str> {
+           let cookie_value = self.get_headers().get("Cookie")?;
 
-        match auth_token.to_str() {
-            Ok(result) => {
-                for itm in result.split(";") {
-                    if let Some(eq_index) = itm.find("=") {
-                        let name = itm[..eq_index].trim();
-
-                        if name == cookie_name {
-                            let value = &itm[eq_index + 1..];
-                            return Some(value);
-                        }
-                    }
-                }
-
-                Some(result)
-            }
-            Err(_) => None,
-        }
-    }
+           match cookie_value.to_str() {
+               Ok(cookie_value) => crate::utils::get_cookie(cookie_value, cookie_name),
+               Err(_) => None,
+           }
+       }
 
     pub fn get_authorization_token(&self) -> Option<&str> {
-        let result = self.get_cookie(AUTHORIZED_COOKIE_NAME);
+        let result = self.get_cookie(crate::consts::AUTHORIZED_COOKIE_NAME);
         result
     }
+    */
 
     async fn build_request(
         self,
@@ -316,12 +299,31 @@ fn modify_headers<'s>(
     }
 }
 
-impl HostPort for HttpRequestBuilder {
-    fn get_uri(&self) -> &Uri {
-        &self.parts.uri
+impl HttpRequestReader for Parts {
+    fn get_cookie<'s>(&'s self, cookie_name: &str) -> Option<&'s str> {
+        let cookie_header = self.headers.get("cookie")?;
+
+        match cookie_header.to_str() {
+            Ok(str) => crate::utils::get_cookie(str, cookie_name),
+            Err(_) => None,
+        }
     }
 
-    fn get_headers(&self) -> &HeaderMap<HeaderValue> {
-        &self.parts.headers
+    fn get_path<'s>(&'s self) -> &'s str {
+        self.uri.path()
+    }
+
+    fn get_path_and_query<'s>(&'s self) -> Option<&'s str> {
+        let path_and_query = self.uri.path_and_query()?;
+        Some(path_and_query.as_str())
+    }
+
+    fn get_query_string<'s>(&'s self) -> Option<&'s str> {
+        let path_and_query = self.uri.path_and_query()?;
+        path_and_query.query()
+    }
+
+    fn get_host<'s>(&'s self) -> Option<&'s str> {
+        self.uri.host()
     }
 }

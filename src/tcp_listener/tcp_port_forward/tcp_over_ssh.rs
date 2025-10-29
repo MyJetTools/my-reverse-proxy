@@ -94,14 +94,12 @@ async fn connection_loop(
         remote_ssh_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
-        debug,
     ));
     tokio::spawn(super::forwards::copy_loop(
         remote_reader,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
-        debug,
     ));
 
     super::forwards::await_while_alive(

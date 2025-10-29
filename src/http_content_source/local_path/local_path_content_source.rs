@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use hyper::Uri;
 use my_http_server::WebContentType;
 
 use crate::http_content_source::{RequestExecutor, RequestExecutorResult};

@@ -2,10 +2,7 @@ use bytes::Bytes;
 use http_body_util::Full;
 use my_http_server::WebContentType;
 
-use crate::{
-    http_content_source::RequestExecutorResult,
-    http_proxy_pass::{HostPort, ProxyPassError},
-};
+use crate::{http_content_source::RequestExecutorResult, http_proxy_pass::*};
 
 pub async fn get_file_from_gateway(
     gateway_id: &str,
@@ -21,7 +18,7 @@ pub async fn get_file_from_gateway(
 
     let gateway = gateway.unwrap();
 
-    let full_path = super::merge_path_and_file(path, req.get_uri().path(), default_file);
+    let full_path = super::merge_path_and_file(path, req.uri().path(), default_file);
 
     match gateway.request_file(full_path.as_str()).await {
         Ok(content) => Ok(RequestExecutorResult {

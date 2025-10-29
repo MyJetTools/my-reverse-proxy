@@ -3,11 +3,8 @@ use std::time::Duration;
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    app::APP_CTX,
-    http_content_source::*,
-    http_proxy_pass::content_source::*,
-    local_path::LocalPathContentSrc,
-    settings::{ModifyHttpHeadersSettings, ProxyPassTo},
+    app::APP_CTX, http_content_source::local_path::LocalPathContentSrc, http_content_source::*,
+    http_proxy_pass::content_source::*, settings::ModifyHttpHeadersSettings,
 };
 
 use super::*;
@@ -19,7 +16,7 @@ pub struct ProxyPassLocationConfig {
     pub modify_response_headers: ModifyHeadersConfig,
     pub ip_white_list_id: Option<String>,
     pub domain_name: Option<String>,
-    pub proxy_pass_to: ProxyPassTo,
+    pub proxy_pass_to: ProxyPassToConfig,
     pub compress: bool,
     pub trace_payload: bool,
 }
@@ -29,7 +26,7 @@ impl ProxyPassLocationConfig {
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
         ip_white_list_id: Option<String>,
-        proxy_pass_to: ProxyPassTo,
+        proxy_pass_to: ProxyPassToConfig,
         domain_name: Option<String>,
         compress: bool,
         trace_payload: bool,
@@ -66,14 +63,10 @@ impl ProxyPassLocationConfig {
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
         let result = match &self.proxy_pass_to {
-            ProxyPassTo::Static(static_content_model) => {
-                HttpProxyPassContentSource::Static(StaticContentSrc::new(
-                    static_content_model.status_code,
-                    static_content_model.content_type.clone(),
-                    static_content_model.body.clone(),
-                ))
-            }
-            ProxyPassTo::Http1(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::Static(config) => HttpProxyPassContentSource::Static(
+                crate::http_content_source::static_content::StaticContentSrc::new(config.clone()),
+            ),
+            ProxyPassToConfig::Http1(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     let model = Http1OverGatewayContentSource {
                         gateway_id: id.clone(),
@@ -157,7 +150,7 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
-            ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::Http2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     let model = Http2OverGatewayContentSource {
                         gateway_id: id.clone(),
@@ -242,7 +235,7 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
-            ProxyPassTo::FilesPath(model) => match &model.files_path {
+            ProxyPassToConfig::FilesPath(model) => match &model.files_path {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     let model = PathOverGatewayContentSource {
                         gateway_id: id.clone(),
@@ -275,7 +268,7 @@ impl ProxyPassLocationConfig {
                     ))
                 }
             },
-            ProxyPassTo::UnixHttp1(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::UnixHttp1(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     panic!(
                         "Unix+Http is not supported  over gateway. Id: {}. RemoteHost: {}",
@@ -305,7 +298,7 @@ impl ProxyPassLocationConfig {
                     return HttpProxyPassContentSource::UnixHttp1(model);
                 }
             },
-            ProxyPassTo::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     panic!(
                         "Unix+Http2 is not supported  over gateway. Id:{}. RemoteHost: {}",
@@ -341,8 +334,8 @@ impl ProxyPassLocationConfig {
 
     pub fn is_remote_content_http1(&self) -> Option<bool> {
         match &self.proxy_pass_to {
-            ProxyPassTo::Http1(_) => Some(true),
-            ProxyPassTo::Http2(_) => Some(false),
+            ProxyPassToConfig::Http1(_) => Some(true),
+            ProxyPassToConfig::Http2(_) => Some(false),
             _ => None,
         }
     }

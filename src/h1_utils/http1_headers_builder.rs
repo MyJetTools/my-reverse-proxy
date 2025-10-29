@@ -13,8 +13,23 @@ impl Http1HeadersBuilder {
         }
     }
 
-    pub fn add_http_response_ok(&mut self) {
-        self.payload.extend_from_slice(b"HTTP/1.1 200 OK");
+    pub fn add_response_first_line(&mut self, status_code: u16) {
+        match status_code {
+            200 => {
+                self.payload.extend_from_slice(b"HTTP/1.1 200 OK");
+            }
+            401 => {
+                self.payload.extend_from_slice(b"HTTP/1.1 401 Unauthorized");
+            }
+            502 => {
+                self.payload.extend_from_slice(b"HTTP/1.1 502 Bad Gateway");
+            }
+            _ => {
+                self.payload
+                    .extend_from_slice(b"HTTP/1.1 503 Service Temporarily Unavailable");
+            }
+        }
+
         self.write_cl_cr();
     }
 
@@ -23,6 +38,10 @@ impl Http1HeadersBuilder {
         self.payload.extend_from_slice(": ".as_bytes());
         self.payload.extend_from_slice(value.as_bytes());
         self.write_cl_cr();
+    }
+
+    pub fn add_content_length(&mut self, size: usize) {
+        self.add_header("content-length", size.to_string().as_str());
     }
 
     pub fn write_cl_cr(&mut self) {

@@ -1,10 +1,5 @@
 use super::*;
-use rust_extensions::slice_of_u8_utils::SliceOfU8Ext;
-
-pub struct HeaderPosition {
-    pub start: usize,
-    pub end: usize,
-}
+use rust_extensions::{slice_of_u8_utils::SliceOfU8Ext, str_utils::StrUtils};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum HttpContentLength {
@@ -13,19 +8,22 @@ pub enum HttpContentLength {
     Chunked,
 }
 
-pub struct HttpHeaders {
+pub struct Http1Headers {
     pub first_line_end: usize,
     pub end: usize,
     pub content_length: HttpContentLength,
     pub host_value: Option<HeaderPosition>,
+    pub cookie_value: Option<HeaderPosition>,
 }
 
-impl HttpHeaders {
+impl Http1Headers {
     pub fn parse(src: &[u8]) -> Option<Self> {
-        const CL_CR: &[u8] = b"\r\n";
-        const HOST_PREFIX: &[u8] = b"host:";
+        const HOST_HEADER: &[u8] = b"host";
+        const COOKIE_HEADER: &[u8] = b"cookie";
+        const CONTENT_LEN_HEADER: &[u8] = b"content-length";
+        const TRANSFER_ENCODING_HEADER: &[u8] = b"transfer-encoding";
 
-        let first_line_end = src.find_sequence_pos(CL_CR, 0)?;
+        let first_line_end = src.find_sequence_pos(crate::consts::HTTP_CR_LF, 0)?;
 
         // Verify HTTP/1.1 first line
         if let Err(err) = verify_http11_first_line(&src[..first_line_end]) {
@@ -34,30 +32,38 @@ impl HttpHeaders {
         }
 
         let mut host_value = None;
+        let mut cookie_value = None;
         let mut content_length = HttpContentLength::None;
 
-        let mut header_start_pos = first_line_end + CL_CR.len();
+        let mut header_start_pos = first_line_end + crate::consts::HTTP_CR_LF.len();
         loop {
-            let end = src.find_sequence_pos(CL_CR, header_start_pos)?;
+            let end = src.find_sequence_pos(crate::consts::HTTP_CR_LF, header_start_pos)?;
 
             if end == header_start_pos {
                 return Some(Self {
                     first_line_end,
                     host_value,
+                    cookie_value,
                     content_length,
-                    end: end + CL_CR.len(),
+                    end: end + crate::consts::HTTP_CR_LF.len(),
                 });
             }
 
-            if host_value.is_none() {
-                host_value = get_header_value(HOST_PREFIX, src, header_start_pos, end);
+            let http_header = HttpHeader::new(src, header_start_pos, end)?;
+            if http_header.is_my_header_name(HOST_HEADER) {
+                host_value = Some(http_header.get_value());
+            } else if http_header.is_my_header_name(COOKIE_HEADER) {
+                cookie_value = Some(http_header.get_value());
+            } else if http_header.is_my_header_name(CONTENT_LEN_HEADER) {
+                content_length = HttpContentLength::Known(http_header.get_usize_value()?);
+            } else if http_header.is_my_header_name(TRANSFER_ENCODING_HEADER) {
+                let value = http_header.get_value_as_str()?;
+                if value.eq_case_insensitive("chunked") {
+                    content_length = HttpContentLength::Chunked;
+                }
             }
 
-            if matches!(content_length, HttpContentLength::None) {
-                content_length = get_content_length(src, header_start_pos, end);
-            }
-
-            header_start_pos = end + CL_CR.len();
+            header_start_pos = end + crate::consts::HTTP_CR_LF.len();
         }
     }
 
@@ -68,15 +74,20 @@ impl HttpHeaders {
     }
 }
 
-fn get_header_value(
-    header_prefix: &[u8],
-    buf: &[u8],
+/*
+fn get_header_value<'s>(
+    buf: &'s [u8],
     pos_start: usize,
     pos_end: usize,
-) -> Option<HeaderPosition> {
-    if pos_end - pos_start <= header_prefix.len() {
-        return None;
-    }
+) -> Result<(&'s [u8], Option<HeaderPosition>), ProxyPassError> {
+
+
+    let Some(header_index) = header_index else{
+        return Err(ProxyPassErr)
+    };
+
+    let key = buf[..header_index]
+
 
     if check_case_insensitive(
         &buf[pos_start..pos_start + header_prefix.len()],
@@ -110,38 +121,6 @@ fn get_header_value(
     None
 }
 
-fn get_content_length(buf: &[u8], pos_start: usize, pos_end: usize) -> HttpContentLength {
-    const CONTENT_LENGTH_PREFIX: &[u8] = b"content-length:";
-    const TRANSFER_ENCODING_PREFIX: &[u8] = b"transfer-encoding:";
-
-    // Check for Transfer-Encoding: chunked first
-    if let Some(header_position) =
-        get_header_value(TRANSFER_ENCODING_PREFIX, buf, pos_start, pos_end)
-    {
-        let value_bytes = &buf[header_position.start..header_position.end];
-        if let Ok(value_str) = std::str::from_utf8(value_bytes) {
-            let trimmed = value_str.trim().to_lowercase();
-            if trimmed == "chunked" {
-                return HttpContentLength::Chunked;
-            }
-        }
-    }
-
-    // Check for Content-Length header
-    if let Some(header_position) = get_header_value(CONTENT_LENGTH_PREFIX, buf, pos_start, pos_end)
-    {
-        // Extract the value part and parse it
-        let value_bytes = &buf[header_position.start..header_position.end];
-        if let Ok(value_str) = std::str::from_utf8(value_bytes) {
-            let trimmed = value_str.trim();
-            if let Ok(length) = trimmed.parse::<usize>() {
-                return HttpContentLength::Known(length);
-            }
-        }
-    }
-
-    HttpContentLength::None
-}
 
 fn check_case_insensitive(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {
@@ -173,7 +152,7 @@ fn check_case_insensitive(left: &[u8], right: &[u8]) -> bool {
 
     true
 }
-
+ */
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,7 +162,7 @@ mod tests {
         // Test with Content-Length header
         let http_request =
             b"POST /api/data HTTP/1.1\r\nContent-Length: 1024\r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::Known(1024));
@@ -194,7 +173,7 @@ mod tests {
         // Test with case-insensitive Content-Length header
         let http_request =
             b"POST /api/data HTTP/1.1\r\ncontent-length: 2048\r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::Known(2048));
@@ -205,7 +184,7 @@ mod tests {
         // Test with Content-Length header that has whitespace
         let http_request =
             b"POST /api/data HTTP/1.1\r\nContent-Length:  512  \r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::Known(512));
@@ -215,7 +194,7 @@ mod tests {
     fn test_no_content_length_header() {
         // Test without Content-Length header
         let http_request = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::None);
@@ -226,7 +205,7 @@ mod tests {
         // Test with Transfer-Encoding: chunked header
         let http_request =
             b"POST /api/data HTTP/1.1\r\nTransfer-Encoding: chunked\r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::Chunked);
@@ -237,7 +216,7 @@ mod tests {
         // Test with case-insensitive Transfer-Encoding: chunked header
         let http_request =
             b"POST /api/data HTTP/1.1\r\ntransfer-encoding: CHUNKED\r\nHost: example.com\r\n\r\n";
-        let headers = HttpHeaders::parse(http_request);
+        let headers = Http1Headers::parse(http_request);
         assert!(headers.is_some());
         let headers = headers.unwrap();
         assert_eq!(headers.content_length, HttpContentLength::Chunked);

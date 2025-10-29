@@ -3,8 +3,6 @@ pub use settings::*;
 
 mod connections_settings;
 pub use connections_settings::*;
-mod proxy_pass_to;
-pub use proxy_pass_to::*;
 
 mod ssl_certificates_settings;
 pub use ssl_certificates_settings::*;

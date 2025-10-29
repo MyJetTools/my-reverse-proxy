@@ -1,23 +1,43 @@
 use std::{sync::Arc, time::Duration};
 
 use my_ssh::{SshCredentials, SshSession};
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
+use rust_extensions::{remote_endpoint::RemoteEndpointOwned, UnsafeValue};
+use tokio::sync::Mutex;
 
-use crate::network_stream::*;
+use crate::{h1_server::H1ReadPart, network_stream::*};
 
-pub struct Http1Connection<
+pub struct H1RemoteConnectionReadPart<
+    TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+> {
+    pub read_half: Mutex<H1ReadPart<TNetworkReadPart>>,
+    disconnected: UnsafeValue<bool>,
+}
+
+impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
+    H1RemoteConnectionReadPart<TNetworkReadPart>
+{
+    pub fn get_disconnected(&self) -> bool {
+        self.disconnected.get_value()
+    }
+
+    pub fn set_disconnected(&self) {
+        self.disconnected.set_value(true);
+    }
+}
+
+pub struct Http1ConnectionInner<
     TNetworkWritePart: NetworkStreamWritePart + Send + Sync + 'static,
     TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
 > {
     write_half: TNetworkWritePart,
-    read_half: Option<TNetworkReadPart>,
+    read_half: Arc<H1RemoteConnectionReadPart<TNetworkReadPart>>,
     _ssh_session: Option<Arc<SshSession>>,
 }
 
 impl<
         TNetworkWritePart: NetworkStreamWritePart + Send + Sync + 'static,
         TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
-    > Http1Connection<TNetworkWritePart, TNetworkReadPart>
+    > Http1ConnectionInner<TNetworkWritePart, TNetworkReadPart>
 {
     pub async fn connect<
         TNetworkStream: NetworkStream<WritePart = TNetworkWritePart, ReadPart = TNetworkReadPart>
@@ -42,18 +62,26 @@ impl<
         )
         .await?;
 
-        let (read_half, write_half) = result.split();
+        let (read_part, write_half) = result.split();
 
         let result = Self {
             write_half,
-            read_half: Some(read_half),
+            read_half: H1RemoteConnectionReadPart {
+                read_half: Mutex::new(H1ReadPart::new(read_part)),
+                disconnected: false.into(),
+            }
+            .into(),
             _ssh_session,
         };
 
         Ok(result)
     }
 
-    pub async fn send(&mut self, payload: &[u8], time_out: Duration) {
+    pub fn is_disconnected(&self) -> bool {
+        self.read_half.disconnected.get_value()
+    }
+
+    pub async fn send_with_timeout(&mut self, payload: &[u8], time_out: Duration) {
         self.write_half
             .write_all_with_timeout(payload, time_out)
             .await
@@ -68,7 +96,7 @@ impl<
         self.write_half.shutdown_socket().await;
     }
 
-    pub fn get_read_part(&mut self) -> TNetworkReadPart {
-        self.read_half.take().unwrap()
+    pub fn get_read_part(&self) -> Arc<H1RemoteConnectionReadPart<TNetworkReadPart>> {
+        self.read_half.clone()
     }
 }

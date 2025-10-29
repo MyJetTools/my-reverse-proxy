@@ -3,15 +3,8 @@ use std::time::Duration;
 use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncReadExt;
 
+use crate::network_stream::NetworkError;
 use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
-
-#[derive(Debug)]
-pub enum NetworkError {
-    Timeout(Duration),
-    Disconnected,
-    IoError(std::io::Error),
-}
-
 #[async_trait::async_trait]
 pub trait NetworkStreamReadPart {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error>;

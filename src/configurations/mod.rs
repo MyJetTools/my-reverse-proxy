@@ -41,3 +41,5 @@ mod my_reverse_proxy_remote_endpoint;
 pub use my_reverse_proxy_remote_endpoint::*;
 mod modify_headers_config;
 pub use modify_headers_config::*;
+mod proxy_pass_to_config;
+pub use proxy_pass_to_config::*;

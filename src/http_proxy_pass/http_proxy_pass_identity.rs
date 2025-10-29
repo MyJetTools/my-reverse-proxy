@@ -2,28 +2,16 @@ use std::sync::Arc;
 
 use crate::{tcp_listener::https::ClientCertificateData, types::Email};
 
-pub struct HttpProxyPassIdentity {
-    pub client_cert_cn: Option<Arc<ClientCertificateData>>,
-    pub ga_user: Option<Email>,
+pub enum HttpProxyPassIdentity {
+    ClientCert(Arc<ClientCertificateData>),
+    GoogleUser(Email),
 }
 
 impl HttpProxyPassIdentity {
-    pub fn new(client_cert_cn: Option<Arc<ClientCertificateData>>) -> Self {
-        Self {
-            client_cert_cn,
-            ga_user: None,
+    pub fn as_str(&self) -> &str {
+        match self {
+            HttpProxyPassIdentity::ClientCert(data) => data.cn.as_str(),
+            HttpProxyPassIdentity::GoogleUser(email) => email.as_str(),
         }
-    }
-
-    pub fn get_identity(&self) -> Option<&str> {
-        if let Some(result) = self.client_cert_cn.as_ref() {
-            return Some(result.cn.as_str());
-        }
-
-        if let Some(result) = self.ga_user.as_ref() {
-            return Some(result.as_str());
-        }
-
-        None
     }
 }

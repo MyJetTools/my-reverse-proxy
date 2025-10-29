@@ -5,7 +5,7 @@ pub struct H1HeadersFirstLine<'s> {
 }
 
 impl<'s> H1HeadersFirstLine<'s> {
-    pub fn get_path(&self) -> &str {
+    pub fn get_path_and_query(&self) -> &str {
         let index_start = self.data.find_byte_pos(b' ', 0).unwrap() + 1;
         let index_end = self.data.find_byte_pos(b' ', index_start).unwrap();
 

@@ -11,6 +11,7 @@ pub async fn transfer_chunked_body<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
     WritePart: NetworkStreamWritePart + Send + Sync + 'static,
 >(
+    request_id: u64,
     read_stream: &mut ReadPart,
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
@@ -19,10 +20,18 @@ pub async fn transfer_chunked_body<
         // Read chunk header line
         let chunk_header = read_chunk_header(read_stream, loop_buffer).await?;
 
-        let len = chunk_header.len;
-        transfer_chunk_data(read_stream, write_stream, loop_buffer, chunk_header).await?;
+        let chunk_size = chunk_header.chunk_size;
 
-        if len == 0 {
+        transfer_chunk_data(
+            request_id,
+            read_stream,
+            write_stream,
+            loop_buffer,
+            chunk_header,
+        )
+        .await?;
+
+        if chunk_size == 0 {
             return Ok(());
         }
     }
@@ -58,6 +67,7 @@ async fn transfer_chunk_data<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
     WritePart: NetworkStreamWritePart + Send + Sync + 'static,
 >(
+    request_id: u64,
     read_stream: &mut ReadPart,
     remote_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
@@ -76,9 +86,16 @@ async fn transfer_chunk_data<
                     remain_to_send
                 };
 
-                remote_stream
-                    .write_all_with_timeout(&buf[..to_send], crate::consts::WRITE_TIMEOUT)
+                let write_error = remote_stream
+                    .write_http_payload(request_id, &buf[..to_send], crate::consts::WRITE_TIMEOUT)
                     .await;
+
+                if let Err(write_error) = write_error {
+                    return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(
+                        write_error,
+                    ));
+                }
+
                 loop_buffer.commit_read(to_send);
                 remain_to_send -= to_send;
             }

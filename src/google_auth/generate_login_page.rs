@@ -1,7 +1,9 @@
-use crate::{configurations::*, http_proxy_pass::HostPort};
+use crate::configurations::*;
 
-pub fn generate_login_page<THostPort: HostPort + Send + Sync + 'static>(
-    req: &THostPort,
+use crate::types::*;
+
+pub fn generate_login_page(
+    req: &impl HttpRequestReader,
     settings: &GoogleAuthCredentials,
 ) -> String {
     return super::html::generate_with_template(|| {

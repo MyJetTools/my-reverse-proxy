@@ -3,14 +3,14 @@ use hyper::{
     HeaderMap,
 };
 
-use crate::configurations::ModifyHeadersConfig;
+use crate::{configurations::ModifyHeadersConfig, types::HttpRequestReader};
 
-use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex};
+use super::{HttpProxyPass, HttpProxyPassInner, LocationIndex};
 
-pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
+pub fn modify_resp_headers(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
-    req_host_port: &THostPort,
+    req_host_port: &impl HttpRequestReader,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
@@ -42,9 +42,9 @@ pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
     );
 }
 
-fn modify_headers<THostPort: HostPort + Send + Sync + 'static>(
+fn modify_headers(
     inner: &HttpProxyPassInner,
-    req_host_port: &THostPort,
+    req_host_port: &impl HttpRequestReader,
     headers: &mut HeaderMap<hyper::header::HeaderValue>,
     headers_settings: &ModifyHeadersConfig,
 ) {

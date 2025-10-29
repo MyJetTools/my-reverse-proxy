@@ -3,13 +3,13 @@ use std::time::Duration;
 use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncWriteExt;
 
-use crate::{
-    network_stream::NetworkError, tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
-};
+use crate::network_stream::*;
+use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
 
 #[async_trait::async_trait]
 pub trait NetworkStreamWritePart {
     async fn shutdown_socket(&mut self);
+
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error>;
 
     async fn write_all_with_timeout(
@@ -22,16 +22,25 @@ pub trait NetworkStreamWritePart {
         let result = tokio::time::timeout(timeout, future).await;
 
         let Ok(result) = result else {
-            self.shutdown_socket();
+            let _ = self.shutdown_socket();
             return Err(NetworkError::Timeout(timeout));
         };
 
         if let Err(err) = result {
-            self.shutdown_socket().await;
+            let _ = self.shutdown_socket().await;
             return Err(NetworkError::IoError(err));
         }
 
         Ok(())
+    }
+
+    async fn write_http_payload(
+        &mut self,
+        _request_id: u64,
+        buffer: &[u8],
+        timeout: Duration,
+    ) -> Result<(), NetworkError> {
+        self.write_all_with_timeout(buffer, timeout).await
     }
 }
 
