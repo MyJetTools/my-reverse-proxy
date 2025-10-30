@@ -260,7 +260,10 @@ impl NetworkStream for TcpGatewayProxyForwardStream {
             .connect_to_forward_proxy_connection(remote_endpoint.clone(), timeout, id)
             .await
         {
-            Ok(result) => Ok(result),
+            Ok(result) => {
+                println!("Connected to gateway");
+                Ok(result)
+            }
             Err(err) => Err(NetworkError::Other(format!("{:?}", err))),
         }
     }

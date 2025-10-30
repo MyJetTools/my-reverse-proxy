@@ -55,6 +55,7 @@ impl TcpGatewayProxyForwardStream {
 #[async_trait::async_trait]
 impl NetworkStreamReadPart for TcpGatewayProxyForwardStream {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        println!("Reading from gateway socket");
         let result = self.receive_buffer.get_data(buf).await;
         println!("Read from Gateway: {:?}", result);
         result
