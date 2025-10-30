@@ -3,9 +3,12 @@ use std::{net::SocketAddr, sync::Arc};
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 
-use crate::{configurations::HttpListenPortConfiguration, network_stream::*};
+use crate::{
+    configurations::HttpListenPortConfiguration, network_stream::*,
+    tcp_listener::AcceptedTcpConnection,
+};
 
-use super::{http_request_handler::http::HttpRequestHandler, AcceptedTcpConnection};
+use super::http_request_handler::http::HttpRequestHandler;
 
 pub async fn handle_connection(
     accepted_connection: AcceptedTcpConnection,
@@ -44,11 +47,6 @@ pub async fn handle_connection(
             MyNetworkStream::UnixSocket(unix_stream) => {
                 let io = TokioIo::new(unix_stream);
                 TcpOrUnixSocket::Unix(io)
-            }
-
-            #[cfg(unix)]
-            MyNetworkStream::Ssh(_) => {
-                panic!("Http2 server can not listen SShStream");
             }
         };
 

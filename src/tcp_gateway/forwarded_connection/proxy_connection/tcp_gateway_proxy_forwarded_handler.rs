@@ -68,8 +68,8 @@ impl TcpGatewayProxyForwardConnectionHandler {
         }
     }
 
-    pub fn enqueue_receive_payload(&self, payload: &[u8]) {
-        self.receive_buffer.extend_from_slice(payload);
+    pub async fn enqueue_receive_payload(&self, payload: &[u8]) {
+        self.receive_buffer.extend_from_slice(payload).await;
     }
 
     pub fn get_connection(&self) -> TcpGatewayProxyForwardStream {
@@ -81,7 +81,7 @@ impl TcpGatewayProxyForwardConnectionHandler {
         }
     }
 
-    pub fn disconnect(&self) {
-        self.receive_buffer.disconnect();
+    pub async fn disconnect(&self) {
+        self.receive_buffer.disconnect().await;
     }
 }

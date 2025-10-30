@@ -238,25 +238,6 @@ impl HttpProxyPass {
                             response
                         }
                     }
-
-                    super::content_source::WebSocketUpgradeStream::HttpOverGatewayStream(
-                        async_channel,
-                    ) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                async_channel,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
-                    }
                 }
             }
         };

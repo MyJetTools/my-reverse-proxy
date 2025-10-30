@@ -1,265 +1,44 @@
-use std::{sync::Arc, time::Duration};
+use crate::{
+    app::SshSessionHandler, network_stream::*, tcp_listener::AcceptedTcpConnection,
+    tcp_utils::LoopBuffer,
+};
 
-use rust_extensions::date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds};
-use tokio::sync::Mutex;
-
-use crate::network_stream::{MyOwnedReadHalf, MyOwnedWriteHalf, NetworkStreamWritePart};
-
-//todo!("Make it though tcp-utils")
-pub async fn copy_loop(
-    mut reader: MyOwnedReadHalf,
-    writer: Arc<Mutex<MyOwnedWriteHalf>>,
-    incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
-    buffer_size: usize,
+pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sync + 'static>(
+    server_stream: AcceptedTcpConnection,
+    remote_stream: TRemoteNetworkStream,
+    ssh_session_handler: Option<SshSessionHandler>,
 ) {
-    let mut buf = Vec::with_capacity(buffer_size);
-
-    unsafe {
-        buf.set_len(buffer_size);
-    }
-
-    let write_timeout = Duration::from_secs(30);
-
-    loop {
-        let read_result = reader.read(&mut buf).await;
-
-        let mut writer_access = writer.lock().await;
-
-        if read_result.is_err() {
-            let _ = writer_access.shutdown_socket().await;
-            break;
+    let (remote_reader, remote_writer) = remote_stream.split();
+    match server_stream.network_stream {
+        MyNetworkStream::Tcp(tcp_stream) => {
+            let (server_reader, server_writer) = tokio::io::split(tcp_stream);
+            tokio::spawn(crate::tcp_utils::copy_streams(
+                server_reader,
+                remote_writer,
+                LoopBuffer::new(),
+                ssh_session_handler,
+            ));
+            tokio::spawn(crate::tcp_utils::copy_streams(
+                remote_reader,
+                server_writer,
+                LoopBuffer::new(),
+                None,
+            ));
         }
-
-        let n = read_result.unwrap();
-
-        if n == 0 {
-            let _ = writer_access.shutdown_socket().await;
-            break;
-        }
-        incoming_traffic_moment.update(DateTimeAsMicroseconds::now());
-
-        let write_result = writer_access
-            .write_all_with_timeout(&buf[0..n], write_timeout)
-            .await;
-
-        if write_result.is_err() {
-            writer_access.shutdown_socket().await;
-            return;
+        MyNetworkStream::UnixSocket(unix_stream) => {
+            let (server_reader, server_writer) = tokio::io::split(unix_stream);
+            tokio::spawn(crate::tcp_utils::copy_streams(
+                server_reader,
+                remote_writer,
+                LoopBuffer::new(),
+                ssh_session_handler,
+            ));
+            tokio::spawn(crate::tcp_utils::copy_streams(
+                remote_reader,
+                server_writer,
+                LoopBuffer::new(),
+                None,
+            ));
         }
     }
 }
-
-/*
-pub async fn copy_to_ssh_loop(
-    mut reader: impl AsyncReadExt + Unpin,
-    writer: Arc<Mutex<futures::io::WriteHalf<SshAsyncChannel>>>,
-    incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
-    buffer_size: usize,
-) {
-    use futures::AsyncWriteExt;
-    let mut buf = Vec::with_capacity(buffer_size);
-
-    unsafe {
-        buf.set_len(buffer_size);
-    }
-
-    let write_timeout = Duration::from_secs(30);
-
-    loop {
-        let read_result = reader.read(&mut buf).await;
-
-        let mut writer_access = writer.lock().await;
-
-        if read_result.is_err() {
-            let _ = writer_access.close().await;
-            break;
-        }
-
-        let n = read_result.unwrap();
-
-        if n == 0 {
-            let _ = writer_access.close().await;
-            break;
-        }
-        incoming_traffic_moment.update(DateTimeAsMicroseconds::now());
-
-        let write_future = writer_access.write_all(&buf[0..n]);
-
-        let result = tokio::time::timeout(write_timeout, write_future).await;
-
-        //Got Timeout on writer
-        if result.is_err() {
-            let _ = writer_access.close().await;
-            break;
-        }
-
-        let result = result.unwrap();
-
-        if result.is_err() {
-            let _ = writer_access.close().await;
-        }
-    }
-}
-
-pub async fn copy_from_ssh_loop(
-    mut reader: futures::io::ReadHalf<SshAsyncChannel>,
-    writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
-    incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
-    buffer_size: usize,
-) {
-    use futures::AsyncReadExt;
-    let mut buf = Vec::with_capacity(buffer_size);
-
-    unsafe {
-        buf.set_len(buffer_size);
-    }
-
-    let write_timeout = Duration::from_secs(30);
-
-    loop {
-        let read_result = reader.read(&mut buf).await;
-
-        let mut writer_access = writer.lock().await;
-
-        if read_result.is_err() {
-            let _ = writer_access.shutdown().await;
-            break;
-        }
-
-        let n = read_result.unwrap();
-
-        if n == 0 {
-            let _ = writer_access.shutdown().await;
-            break;
-        }
-        incoming_traffic_moment.update(DateTimeAsMicroseconds::now());
-
-        let write_future = writer_access.write_all(&buf[0..n]);
-
-        let result = tokio::time::timeout(write_timeout, write_future).await;
-
-        //Got Timeout on writer
-        if result.is_err() {
-            let _ = writer_access.shutdown().await;
-            break;
-        }
-
-        let result = result.unwrap();
-
-        if result.is_err() {
-            let _ = writer_access.shutdown().await;
-        }
-    }
-}
- */
-/*
-pub async fn copy_from_remote_loop(
-    mut remote_reader: impl AsyncReadExt + Unpin,
-    local_writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
-    buffer_size: usize,
-) {
-    let mut buf = Vec::with_capacity(buffer_size);
-
-    unsafe {
-        buf.set_len(buffer_size);
-    }
-
-    loop {
-        let read_result = remote_reader.read(&mut buf).await;
-        let mut local_writer_access = local_writer.lock().await;
-
-        if read_result.is_err() {
-            let _ = local_writer_access.shutdown().await;
-            break;
-        }
-
-        let n = read_result.unwrap();
-
-        if n == 0 {
-            let _ = local_writer_access.shutdown().await;
-            break;
-        }
-        let result = local_writer_access.write_all(&buf[0..n]).await;
-
-        if result.is_err() {
-            let _ = local_writer_access.shutdown().await;
-        }
-    }
-}
- */
-pub async fn await_while_alive(
-    local_writer: Arc<Mutex<MyOwnedWriteHalf>>,
-    remote_writer: Arc<Mutex<MyOwnedWriteHalf>>,
-    incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
-
-    print_detected: impl Fn() -> (),
-) {
-    loop {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-
-        let now = DateTimeAsMicroseconds::now();
-
-        let last_incoming_traffic =
-            DateTimeAsMicroseconds::new(incoming_traffic_moment.get_unix_microseconds());
-
-        if now
-            .duration_since(last_incoming_traffic)
-            .as_positive_or_zero()
-            > Duration::from_secs(60)
-        {
-            print_detected();
-
-            {
-                let mut remote_writer_access = remote_writer.lock().await;
-                remote_writer_access.shutdown_socket().await;
-            }
-
-            {
-                let mut remote_writer_access = local_writer.lock().await;
-                remote_writer_access.shutdown_socket().await;
-            }
-
-            break;
-        }
-    }
-}
-
-/*
-pub async fn await_while_alive_with_ssh(
-    local_writer: Arc<Mutex<impl AsyncWriteExt + Unpin>>,
-    remote_writer: Arc<Mutex<futures::io::WriteHalf<SshAsyncChannel>>>,
-    incoming_traffic_moment: Arc<AtomicDateTimeAsMicroseconds>,
-
-    print_detected: impl Fn() -> (),
-) {
-    use futures::AsyncWriteExt;
-    loop {
-        tokio::time::sleep(Duration::from_secs(10)).await;
-
-        let now = DateTimeAsMicroseconds::now();
-
-        let last_incoming_traffic =
-            DateTimeAsMicroseconds::new(incoming_traffic_moment.get_unix_microseconds());
-
-        if now
-            .duration_since(last_incoming_traffic)
-            .as_positive_or_zero()
-            > Duration::from_secs(60)
-        {
-            print_detected();
-
-            {
-                let mut remote_writer = remote_writer.lock().await;
-                let _ = remote_writer.close().await;
-            }
-
-            {
-                let mut local_writer = local_writer.lock().await;
-                let _ = local_writer.shutdown().await;
-            }
-
-            break;
-        }
-    }
-}
- */

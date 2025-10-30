@@ -4,7 +4,6 @@ use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncReadExt;
 
 use crate::network_stream::NetworkError;
-use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
 #[async_trait::async_trait]
 pub trait NetworkStreamReadPart {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error>;
@@ -121,13 +120,6 @@ impl NetworkStreamReadPart for tokio::io::ReadHalf<tokio::net::UnixStream> {
 #[cfg(unix)]
 #[async_trait::async_trait]
 impl NetworkStreamReadPart for tokio::io::ReadHalf<my_ssh::SshAsyncChannel> {
-    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
-        self.read(buf).await
-    }
-}
-
-#[async_trait::async_trait]
-impl NetworkStreamReadPart for tokio::io::ReadHalf<TcpGatewayProxyForwardStream> {
     async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
         self.read(buf).await
     }

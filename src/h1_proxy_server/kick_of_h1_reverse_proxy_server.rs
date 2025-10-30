@@ -61,11 +61,5 @@ pub fn kick_h1_reverse_proxy_server_from_http(
                 http_connection_info,
             ));
         }
-        MyNetworkStream::Ssh(async_channel) => {
-            tokio::spawn(super::server_loop::serve_reverse_proxy(
-                async_channel,
-                http_connection_info,
-            ));
-        }
     }
 }

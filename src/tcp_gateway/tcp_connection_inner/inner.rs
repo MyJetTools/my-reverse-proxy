@@ -1,9 +1,7 @@
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use encryption::aes::AesKey;
+use rust_extensions::UnsafeValue;
 use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::Mutex};
 
 use super::SendBuffer;
@@ -14,7 +12,7 @@ pub struct TcpConnectionInner {
     pub connection: Mutex<Option<OwnedWriteHalf>>,
     pub buffer: Mutex<SendBuffer>,
     sender: Arc<tokio::sync::mpsc::Sender<()>>,
-    is_connected: AtomicBool,
+    is_connected: Box<UnsafeValue<bool>>,
     pub aes_key: Arc<AesKey>,
 }
 
@@ -28,7 +26,7 @@ impl TcpConnectionInner {
             connection: Mutex::new(Some(connection)),
             buffer: Mutex::new(SendBuffer::new()),
             sender: Arc::new(sender),
-            is_connected: AtomicBool::new(true),
+            is_connected: Box::new(true.into()),
             aes_key,
         };
 
@@ -56,12 +54,11 @@ impl TcpConnectionInner {
     }
 
     pub fn is_connected(&self) -> bool {
-        self.is_connected.load(std::sync::atomic::Ordering::Relaxed)
+        self.is_connected.get_value()
     }
 
     pub async fn disconnect(&self) -> bool {
-        self.is_connected
-            .store(false, std::sync::atomic::Ordering::Relaxed);
+        self.is_connected.set_value(false);
 
         let connection = {
             let mut write_access = self.connection.lock().await;

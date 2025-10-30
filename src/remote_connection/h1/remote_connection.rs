@@ -46,17 +46,14 @@ pub enum RemoteConnection {
         >,
     ),
     Http1OverGateway(
-        Http1ConnectionInner<
-            tokio::io::WriteHalf<TcpGatewayProxyForwardStream>,
-            tokio::io::ReadHalf<TcpGatewayProxyForwardStream>,
-        >,
+        Http1ConnectionInner<TcpGatewayProxyForwardStream, TcpGatewayProxyForwardStream>,
     ),
     StaticContent(Arc<StaticContentConfig>),
     LocalFiles(Arc<LocalPathContent>),
 }
 
 impl RemoteConnection {
-    pub async fn connect(proxy_pass_to: &ProxyPassToConfig) -> Result<Self, String> {
+    pub async fn connect(proxy_pass_to: &ProxyPassToConfig) -> Result<Self, NetworkError> {
         match proxy_pass_to {
             ProxyPassToConfig::Http1(proxy_pass_to) => match &proxy_pass_to.remote_host {
                 crate::configurations::MyReverseProxyRemoteEndpoint::Gateway {
@@ -273,7 +270,7 @@ impl RemoteConnection {
         server_loop_buffer: LoopBuffer,
     ) -> Result<(), (ServerReadPart, ServerWritePart)> {
         match self {
-            RemoteConnection::Http1Direct(mut inner) => {
+            RemoteConnection::Http1Direct(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -281,17 +278,19 @@ impl RemoteConnection {
                     server_read_part,
                     remote_write_part,
                     server_loop_buffer,
+                    None,
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
                     remote_read_part,
                     server_write_part,
                     remote_loop_buffer,
+                    None,
                 ));
 
                 return Ok(());
             }
-            RemoteConnection::Http1UnixSocket(mut inner) => {
+            RemoteConnection::Http1UnixSocket(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -299,17 +298,19 @@ impl RemoteConnection {
                     server_read_part,
                     remote_write_part,
                     server_loop_buffer,
+                    None,
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
                     remote_read_part,
                     server_write_part,
                     remote_loop_buffer,
+                    None,
                 ));
 
                 return Ok(());
             }
-            RemoteConnection::Https1Direct(mut inner) => {
+            RemoteConnection::Https1Direct(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -317,17 +318,20 @@ impl RemoteConnection {
                     server_read_part,
                     remote_write_part,
                     server_loop_buffer,
+                    None,
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
                     remote_read_part,
                     server_write_part,
                     remote_loop_buffer,
+                    None,
                 ));
 
                 return Ok(());
             }
             RemoteConnection::Http1OverSsh(mut inner) => {
+                let ssh_session_handler = inner.ssh_session_handler.take();
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -335,17 +339,19 @@ impl RemoteConnection {
                     server_read_part,
                     remote_write_part,
                     server_loop_buffer,
+                    ssh_session_handler,
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
                     remote_read_part,
                     server_write_part,
                     remote_loop_buffer,
+                    None,
                 ));
 
                 return Ok(());
             }
-            RemoteConnection::Http1OverGateway(mut inner) => {
+            RemoteConnection::Http1OverGateway(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -353,12 +359,14 @@ impl RemoteConnection {
                     server_read_part,
                     remote_write_part,
                     server_loop_buffer,
+                    None,
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
                     remote_read_part,
                     server_write_part,
                     remote_loop_buffer,
+                    None,
                 ));
 
                 return Ok(());

@@ -67,12 +67,8 @@ impl ProxyPassLocationConfig {
                 crate::http_content_source::static_content::StaticContentSrc::new(config.clone()),
             ),
             ProxyPassToConfig::Http1(proxy_pass) => match &proxy_pass.remote_host {
-                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    let model = Http1OverGatewayContentSource {
-                        gateway_id: id.clone(),
-                        remote_endpoint: remote_host.clone(),
-                    };
-                    return HttpProxyPassContentSource::Http1OverGateway(model);
+                MyReverseProxyRemoteEndpoint::Gateway { .. } => {
+                    todo!("Should not be here. Remove it");
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -151,12 +147,8 @@ impl ProxyPassLocationConfig {
                 }
             },
             ProxyPassToConfig::Http2(proxy_pass) => match &proxy_pass.remote_host {
-                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    let model = Http2OverGatewayContentSource {
-                        gateway_id: id.clone(),
-                        remote_endpoint: remote_host.clone(),
-                    };
-                    return HttpProxyPassContentSource::Http2OverGateway(model);
+                MyReverseProxyRemoteEndpoint::Gateway { .. } => {
+                    todo!("Should not be here. Remote it at the end of the day");
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,

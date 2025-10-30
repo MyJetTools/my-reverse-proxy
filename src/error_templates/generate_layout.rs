@@ -1,8 +1,6 @@
 use rust_extensions::StrOrString;
 use x509_parser::nom::AsBytes;
 
-//todo!("Add timeout");
-
 lazy_static::lazy_static! {
     pub static ref NOT_FOUND: Vec<u8> = {
        generate_layout(404, "Resource not found", None)
@@ -20,6 +18,10 @@ lazy_static::lazy_static! {
        generate_layout(503, "Server Error", Some("Endpoint configuration is missing".into()))
     };
 
+
+    pub static ref ERROR_TIMEOUT: Vec<u8> = {
+       generate_layout(503, "Server Error", Some("Timeout".into()))
+    };
      pub static ref ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: Vec<u8> = {
        generate_layout(502, "Server Error", Some("Bad gateway".into()))
     };
@@ -27,6 +29,7 @@ lazy_static::lazy_static! {
     pub static ref NOT_AUTHORIZED_PAGE: Vec<u8> = {
        generate_layout(401, "Not authorized request", None)
     };
+
 }
 
 pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {

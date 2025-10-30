@@ -5,7 +5,6 @@ use rust_extensions::{remote_endpoint::RemoteEndpointOwned, StrOrString};
 
 use crate::{
     consts::{DEFAULT_HTTP_CONNECT_TIMEOUT, DEFAULT_HTTP_REQUEST_TIMEOUT},
-    http_client_connectors::HttpOverGatewayConnector,
     http_proxy_pass::ProxyPassError,
 };
 

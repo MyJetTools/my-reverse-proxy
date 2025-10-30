@@ -4,7 +4,6 @@ use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncWriteExt;
 
 use crate::network_stream::*;
-use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
 
 #[async_trait::async_trait]
 pub trait NetworkStreamWritePart {
@@ -152,15 +151,6 @@ impl NetworkStreamWritePart for tokio::io::WriteHalf<my_ssh::SshAsyncChannel> {
         let _ = self.shutdown().await;
     }
 
-    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
-        self.write_all(buffer).await
-    }
-}
-#[async_trait::async_trait]
-impl NetworkStreamWritePart for tokio::io::WriteHalf<TcpGatewayProxyForwardStream> {
-    async fn shutdown_socket(&mut self) {
-        let _ = self.shutdown().await;
-    }
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
         self.write_all(buffer).await
     }

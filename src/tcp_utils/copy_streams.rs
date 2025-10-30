@@ -1,4 +1,4 @@
-use crate::{network_stream::*, tcp_utils::LoopBuffer};
+use crate::{app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer};
 
 pub async fn copy_streams<
     Reader: NetworkStreamReadPart + Send + 'static,
@@ -7,6 +7,7 @@ pub async fn copy_streams<
     mut reader: Reader,
     mut writer: Writer,
     mut loop_buffer: LoopBuffer,
+    _ssh_session_handler: Option<SshSessionHandler>,
 ) {
     loop {
         {

@@ -5,8 +5,6 @@ use http_body_util::combinators::BoxBody;
 use my_http_client::MyHttpClientDisconnect;
 use my_ssh::SshAsyncChannel;
 
-use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
-
 pub enum HttpResponse {
     Response(my_http_client::HyperResponse),
     WebSocketUpgrade {
@@ -21,6 +19,6 @@ pub enum WebSocketUpgradeStream {
     UnixStream(tokio::net::UnixStream),
     TlsStream(my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
     SshChannel(SshAsyncChannel),
-    HttpOverGatewayStream(TcpGatewayProxyForwardStream),
+    //HttpOverGatewayStream(TcpGatewayProxyForwardStream),
     // Hyper(HyperWebsocket),
 }

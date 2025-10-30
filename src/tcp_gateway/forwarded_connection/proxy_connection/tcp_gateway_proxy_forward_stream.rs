@@ -1,6 +1,9 @@
-use std::{sync::Arc, task::Poll};
+use std::sync::Arc;
 
-use crate::tcp_gateway::{TcpConnectionInner, TcpGatewayContract};
+use crate::{
+    network_stream::*,
+    tcp_gateway::{TcpConnectionInner, TcpGatewayContract},
+};
 
 use super::ProxyReceiveBuffer;
 
@@ -13,7 +16,7 @@ pub struct TcpGatewayProxyForwardStream {
 }
 
 impl TcpGatewayProxyForwardStream {
-    pub fn send_payload(&self, payload: &[u8]) {
+    pub async fn send_payload(&self, payload: &[u8]) -> bool {
         let payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
             payload: payload.into(),
@@ -23,15 +26,13 @@ impl TcpGatewayProxyForwardStream {
             self.support_compression,
         );
 
-        let inner = self.gateway_connection_inner.clone();
-
-        tokio::spawn(async move {
-            inner.send_payload(payload.as_slice()).await;
-        });
+        self.gateway_connection_inner
+            .send_payload(payload.as_slice())
+            .await
     }
 
-    pub fn disconnect(&self) {
-        if self.receive_buffer.disconnect() {
+    pub async fn disconnect(&self) {
+        if self.receive_buffer.disconnect().await {
             return;
         }
         let payload = TcpGatewayContract::ConnectionError {
@@ -51,6 +52,32 @@ impl TcpGatewayProxyForwardStream {
     }
 }
 
+#[async_trait::async_trait]
+impl NetworkStreamReadPart for TcpGatewayProxyForwardStream {
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        let result = self.receive_buffer.get_data(buf).await;
+        result
+    }
+}
+
+#[async_trait::async_trait]
+impl NetworkStreamWritePart for TcpGatewayProxyForwardStream {
+    async fn shutdown_socket(&mut self) {
+        self.disconnect().await;
+    }
+    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        if !self.send_payload(buffer).await {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotConnected,
+                "No connection",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/*
 impl tokio::io::AsyncRead for TcpGatewayProxyForwardStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -118,3 +145,4 @@ impl tokio::io::AsyncWrite for TcpGatewayProxyForwardStream {
         std::task::Poll::Ready(Ok(()))
     }
 }
+ */

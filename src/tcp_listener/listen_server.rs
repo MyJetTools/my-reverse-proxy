@@ -56,7 +56,7 @@ async fn accept_connections_loop(
                 let (tcp_stream, addr) = accepted_connection.unwrap();
 
                 let accepted_connection = AcceptedTcpConnection{
-                    network_stream : MyNetworkStream::Tcp(tcp_stream),
+                    network_stream : tcp_stream.into(),
                     addr
                 };
 
@@ -160,7 +160,7 @@ async fn handle_accepted_connection(
                     accepted_connection,
                     listening_addr,
                     configuration.clone(),
-                    id.clone(),
+                    id,
                     remote_host.clone(),
                 )
                 .await;
@@ -173,7 +173,7 @@ async fn handle_accepted_connection(
                     accepted_connection,
                     listening_addr,
                     configuration.clone(),
-                    ssh_credentials.clone(),
+                    ssh_credentials,
                     remote_host.clone(),
                 )
                 .await;

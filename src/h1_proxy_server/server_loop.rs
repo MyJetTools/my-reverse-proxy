@@ -83,8 +83,12 @@ pub async fn serve_reverse_proxy<
                         crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
                             .as_slice()
                     }
-                    ProxyServerError::CanNotConnectToRemoteResource(_) => {
-                        crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()
+                    ProxyServerError::CanNotConnectToRemoteResource(err) => {
+                        if err.as_timeout().is_some() {
+                            crate::error_templates::ERROR_TIMEOUT.as_slice()
+                        } else {
+                            crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()
+                        }
                     }
                     ProxyServerError::LocationIsNotFound => {
                         crate::error_templates::LOCATION_IS_NOT_FOUND.as_slice()
@@ -209,7 +213,7 @@ async fn execute_request<
 
         if !send_headers_result {
             return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(
-                NetworkError::Other("Remote resource is disconnected"),
+                NetworkError::OtherStr("Remote resource is disconnected"),
             ));
         }
     }
@@ -233,7 +237,7 @@ async fn execute_request<
 
     if !connected {
         return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(
-            NetworkError::Other("Remote connection is lost"),
+            NetworkError::OtherStr("Remote connection is lost"),
         ));
     }
 
