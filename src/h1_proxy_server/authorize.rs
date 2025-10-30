@@ -43,7 +43,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                                     token
                                 );
                                 return Err(ProxyServerError::HttpResponse(
-                                    Http1ResponseBuilder::new_as_ok_result()
+                                    Http1ResponseBuilder::new_as_html()
                                         .add_header("Set-Cookie", cookie_value.as_str())
                                         .build_with_body(body.as_bytes()),
                                 ));
@@ -56,7 +56,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                                     &google_auth_credentials,
                                 );
                                 return Err(ProxyServerError::HttpResponse(
-                                    Http1ResponseBuilder::new_as_ok_result()
+                                    Http1ResponseBuilder::new_as_html()
                                         .build_with_body(body.as_bytes()),
                                 ));
                             }
@@ -94,7 +94,7 @@ fn from_google_auth_error(
                 "You have successfully logged out!",
             );
             return ProxyServerError::HttpResponse(
-                Http1ResponseBuilder::new_as_ok_result().build_with_body(body.as_bytes()),
+                Http1ResponseBuilder::new_as_html().build_with_body(body.as_bytes()),
             );
         }
         crate::google_auth::GoogleAuthError::EmailDomainIsNotAuthorized => {
@@ -106,19 +106,19 @@ fn from_google_auth_error(
                 "Unauthorized email domain",
             );
             return ProxyServerError::HttpResponse(
-                Http1ResponseBuilder::new_as_ok_result().build_with_body(body.as_bytes()),
+                Http1ResponseBuilder::new_as_html().build_with_body(body.as_bytes()),
             );
         }
         crate::google_auth::GoogleAuthError::ShowUserAuthenticatedPage(email) => {
             let body =
                 crate::google_auth::generate_authenticated_user(headers_reader, email.as_str());
             return ProxyServerError::HttpResponse(
-                Http1ResponseBuilder::new_as_ok_result().build_with_body(body.as_bytes()),
+                Http1ResponseBuilder::new_as_html().build_with_body(body.as_bytes()),
             );
         }
         crate::google_auth::GoogleAuthError::ShowError(err) => {
             return ProxyServerError::HttpResponse(
-                Http1ResponseBuilder::new_as_ok_result().build_with_body(err.as_bytes()),
+                Http1ResponseBuilder::new_as_html().build_with_body(err.as_bytes()),
             );
         }
     }

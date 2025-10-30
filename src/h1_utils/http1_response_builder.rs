@@ -9,6 +9,10 @@ impl Http1ResponseBuilder {
         Self::new(200)
     }
 
+    pub fn new_as_html() -> Self {
+        Self::new(200).add_content_type("text/html; charset=UTF-8")
+    }
+
     pub fn new(status_code: u16) -> Self {
         let mut result = Self {
             headers: Http1HeadersBuilder::new(),
