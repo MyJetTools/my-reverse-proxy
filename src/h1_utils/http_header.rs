@@ -45,7 +45,7 @@ impl<'s> HttpHeader<'s> {
 
     pub fn get_value(&self) -> HeaderPosition {
         HeaderPosition {
-            start: self.header_separator_index + 1,
+            start: self.header_separator_index + 2,
             end: self.header_end,
         }
     }

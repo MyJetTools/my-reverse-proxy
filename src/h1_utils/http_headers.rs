@@ -67,7 +67,6 @@ impl Http1Headers {
                     content_length = HttpContentLength::Chunked;
                 }
             } else if http_header.is_my_header_name(UPGRADE_HEADER) {
-                http_header.print();
                 upgrade_value = Some(http_header.get_value());
             }
 

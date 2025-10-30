@@ -166,7 +166,6 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
 
         if let Some(upgrade_position) = http_headers.upgrade_value.as_ref() {
             let upgrade_value = &data[upgrade_position.start..upgrade_position.end];
-            println!("Upgrade value: {:?}", std::str::from_utf8(upgrade_value));
 
             web_socket_upgrade =
                 crate::h1_utils::compare_case_insensitive(upgrade_value, b"websocket");
