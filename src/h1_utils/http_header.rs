@@ -57,6 +57,13 @@ impl<'s> HttpHeader<'s> {
             Err(_) => None,
         }
     }
+
+    pub fn print(&self) {
+        println!(
+            "Header: {:?}",
+            std::str::from_utf8(&self.payload[self.header_start..self.header_end])
+        )
+    }
 }
 
 pub fn compare_case_insensitive(left: &[u8], right: &[u8]) -> bool {

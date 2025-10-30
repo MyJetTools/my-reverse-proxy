@@ -54,6 +54,9 @@ impl Http1Headers {
             }
 
             let http_header = HttpHeader::new(src, header_start_pos, end)?;
+
+            http_header.print();
+
             if http_header.is_my_header_name(HOST_HEADER) {
                 host_value = Some(http_header.get_value());
             } else if http_header.is_my_header_name(COOKIE_HEADER) {
