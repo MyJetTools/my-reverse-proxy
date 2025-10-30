@@ -269,7 +269,6 @@ impl RemoteConnection {
 
         server_loop_buffer: LoopBuffer,
     ) -> Result<(), (ServerReadPart, ServerWritePart)> {
-        println!("Websocket upgrade detected");
         match self {
             RemoteConnection::Http1Direct(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
