@@ -19,7 +19,7 @@ pub async fn copy_streams<
                     .await;
 
                 if write_result.is_err() {
-                    return;
+                    break;
                 }
 
                 loop_buffer.commit_read(buf.len());
@@ -37,4 +37,6 @@ pub async fn copy_streams<
 
         loop_buffer.advance(read_size);
     }
+
+    println!("Copy loop is done");
 }
