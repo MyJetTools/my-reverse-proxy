@@ -13,9 +13,10 @@ pub async fn merge_http_configuration_with_existing_port(
         .await;
 
     if configuration.is_none() {
-        return Ok(HttpListenPortConfiguration::new(Arc::new(
-            http_endpoint_info,
-        )));
+        return Ok(HttpListenPortConfiguration::new(
+            Arc::new(http_endpoint_info),
+            port,
+        ));
     }
 
     let configuration = configuration.unwrap();

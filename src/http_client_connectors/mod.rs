@@ -18,8 +18,8 @@ mod http_connector;
 pub use http_connector::*;
 mod http_tls_connector;
 pub use http_tls_connector::*;
-mod http_over_gateway_connector;
-pub use http_over_gateway_connector::*;
+//mod http_over_gateway_connector;
+//pub use http_over_gateway_connector::*;
 #[cfg(unix)]
 mod unix_socket_http_connector;
 #[cfg(unix)]

@@ -5,10 +5,7 @@ use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use tokio::sync::Mutex;
 
-use crate::{
-    configurations::HttpListenPortConfiguration,
-    http_proxy_pass::{HostPort, HttpListenPortInfo, HttpProxyPass},
-};
+use crate::{configurations::HttpListenPortConfiguration, http_proxy_pass::*};
 
 pub struct HttpRequestHandler {
     proxy_pass: Mutex<Option<Arc<HttpProxyPass>>>,
@@ -38,9 +35,7 @@ impl HttpRequestHandler {
             return Ok(proxy_pass);
         }
 
-        let host = req.get_host();
-
-        if host.is_none() {
+        let Some(host) = req.uri().host() else {
             println!(
                 "Can not detect host. Uri:{}. Headers: {:?}",
                 req.uri(),
@@ -50,12 +45,12 @@ impl HttpRequestHandler {
                 StatusCode::BAD_REQUEST,
                 "Unknown host".to_string().into_bytes(),
             ));
-        }
-        let http_endpoint_info = self
-            .listen_port_config
-            .get_http_endpoint_info(host.unwrap());
+        };
+
+        let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(Some(host));
         if http_endpoint_info.is_none() {
-            let content = super::utils::generate_layout(400, "No configuration found", None);
+            let content =
+                crate::error_templates::generate_layout(400, "No configuration found", None);
             return Err(create_err_response(StatusCode::BAD_REQUEST, content));
         }
 

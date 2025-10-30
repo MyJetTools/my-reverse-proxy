@@ -6,13 +6,15 @@ use super::*;
 pub struct HttpListenPortConfiguration {
     pub endpoints: Vec<Arc<HttpEndpointInfo>>,
     pub listen_endpoint_type: ListenHttpEndpointType,
+    pub port: u16,
 }
 
 impl HttpListenPortConfiguration {
-    pub fn new(endpoint_info: Arc<HttpEndpointInfo>) -> Self {
+    pub fn new(endpoint_info: Arc<HttpEndpointInfo>, port: u16) -> Self {
         let result = Self {
             listen_endpoint_type: endpoint_info.listen_endpoint_type,
             endpoints: vec![endpoint_info],
+            port,
         };
 
         result
@@ -38,6 +40,7 @@ impl HttpListenPortConfiguration {
         &self,
         endpoint_host_string: &EndpointHttpHostString,
     ) -> Option<Self> {
+        let port = self.port;
         let index = self
             .endpoints
             .iter()
@@ -50,12 +53,30 @@ impl HttpListenPortConfiguration {
         let result = Self {
             listen_endpoint_type: self.listen_endpoint_type,
             endpoints: result,
+            port,
         };
 
         Some(result)
     }
 
-    pub fn get_http_endpoint_info(&self, server_name: &str) -> Option<Arc<HttpEndpointInfo>> {
+    pub fn get_http_endpoint_info(
+        &self,
+        server_name: Option<&str>,
+    ) -> Option<Arc<HttpEndpointInfo>> {
+        let Some(server_name) = server_name else {
+            if self.endpoints.len() > 1 {
+                return None;
+            }
+
+            let first = self.endpoints.first().unwrap();
+
+            if !first.host_endpoint.has_server_name() {
+                return Some(first.clone());
+            }
+
+            return None;
+        };
+
         for endpoint_info in &self.endpoints {
             if endpoint_info.is_my_endpoint(server_name) {
                 return Some(endpoint_info.clone());

@@ -1,7 +1,5 @@
-use crate::http_proxy_pass::HostPort;
-
-pub fn generate_logout_page<THostPort: HostPort + Send + Sync + 'static>(
-    req: &THostPort,
+pub fn generate_logout_page(
+    req: &impl crate::types::HttpRequestReader,
     text: &str, //You have successfully logged out!
 ) -> String {
     return super::html::generate_with_template(|| {
@@ -20,7 +18,7 @@ pub fn generate_logout_page<THostPort: HostPort + Send + Sync + 'static>(
             
             "###,
             text,
-            req.get_host_port()
+            req.get_host().unwrap_or_default()
         )
     });
 }

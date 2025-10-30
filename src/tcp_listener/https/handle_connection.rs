@@ -16,12 +16,11 @@ pub async fn handle_connection(
     configuration: Arc<HttpListenPortConfiguration>,
     connection_id: u64,
 ) {
-    let listening_addr_str = Arc::new(format!("https://{}", listening_addr));
     let endpoint_port = listening_addr.port();
     let result = super::utils::lazy_accept_tcp_stream(
         endpoint_port,
         accepted_connection.network_stream,
-        configuration,
+        configuration.clone(),
     )
     .await;
 
@@ -49,19 +48,18 @@ pub async fn handle_connection(
 
     match endpoint_info.listen_endpoint_type {
         ListenHttpEndpointType::Http1 => {
-            kick_off_https1(
-                listening_addr_str.clone(),
+            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
+                listening_addr,
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
-                endpoint_port,
-            )
-            .await;
+                configuration,
+            );
         }
         ListenHttpEndpointType::Http2 => {
             kick_off_https2(
-                listening_addr_str.clone(),
+                listening_addr,
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
@@ -71,19 +69,18 @@ pub async fn handle_connection(
             .await;
         }
         ListenHttpEndpointType::Https1 => {
-            kick_off_https1(
-                listening_addr_str.clone(),
+            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
+                listening_addr,
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
-                endpoint_port,
-            )
-            .await;
+                configuration.clone(),
+            );
         }
         ListenHttpEndpointType::Https2 => {
             kick_off_https2(
-                listening_addr_str.clone(),
+                listening_addr,
                 accepted_connection.addr,
                 endpoint_info,
                 tls_stream,
@@ -99,70 +96,8 @@ pub async fn handle_connection(
     }
 }
 
-async fn kick_off_https1(
-    endpoint_name: Arc<String>,
-    socket_addr: SocketAddr,
-    endpoint_info: Arc<HttpEndpointInfo>,
-    tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-    cn_user_name: Option<Arc<ClientCertificateData>>,
-    endpoint_port: u16,
-) {
-    use hyper::{server::conn::http1, service::service_fn};
-    let mut http1 = http1::Builder::new();
-    http1.keep_alive(true);
-
-    crate::app::APP_CTX
-        .prometheus
-        .inc_http1_server_connections(endpoint_name.as_str());
-
-    crate::app::APP_CTX
-        .metrics
-        .update(|itm| itm.connection_by_port.inc(&endpoint_port))
-        .await;
-
-    tokio::spawn(async move {
-        let listening_port_info = HttpListenPortInfo {
-            endpoint_type: endpoint_info.listen_endpoint_type,
-            socket_addr,
-        };
-        let http_proxy_pass =
-            HttpProxyPass::new(endpoint_info.clone(), listening_port_info, cn_user_name).await;
-
-        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, socket_addr);
-
-        let https_requests_handler = Arc::new(https_requests_handler);
-
-        let https_requests_handler_dispose = https_requests_handler.clone();
-
-        let _ = http1
-            .clone()
-            .serve_connection(
-                TokioIo::new(tls_stream),
-                service_fn(move |req| {
-                    super::super::http_request_handler::https::handle_request(
-                        https_requests_handler.clone(),
-                        req,
-                    )
-                }),
-            )
-            .with_upgrades()
-            .await;
-
-        crate::app::APP_CTX
-            .prometheus
-            .dec_http1_server_connections(endpoint_name.as_str());
-
-        crate::app::APP_CTX
-            .metrics
-            .update(|itm| itm.connection_by_port.dec(&endpoint_port))
-            .await;
-
-        https_requests_handler_dispose.dispose().await;
-    });
-}
-
 async fn kick_off_https2(
-    endpoint_name: Arc<String>,
+    listening_addr: SocketAddr,
     socket_addr: SocketAddr,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
@@ -173,6 +108,8 @@ async fn kick_off_https2(
     use hyper_util::server::conn::auto::Builder;
 
     use hyper_util::rt::TokioExecutor;
+
+    let endpoint_name = format!("https://{}", listening_addr);
 
     crate::app::APP_CTX
         .prometheus

@@ -1,10 +1,11 @@
+use crate::types::*;
 use my_settings_reader::flurl::{body::FlUrlBody, FlUrl};
 use serde::*;
 
-use crate::{configurations::GoogleAuthCredentials, http_proxy_pass::HostPort, types::Email};
+use crate::{configurations::GoogleAuthCredentials, types::Email};
 
-pub async fn resolve_email<THostPort: HostPort + Send + Sync + 'static>(
-    req: &THostPort,
+pub async fn resolve_email(
+    req: &impl HttpRequestReader,
     code: &str,
     settings: &GoogleAuthCredentials,
     debug: bool,

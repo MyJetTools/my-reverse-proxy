@@ -1,15 +1,15 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::configurations::MyReverseProxyRemoteEndpoint;
 
-#[derive(Debug)]
-pub struct StaticContentModel {
+#[derive(Debug, Clone)]
+pub struct StaticContentConfig {
     pub status_code: u16,
     pub content_type: Option<String>,
     pub body: Vec<u8>,
 }
 
-impl StaticContentModel {
+impl StaticContentConfig {
     pub fn to_string(&self) -> String {
         format!(
             "status_code: {}, content_type: {:?}, body: {}bytes",
@@ -39,35 +39,35 @@ pub struct ProxyPassToModel {
 }
 
 #[derive(Debug)]
-pub enum ProxyPassTo {
+pub enum ProxyPassToConfig {
     Http1(ProxyPassToModel),
     Http2(ProxyPassToModel),
     UnixHttp1(ProxyPassToModel),
     UnixHttp2(ProxyPassToModel),
     FilesPath(ProxyPassFilesPathModel),
-    Static(StaticContentModel),
+    Static(Arc<StaticContentConfig>),
 }
 
-impl ProxyPassTo {
+impl ProxyPassToConfig {
     pub fn to_string(&self) -> String {
         match self {
-            ProxyPassTo::Http1(proxy_pass) => proxy_pass.remote_host.to_string(),
-            ProxyPassTo::UnixHttp1(proxy_pass) => proxy_pass.remote_host.to_string(),
-            ProxyPassTo::UnixHttp2(proxy_pass) => proxy_pass.remote_host.to_string(),
-            ProxyPassTo::Http2(proxy_pass) => proxy_pass.remote_host.to_string(),
-            ProxyPassTo::FilesPath(model) => model.to_string(),
-            ProxyPassTo::Static(model) => model.to_string(),
+            ProxyPassToConfig::Http1(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassToConfig::UnixHttp1(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassToConfig::UnixHttp2(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassToConfig::Http2(proxy_pass) => proxy_pass.remote_host.to_string(),
+            ProxyPassToConfig::FilesPath(model) => model.to_string(),
+            ProxyPassToConfig::Static(model) => model.to_string(),
         }
     }
 
     pub fn get_type_as_str(&self) -> &'static str {
         match self {
-            ProxyPassTo::UnixHttp1(_) => "unix+http1",
-            ProxyPassTo::UnixHttp2(_) => "unix+http2",
-            ProxyPassTo::Http1(_) => "http1",
-            ProxyPassTo::Http2(_) => "http2",
-            ProxyPassTo::FilesPath(_) => "files_path",
-            ProxyPassTo::Static(_) => "static",
+            ProxyPassToConfig::UnixHttp1(_) => "unix+http1",
+            ProxyPassToConfig::UnixHttp2(_) => "unix+http2",
+            ProxyPassToConfig::Http1(_) => "http1",
+            ProxyPassToConfig::Http2(_) => "http2",
+            ProxyPassToConfig::FilesPath(_) => "files_path",
+            ProxyPassToConfig::Static(_) => "static",
         }
     }
 }

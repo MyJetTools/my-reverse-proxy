@@ -53,9 +53,6 @@ async fn lazy_accept_tcp_stream_internal(
         MyNetworkStream::UnixSocket(_) => {
             panic!("TLS does not support unix sockets");
         }
-        MyNetworkStream::Ssh(_) => {
-            panic!("TLS does not support Ssh sockets");
-        }
     };
 
     let result: Result<

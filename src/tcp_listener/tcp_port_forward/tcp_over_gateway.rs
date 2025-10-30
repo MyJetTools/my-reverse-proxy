@@ -1,23 +1,14 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use tokio::io::{ReadHalf, WriteHalf};
-
-use crate::network_stream::NetworkStreamWritePart;
-use crate::{
-    configurations::TcpEndpointHostConfig,
-    network_stream::{MyOwnedReadHalf, MyOwnedWriteHalf},
-    tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
-    tcp_listener::AcceptedTcpConnection,
-};
+use crate::{configurations::TcpEndpointHostConfig, tcp_listener::AcceptedTcpConnection};
 
 pub async fn handle_connection(
     mut accepted_server_connection: AcceptedTcpConnection,
-    listening_addr: SocketAddr,
+    _listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
-    gateway_id: Arc<String>,
+    gateway_id: &Arc<String>,
     remote_endpoint: Arc<RemoteEndpointOwned>,
 ) {
     if configuration.debug {
@@ -106,8 +97,6 @@ pub async fn handle_connection(
 
     let proxy_connection = connection_result.unwrap();
 
-    let (proxy_read, proxy_write) = tokio::io::split(proxy_connection);
-
     if configuration.debug {
         println!(
             "Accepted connection to {}->{}. Connection_id: {}",
@@ -117,31 +106,17 @@ pub async fn handle_connection(
         );
     }
 
-    let (server_read, server_write) = accepted_server_connection.network_stream.into_split();
-
-    tokio::spawn(copy_from_connection_to_gateway(
-        server_read,
-        proxy_write,
-        listening_addr,
-        gateway_id.clone(),
-        connection_id,
-        remote_endpoint.clone(),
-        configuration.debug,
-    ));
-    tokio::spawn(copy_from_gateway_to_connection(
-        server_write,
-        proxy_read,
-        listening_addr,
-        gateway_id,
-        connection_id,
-        remote_endpoint,
-        configuration.debug,
+    tokio::spawn(super::handle_port_forward(
+        accepted_server_connection,
+        proxy_connection,
+        None,
     ));
 }
 
+/*
 async fn copy_from_connection_to_gateway(
-    mut server_read: MyOwnedReadHalf,
-    mut proxy_write: WriteHalf<TcpGatewayProxyForwardStream>,
+    mut server_read: impl NetworkStreamReadPart,
+    mut proxy_write: impl NetworkStreamWritePart,
     listening_addr: SocketAddr,
     gateway_id: Arc<String>,
     connection_id: u32,
@@ -151,7 +126,9 @@ async fn copy_from_connection_to_gateway(
     let mut buffer = crate::tcp_utils::allocated_read_buffer(None);
 
     loop {
-        let read_result = server_read.read(&mut buffer).await;
+        let read_result = server_read
+            .read_with_timeout(&mut buffer, crate::consts::READ_TIMEOUT)
+            .await;
 
         let read_size = match read_result {
             Ok(size) => size,
@@ -250,7 +227,7 @@ async fn copy_from_gateway_to_connection(
 
         if let Err(err) = write_result {
             let err = format!(
-                "Write from gateway:{}->{} with connection id {} to {} is ended with error: `{}`. Closing connection",
+                "Write from gateway:{}->{} with connection id {} to {} is ended with error: `{:?}`. Closing connection",
                 gateway_id.as_str(),
                 remote_endpoint.as_str(),
                 connection_id,
@@ -266,3 +243,4 @@ async fn copy_from_gateway_to_connection(
         }
     }
 }
+ */

@@ -9,6 +9,9 @@ pub use cert_pass_keys::*;
 mod active_listen_ports;
 pub use active_listen_ports::*;
 
+mod ssh_sessions_pool;
+pub use ssh_sessions_pool::*;
+
 //mod local_port_allocator;
 //pub use local_port_allocator::*;
 //mod app_ctx_wrapper;

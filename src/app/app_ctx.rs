@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use super::*;
 use encryption::aes::AesKey;
 use my_ssh::SshAsyncChannel;
 use my_tls::tokio_rustls::client::TlsStream;
@@ -21,10 +22,7 @@ use crate::{
     settings::ConnectionsSettingsModel,
     settings_compiled::SettingsCompiled,
     ssl::CertificatesCache,
-    tcp_gateway::{
-        client::TcpGatewayClient, forwarded_connection::TcpGatewayProxyForwardStream,
-        server::TcpGatewayServer, TcpGatewayConnection,
-    },
+    tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer, TcpGatewayConnection},
 };
 
 use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
@@ -41,8 +39,7 @@ lazy_static::lazy_static! {
 
 pub struct AppContext {
     pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
-    pub http_over_gateway_clients_pool:
-        HttpClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
+
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
 
     pub unix_sockets_per_connection: HttpClients<tokio::net::UnixStream, UnixSocketHttpConnector>,
@@ -60,8 +57,7 @@ pub struct AppContext {
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
-    pub http2_over_gateway_clients_pool:
-        Http2ClientPool<TcpGatewayProxyForwardStream, HttpOverGatewayConnector>,
+
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
     pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
@@ -88,6 +84,8 @@ pub struct AppContext {
     pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
     pub http_control_port: Option<u16>,
+
+    pub ssh_sessions_pool: SshSessionsPool,
 }
 
 impl AppContext {
@@ -151,7 +149,6 @@ impl AppContext {
             allowed_users_list: AllowedUsersList::new(),
             ssh_cert_pass_keys: CertPassKeys::new(),
             http_clients_pool: HttpClientPool::new(),
-            http_over_gateway_clients_pool: HttpClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
             unix_socket_h2_socket_per_connection: Http2Clients::new(),
 
@@ -159,13 +156,13 @@ impl AppContext {
             http2_clients_pool: Http2ClientPool::new(),
             https2_clients_pool: Http2ClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
-            http2_over_gateway_clients_pool: Http2ClientPool::new(),
             unix_sockets_per_connection: HttpClients::new(),
             //unix_socket_http_clients_pool: HttpClientPool::new(),
             //unix_socket_http2_clients_pool: Http2ClientPool::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,
+            ssh_sessions_pool: SshSessionsPool::new(),
         }
     }
 

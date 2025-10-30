@@ -3,24 +3,34 @@ use std::time::Duration;
 use my_ssh::SshAsyncChannel;
 use tokio::io::AsyncWriteExt;
 
+use crate::network_stream::*;
+
+#[async_trait::async_trait]
 pub trait NetworkStreamWritePart {
     async fn shutdown_socket(&mut self);
+
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error>;
 
     async fn write_all_with_timeout(
         &mut self,
         buffer: &[u8],
         timeout: Duration,
-    ) -> Result<(), String> {
+    ) -> Result<(), NetworkError> {
         let future = self.write_to_socket(buffer);
 
         let result = tokio::time::timeout(timeout, future).await;
 
         let Ok(result) = result else {
-            return Err(format!("Write to remote host timeout: {:?}", timeout));
+            let _ = self.shutdown_socket();
+            return Err(NetworkError::Timeout(timeout));
         };
 
-        result.map_err(|err| format!("Write to remote host error: {:?}", err))
+        if let Err(err) = result {
+            let _ = self.shutdown_socket().await;
+            return Err(NetworkError::IoError(err));
+        }
+
+        Ok(())
     }
 }
 
@@ -48,6 +58,7 @@ impl Into<MyOwnedWriteHalf> for futures::io::WriteHalf<SshAsyncChannel> {
     }
 }
 
+#[async_trait::async_trait]
 impl NetworkStreamWritePart for MyOwnedWriteHalf {
     async fn shutdown_socket(&mut self) {
         match self {
@@ -84,6 +95,20 @@ impl NetworkStreamWritePart for MyOwnedWriteHalf {
     }
 }
 
+#[async_trait::async_trait]
+impl NetworkStreamWritePart
+    for tokio::io::WriteHalf<my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>>
+{
+    async fn shutdown_socket(&mut self) {
+        let _ = self.shutdown().await;
+    }
+
+    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        self.write_all(buffer).await
+    }
+}
+
+#[async_trait::async_trait]
 impl NetworkStreamWritePart
     for tokio::io::WriteHalf<my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>>
 {
@@ -96,7 +121,32 @@ impl NetworkStreamWritePart
     }
 }
 
+#[async_trait::async_trait]
 impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::TcpStream> {
+    async fn shutdown_socket(&mut self) {
+        let _ = self.shutdown().await;
+    }
+
+    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        self.write_all(buffer).await
+    }
+}
+
+#[cfg(unix)]
+#[async_trait::async_trait]
+impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::UnixStream> {
+    async fn shutdown_socket(&mut self) {
+        let _ = self.shutdown().await;
+    }
+
+    async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        self.write_all(buffer).await
+    }
+}
+
+#[cfg(unix)]
+#[async_trait::async_trait]
+impl NetworkStreamWritePart for tokio::io::WriteHalf<my_ssh::SshAsyncChannel> {
     async fn shutdown_socket(&mut self) {
         let _ = self.shutdown().await;
     }

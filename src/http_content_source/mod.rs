@@ -7,5 +7,5 @@ mod request_executor;
 pub use request_executor::*;
 //mod _content_type;
 //pub use _content_type::*;
-mod static_content_src;
-pub use static_content_src::*;
+pub mod local_path;
+pub mod static_content;

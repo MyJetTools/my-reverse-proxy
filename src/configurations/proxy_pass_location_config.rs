@@ -3,10 +3,8 @@ use std::time::Duration;
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    app::APP_CTX,
-    http_content_source::*,
-    http_proxy_pass::content_source::*,
-    settings::{ModifyHttpHeadersSettings, ProxyPassTo},
+    app::APP_CTX, http_content_source::local_path::LocalPathContentSrc, http_content_source::*,
+    http_proxy_pass::content_source::*, settings::ModifyHttpHeadersSettings,
 };
 
 use super::*;
@@ -14,10 +12,11 @@ use super::*;
 pub struct ProxyPassLocationConfig {
     pub path: String,
     pub id: i64,
-    pub modify_headers: Option<ModifyHttpHeadersSettings>,
+    pub modify_request_headers: ModifyHeadersConfig,
+    pub modify_response_headers: ModifyHeadersConfig,
     pub ip_white_list_id: Option<String>,
     pub domain_name: Option<String>,
-    pub proxy_pass_to: ProxyPassTo,
+    pub proxy_pass_to: ProxyPassToConfig,
     pub compress: bool,
     pub trace_payload: bool,
 }
@@ -27,17 +26,26 @@ impl ProxyPassLocationConfig {
         path: String,
         modify_headers: Option<ModifyHttpHeadersSettings>,
         ip_white_list_id: Option<String>,
-        proxy_pass_to: ProxyPassTo,
+        proxy_pass_to: ProxyPassToConfig,
         domain_name: Option<String>,
         compress: bool,
         trace_payload: bool,
     ) -> Self {
         //println!("Created location to {:?}", proxy_pass_to);
 
+        let mut modify_request_headers = ModifyHeadersConfig::default();
+        let mut modify_response_headers = ModifyHeadersConfig::default();
+
+        if let Some(mut modify_headers) = modify_headers {
+            modify_request_headers.populate_request(&mut modify_headers);
+            modify_response_headers.populate_response(&mut modify_headers);
+        }
+
         Self {
             path,
             id: APP_CTX.get_next_id(),
-            modify_headers,
+            modify_request_headers,
+            modify_response_headers,
             ip_white_list_id,
             proxy_pass_to,
             domain_name,
@@ -55,20 +63,12 @@ impl ProxyPassLocationConfig {
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
         let result = match &self.proxy_pass_to {
-            ProxyPassTo::Static(static_content_model) => {
-                HttpProxyPassContentSource::Static(StaticContentSrc::new(
-                    static_content_model.status_code,
-                    static_content_model.content_type.clone(),
-                    static_content_model.body.clone(),
-                ))
-            }
-            ProxyPassTo::Http1(proxy_pass) => match &proxy_pass.remote_host {
-                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    let model = Http1OverGatewayContentSource {
-                        gateway_id: id.clone(),
-                        remote_endpoint: remote_host.clone(),
-                    };
-                    return HttpProxyPassContentSource::Http1OverGateway(model);
+            ProxyPassToConfig::Static(config) => HttpProxyPassContentSource::Static(
+                crate::http_content_source::static_content::StaticContentSrc::new(config.clone()),
+            ),
+            ProxyPassToConfig::Http1(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { .. } => {
+                    todo!("Should not be here. Remove it");
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -146,13 +146,9 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
-            ProxyPassTo::Http2(proxy_pass) => match &proxy_pass.remote_host {
-                MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-                    let model = Http2OverGatewayContentSource {
-                        gateway_id: id.clone(),
-                        remote_endpoint: remote_host.clone(),
-                    };
-                    return HttpProxyPassContentSource::Http2OverGateway(model);
+            ProxyPassToConfig::Http2(proxy_pass) => match &proxy_pass.remote_host {
+                MyReverseProxyRemoteEndpoint::Gateway { .. } => {
+                    todo!("Should not be here. Remote it at the end of the day");
                 }
                 MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -231,7 +227,7 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
-            ProxyPassTo::FilesPath(model) => match &model.files_path {
+            ProxyPassToConfig::FilesPath(model) => match &model.files_path {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     let model = PathOverGatewayContentSource {
                         gateway_id: id.clone(),
@@ -264,7 +260,7 @@ impl ProxyPassLocationConfig {
                     ))
                 }
             },
-            ProxyPassTo::UnixHttp1(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::UnixHttp1(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     panic!(
                         "Unix+Http is not supported  over gateway. Id: {}. RemoteHost: {}",
@@ -294,7 +290,7 @@ impl ProxyPassLocationConfig {
                     return HttpProxyPassContentSource::UnixHttp1(model);
                 }
             },
-            ProxyPassTo::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::UnixHttp2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                     panic!(
                         "Unix+Http2 is not supported  over gateway. Id:{}. RemoteHost: {}",
@@ -330,8 +326,8 @@ impl ProxyPassLocationConfig {
 
     pub fn is_remote_content_http1(&self) -> Option<bool> {
         match &self.proxy_pass_to {
-            ProxyPassTo::Http1(_) => Some(true),
-            ProxyPassTo::Http2(_) => Some(false),
+            ProxyPassToConfig::Http1(_) => Some(true),
+            ProxyPassToConfig::Http2(_) => Some(false),
             _ => None,
         }
     }

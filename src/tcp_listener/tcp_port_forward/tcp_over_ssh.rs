@@ -1,25 +1,18 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use my_ssh::SshCredentials;
-use rust_extensions::{
-    date_time::AtomicDateTimeAsMicroseconds, remote_endpoint::RemoteEndpointOwned,
-};
-use tokio::sync::Mutex;
+use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::{
-    configurations::*, network_stream::MyNetworkStream, tcp_listener::AcceptedTcpConnection,
-};
+use crate::{app::APP_CTX, configurations::*, tcp_listener::AcceptedTcpConnection};
 
 pub async fn handle_connection(
     mut accepted_server_connection: AcceptedTcpConnection,
-    listening_addr: SocketAddr,
+    _listening_addr: SocketAddr,
     configuration: Arc<TcpEndpointHostConfig>,
-    ssh_credentials: Arc<SshCredentials>,
+    ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: Arc<RemoteEndpointOwned>,
 ) {
-    let ssh_session = my_ssh::SSH_SESSIONS_POOL
-        .get_or_create(&ssh_credentials)
-        .await;
+    let ssh_session_handler = APP_CTX.ssh_sessions_pool.get(ssh_credentials).await;
 
     let remote_port = remote_endpoint.get_port();
 
@@ -33,7 +26,8 @@ pub async fn handle_connection(
         return;
     }
 
-    let ssh_channel = ssh_session
+    let ssh_channel = ssh_session_handler
+        .ssh_session
         .connect_to_remote_host(
             remote_endpoint.get_host(),
             remote_port.unwrap(),
@@ -43,33 +37,31 @@ pub async fn handle_connection(
         )
         .await;
 
-    if let Err(err) = ssh_channel {
-        if configuration.debug {
-            println!(
+    let ssh_channel = match ssh_channel {
+        Ok(value) => value,
+        Err(err) => {
+            if configuration.debug {
+                println!(
                     "Error connecting to remote tcp endpoint over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
                     ssh_credentials.to_string(),
                     remote_endpoint.as_str(),
                     accepted_server_connection.addr,
                     err
                 );
+            }
+            let _ = accepted_server_connection.network_stream.shutdown().await;
+            return;
         }
-        let _ = accepted_server_connection.network_stream.shutdown().await;
-        return;
-    }
+    };
 
-    let remote_host = Arc::new(remote_endpoint.as_str().to_string());
-
-    tokio::spawn(connection_loop(
-        listening_addr,
-        ssh_credentials.clone(),
-        remote_host,
-        accepted_server_connection.network_stream,
-        ssh_channel.unwrap().into(),
-        crate::app::APP_CTX.connection_settings.buffer_size,
-        configuration.debug,
+    tokio::spawn(super::handle_port_forward(
+        accepted_server_connection,
+        ssh_channel,
+        None,
     ));
 }
 
+/*
 async fn connection_loop(
     listen_addr: SocketAddr,
     ssh_credentials: Arc<SshCredentials>,
@@ -94,14 +86,12 @@ async fn connection_loop(
         remote_ssh_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
-        debug,
     ));
     tokio::spawn(super::forwards::copy_loop(
         remote_reader,
         tcp_server_writer.clone(),
         incoming_traffic_moment.clone(),
         buffer_size,
-        debug,
     ));
 
     super::forwards::await_while_alive(
@@ -121,3 +111,4 @@ async fn connection_loop(
     )
     .await;
 }
+ */

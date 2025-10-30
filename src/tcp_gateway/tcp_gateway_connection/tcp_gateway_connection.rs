@@ -357,7 +357,7 @@ impl TcpGatewayConnection {
                 println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is not acknowledged yet", gateway_id.as_str(), payload.len(), connection_id);
             }
             TcpGatewayProxyForwardedConnectionStatus::Connected => {
-                proxy_connection.enqueue_receive_payload(payload);
+                proxy_connection.enqueue_receive_payload(payload).await;
             }
             TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
                 let gateway_id = self.get_gateway_id().await;
@@ -395,7 +395,7 @@ impl TcpGatewayConnection {
         let mut write_access = self.forward_proxy_handlers.lock().await;
         if let Some(mut connection) = write_access.remove(&connection_id) {
             connection.set_connection_error(message.into());
-            connection.disconnect();
+            connection.disconnect().await;
         }
     }
 }
@@ -408,7 +408,7 @@ impl Drop for TcpGatewayConnection {
             {
                 let write_access = proxy_connections.lock().await;
                 for itm in write_access.values() {
-                    itm.disconnect();
+                    itm.disconnect().await;
                 }
             }
 

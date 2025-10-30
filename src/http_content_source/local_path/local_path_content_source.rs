@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use hyper::Uri;
 use my_http_server::WebContentType;
 
 use crate::http_content_source::{RequestExecutor, RequestExecutorResult};
@@ -28,18 +27,18 @@ impl LocalPathContentSrc {
         }
     }
 
-    pub fn get_request_executor(
+    pub fn execute_request(
         &self,
-        uri: &Uri,
+        path: &str,
     ) -> Result<Arc<dyn RequestExecutor + Send + Sync + 'static>, ProxyPassError> {
-        let file_path = if uri.path() == "/" {
+        let file_path = if path == "/" {
             if let Some(default_file) = self.default_file.as_ref() {
                 format!("{}/{}", self.file_path, default_file)
             } else {
-                format!("{}{}", self.file_path, uri.path())
+                format!("{}{}", self.file_path, path)
             }
         } else {
-            format!("{}{}", self.file_path, uri.path())
+            format!("{}{}", self.file_path, path)
         };
 
         let result = FileRequestExecutor { file_path };
@@ -51,7 +50,7 @@ impl LocalPathContentSrc {
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
         println!("Executing as local path");
-        let request_executor = self.get_request_executor(&req.uri())?;
+        let request_executor = self.execute_request(req.uri().path())?;
         let result = request_executor.execute_request().await?;
         Ok(HttpResponse::Response(result.into()))
     }

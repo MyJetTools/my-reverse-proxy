@@ -5,11 +5,14 @@ use http_body_util::combinators::BoxBody;
 use my_http_client::utils::into_full_body_response;
 use tokio::sync::Mutex;
 
-use crate::{configurations::*, tcp_listener::https::ClientCertificateData};
+use crate::{
+    configurations::*, http_proxy_pass::GoogleAuthResult,
+    tcp_listener::https::ClientCertificateData,
+};
 
 use super::{
-    GoogleAuthResult, HttpListenPortInfo, HttpProxyPassIdentity, HttpProxyPassInner,
-    HttpRequestBuilder, ProxyPassError, ProxyPassLocations,
+    HttpListenPortInfo, HttpProxyPassIdentity, HttpProxyPassInner, HttpRequestBuilder,
+    ProxyPassError, ProxyPassLocations,
 };
 
 pub struct HttpProxyPass {
@@ -28,7 +31,7 @@ impl HttpProxyPass {
         Self {
             inner: Mutex::new(
                 HttpProxyPassInner::new(
-                    HttpProxyPassIdentity::new(client_cert),
+                    client_cert.map(|itm| HttpProxyPassIdentity::ClientCert(itm)),
                     locations,
                     listening_port_info.clone(),
                 )
@@ -65,7 +68,11 @@ impl HttpProxyPass {
 
             let inner = inner.as_mut().unwrap();
             match self.handle_auth_with_g_auth(&req).await {
-                GoogleAuthResult::Passed(user) => inner.identity.ga_user = user,
+                GoogleAuthResult::Passed(user) => {
+                    if let Some(email) = user {
+                        inner.identity = HttpProxyPassIdentity::GoogleUser(email).into();
+                    }
+                }
                 GoogleAuthResult::Content(content) => return Ok(content),
                 GoogleAuthResult::DomainIsNotAuthorized => {
                     return Err(ProxyPassError::Unauthorized);
@@ -73,10 +80,10 @@ impl HttpProxyPass {
             }
 
             if let Some(allowed_user_list_id) = self.endpoint_info.allowed_user_list_id.as_ref() {
-                if let Some(identity) = inner.identity.get_identity() {
+                if let Some(identity) = inner.identity.as_ref() {
                     if !crate::app::APP_CTX
                         .allowed_users_list
-                        .is_allowed(allowed_user_list_id, identity)
+                        .is_allowed(allowed_user_list_id, identity.as_str())
                         .await
                     {
                         return Err(ProxyPassError::UserIsForbidden);
@@ -216,25 +223,6 @@ impl HttpProxyPass {
                         }
                     }
                     super::content_source::WebSocketUpgradeStream::SshChannel(async_channel) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                async_channel,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
-                    }
-
-                    super::content_source::WebSocketUpgradeStream::HttpOverGatewayStream(
-                        async_channel,
-                    ) => {
                         if let Some(web_socket_upgrade) = request.web_socket_upgrade {
                             let server_web_socket = web_socket_upgrade.server_web_socket;
                             tokio::spawn(super::start_web_socket_loop(

@@ -17,8 +17,8 @@ pub fn start() {
 
     let swagger_middleware = SwaggerMiddleware::new(
         controllers.clone(),
-        crate::app::APP_NAME.to_string(),
-        crate::app::APP_VERSION.to_string(),
+        crate::app::APP_NAME,
+        crate::app::APP_VERSION,
     );
 
     http_server.add_middleware(Arc::new(swagger_middleware));

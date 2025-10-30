@@ -3,14 +3,14 @@ use hyper::{
     HeaderMap,
 };
 
-use crate::settings::ModifyHttpHeadersSettings;
+use crate::{configurations::ModifyHeadersConfig, types::HttpRequestReader};
 
-use super::{HostPort, HttpProxyPass, HttpProxyPassInner, LocationIndex};
+use super::{HttpProxyPass, HttpProxyPassInner, LocationIndex};
 
-pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
+pub fn modify_resp_headers(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
-    req_host_port: &THostPort,
+    req_host_port: &impl HttpRequestReader,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
@@ -27,55 +27,39 @@ pub fn modify_resp_headers<THostPort: HostPort + Send + Sync + 'static>(
         }
     }
 
-    if let Some(modify_headers_settings) = proxy_pass
-        .endpoint_info
-        .modify_headers_settings
-        .global_modify_headers_settings
-        .as_ref()
-    {
-        modify_headers(inner, req_host_port, headers, modify_headers_settings);
-    }
+    modify_headers(
+        inner,
+        req_host_port,
+        headers,
+        &proxy_pass.endpoint_info.modify_response_headers,
+    );
 
-    if let Some(modify_headers_settings) = proxy_pass
-        .endpoint_info
-        .modify_headers_settings
-        .endpoint_modify_headers_settings
-        .as_ref()
-    {
-        modify_headers(inner, req_host_port, headers, modify_headers_settings);
-    }
-
-    if let Some(modify_headers_settings) = proxy_pass_location.config.modify_headers.as_ref() {
-        modify_headers(inner, req_host_port, headers, modify_headers_settings);
-    }
+    modify_headers(
+        inner,
+        req_host_port,
+        headers,
+        &proxy_pass_location.config.modify_response_headers,
+    );
 }
 
-fn modify_headers<THostPort: HostPort + Send + Sync + 'static>(
+fn modify_headers(
     inner: &HttpProxyPassInner,
-    req_host_port: &THostPort,
+    req_host_port: &impl HttpRequestReader,
     headers: &mut HeaderMap<hyper::header::HeaderValue>,
-    headers_settings: &ModifyHttpHeadersSettings,
+    headers_settings: &ModifyHeadersConfig,
 ) {
-    if let Some(remove_header) = headers_settings.remove.as_ref() {
-        if let Some(remove_headers) = remove_header.response.as_ref() {
-            for remove_header in remove_headers {
-                headers.remove(remove_header.as_str());
-            }
-        }
+    for remove in headers_settings.iter_remove() {
+        headers.remove(remove);
     }
 
-    if let Some(add_headers) = headers_settings.add.as_ref() {
-        if let Some(add_headers) = add_headers.response.as_ref() {
-            for add_header in add_headers {
-                headers.insert(
-                    HeaderName::from_bytes(add_header.name.as_bytes()).unwrap(),
-                    inner
-                        .populate_value(&add_header.value, req_host_port)
-                        .as_str()
-                        .parse()
-                        .unwrap(),
-                );
-            }
-        }
+    for (header, value) in headers_settings.iter_add() {
+        headers.insert(
+            HeaderName::from_bytes(header.as_bytes()).unwrap(),
+            inner
+                .populate_value(&value, req_host_port)
+                .as_str()
+                .parse()
+                .unwrap(),
+        );
     }
 }

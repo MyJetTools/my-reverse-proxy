@@ -98,6 +98,7 @@ async fn connection_loop(
                 inner.gateway_host.as_str(),
                 connect_timeout
             );
+            continue;
         }
 
         let tcp_stream = match connect_timeout.unwrap() {
