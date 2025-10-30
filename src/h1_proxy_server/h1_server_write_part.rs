@@ -87,6 +87,13 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
     ) -> Result<(), NetworkError> {
         let mut write_access = self.inner.lock().await;
 
+        if write_access.current_requests.len() == 0 {
+            if let Some(write_part) = write_access.server_write_part.as_mut() {
+                return write_part.write_all_with_timeout(buffer, timeout).await;
+            }
+            return Err(NetworkError::Disconnected);
+        }
+
         if write_access.current_requests.get(0).unwrap().request_id == request_id {
             if let Some(write_part) = write_access.server_write_part.as_mut() {
                 return write_part.write_all_with_timeout(buffer, timeout).await;
