@@ -104,9 +104,9 @@ pub async fn serve_reverse_proxy<
                         crate::error_templates::NOT_AUTHORIZED_PAGE.as_slice()
                     }
                     ProxyServerError::HttpResponse(payload) => {
-                        println!("{:?}",std::str::from_utf8(payload.as_slice()))
+                        println!("{:?}", std::str::from_utf8(payload.as_slice()));
                         payload.as_slice()
-                    },
+                    }
                 };
                 h1_serer_write_part
                     .write_http_payload_with_timeout(
