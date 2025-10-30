@@ -26,7 +26,7 @@ impl ProxyReceiveBuffer {
                 if write_access.disconnected {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
-                        "Disconnected",
+                        "Can not read. Disconnected",
                     ));
                 }
                 if write_access.buffer.len() > 0 {
@@ -73,7 +73,7 @@ impl ProxyReceiveBuffer {
         if let Some(mut task_completion) = buffer_access.awaiter.take() {
             task_completion.set_error(std::io::Error::new(
                 std::io::ErrorKind::ConnectionAborted,
-                "Disconnected",
+                "Can not disconnect already disconnected",
             ));
         }
 

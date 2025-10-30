@@ -62,7 +62,7 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                println!("Response: {:?}", err);
+                println!("Response Err: {:?}", err);
                 let content = match &err {
                     ProxyServerError::NetworkError(network_error) => {
                         println!("Http Server connections network error. {:?}", network_error);
