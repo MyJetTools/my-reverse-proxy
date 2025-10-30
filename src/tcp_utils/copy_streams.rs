@@ -8,10 +8,15 @@ pub async fn copy_streams<
     mut writer: Writer,
     mut loop_buffer: LoopBuffer,
     _ssh_session_handler: Option<SshSessionHandler>,
+    debug: Option<&'static str>,
 ) {
     loop {
         {
             let buf = loop_buffer.get_data();
+
+            if let Some(debug) = debug {
+                println!("[{}] buf len: {}", debug, buf.len());
+            }
 
             if buf.len() > 0 {
                 let write_result = writer
@@ -29,6 +34,10 @@ pub async fn copy_streams<
         let read_result = reader
             .read_with_timeout(loop_buffer.get_mut().unwrap(), crate::consts::READ_TIMEOUT)
             .await;
+
+        if let Some(debug) = debug {
+            println!("[{}] buf read: {:?}", debug, read_result);
+        }
 
         let Ok(read_size) = read_result else {
             writer.shutdown_socket().await;
