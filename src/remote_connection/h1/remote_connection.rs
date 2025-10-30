@@ -280,7 +280,6 @@ impl RemoteConnection {
                     remote_write_part,
                     server_loop_buffer,
                     None,
-                    Some("server->remote"),
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
@@ -288,7 +287,6 @@ impl RemoteConnection {
                     server_write_part,
                     remote_loop_buffer,
                     None,
-                    Some("server<-remote"),
                 ));
 
                 return Ok(());
@@ -302,7 +300,6 @@ impl RemoteConnection {
                     remote_write_part,
                     server_loop_buffer,
                     None,
-                    Some("server->remote"),
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
@@ -310,7 +307,6 @@ impl RemoteConnection {
                     server_write_part,
                     remote_loop_buffer,
                     None,
-                    Some("server<-remote"),
                 ));
 
                 return Ok(());
@@ -324,7 +320,6 @@ impl RemoteConnection {
                     remote_write_part,
                     server_loop_buffer,
                     None,
-                    Some("server->remote"),
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
@@ -332,7 +327,6 @@ impl RemoteConnection {
                     server_write_part,
                     remote_loop_buffer,
                     None,
-                    Some("server<-remote"),
                 ));
 
                 return Ok(());
@@ -347,7 +341,6 @@ impl RemoteConnection {
                     remote_write_part,
                     server_loop_buffer,
                     ssh_session_handler,
-                    Some("server->remote"),
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
@@ -355,7 +348,6 @@ impl RemoteConnection {
                     server_write_part,
                     remote_loop_buffer,
                     None,
-                    Some("server<-remote"),
                 ));
 
                 return Ok(());
@@ -369,7 +361,6 @@ impl RemoteConnection {
                     remote_write_part,
                     server_loop_buffer,
                     None,
-                    Some("server->remote"),
                 ));
 
                 tokio::spawn(crate::tcp_utils::copy_streams(
@@ -377,7 +368,6 @@ impl RemoteConnection {
                     server_write_part,
                     remote_loop_buffer,
                     None,
-                    Some("server<-remote"),
                 ));
 
                 return Ok(());
