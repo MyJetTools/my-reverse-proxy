@@ -14,6 +14,7 @@ pub struct Http1Headers {
     pub content_length: HttpContentLength,
     pub host_value: Option<HeaderPosition>,
     pub cookie_value: Option<HeaderPosition>,
+    pub upgrade_value: Option<HeaderPosition>,
 }
 
 impl Http1Headers {
@@ -22,6 +23,7 @@ impl Http1Headers {
         const COOKIE_HEADER: &[u8] = b"cookie";
         const CONTENT_LEN_HEADER: &[u8] = b"content-length";
         const TRANSFER_ENCODING_HEADER: &[u8] = b"transfer-encoding";
+        const UPGRADE_HEADER: &[u8] = b"upgrade";
 
         let first_line_end = src.find_sequence_pos(crate::consts::HTTP_CR_LF, 0)?;
 
@@ -33,6 +35,7 @@ impl Http1Headers {
 
         let mut host_value = None;
         let mut cookie_value = None;
+        let mut upgrade_value = None;
         let mut content_length = HttpContentLength::None;
 
         let mut header_start_pos = first_line_end + crate::consts::HTTP_CR_LF.len();
@@ -44,6 +47,7 @@ impl Http1Headers {
                     first_line_end,
                     host_value,
                     cookie_value,
+                    upgrade_value,
                     content_length,
                     end: end + crate::consts::HTTP_CR_LF.len(),
                 });
@@ -61,6 +65,8 @@ impl Http1Headers {
                 if value.eq_case_insensitive("chunked") {
                     content_length = HttpContentLength::Chunked;
                 }
+            } else if http_header.is_my_header_name(UPGRADE_HEADER) {
+                upgrade_value = Some(http_header.get_value());
             }
 
             header_start_pos = end + crate::consts::HTTP_CR_LF.len();
@@ -74,85 +80,6 @@ impl Http1Headers {
     }
 }
 
-/*
-fn get_header_value<'s>(
-    buf: &'s [u8],
-    pos_start: usize,
-    pos_end: usize,
-) -> Result<(&'s [u8], Option<HeaderPosition>), ProxyPassError> {
-
-
-    let Some(header_index) = header_index else{
-        return Err(ProxyPassErr)
-    };
-
-    let key = buf[..header_index]
-
-
-    if check_case_insensitive(
-        &buf[pos_start..pos_start + header_prefix.len()],
-        header_prefix,
-    ) {
-        let value_start = pos_start + header_prefix.len();
-        let value_end = pos_end;
-
-        // Trim leading whitespace
-        let mut trimmed_start = value_start;
-        while trimmed_start < value_end
-            && (buf[trimmed_start] == b' ' || buf[trimmed_start] == b'\t')
-        {
-            trimmed_start += 1;
-        }
-
-        // Trim trailing whitespace
-        let mut trimmed_end = value_end;
-        while trimmed_end > trimmed_start
-            && (buf[trimmed_end - 1] == b' ' || buf[trimmed_end - 1] == b'\t')
-        {
-            trimmed_end -= 1;
-        }
-
-        return Some(HeaderPosition {
-            start: trimmed_start,
-            end: trimmed_end,
-        });
-    }
-
-    None
-}
-
-
-fn check_case_insensitive(left: &[u8], right: &[u8]) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-
-    for (l, r) in left.iter().zip(right.iter()) {
-        if l == r {
-            continue;
-        }
-
-        // Convert to lowercase for comparison
-        let l_lower = if *l >= b'A' && *l <= b'Z' {
-            *l + 32 // Convert to lowercase
-        } else {
-            *l
-        };
-
-        let r_lower = if *r >= b'A' && *r <= b'Z' {
-            *r + 32 // Convert to lowercase
-        } else {
-            *r
-        };
-
-        if l_lower != r_lower {
-            return false;
-        }
-    }
-
-    true
-}
- */
 #[cfg(test)]
 mod tests {
     use super::*;

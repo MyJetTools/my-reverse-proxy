@@ -1,11 +1,8 @@
-use crate::{
-    h1_proxy_server::{LoopBuffer, ProxyServerError},
-    network_stream::*,
-};
+use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*};
 
 pub async fn transfer_known_size<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
-    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    WritePart: H1Writer + Send + Sync + 'static,
 >(
     request_id: u64,
     read_stream: &mut ReadPart,
@@ -41,8 +38,12 @@ pub async fn transfer_known_size<
             break;
         }
 
+        let Some(buffer) = loop_buffer.get_mut() else {
+            return Err(ProxyServerError::BufferAllocationFail);
+        };
+
         let read_size = read_stream
-            .read_with_timeout(loop_buffer.get_mut()?, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
         loop_buffer.advance(read_size);

@@ -5,6 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::network_stream::{MyOwnedReadHalf, MyOwnedWriteHalf, NetworkStreamWritePart};
 
+//todo!("Make it though tcp-utils")
 pub async fn copy_loop(
     mut reader: MyOwnedReadHalf,
     writer: Arc<Mutex<MyOwnedWriteHalf>>,

@@ -33,15 +33,6 @@ pub trait NetworkStreamWritePart {
 
         Ok(())
     }
-
-    async fn write_http_payload(
-        &mut self,
-        _request_id: u64,
-        buffer: &[u8],
-        timeout: Duration,
-    ) -> Result<(), NetworkError> {
-        self.write_all_with_timeout(buffer, timeout).await
-    }
 }
 
 pub enum MyOwnedWriteHalf {

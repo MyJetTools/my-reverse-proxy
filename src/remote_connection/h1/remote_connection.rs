@@ -1,11 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::sync::Mutex;
-
 use crate::configurations::*;
-use crate::h1_proxy_server::server_loop::HttpServerSingleThreadedPart;
-use crate::h1_proxy_server::HttpConnectionInfo;
 
+use crate::h1_proxy_server::{H1ServerWritePart, H1Writer, HttpConnectionInfo};
+
+use crate::tcp_utils::LoopBuffer;
 use crate::{
     h1_utils::*, http_content_source::local_path::LocalPathContent, network_stream::*,
     tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
@@ -14,84 +13,10 @@ use crate::{
 use super::*;
 
 pub struct Http1ConnectionContext<WritePart: NetworkStreamWritePart + Send + Sync + 'static> {
-    pub server_single_threaded_part: Arc<Mutex<HttpServerSingleThreadedPart<WritePart>>>,
+    pub h1_server_write_part: H1ServerWritePart<WritePart>,
     pub http_connection_info: HttpConnectionInfo,
     pub end_point_info: Arc<HttpEndpointInfo>,
     pub request_id: u64,
-}
-
-impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> Http1ConnectionContext<WritePart> {
-    async fn request_is_done(&self) {
-        let mut write_access = self.server_single_threaded_part.lock().await;
-
-        for itm in write_access.current_requests.iter_mut() {
-            if itm.request_id == self.request_id {
-                itm.done = true;
-                break;
-            }
-        }
-
-        loop {
-            let done = match write_access.current_requests.get(0) {
-                Some(itm) => itm.done,
-                None => {
-                    break;
-                }
-            };
-
-            if done {
-                let done_item = write_access.current_requests.remove(0);
-
-                if done_item.buffer.len() > 0 {
-                    write_access
-                        .server_write_part
-                        .write_all_with_timeout(&done_item.buffer, crate::consts::WRITE_TIMEOUT)
-                        .await
-                        .unwrap();
-                }
-            }
-        }
-
-        //println!("Requests: {}", write_access.current_requests.len());
-    }
-}
-
-#[async_trait::async_trait]
-impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> NetworkStreamWritePart
-    for Http1ConnectionContext<WritePart>
-{
-    async fn shutdown_socket(&mut self) {
-        let mut write_access = self.server_single_threaded_part.lock().await;
-        write_access.server_write_part.shutdown_socket().await;
-    }
-
-    async fn write_to_socket(&mut self, _buffer: &[u8]) -> Result<(), std::io::Error> {
-        panic!("Should not be used. Instead  write_http_payload should be used");
-    }
-
-    async fn write_http_payload(
-        &mut self,
-        request_id: u64,
-        buffer: &[u8],
-        timeout: Duration,
-    ) -> Result<(), NetworkError> {
-        let mut write_access = self.server_single_threaded_part.lock().await;
-
-        if write_access.current_requests.get(0).unwrap().request_id == request_id {
-            return write_access
-                .server_write_part
-                .write_all_with_timeout(buffer, timeout)
-                .await;
-        }
-
-        for itm in write_access.current_requests.iter_mut() {
-            if itm.request_id == request_id {
-                itm.buffer.extend_from_slice(buffer);
-            }
-        }
-
-        Ok(())
-    }
 }
 
 pub enum RemoteConnection {
@@ -235,8 +160,8 @@ impl RemoteConnection {
                 }
                 connection
                     .send_with_timeout(h1_headers.as_slice(), time_out)
-                    .await;
-                true
+                    .await
+                    .is_ok()
             }
             Self::Http1UnixSocket(connection) => {
                 if connection.is_disconnected() {
@@ -244,8 +169,8 @@ impl RemoteConnection {
                 }
                 connection
                     .send_with_timeout(h1_headers.as_slice(), time_out)
-                    .await;
-                true
+                    .await
+                    .is_ok()
             }
             Self::Https1Direct(connection) => {
                 if connection.is_disconnected() {
@@ -253,8 +178,8 @@ impl RemoteConnection {
                 }
                 connection
                     .send_with_timeout(h1_headers.as_slice(), time_out)
-                    .await;
-                true
+                    .await
+                    .is_ok()
             }
             Self::Http1OverSsh(connection) => {
                 if connection.is_disconnected() {
@@ -262,8 +187,8 @@ impl RemoteConnection {
                 }
                 connection
                     .send_with_timeout(h1_headers.as_slice(), time_out)
-                    .await;
-                true
+                    .await
+                    .is_ok()
             }
 
             Self::Http1OverGateway(connection) => {
@@ -272,8 +197,8 @@ impl RemoteConnection {
                 }
                 connection
                     .send_with_timeout(h1_headers.as_slice(), time_out)
-                    .await;
-                true
+                    .await
+                    .is_ok()
             }
             Self::StaticContent(_) => true,
             Self::LocalFiles(connection) => {
@@ -335,6 +260,149 @@ impl RemoteConnection {
             }
         }
         true
+    }
+
+    pub async fn web_socket_upgrade<
+        ServerReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+        ServerWritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    >(
+        self,
+        server_read_part: ServerReadPart,
+        server_write_part: ServerWritePart,
+
+        server_loop_buffer: LoopBuffer,
+    ) -> Result<(), (ServerReadPart, ServerWritePart)> {
+        match self {
+            RemoteConnection::Http1Direct(mut inner) => {
+                let (remote_read_part, remote_write_part, remote_loop_buffer) =
+                    inner.get_read_and_write_parts().await;
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    server_read_part,
+                    remote_write_part,
+                    server_loop_buffer,
+                ));
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    remote_read_part,
+                    server_write_part,
+                    remote_loop_buffer,
+                ));
+
+                return Ok(());
+            }
+            RemoteConnection::Http1UnixSocket(mut inner) => {
+                let (remote_read_part, remote_write_part, remote_loop_buffer) =
+                    inner.get_read_and_write_parts().await;
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    server_read_part,
+                    remote_write_part,
+                    server_loop_buffer,
+                ));
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    remote_read_part,
+                    server_write_part,
+                    remote_loop_buffer,
+                ));
+
+                return Ok(());
+            }
+            RemoteConnection::Https1Direct(mut inner) => {
+                let (remote_read_part, remote_write_part, remote_loop_buffer) =
+                    inner.get_read_and_write_parts().await;
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    server_read_part,
+                    remote_write_part,
+                    server_loop_buffer,
+                ));
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    remote_read_part,
+                    server_write_part,
+                    remote_loop_buffer,
+                ));
+
+                return Ok(());
+            }
+            RemoteConnection::Http1OverSsh(mut inner) => {
+                let (remote_read_part, remote_write_part, remote_loop_buffer) =
+                    inner.get_read_and_write_parts().await;
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    server_read_part,
+                    remote_write_part,
+                    server_loop_buffer,
+                ));
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    remote_read_part,
+                    server_write_part,
+                    remote_loop_buffer,
+                ));
+
+                return Ok(());
+            }
+            RemoteConnection::Http1OverGateway(mut inner) => {
+                let (remote_read_part, remote_write_part, remote_loop_buffer) =
+                    inner.get_read_and_write_parts().await;
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    server_read_part,
+                    remote_write_part,
+                    server_loop_buffer,
+                ));
+
+                tokio::spawn(crate::tcp_utils::copy_streams(
+                    remote_read_part,
+                    server_write_part,
+                    remote_loop_buffer,
+                ));
+
+                return Ok(());
+            }
+            RemoteConnection::StaticContent(_) => {
+                return Err((server_read_part, server_write_part))
+            }
+            RemoteConnection::LocalFiles(_) => return Err((server_read_part, server_write_part)),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl H1Writer for RemoteConnection {
+    async fn write_http_payload(
+        &mut self,
+        _request_id: u64,
+        buffer: &[u8],
+        timeout: Duration,
+    ) -> Result<(), NetworkError> {
+        match self {
+            RemoteConnection::Http1Direct(inner) => {
+                inner.send_with_timeout(buffer, timeout).await?;
+                Ok(())
+            }
+            RemoteConnection::Http1UnixSocket(inner) => {
+                inner.send_with_timeout(buffer, timeout).await?;
+                Ok(())
+            }
+            RemoteConnection::Https1Direct(inner) => {
+                inner.send_with_timeout(buffer, timeout).await?;
+                Ok(())
+            }
+            RemoteConnection::Http1OverSsh(inner) => {
+                inner.send_with_timeout(buffer, timeout).await?;
+                Ok(())
+            }
+            RemoteConnection::Http1OverGateway(inner) => {
+                inner.send_with_timeout(buffer, timeout).await?;
+                Ok(())
+            }
+            RemoteConnection::StaticContent(_) => Ok(()),
+            RemoteConnection::LocalFiles(_) => Ok(()),
+        }
     }
 }
 
@@ -412,9 +480,27 @@ async fn send_response_loop<
     mut connection_context: Http1ConnectionContext<WritePart>,
     remote_connection: Arc<H1RemoteConnectionReadPart<RemoteReadPart>>,
 ) {
-    let mut remote_read_part = remote_connection.read_half.lock().await;
+    let mut remote_read_part = remote_connection.h1_reader.lock().await;
 
-    let http_headers = match remote_read_part.read_headers().await {
+    let Some(h1_reader) = remote_read_part.as_mut() else {
+        connection_context
+            .h1_server_write_part
+            .write_http_payload_with_timeout(
+                connection_context.request_id,
+                crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
+                crate::consts::WRITE_TIMEOUT,
+            )
+            .await
+            .unwrap();
+
+        connection_context
+            .h1_server_write_part
+            .request_is_done(connection_context.request_id)
+            .await;
+        return;
+    };
+
+    let http_headers = match h1_reader.read_headers().await {
         Ok(headers) => headers,
         Err(err) => {
             println!("Reading header from remote: {:?}", err);
@@ -424,7 +510,8 @@ async fn send_response_loop<
             remote_connection.set_disconnected();
 
             connection_context
-                .write_http_payload(
+                .h1_server_write_part
+                .write_http_payload_with_timeout(
                     connection_context.request_id,
                     crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
                     crate::consts::WRITE_TIMEOUT,
@@ -432,14 +519,17 @@ async fn send_response_loop<
                 .await
                 .unwrap();
 
-            connection_context.request_is_done().await;
+            connection_context
+                .h1_server_write_part
+                .request_is_done(connection_context.request_id)
+                .await;
             return;
         }
     };
 
     let content_length = http_headers.content_length;
 
-    if let Err(err) = remote_read_part.compile_headers(
+    if let Err(err) = h1_reader.compile_headers(
         http_headers,
         &connection_context.end_point_info.modify_response_headers,
         &connection_context.http_connection_info,
@@ -450,21 +540,26 @@ async fn send_response_loop<
         drop(remote_read_part);
         remote_connection.set_disconnected();
         connection_context
-            .write_http_payload(
+            .h1_server_write_part
+            .write_http_payload_with_timeout(
                 connection_context.request_id,
                 crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
                 crate::consts::WRITE_TIMEOUT,
             )
             .await
             .unwrap();
-        connection_context.request_is_done().await;
+        connection_context
+            .h1_server_write_part
+            .request_is_done(connection_context.request_id)
+            .await;
         return;
     }
 
     if let Err(err) = connection_context
-        .write_http_payload(
+        .h1_server_write_part
+        .write_http_payload_with_timeout(
             connection_context.request_id,
-            remote_read_part.h1_headers_builder.as_slice(),
+            h1_reader.h1_headers_builder.as_slice(),
             crate::consts::WRITE_TIMEOUT,
         )
         .await
@@ -473,21 +568,25 @@ async fn send_response_loop<
         drop(remote_read_part);
         remote_connection.set_disconnected();
         let _ = connection_context
-            .write_http_payload(
+            .h1_server_write_part
+            .write_http_payload_with_timeout(
                 connection_context.request_id,
                 crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
                 crate::consts::WRITE_TIMEOUT,
             )
             .await;
 
-        connection_context.request_is_done().await;
+        connection_context
+            .h1_server_write_part
+            .request_is_done(connection_context.request_id)
+            .await;
         return;
     }
 
-    if let Err(err) = remote_read_part
+    if let Err(err) = h1_reader
         .transfer_body(
             connection_context.request_id,
-            &mut connection_context,
+            &mut connection_context.h1_server_write_part,
             content_length,
         )
         .await
@@ -496,6 +595,7 @@ async fn send_response_loop<
         drop(remote_read_part);
         remote_connection.set_disconnected();
         let _ = connection_context
+            .h1_server_write_part
             .write_http_payload(
                 connection_context.request_id,
                 crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
@@ -503,15 +603,21 @@ async fn send_response_loop<
             )
             .await;
 
-        connection_context.request_is_done().await;
+        connection_context
+            .h1_server_write_part
+            .request_is_done(connection_context.request_id)
+            .await;
         return;
     }
 
-    connection_context.request_is_done().await;
+    connection_context
+        .h1_server_write_part
+        .request_is_done(connection_context.request_id)
+        .await;
 }
 
 async fn execute_local_path<WritePart: NetworkStreamWritePart + Send + Sync + 'static>(
-    mut connection_context: Http1ConnectionContext<WritePart>,
+    connection_context: Http1ConnectionContext<WritePart>,
     local_path_content: Arc<LocalPathContent>,
 ) {
     let content = local_path_content
@@ -519,18 +625,22 @@ async fn execute_local_path<WritePart: NetworkStreamWritePart + Send + Sync + 's
         .await;
 
     let _ = connection_context
-        .write_http_payload(
+        .h1_server_write_part
+        .write_http_payload_with_timeout(
             connection_context.request_id,
             content.as_slice(),
             crate::consts::WRITE_TIMEOUT,
         )
         .await;
 
-    connection_context.request_is_done().await;
+    connection_context
+        .h1_server_write_part
+        .request_is_done(connection_context.request_id)
+        .await;
 }
 
 async fn execute_static_content<WritePart: NetworkStreamWritePart + Send + Sync + 'static>(
-    mut connection_context: Http1ConnectionContext<WritePart>,
+    connection_context: Http1ConnectionContext<WritePart>,
     static_content: Arc<StaticContentConfig>,
 ) {
     let mut result = Http1ResponseBuilder::new(static_content.status_code);
@@ -542,12 +652,16 @@ async fn execute_static_content<WritePart: NetworkStreamWritePart + Send + Sync 
     let content = result.build_with_body(&static_content.body.as_slice());
 
     let _ = connection_context
-        .write_http_payload(
+        .h1_server_write_part
+        .write_http_payload_with_timeout(
             connection_context.request_id,
             content.as_slice(),
             crate::consts::WRITE_TIMEOUT,
         )
         .await;
 
-    connection_context.request_is_done().await;
+    connection_context
+        .h1_server_write_part
+        .request_is_done(connection_context.request_id)
+        .await;
 }

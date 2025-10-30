@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use super::*;
 use encryption::aes::AesKey;
 use my_ssh::SshAsyncChannel;
 use my_tls::tokio_rustls::client::TlsStream;
@@ -88,6 +89,8 @@ pub struct AppContext {
     pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
     pub http_control_port: Option<u16>,
+
+    pub ssh_sessions_pool: SshSessionsPool,
 }
 
 impl AppContext {
@@ -166,6 +169,7 @@ impl AppContext {
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,
+            ssh_sessions_pool: SshSessionsPool::new(),
         }
     }
 

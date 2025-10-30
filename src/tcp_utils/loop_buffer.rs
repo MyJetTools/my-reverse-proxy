@@ -1,5 +1,3 @@
-use crate::h1_proxy_server::ProxyServerError;
-
 const BUFFER_CAPACITY: usize = 1024 * 1024;
 pub struct LoopBuffer {
     data: Vec<u8>,
@@ -45,14 +43,14 @@ impl LoopBuffer {
         }
     }
 
-    pub fn get_mut(&mut self) -> Result<&mut [u8], ProxyServerError> {
+    pub fn get_mut(&mut self) -> Option<&mut [u8]> {
         self.gc();
 
         if self.read_to >= self.data.len() {
-            return Err(ProxyServerError::BufferAllocationFail);
+            return None;
         }
 
-        Ok(&mut self.data[self.read_to..])
+        Some(&mut self.data[self.read_to..])
     }
 
     pub fn get_data(&self) -> &[u8] {

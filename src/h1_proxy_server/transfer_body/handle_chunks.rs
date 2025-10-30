@@ -1,15 +1,12 @@
 use rust_extensions::slice_of_u8_utils::SliceOfU8Ext;
 
-use crate::{
-    h1_proxy_server::{LoopBuffer, ProxyServerError},
-    network_stream::*,
-};
+use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*};
 
 use super::*;
 
 pub async fn transfer_chunked_body<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
-    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    WritePart: H1Writer + Send + Sync + 'static,
 >(
     request_id: u64,
     read_stream: &mut ReadPart,
@@ -53,8 +50,12 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             }
         }
 
+        let Some(buffer) = loop_buffer.get_mut() else {
+            return Err(ProxyServerError::BufferAllocationFail);
+        };
+
         let read_size = read_stream
-            .read_with_timeout(loop_buffer.get_mut()?, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
         if read_size == 0 {
@@ -65,7 +66,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
 
 async fn transfer_chunk_data<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
-    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    WritePart: H1Writer + Send + Sync + 'static,
 >(
     request_id: u64,
     read_stream: &mut ReadPart,
@@ -105,8 +106,12 @@ async fn transfer_chunk_data<
             break;
         }
 
+        let Some(buffer) = loop_buffer.get_mut() else {
+            return Err(ProxyServerError::BufferAllocationFail);
+        };
+
         read_stream
-            .read_with_timeout(loop_buffer.get_mut()?, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
     }
 

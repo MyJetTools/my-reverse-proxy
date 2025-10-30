@@ -31,23 +31,7 @@ impl<'s> HttpHeader<'s> {
 
         let header_name = &self.payload[self.header_start..self.header_separator_index];
 
-        let mut h_iter = header_name.iter();
-        for v in value {
-            let p = h_iter.next().unwrap();
-
-            if v == p {
-                continue;
-            }
-
-            let v = to_lower_case(*v);
-            let p = to_lower_case(*p);
-
-            if v != p {
-                return false;
-            }
-        }
-
-        true
+        compare_case_insensitive(header_name, value)
     }
 
     pub fn get_value_as_str(&self) -> Option<&str> {
@@ -73,6 +57,26 @@ impl<'s> HttpHeader<'s> {
             Err(_) => None,
         }
     }
+}
+
+pub fn compare_case_insensitive(left: &[u8], right: &[u8]) -> bool {
+    let mut h_iter = left.iter();
+    for v in right {
+        let p = h_iter.next().unwrap();
+
+        if v == p {
+            continue;
+        }
+
+        let v = to_lower_case(*v);
+        let p = to_lower_case(*p);
+
+        if v != p {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn to_lower_case(b: u8) -> u8 {

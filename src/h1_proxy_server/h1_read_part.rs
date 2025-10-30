@@ -6,19 +6,21 @@ use crate::{
     configurations::{
         HttpEndpointInfo, HttpListenPortConfiguration, ModifyHeadersConfig, ProxyPassLocationConfig,
     },
-    h1_proxy_server::{HttpConnectionInfo, HttpHeadersReader, LoopBuffer, ProxyServerError},
+    h1_proxy_server::*,
     h1_utils::{Http1Headers, Http1HeadersBuilder, HttpContentLength},
     http_proxy_pass::HttpProxyPassIdentity,
-    network_stream::{NetworkStreamReadPart, NetworkStreamWritePart},
+    network_stream::*,
 };
 
-pub struct H1ReadPart<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
+use crate::tcp_utils::LoopBuffer;
+
+pub struct H1Reader<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
     read_part: TNetworkReadPart,
     pub loop_buffer: LoopBuffer,
     pub h1_headers_builder: Http1HeadersBuilder,
 }
 
-impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1ReadPart<TNetworkReadPart> {
+impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<TNetworkReadPart> {
     pub fn new(read_part: TNetworkReadPart) -> Self {
         Self {
             read_part,
@@ -41,7 +43,9 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1ReadPart
                 }
             }
 
-            let buffer = self.loop_buffer.get_mut()?;
+            let Some(buffer) = self.loop_buffer.get_mut() else {
+                return Err(ProxyServerError::BufferAllocationFail);
+            };
 
             let read_size = self
                 .read_part
@@ -101,7 +105,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1ReadPart
         modify_headers: &ModifyHeadersConfig,
         http_connection_info: &HttpConnectionInfo,
         identity: &Option<HttpProxyPassIdentity>,
-    ) -> Result<(), ProxyServerError> {
+    ) -> Result<bool, ProxyServerError> {
         self.h1_headers_builder.clear();
         let data = self.loop_buffer.get_data();
 
@@ -156,15 +160,23 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1ReadPart
             self.h1_headers_builder
                 .add_header(add_header.0, value.as_str());
         }
-        self.h1_headers_builder
-            .push_raw_payload(crate::consts::HTTP_CR_LF);
+        self.h1_headers_builder.write_cl_cr();
+
+        let mut web_socket_upgrade = false;
+
+        if let Some(upgrade_position) = http_headers.upgrade_value.as_ref() {
+            let upgrade_value = &data[upgrade_position.start..upgrade_position.end];
+
+            web_socket_upgrade =
+                crate::h1_utils::compare_case_insensitive(upgrade_value, b"websocket");
+        }
 
         self.loop_buffer.commit_read(http_headers.end);
 
-        Ok(())
+        Ok(web_socket_upgrade)
     }
 
-    pub async fn transfer_body<WritePart: NetworkStreamWritePart + Send + Sync + 'static>(
+    pub async fn transfer_body<WritePart: H1Writer + Send + Sync + 'static>(
         &mut self,
         request_id: u64,
         write_stream: &mut WritePart,
@@ -195,5 +207,9 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1ReadPart
                 result
             }
         }
+    }
+
+    pub fn into_read_part(self) -> (TNetworkReadPart, LoopBuffer) {
+        (self.read_part, self.loop_buffer)
     }
 }
