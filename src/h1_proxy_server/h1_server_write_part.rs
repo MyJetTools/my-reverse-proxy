@@ -143,6 +143,7 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1Writer
         buffer: &[u8],
         timeout: Duration,
     ) -> Result<(), NetworkError> {
+        println!("Writing payload{}", buffer.len());
         self.write_http_payload_with_timeout(request_id, buffer, timeout)
             .await
     }
