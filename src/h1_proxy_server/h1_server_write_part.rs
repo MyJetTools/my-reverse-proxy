@@ -44,6 +44,7 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
     }
 
     pub async fn request_is_done(&self, request_id: u64) {
+        println!("ReqId:{} is done", request_id);
         let mut write_access = self.inner.lock().await;
 
         for itm in write_access.current_requests.iter_mut() {
@@ -93,7 +94,6 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
 
         if write_access.current_requests.len() == 0 {
             write_part.write_all_with_timeout(buffer, timeout).await?;
-
             write_access.server_write_part = Some(write_part);
 
             return Ok(());
@@ -128,7 +128,6 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
         }
 
         write_access.server_write_part = Some(write_part);
-        println!("Somehow nowhere to write");
 
         Ok(())
     }
