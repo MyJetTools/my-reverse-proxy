@@ -39,6 +39,7 @@ pub async fn transfer_known_size<
         }
 
         let Some(buffer) = loop_buffer.get_mut() else {
+            println!("Buffer allocation fail - transfer_known_size");
             return Err(ProxyServerError::BufferAllocationFail);
         };
 

@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     app::SshSessionHandler, h1_proxy_server::H1Reader, network_stream::*, tcp_utils::LoopBuffer,
+    types::HttpTimeouts,
 };
 
 pub struct H1RemoteConnectionReadPart<
@@ -79,7 +80,7 @@ impl<
         let result = Self {
             write_part: write_half,
             read_half: H1RemoteConnectionReadPart {
-                h1_reader: Mutex::new(Some(H1Reader::new(read_part))),
+                h1_reader: Mutex::new(Some(H1Reader::new(read_part, HttpTimeouts::default()))),
                 disconnected: false.into(),
             }
             .into(),

@@ -10,6 +10,7 @@ use crate::{
     h1_utils::{Http1Headers, Http1HeadersBuilder, HttpContentLength},
     http_proxy_pass::HttpProxyPassIdentity,
     network_stream::*,
+    types::HttpTimeouts,
 };
 
 use crate::tcp_utils::LoopBuffer;
@@ -18,14 +19,16 @@ pub struct H1Reader<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'sta
     read_part: TNetworkReadPart,
     pub loop_buffer: LoopBuffer,
     pub h1_headers_builder: Http1HeadersBuilder,
+    pub timeouts: HttpTimeouts,
 }
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<TNetworkReadPart> {
-    pub fn new(read_part: TNetworkReadPart) -> Self {
+    pub fn new(read_part: TNetworkReadPart, timeouts: HttpTimeouts) -> Self {
         Self {
             read_part,
             loop_buffer: LoopBuffer::new(),
             h1_headers_builder: Http1HeadersBuilder::new(),
+            timeouts,
         }
     }
 
@@ -49,7 +52,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
 
             let read_size = self
                 .read_part
-                .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
+                .read_with_timeout(buffer, self.timeouts.read_timeout)
                 .await?;
 
             self.loop_buffer.advance(read_size);

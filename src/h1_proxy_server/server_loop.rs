@@ -18,7 +18,13 @@ pub async fn serve_reverse_proxy<
 
     let (server_read_part, server_write_part) = server_stream.split();
 
-    let mut h1_reader = H1Reader::new(server_read_part);
+    let timeouts = crate::types::HttpTimeouts {
+        read_timeout: crate::consts::READ_TIMEOUT,
+        write_timeout: crate::consts::WRITE_TIMEOUT,
+        connect_timeout: crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+    };
+
+    let mut h1_reader = H1Reader::new(server_read_part, timeouts);
 
     let h1_serer_write_part = H1ServerWritePart::new(server_write_part);
 
@@ -73,6 +79,7 @@ pub async fn serve_reverse_proxy<
                             .as_slice()
                     }
                     ProxyServerError::BufferAllocationFail => {
+                        println!("Buffer allocation fail - server loop");
                         crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()
                     }
                     ProxyServerError::ChunkHeaderParseError => {

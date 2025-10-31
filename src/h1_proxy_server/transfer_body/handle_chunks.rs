@@ -19,6 +19,8 @@ pub async fn transfer_chunked_body<
 
         let chunk_size = chunk_header.chunk_size;
 
+        println!("ReqId: {}. Size: {}", request_id, chunk_size);
+
         transfer_chunk_data(
             request_id,
             read_stream,
@@ -51,6 +53,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         }
 
         let Some(buffer) = loop_buffer.get_mut() else {
+            println!("Buffer allocation fail - read_chunk_header");
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
@@ -107,6 +110,7 @@ async fn transfer_chunk_data<
         }
 
         let Some(buffer) = loop_buffer.get_mut() else {
+            println!("Buffer allocation fail - transfer_chunk_data");
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
