@@ -15,7 +15,7 @@ pub async fn transfer_chunked_body<
 ) -> Result<(), ProxyServerError> {
     loop {
         // Read chunk header line
-        let chunk_header = read_chunk_header(read_stream, loop_buffer).await?;
+        let chunk_header = read_chunk_header(request_id, read_stream, loop_buffer).await?;
 
         let chunk_size = chunk_header.chunk_size;
 
@@ -37,6 +37,7 @@ pub async fn transfer_chunked_body<
 }
 
 async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'static>(
+    request_id: u64,
     read_stream: &mut ReadPart,
     loop_buffer: &mut LoopBuffer,
 ) -> Result<ChunkHeader, ProxyServerError> {
@@ -61,6 +62,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
+        println!("Read Chunk Size: {}. Uploaded: {}", request_id, read_size);
         loop_buffer.advance(read_size);
     }
 }
@@ -78,7 +80,10 @@ async fn transfer_chunk_data<
     let mut remain_to_send =
         chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
 
-    println!("Chunks. ReqId{}. Remaining: {}", request_id, remain_to_send);
+    println!(
+        "Chunks. ReqId{}. Chunk Size: {}. Remaining: {}",
+        request_id, chunk_header.chunk_size, remain_to_send
+    );
 
     while remain_to_send > 0 {
         {
