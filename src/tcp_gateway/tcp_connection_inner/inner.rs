@@ -72,7 +72,7 @@ impl TcpConnectionInner {
         connection.is_some()
     }
 
-    pub async fn flush_payload(&self) -> bool {
+    pub async fn push_payload_to_socket(&self) -> bool {
         loop {
             let payload_to_send = {
                 let mut write_access = self.buffer.lock().await;
@@ -96,20 +96,27 @@ impl TcpConnectionInner {
 
                 let write_result = tokio::time::timeout(SEND_TIMEOUT, write_future).await;
 
-                if write_result.is_err() {
+                let Ok(write_result) = write_result else {
                     println!(
                         "Timeout sending payload to socket with size {}",
                         payload_to_send.len()
                     );
                     return false;
-                }
-
-                let write_result = write_result.unwrap();
+                };
 
                 if write_result.is_err() {
                     return false;
                 }
             }
         }
+    }
+
+    pub async fn flush(&self) -> Result<(), std::io::Error> {
+        let mut connection_access = self.connection.lock().await;
+        if let Some(connection) = &mut *connection_access {
+            return connection.flush().await;
+        }
+
+        Ok(())
     }
 }

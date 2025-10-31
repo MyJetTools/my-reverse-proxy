@@ -105,6 +105,10 @@ impl<
             .await;
     }
 
+    pub async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        self.write_part.flush_it().await
+    }
+
     pub async fn write_to_socket(&mut self, payload: &[u8]) -> Result<(), std::io::Error> {
         return self.write_part.write_to_socket(payload).await;
     }

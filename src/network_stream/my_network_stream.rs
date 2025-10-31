@@ -74,6 +74,11 @@ impl NetworkStreamWritePart for tokio::net::TcpStream {
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
         self.write_all(buffer).await
     }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        self.flush().await?;
+        Ok(())
+    }
 }
 
 pub trait NetworkStream {

@@ -479,6 +479,17 @@ impl NetworkStreamWritePart for RemoteConnection {
             Self::LocalFiles(_) => Ok(()),
         }
     }
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        match self {
+            RemoteConnection::Http1Direct(inner) => inner.flush_it().await,
+            RemoteConnection::Http1UnixSocket(inner) => inner.flush_it().await,
+            RemoteConnection::Https1Direct(inner) => inner.flush_it().await,
+            RemoteConnection::Http1OverSsh(inner) => inner.flush_it().await,
+            RemoteConnection::Http1OverGateway(inner) => inner.flush_it().await,
+            RemoteConnection::StaticContent(_) => Ok(()),
+            RemoteConnection::LocalFiles(_) => Ok(()),
+        }
+    }
 }
 
 async fn send_response_loop<
@@ -623,6 +634,8 @@ async fn send_response_loop<
             .await;
         return;
     }
+
+    let _ = connection_context.h1_server_write_part.flush_it();
 
     connection_context
         .h1_server_write_part

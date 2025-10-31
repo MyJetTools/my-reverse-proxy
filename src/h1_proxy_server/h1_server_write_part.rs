@@ -165,6 +165,15 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> NetworkStreamWri
     async fn write_to_socket(&mut self, _buffer: &[u8]) -> Result<(), std::io::Error> {
         panic!("Should not be used. Instead  write_http_payload should be used");
     }
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        let mut write_access = self.inner.lock().await;
+        if let Some(inner) = write_access.server_write_part.as_mut() {
+            inner.flush_it().await?;
+            return Ok(());
+        }
+
+        Err(NetworkError::Disconnected)
+    }
 }
 
 #[cfg(test)]

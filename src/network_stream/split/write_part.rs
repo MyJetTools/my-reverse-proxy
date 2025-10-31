@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use my_ssh::SshAsyncChannel;
-use tokio::io::AsyncWriteExt;
 
 use crate::network_stream::*;
 
@@ -10,6 +9,8 @@ pub trait NetworkStreamWritePart {
     async fn shutdown_socket(&mut self);
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error>;
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError>;
 
     async fn write_all_with_timeout(
         &mut self,
@@ -93,6 +94,25 @@ impl NetworkStreamWritePart for MyOwnedWriteHalf {
             }
         }
     }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        match self {
+            MyOwnedWriteHalf::Tcp(owned_write_half) => {
+                use tokio::io::AsyncWriteExt;
+                owned_write_half.flush().await?;
+            }
+            MyOwnedWriteHalf::Unix(owned_write_half) => {
+                use tokio::io::AsyncWriteExt;
+                owned_write_half.flush().await?;
+            }
+            MyOwnedWriteHalf::Ssh(write_half) => {
+                use futures::AsyncWriteExt;
+                write_half.flush().await?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -100,12 +120,20 @@ impl NetworkStreamWritePart
     for tokio::io::WriteHalf<my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>>
 {
     async fn shutdown_socket(&mut self) {
+        use tokio::io::AsyncWriteExt;
         let _ = self.shutdown().await;
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        use tokio::io::AsyncWriteExt;
         println!("Writing all-1 {} ", buffer.len());
         self.write_all(buffer).await
+    }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        use tokio::io::AsyncWriteExt;
+        self.flush().await?;
+        Ok(())
     }
 }
 
@@ -114,25 +142,41 @@ impl NetworkStreamWritePart
     for tokio::io::WriteHalf<my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>>
 {
     async fn shutdown_socket(&mut self) {
+        use tokio::io::AsyncWriteExt;
         let _ = self.shutdown().await;
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        use tokio::io::AsyncWriteExt;
         println!("Writing all-2 {} ", buffer.len());
         let result = self.write_all(buffer).await;
-        self.flush().await?;
+
         result
+    }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        use tokio::io::AsyncWriteExt;
+        self.flush().await?;
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::TcpStream> {
     async fn shutdown_socket(&mut self) {
+        use tokio::io::AsyncWriteExt;
         let _ = self.shutdown().await;
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        use tokio::io::AsyncWriteExt;
         self.write_all(buffer).await
+    }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        use tokio::io::AsyncWriteExt;
+        self.flush().await?;
+        Ok(())
     }
 }
 
@@ -140,11 +184,19 @@ impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::TcpStream> {
 #[async_trait::async_trait]
 impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::UnixStream> {
     async fn shutdown_socket(&mut self) {
+        use tokio::io::AsyncWriteExt;
         let _ = self.shutdown().await;
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        use tokio::io::AsyncWriteExt;
         self.write_all(buffer).await
+    }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        use tokio::io::AsyncWriteExt;
+        self.flush().await?;
+        Ok(())
     }
 }
 
@@ -152,10 +204,18 @@ impl NetworkStreamWritePart for tokio::io::WriteHalf<tokio::net::UnixStream> {
 #[async_trait::async_trait]
 impl NetworkStreamWritePart for tokio::io::WriteHalf<my_ssh::SshAsyncChannel> {
     async fn shutdown_socket(&mut self) {
+        use tokio::io::AsyncWriteExt;
         let _ = self.shutdown().await;
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        use tokio::io::AsyncWriteExt;
         self.write_all(buffer).await
+    }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        use tokio::io::AsyncWriteExt;
+        self.flush().await?;
+        Ok(())
     }
 }

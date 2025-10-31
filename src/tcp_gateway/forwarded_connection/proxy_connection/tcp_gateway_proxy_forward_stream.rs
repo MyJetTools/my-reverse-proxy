@@ -75,6 +75,11 @@ impl NetworkStreamWritePart for TcpGatewayProxyForwardStream {
 
         Ok(())
     }
+
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        self.gateway_connection_inner.flush().await?;
+        Ok(())
+    }
 }
 
 /*

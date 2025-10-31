@@ -12,7 +12,7 @@ async fn write_loop(inner: Arc<TcpConnectionInner>, mut receiver: tokio::sync::m
             inner.disconnect().await;
             break;
         }
-        if !inner.flush_payload().await {
+        if !inner.push_payload_to_socket().await {
             inner.disconnect().await;
             break;
         }
