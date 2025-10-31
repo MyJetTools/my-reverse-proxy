@@ -235,8 +235,6 @@ async fn execute_request<
         .transfer_body(request_id, connection, content_length)
         .await?;
 
-    connection.flush_it().await?;
-
     h1_server_write_part.add_current_request(request_id).await;
 
     //let server_single_threaded_part: Arc<Mutex<HttpServerSingleThreadedPart<WritePart>>> =

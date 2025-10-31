@@ -31,6 +31,8 @@ pub trait NetworkStreamWritePart {
             return Err(NetworkError::IoError(err));
         }
 
+        self.flush_it().await?;
+
         Ok(())
     }
 }

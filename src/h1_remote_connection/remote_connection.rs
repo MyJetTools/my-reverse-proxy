@@ -635,8 +635,6 @@ async fn send_response_loop<
         return;
     }
 
-    let _ = connection_context.h1_server_write_part.flush_it();
-
     connection_context
         .h1_server_write_part
         .request_is_done(connection_context.request_id)
