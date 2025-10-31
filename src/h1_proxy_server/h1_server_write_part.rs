@@ -115,11 +115,14 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
                             request_id,
                             itm.buffer.len()
                         );
+
                         write_part
                             .write_all_with_timeout(itm.buffer.as_slice(), timeout)
                             .await?;
                         itm.buffer.clear();
                     }
+
+                    println!("Writing payload{}", buffer.len());
                     write_part.write_all_with_timeout(buffer, timeout).await?;
                 }
 
@@ -143,7 +146,6 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1Writer
         buffer: &[u8],
         timeout: Duration,
     ) -> Result<(), NetworkError> {
-        println!("Writing payload{}", buffer.len());
         self.write_http_payload_with_timeout(request_id, buffer, timeout)
             .await
     }
@@ -162,5 +164,25 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> NetworkStreamWri
 
     async fn write_to_socket(&mut self, _buffer: &[u8]) -> Result<(), std::io::Error> {
         panic!("Should not be used. Instead  write_http_payload should be used");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use my_settings_reader::flurl::FlUrl;
+
+    #[tokio::test]
+    async fn test() {
+        let result = FlUrl::new("https://settings.jetdev.eu/assets/my-settings-ui_bg-a0e24054a4c5ecb7.wasm?id=Y9LnLOadQ194cCzz").get().await.unwrap();
+
+        let mut stream = result.get_body_as_stream();
+
+        let mut total = 0;
+        while let Some(next) = stream.get_next_chunk().await.unwrap() {
+            println!("Len:{}", next.len());
+            total += next.len();
+        }
+
+        println!("Total: {}", total);
     }
 }

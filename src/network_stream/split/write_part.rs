@@ -104,6 +104,7 @@ impl NetworkStreamWritePart
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        println!("Writing all-1{} ", buffer.len());
         self.write_all(buffer).await
     }
 }
@@ -117,6 +118,7 @@ impl NetworkStreamWritePart
     }
 
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
+        println!("Writing all-2{} ", buffer.len());
         self.write_all(buffer).await
     }
 }
