@@ -10,6 +10,7 @@ pub async fn transfer_known_size<
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
 ) -> Result<(), ProxyServerError> {
+    println!("Request: {}. BodySize: {}", request_id, remaining_size);
     loop {
         {
             println!("Request {}, remaining: {}", request_id, remaining_size);

@@ -188,6 +188,10 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         match content_length {
             HttpContentLength::None => return Ok(()),
             HttpContentLength::Known(size) => {
+                if size == 0 {
+                    return Ok(());
+                }
+
                 let result = super::transfer_body::transfer_known_size(
                     request_id,
                     &mut self.read_part,
