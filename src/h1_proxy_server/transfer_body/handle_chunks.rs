@@ -97,9 +97,7 @@ async fn transfer_chunk_data<
 
                 let to_send_buf = &buf[..to_send];
 
-                if chunk_header.chunk_size == 0 {
-                    println!("{:?}", std::str::from_utf8(to_send_buf));
-                }
+                println!("Chunk: {:?}", std::str::from_utf8(to_send_buf));
 
                 let write_error = remote_stream
                     .write_http_payload(request_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
