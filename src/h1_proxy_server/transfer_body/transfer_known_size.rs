@@ -35,6 +35,11 @@ pub async fn transfer_known_size<
 
                 remaining_size -= to_send;
                 loop_buffer.commit_read(to_send);
+
+                println!(
+                    "Read Body: ReqId:{}. Sent: {}. Remains: {}",
+                    request_id, to_send, remaining_size
+                );
             }
         }
 
@@ -47,9 +52,12 @@ pub async fn transfer_known_size<
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
+        println!("Read Body: ReqId:{}. Reading", request_id);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
+
+        println!("Read Body: ReqId:{}. Uploaded: {}", request_id, read_size);
 
         loop_buffer.advance(read_size);
     }
