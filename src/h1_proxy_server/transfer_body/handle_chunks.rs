@@ -19,7 +19,7 @@ pub async fn transfer_chunked_body<
 
         let chunk_size = chunk_header.chunk_size;
 
-        println!("ReqId: {}. Size: {}", request_id, chunk_size);
+        println!("Chunked ReqId: {}. Size: {}", request_id, chunk_size);
 
         transfer_chunk_data(
             request_id,
@@ -80,6 +80,8 @@ async fn transfer_chunk_data<
     let mut remain_to_send =
         chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
 
+    println!("Chunks. ReqId{}. Remaining: {}", request_id, remain_to_send);
+
     while remain_to_send > 0 {
         {
             let buf = loop_buffer.get_data();
@@ -102,6 +104,7 @@ async fn transfer_chunk_data<
 
                 loop_buffer.commit_read(to_send);
                 remain_to_send -= to_send;
+                println!("Chunks. ReqId{}. Sent: {}", request_id, to_send);
             }
         }
 
@@ -114,9 +117,11 @@ async fn transfer_chunk_data<
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
-        read_stream
+        let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
+
+        loop_buffer.advance(read_size);
     }
 
     Ok(())

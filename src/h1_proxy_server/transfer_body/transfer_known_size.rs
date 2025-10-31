@@ -10,10 +10,8 @@ pub async fn transfer_known_size<
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
 ) -> Result<(), ProxyServerError> {
-    println!("Request: {}. BodySize: {}", request_id, remaining_size);
     loop {
         {
-            println!("Request {}, remaining: {}", request_id, remaining_size);
             let read_buf = loop_buffer.get_data();
 
             if read_buf.len() > 0 {
@@ -35,8 +33,6 @@ pub async fn transfer_known_size<
                     return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(err));
                 }
 
-                println!("Request {}, sent: {}", request_id, to_send);
-
                 remaining_size -= to_send;
                 loop_buffer.commit_read(to_send);
             }
@@ -54,8 +50,6 @@ pub async fn transfer_known_size<
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
-
-        println!("Request {}. Uploaded {}", request_id, read_size);
 
         loop_buffer.advance(read_size);
     }
