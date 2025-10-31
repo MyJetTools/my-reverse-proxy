@@ -26,7 +26,7 @@ pub async fn serve_reverse_proxy<
 
     let mut h1_reader = H1Reader::new(server_read_part, timeouts);
 
-    let h1_serer_write_part = H1ServerWritePart::new(server_write_part);
+    let h1_server_write_part = H1ServerWritePart::new(server_write_part);
 
     let mut request_id = 0;
 
@@ -37,7 +37,7 @@ pub async fn serve_reverse_proxy<
             &mut http_connection_info,
             &mut h1_reader,
             &mut remote_connections,
-            &h1_serer_write_part,
+            &h1_server_write_part,
         )
         .await;
 
@@ -48,7 +48,7 @@ pub async fn serve_reverse_proxy<
                         remote_connections.remove(&web_socket_upgrade.location_id)
                     {
                         let (server_read_part, loop_buffer) = h1_reader.into_read_part();
-                        let server_write_part = h1_serer_write_part.into_write_part().await;
+                        let server_write_part = h1_server_write_part.into_write_part().await;
                         let result = connection
                             .web_socket_upgrade(server_read_part, server_write_part, loop_buffer)
                             .await;
@@ -112,7 +112,7 @@ pub async fn serve_reverse_proxy<
                     }
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
-                h1_serer_write_part
+                h1_server_write_part
                     .write_http_payload_with_timeout(
                         request_id,
                         content,
@@ -227,8 +227,7 @@ async fn execute_request<
 
     h1_read_part
         .transfer_body(request_id, connection, content_length)
-        .await
-        .unwrap();
+        .await?;
 
     h1_server_write_part.add_current_request(request_id).await;
 
