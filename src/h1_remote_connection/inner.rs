@@ -75,6 +75,7 @@ impl<
         )
         .await?;
 
+        println!("Connected to {}", remote_endpoint.get_host_port().as_str());
         let (read_part, write_half) = result.split();
 
         let result = Self {
