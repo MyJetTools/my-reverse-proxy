@@ -4,7 +4,7 @@ use crate::network_stream::*;
 
 use super::*;
 
-use crate::remote_connection::h1::*;
+use crate::h1_remote_connection::*;
 
 pub async fn serve_reverse_proxy<
     WritePart: NetworkStreamWritePart + Send + Sync + 'static,
@@ -136,22 +136,28 @@ async fn execute_request<
 >(
     request_id: u64,
     http_connection_info: &mut HttpConnectionInfo,
-    h1_read_part: &mut H1Reader<ReadPart>,
+    h1_reader: &mut H1Reader<ReadPart>,
     remote_connections: &mut HashMap<i64, RemoteConnection>,
     h1_server_write_part: &H1ServerWritePart<WritePart>,
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
-    let request_headers = h1_read_part.read_headers().await?;
+    let request_headers = h1_reader.read_headers().await?;
+
+    println!(
+        "Request {}. Data: {:?}",
+        request_id,
+        std::str::from_utf8(&h1_reader.loop_buffer.get_data()[..request_headers.end])
+    );
 
     if http_connection_info.endpoint_info.is_none() {
-        http_connection_info.endpoint_info = h1_read_part
-            .try_find_endpoint_info(&request_headers, &http_connection_info.listen_config);
+        http_connection_info.endpoint_info =
+            h1_reader.try_find_endpoint_info(&request_headers, &http_connection_info.listen_config);
     }
 
-    let (location, end_point_info) = h1_read_part
+    let (location, end_point_info) = h1_reader
         .find_location(&request_headers, &http_connection_info)
         .await?;
 
-    let identity = h1_read_part
+    let identity = h1_reader
         .authorize(end_point_info, &http_connection_info, &request_headers)
         .await?;
 
@@ -176,7 +182,7 @@ async fn execute_request<
 
     let content_length = request_headers.content_length;
 
-    let web_socket_upgrade = h1_read_part.compile_headers(
+    let web_socket_upgrade = h1_reader.compile_headers(
         request_headers,
         &end_point_info.modify_request_headers,
         &http_connection_info,
@@ -186,7 +192,7 @@ async fn execute_request<
     let send_headers_result = connection
         .send_h1_header(
             request_id,
-            &h1_read_part.h1_headers_builder,
+            &h1_reader.h1_headers_builder,
             crate::consts::WRITE_TIMEOUT,
         )
         .await;
@@ -213,7 +219,7 @@ async fn execute_request<
         let send_headers_result = connection
             .send_h1_header(
                 request_id,
-                &h1_read_part.h1_headers_builder,
+                &h1_reader.h1_headers_builder,
                 crate::consts::WRITE_TIMEOUT,
             )
             .await;
@@ -225,7 +231,7 @@ async fn execute_request<
         }
     }
 
-    h1_read_part
+    h1_reader
         .transfer_body(request_id, connection, content_length)
         .await?;
 

@@ -508,7 +508,7 @@ async fn send_response_loop<
         return;
     };
 
-    let http_headers = match h1_reader.read_headers().await {
+    let resp_headers = match h1_reader.read_headers().await {
         Ok(headers) => headers,
         Err(err) => {
             println!("Reading header from remote: {:?}", err);
@@ -535,10 +535,16 @@ async fn send_response_loop<
         }
     };
 
-    let content_length = http_headers.content_length;
+    println!(
+        "Request {}. Data: {:?}",
+        connection_context.request_id,
+        std::str::from_utf8(&h1_reader.loop_buffer.get_data()[..resp_headers.end])
+    );
+
+    let content_length = resp_headers.content_length;
 
     if let Err(err) = h1_reader.compile_headers(
-        http_headers,
+        resp_headers,
         &connection_context.end_point_info.modify_response_headers,
         &connection_context.http_connection_info,
         &None,
