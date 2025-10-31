@@ -52,6 +52,10 @@ impl Http1HeadersBuilder {
         self.payload.extend_from_slice(buffer);
     }
 
+    pub fn push_space(&mut self) {
+        self.payload.push(b' ');
+    }
+
     pub fn as_slice(&self) -> &[u8] {
         &self.payload
     }

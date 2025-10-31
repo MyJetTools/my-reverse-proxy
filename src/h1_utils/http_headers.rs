@@ -91,6 +91,9 @@ impl Http1Headers {
         let items = buffer.split(|b| *b == b' ');
 
         for (no, itm) in items.enumerate() {
+            if no > 0 {
+                out.push_space();
+            }
             if no == 1 {
                 println!("Push fl item: {:?}", path);
                 out.push_raw_payload(path.as_bytes());
