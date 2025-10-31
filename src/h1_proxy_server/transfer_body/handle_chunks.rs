@@ -58,6 +58,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
+        println!("Read Chunk Size. ReqId:{}. Reading data", request_id);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
@@ -137,6 +138,7 @@ async fn transfer_chunk_data<
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
+        println!("Chunks. ReqId:{}. Reading data", request_id);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
