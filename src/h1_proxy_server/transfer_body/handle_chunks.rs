@@ -97,7 +97,20 @@ async fn transfer_chunk_data<
 
                 let to_send_buf = &buf[..to_send];
 
-                println!("Chunk: {:?}", std::str::from_utf8(to_send_buf));
+                if to_send_buf.len() > 64 {
+                    println!(
+                        "ReqId: {}. Chunk: `{:?}`..`{:?}`",
+                        request_id,
+                        std::str::from_utf8(&to_send_buf[..16]),
+                        std::str::from_utf8(&to_send_buf[to_send_buf.len() - 16..])
+                    );
+                } else {
+                    println!(
+                        "ReqId: {}. Chunk: {:?}",
+                        request_id,
+                        std::str::from_utf8(to_send_buf),
+                    );
+                }
 
                 let write_error = remote_stream
                     .write_http_payload(request_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
