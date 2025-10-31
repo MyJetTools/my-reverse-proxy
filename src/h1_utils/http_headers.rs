@@ -79,6 +79,27 @@ impl Http1Headers {
             data: &src[..self.first_line_end],
         }
     }
+
+    pub fn push_first_line_with_other_path(
+        &self,
+        data: &[u8],
+        path: &str,
+        out: &mut Http1HeadersBuilder,
+    ) {
+        let buffer = &data[..self.first_line_end];
+
+        let items = buffer.split(|b| *b == b' ');
+
+        for (no, itm) in items.enumerate() {
+            if no == 1 {
+                println!("Push fl item: {:?}", path);
+                out.push_raw_payload(path.as_bytes());
+            } else {
+                println!("Push fl item: {:?}", std::str::from_utf8(itm));
+                out.push_raw_payload(itm);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

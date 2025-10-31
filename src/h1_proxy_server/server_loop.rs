@@ -179,6 +179,7 @@ async fn execute_request<
         &end_point_info.modify_request_headers,
         &http_connection_info,
         &identity,
+        connection.mcp_path.as_deref(),
     )?;
 
     let send_headers_result = connection

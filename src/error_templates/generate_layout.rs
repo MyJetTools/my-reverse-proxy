@@ -55,10 +55,10 @@ pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrSt
     .into_bytes();
 
     let mut headers = crate::h1_utils::Http1HeadersBuilder::new();
-    headers.add_response_first_line(200);
+    headers.push_response_first_line(200);
 
-    headers.add_content_length(body.len());
-    headers.write_cl_cr();
+    headers.push_content_length(body.len());
+    headers.push_cl_cr();
 
     let mut result = headers.into_bytes();
     result.extend_from_slice(body.as_bytes());

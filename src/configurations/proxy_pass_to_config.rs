@@ -36,6 +36,7 @@ pub struct ProxyPassToModel {
     pub remote_host: MyReverseProxyRemoteEndpoint,
     pub request_timeout: Duration,
     pub connect_timeout: Duration,
+    pub is_mcp: bool,
 }
 
 #[derive(Debug)]
@@ -55,6 +56,7 @@ impl ProxyPassToConfig {
             ProxyPassToConfig::UnixHttp1(proxy_pass) => proxy_pass.remote_host.to_string(),
             ProxyPassToConfig::UnixHttp2(proxy_pass) => proxy_pass.remote_host.to_string(),
             ProxyPassToConfig::Http2(proxy_pass) => proxy_pass.remote_host.to_string(),
+
             ProxyPassToConfig::FilesPath(model) => model.to_string(),
             ProxyPassToConfig::Static(model) => model.to_string(),
         }
@@ -62,12 +64,12 @@ impl ProxyPassToConfig {
 
     pub fn get_type_as_str(&self) -> &'static str {
         match self {
-            ProxyPassToConfig::UnixHttp1(_) => "unix+http1",
-            ProxyPassToConfig::UnixHttp2(_) => "unix+http2",
-            ProxyPassToConfig::Http1(_) => "http1",
-            ProxyPassToConfig::Http2(_) => "http2",
-            ProxyPassToConfig::FilesPath(_) => "files_path",
-            ProxyPassToConfig::Static(_) => "static",
+            Self::UnixHttp1(_) => "unix+http1",
+            Self::UnixHttp2(_) => "unix+http2",
+            Self::Http1(_) => "http1",
+            Self::Http2(_) => "http2",
+            Self::FilesPath(_) => "files_path",
+            Self::Static(_) => crate::consts::location_type::STATIC,
         }
     }
 }

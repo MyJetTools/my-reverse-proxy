@@ -13,7 +13,7 @@ impl Http1HeadersBuilder {
         }
     }
 
-    pub fn add_response_first_line(&mut self, status_code: u16) {
+    pub fn push_response_first_line(&mut self, status_code: u16) {
         match status_code {
             200 => {
                 self.payload.extend_from_slice(b"HTTP/1.1 200 OK");
@@ -30,21 +30,21 @@ impl Http1HeadersBuilder {
             }
         }
 
-        self.write_cl_cr();
+        self.push_cl_cr();
     }
 
-    pub fn add_header(&mut self, name: &str, value: &str) {
+    pub fn push_header(&mut self, name: &str, value: &str) {
         self.payload.extend_from_slice(name.as_bytes());
         self.payload.extend_from_slice(": ".as_bytes());
         self.payload.extend_from_slice(value.as_bytes());
-        self.write_cl_cr();
+        self.push_cl_cr();
     }
 
-    pub fn add_content_length(&mut self, size: usize) {
-        self.add_header("content-length", size.to_string().as_str());
+    pub fn push_content_length(&mut self, size: usize) {
+        self.push_header("content-length", size.to_string().as_str());
     }
 
-    pub fn write_cl_cr(&mut self) {
+    pub fn push_cl_cr(&mut self) {
         self.payload.extend_from_slice(crate::consts::HTTP_CR_LF);
     }
 

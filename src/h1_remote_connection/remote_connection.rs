@@ -19,7 +19,7 @@ pub struct Http1ConnectionContext<WritePart: NetworkStreamWritePart + Send + Syn
     pub request_id: u64,
 }
 
-pub enum RemoteConnection {
+pub enum RemoteConnectionInner {
     Http1Direct(
         Http1ConnectionInner<
             tokio::io::WriteHalf<tokio::net::TcpStream>,
@@ -52,6 +52,11 @@ pub enum RemoteConnection {
     LocalFiles(Arc<LocalPathContent>),
 }
 
+pub struct RemoteConnection {
+    inner: RemoteConnectionInner,
+    pub mcp_path: Option<String>,
+}
+
 impl RemoteConnection {
     pub async fn connect(proxy_pass_to: &ProxyPassToConfig) -> Result<Self, NetworkError> {
         match proxy_pass_to {
@@ -69,7 +74,14 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    return Ok(Self::Http1OverGateway(result));
+                    return Ok(Self {
+                        inner: RemoteConnectionInner::Http1OverGateway(result),
+                        mcp_path: if proxy_pass_to.is_mcp {
+                            Some(proxy_pass_to.remote_host.get_path_and_query().to_string())
+                        } else {
+                            None
+                        },
+                    });
                 }
                 crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh {
                     ssh_credentials,
@@ -84,7 +96,14 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    return Ok(Self::Http1OverSsh(result));
+                    return Ok(Self {
+                        inner: RemoteConnectionInner::Http1OverSsh(result),
+                        mcp_path: if proxy_pass_to.is_mcp {
+                            Some(proxy_pass_to.remote_host.get_path_and_query().to_string())
+                        } else {
+                            None
+                        },
+                    });
                 }
                 crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     if let Some(scheme) = remote_host.get_scheme() {
@@ -97,7 +116,14 @@ impl RemoteConnection {
                                 )
                                 .await?;
 
-                            return Ok(Self::Https1Direct(result));
+                            return Ok(Self {
+                                inner: RemoteConnectionInner::Https1Direct(result),
+                                mcp_path: if proxy_pass_to.is_mcp {
+                                    Some(proxy_pass_to.remote_host.get_path_and_query().to_string())
+                                } else {
+                                    None
+                                },
+                            });
                         }
                     }
                     let result = Http1ConnectionInner::connect::<tokio::net::TcpStream>(
@@ -109,7 +135,14 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    return Ok(Self::Http1Direct(result));
+                    return Ok(Self {
+                        inner: RemoteConnectionInner::Http1Direct(result),
+                        mcp_path: if proxy_pass_to.is_mcp {
+                            Some(proxy_pass_to.remote_host.get_path_and_query().to_string())
+                        } else {
+                            None
+                        },
+                    });
                 }
             },
             ProxyPassToConfig::Http2(_) => {
@@ -128,7 +161,14 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    return Ok(Self::Http1UnixSocket(result));
+                    return Ok(Self {
+                        inner: RemoteConnectionInner::Http1UnixSocket(result),
+                        mcp_path: if proxy_pass_to.is_mcp {
+                            Some(proxy_pass_to.remote_host.get_path_and_query().to_string())
+                        } else {
+                            None
+                        },
+                    });
                 }
             },
             ProxyPassToConfig::UnixHttp2(_) => todo!("Not Implemented"),
@@ -138,9 +178,17 @@ impl RemoteConnection {
                     model.default_file.clone(),
                 );
 
-                return Ok(Self::LocalFiles(Arc::new(path_content)));
+                return Ok(Self {
+                    inner: RemoteConnectionInner::LocalFiles(Arc::new(path_content)),
+                    mcp_path: None,
+                });
             }
-            ProxyPassToConfig::Static(config) => return Ok(Self::StaticContent(config.clone())),
+            ProxyPassToConfig::Static(config) => {
+                return Ok(Self {
+                    inner: RemoteConnectionInner::StaticContent(config.clone()),
+                    mcp_path: None,
+                });
+            }
         }
     }
 
@@ -150,8 +198,8 @@ impl RemoteConnection {
         h1_headers: &Http1HeadersBuilder,
         time_out: Duration,
     ) -> bool {
-        match self {
-            Self::Http1Direct(connection) => {
+        match &mut self.inner {
+            RemoteConnectionInner::Http1Direct(connection) => {
                 if connection.is_disconnected() {
                     return false;
                 }
@@ -160,7 +208,7 @@ impl RemoteConnection {
                     .await
                     .is_ok()
             }
-            Self::Http1UnixSocket(connection) => {
+            RemoteConnectionInner::Http1UnixSocket(connection) => {
                 if connection.is_disconnected() {
                     return false;
                 }
@@ -169,7 +217,7 @@ impl RemoteConnection {
                     .await
                     .is_ok()
             }
-            Self::Https1Direct(connection) => {
+            RemoteConnectionInner::Https1Direct(connection) => {
                 if connection.is_disconnected() {
                     return false;
                 }
@@ -178,7 +226,7 @@ impl RemoteConnection {
                     .await
                     .is_ok()
             }
-            Self::Http1OverSsh(connection) => {
+            RemoteConnectionInner::Http1OverSsh(connection) => {
                 if connection.is_disconnected() {
                     return false;
                 }
@@ -188,7 +236,7 @@ impl RemoteConnection {
                     .is_ok()
             }
 
-            Self::Http1OverGateway(connection) => {
+            RemoteConnectionInner::Http1OverGateway(connection) => {
                 if connection.is_disconnected() {
                     return false;
                 }
@@ -197,8 +245,8 @@ impl RemoteConnection {
                     .await
                     .is_ok()
             }
-            Self::StaticContent(_) => true,
-            Self::LocalFiles(connection) => {
+            RemoteConnectionInner::StaticContent(_) => true,
+            RemoteConnectionInner::LocalFiles(connection) => {
                 connection.send_headers(request_id, h1_headers).await;
 
                 true
@@ -210,49 +258,49 @@ impl RemoteConnection {
         &self,
         connection_context: Http1ConnectionContext<MyWritePart>,
     ) -> bool {
-        match self {
-            RemoteConnection::Http1Direct(inner) => {
+        match &self.inner {
+            RemoteConnectionInner::Http1Direct(inner) => {
                 let read_part = inner.get_read_part();
                 if read_part.get_disconnected() {
                     return false;
                 }
                 tokio::spawn(send_response_loop(connection_context, read_part));
             }
-            RemoteConnection::Http1UnixSocket(inner) => {
+            RemoteConnectionInner::Http1UnixSocket(inner) => {
                 let read_part = inner.get_read_part();
                 if read_part.get_disconnected() {
                     return false;
                 }
                 tokio::spawn(send_response_loop(connection_context, read_part));
             }
-            RemoteConnection::Https1Direct(inner) => {
+            RemoteConnectionInner::Https1Direct(inner) => {
                 let read_part = inner.get_read_part();
                 if read_part.get_disconnected() {
                     return false;
                 }
                 tokio::spawn(send_response_loop(connection_context, read_part));
             }
-            RemoteConnection::Http1OverSsh(inner) => {
+            RemoteConnectionInner::Http1OverSsh(inner) => {
                 let read_part = inner.get_read_part();
                 if read_part.get_disconnected() {
                     return false;
                 }
                 tokio::spawn(send_response_loop(connection_context, read_part));
             }
-            RemoteConnection::Http1OverGateway(inner) => {
+            RemoteConnectionInner::Http1OverGateway(inner) => {
                 let read_part = inner.get_read_part();
                 if read_part.get_disconnected() {
                     return false;
                 }
                 tokio::spawn(send_response_loop(connection_context, read_part));
             }
-            RemoteConnection::StaticContent(static_content) => {
+            RemoteConnectionInner::StaticContent(static_content) => {
                 tokio::spawn(execute_static_content(
                     connection_context,
                     static_content.clone(),
                 ));
             }
-            RemoteConnection::LocalFiles(local_files) => {
+            RemoteConnectionInner::LocalFiles(local_files) => {
                 tokio::spawn(execute_local_path(connection_context, local_files.clone()));
             }
         }
@@ -269,8 +317,8 @@ impl RemoteConnection {
 
         server_loop_buffer: LoopBuffer,
     ) -> Result<(), (ServerReadPart, ServerWritePart)> {
-        match self {
-            RemoteConnection::Http1Direct(inner) => {
+        match self.inner {
+            RemoteConnectionInner::Http1Direct(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -290,7 +338,7 @@ impl RemoteConnection {
 
                 return Ok(());
             }
-            RemoteConnection::Http1UnixSocket(inner) => {
+            RemoteConnectionInner::Http1UnixSocket(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -310,7 +358,7 @@ impl RemoteConnection {
 
                 return Ok(());
             }
-            RemoteConnection::Https1Direct(inner) => {
+            RemoteConnectionInner::Https1Direct(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -330,7 +378,7 @@ impl RemoteConnection {
 
                 return Ok(());
             }
-            RemoteConnection::Http1OverSsh(mut inner) => {
+            RemoteConnectionInner::Http1OverSsh(mut inner) => {
                 let ssh_session_handler = inner.ssh_session_handler.take();
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
@@ -351,7 +399,7 @@ impl RemoteConnection {
 
                 return Ok(());
             }
-            RemoteConnection::Http1OverGateway(inner) => {
+            RemoteConnectionInner::Http1OverGateway(inner) => {
                 let (remote_read_part, remote_write_part, remote_loop_buffer) =
                     inner.get_read_and_write_parts().await;
 
@@ -371,10 +419,12 @@ impl RemoteConnection {
 
                 return Ok(());
             }
-            RemoteConnection::StaticContent(_) => {
+            RemoteConnectionInner::StaticContent(_) => {
                 return Err((server_read_part, server_write_part))
             }
-            RemoteConnection::LocalFiles(_) => return Err((server_read_part, server_write_part)),
+            RemoteConnectionInner::LocalFiles(_) => {
+                return Err((server_read_part, server_write_part))
+            }
         }
     }
 }
@@ -387,29 +437,29 @@ impl H1Writer for RemoteConnection {
         buffer: &[u8],
         timeout: Duration,
     ) -> Result<(), NetworkError> {
-        match self {
-            RemoteConnection::Http1Direct(inner) => {
+        match &mut self.inner {
+            RemoteConnectionInner::Http1Direct(inner) => {
                 inner.send_with_timeout(buffer, timeout).await?;
                 Ok(())
             }
-            RemoteConnection::Http1UnixSocket(inner) => {
+            RemoteConnectionInner::Http1UnixSocket(inner) => {
                 inner.send_with_timeout(buffer, timeout).await?;
                 Ok(())
             }
-            RemoteConnection::Https1Direct(inner) => {
+            RemoteConnectionInner::Https1Direct(inner) => {
                 inner.send_with_timeout(buffer, timeout).await?;
                 Ok(())
             }
-            RemoteConnection::Http1OverSsh(inner) => {
+            RemoteConnectionInner::Http1OverSsh(inner) => {
                 inner.send_with_timeout(buffer, timeout).await?;
                 Ok(())
             }
-            RemoteConnection::Http1OverGateway(inner) => {
+            RemoteConnectionInner::Http1OverGateway(inner) => {
                 inner.send_with_timeout(buffer, timeout).await?;
                 Ok(())
             }
-            RemoteConnection::StaticContent(_) => Ok(()),
-            RemoteConnection::LocalFiles(_) => Ok(()),
+            RemoteConnectionInner::StaticContent(_) => Ok(()),
+            RemoteConnectionInner::LocalFiles(_) => Ok(()),
         }
     }
 }
@@ -417,20 +467,24 @@ impl H1Writer for RemoteConnection {
 #[async_trait::async_trait]
 impl NetworkStreamWritePart for RemoteConnection {
     async fn shutdown_socket(&mut self) {
-        match self {
-            Self::Http1Direct(connection) => connection.shutdown_socket().await,
-            Self::Http1UnixSocket(connection) => connection.shutdown_socket().await,
-            Self::Https1Direct(connection) => connection.shutdown_socket().await,
-            Self::Http1OverSsh(connection) => connection.shutdown_socket().await,
-            Self::Http1OverGateway(connection) => connection.shutdown_socket().await,
-            Self::StaticContent(_) => {}
-            Self::LocalFiles(_) => {}
+        match &mut self.inner {
+            RemoteConnectionInner::Http1Direct(connection) => connection.shutdown_socket().await,
+            RemoteConnectionInner::Http1UnixSocket(connection) => {
+                connection.shutdown_socket().await
+            }
+            RemoteConnectionInner::Https1Direct(connection) => connection.shutdown_socket().await,
+            RemoteConnectionInner::Http1OverSsh(connection) => connection.shutdown_socket().await,
+            RemoteConnectionInner::Http1OverGateway(connection) => {
+                connection.shutdown_socket().await
+            }
+            RemoteConnectionInner::StaticContent(_) => {}
+            RemoteConnectionInner::LocalFiles(_) => {}
         }
     }
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
         const DISCONNECTED: &'static str = "Disconnected";
-        match self {
-            Self::Http1Direct(connection) => {
+        match &mut self.inner {
+            RemoteConnectionInner::Http1Direct(connection) => {
                 if connection.is_disconnected() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -439,7 +493,7 @@ impl NetworkStreamWritePart for RemoteConnection {
                 }
                 connection.write_to_socket(buffer).await
             }
-            Self::Http1UnixSocket(connection) => {
+            RemoteConnectionInner::Http1UnixSocket(connection) => {
                 if connection.is_disconnected() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -448,7 +502,7 @@ impl NetworkStreamWritePart for RemoteConnection {
                 }
                 connection.write_to_socket(buffer).await
             }
-            Self::Https1Direct(connection) => {
+            RemoteConnectionInner::Https1Direct(connection) => {
                 if connection.is_disconnected() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -457,7 +511,7 @@ impl NetworkStreamWritePart for RemoteConnection {
                 }
                 connection.write_to_socket(buffer).await
             }
-            Self::Http1OverSsh(connection) => {
+            RemoteConnectionInner::Http1OverSsh(connection) => {
                 if connection.is_disconnected() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -466,7 +520,7 @@ impl NetworkStreamWritePart for RemoteConnection {
                 }
                 connection.write_to_socket(buffer).await
             }
-            Self::Http1OverGateway(connection) => {
+            RemoteConnectionInner::Http1OverGateway(connection) => {
                 if connection.is_disconnected() {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -475,19 +529,19 @@ impl NetworkStreamWritePart for RemoteConnection {
                 }
                 connection.write_to_socket(buffer).await
             }
-            Self::StaticContent(_) => Ok(()),
-            Self::LocalFiles(_) => Ok(()),
+            RemoteConnectionInner::StaticContent(_) => Ok(()),
+            RemoteConnectionInner::LocalFiles(_) => Ok(()),
         }
     }
     async fn flush_it(&mut self) -> Result<(), NetworkError> {
-        match self {
-            RemoteConnection::Http1Direct(inner) => inner.flush_it().await,
-            RemoteConnection::Http1UnixSocket(inner) => inner.flush_it().await,
-            RemoteConnection::Https1Direct(inner) => inner.flush_it().await,
-            RemoteConnection::Http1OverSsh(inner) => inner.flush_it().await,
-            RemoteConnection::Http1OverGateway(inner) => inner.flush_it().await,
-            RemoteConnection::StaticContent(_) => Ok(()),
-            RemoteConnection::LocalFiles(_) => Ok(()),
+        match &mut self.inner {
+            RemoteConnectionInner::Http1Direct(inner) => inner.flush_it().await,
+            RemoteConnectionInner::Http1UnixSocket(inner) => inner.flush_it().await,
+            RemoteConnectionInner::Https1Direct(inner) => inner.flush_it().await,
+            RemoteConnectionInner::Http1OverSsh(inner) => inner.flush_it().await,
+            RemoteConnectionInner::Http1OverGateway(inner) => inner.flush_it().await,
+            RemoteConnectionInner::StaticContent(_) => Ok(()),
+            RemoteConnectionInner::LocalFiles(_) => Ok(()),
         }
     }
 }
@@ -553,6 +607,7 @@ async fn send_response_loop<
         &connection_context.end_point_info.modify_response_headers,
         &connection_context.http_connection_info,
         &None,
+        None,
     ) {
         println!("Compile headers from remote: {:?}", err);
 

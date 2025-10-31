@@ -146,6 +146,7 @@ impl ProxyPassLocationConfig {
                     }
                 }
             },
+
             ProxyPassToConfig::Http2(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { .. } => {
                     todo!("Should not be here. Remote it at the end of the day");

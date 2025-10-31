@@ -108,13 +108,24 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         modify_headers: &ModifyHeadersConfig,
         http_connection_info: &HttpConnectionInfo,
         identity: &Option<HttpProxyPassIdentity>,
+        mcp_path: Option<&str>,
     ) -> Result<bool, ProxyServerError> {
         self.h1_headers_builder.clear();
         let data = self.loop_buffer.get_data();
 
-        self.h1_headers_builder.push_raw_payload(
-            &data[..http_headers.first_line_end + crate::consts::HTTP_CR_LF.len()],
-        );
+        if let Some(mcp_path) = mcp_path {
+            println!("Pushing mcp path {}", mcp_path);
+            http_headers.push_first_line_with_other_path(
+                data,
+                mcp_path,
+                &mut self.h1_headers_builder,
+            );
+            self.h1_headers_builder.push_cl_cr();
+        } else {
+            self.h1_headers_builder.push_raw_payload(
+                &data[..http_headers.first_line_end + crate::consts::HTTP_CR_LF.len()],
+            );
+        }
 
         let mut pos = http_headers.first_line_end + crate::consts::HTTP_CR_LF.len();
 
@@ -161,9 +172,9 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 add_header.1.as_str(),
             );
             self.h1_headers_builder
-                .add_header(add_header.0, value.as_str());
+                .push_header(add_header.0, value.as_str());
         }
-        self.h1_headers_builder.write_cl_cr();
+        self.h1_headers_builder.push_cl_cr();
 
         let mut web_socket_upgrade = false;
 

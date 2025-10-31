@@ -13,6 +13,7 @@ pub enum LocationType {
     StaticContent,
     UnixSocketHttp,
     UnixSocketHttp2,
+    Mcp,
 }
 
 impl LocationType {
@@ -77,6 +78,7 @@ pub struct LocationSettings {
 
 impl LocationSettings {
     pub fn get_location_type(&self) -> Result<Option<LocationType>, String> {
+        use crate::consts::location_type::*;
         if let Some(location_type) = self.location_type.as_ref() {
             match location_type.as_str() {
                 "unix+http" => return Ok(LocationType::UnixSocketHttp.into()),
@@ -86,7 +88,8 @@ impl LocationSettings {
                 "https" => return Ok(LocationType::Https1.into()),
                 "https1" => return Ok(LocationType::Https1.into()),
                 "https2" => return Ok(LocationType::Https2.into()),
-                "static" => return Ok(LocationType::StaticContent.into()),
+                STATIC => return Ok(LocationType::StaticContent.into()),
+                MCP => return Ok(LocationType::Mcp.into()),
                 _ => return Err(format!("Unknown remote location type {}", location_type)),
             }
         } else {

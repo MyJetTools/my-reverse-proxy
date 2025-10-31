@@ -35,6 +35,21 @@ impl MyReverseProxyRemoteEndpoint {
             MyReverseProxyRemoteEndpoint::Direct { remote_host } => Some(remote_host.get_host()),
         }
     }
+
+    pub fn get_path_and_query(&self) -> &str {
+        match self {
+            MyReverseProxyRemoteEndpoint::Gateway { id: _, remote_host } => {
+                remote_host.get_http_path_and_query().unwrap_or("/")
+            }
+            MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials: _,
+                remote_host,
+            } => remote_host.get_http_path_and_query().unwrap_or("/"),
+            MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                remote_host.get_http_path_and_query().unwrap_or("/")
+            }
+        }
+    }
     pub async fn try_parse(
         remote_host: &str,
         settings_model: &SettingsCompiled,

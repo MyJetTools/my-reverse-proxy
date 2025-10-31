@@ -18,24 +18,24 @@ impl Http1ResponseBuilder {
             headers: Http1HeadersBuilder::new(),
         };
 
-        result.headers.add_response_first_line(status_code);
+        result.headers.push_response_first_line(status_code);
 
         result
     }
 
     pub fn add_content_type(mut self, value: &str) -> Self {
-        self.headers.add_header("content-type", value);
+        self.headers.push_header("content-type", value);
         self
     }
 
     pub fn add_header(mut self, name: &str, value: &str) -> Self {
-        self.headers.add_header(name, value);
+        self.headers.push_header(name, value);
         self
     }
 
     pub fn build_with_body(mut self, body: &[u8]) -> Vec<u8> {
-        self.headers.add_content_length(body.len());
-        self.headers.write_cl_cr();
+        self.headers.push_content_length(body.len());
+        self.headers.push_cl_cr();
         let mut result = self.headers.into_bytes();
 
         result.extend_from_slice(body);

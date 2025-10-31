@@ -10,3 +10,9 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 pub const HTTP_CR_LF: &[u8] = b"\r\n";
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
+
+pub mod location_type {
+
+    pub const MCP: &'static str = "mcp";
+    pub const STATIC: &'static str = "static";
+}
