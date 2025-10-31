@@ -122,7 +122,6 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
                         itm.buffer.clear();
                     }
 
-                    println!("Writing payload{}", buffer.len());
                     write_part.write_all_with_timeout(buffer, timeout).await?;
                 }
 

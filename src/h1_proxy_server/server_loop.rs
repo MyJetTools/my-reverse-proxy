@@ -142,12 +142,6 @@ async fn execute_request<
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
     let request_headers = h1_reader.read_headers().await?;
 
-    println!(
-        "Request {}. Data: {:?}",
-        request_id,
-        std::str::from_utf8(&h1_reader.loop_buffer.get_data()[..request_headers.end])
-    );
-
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
             h1_reader.try_find_endpoint_info(&request_headers, &http_connection_info.listen_config);

@@ -546,12 +546,6 @@ async fn send_response_loop<
         }
     };
 
-    println!(
-        "Request {}. Data: {:?}",
-        connection_context.request_id,
-        std::str::from_utf8(&h1_reader.loop_buffer.get_data()[..resp_headers.end])
-    );
-
     let content_length = resp_headers.content_length;
 
     if let Err(err) = h1_reader.compile_headers(
