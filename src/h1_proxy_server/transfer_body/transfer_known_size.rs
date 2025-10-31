@@ -46,8 +46,10 @@ pub async fn transfer_known_size<
 
         if remaining_size == 0 {
             println!(
-                "Read Body: ReqId:{}. Size: {} Exit read loop",
-                request_id, size,
+                "Read Body: ReqId:{}. Size: {} Exit read loop. Remains: {}",
+                request_id,
+                size,
+                loop_buffer.get_data().len()
             );
             break;
         }
