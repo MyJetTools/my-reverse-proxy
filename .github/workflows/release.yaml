@@ -23,8 +23,8 @@ jobs:
       - name: Updating version
         run: sed -i -e 's/^version = .*/version = "${{ steps.get_version.outputs.VERSION }}"/' Cargo.toml
 
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1      
+#      - name: Install Protoc
+#        uses: arduino/setup-protoc@v1      
               
       - run: cargo build --release
 
