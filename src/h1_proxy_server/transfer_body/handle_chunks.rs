@@ -92,8 +92,14 @@ async fn transfer_chunk_data<
                     remain_to_send
                 };
 
+                let to_send_buf = &buf[..to_send];
+
+                if chunk_header.chunk_size == 0 {
+                    println!("{:?}", std::str::from_utf8(to_send_buf));
+                }
+
                 let write_error = remote_stream
-                    .write_http_payload(request_id, &buf[..to_send], crate::consts::WRITE_TIMEOUT)
+                    .write_http_payload(request_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
                     .await;
 
                 if let Err(write_error) = write_error {
@@ -104,7 +110,7 @@ async fn transfer_chunk_data<
 
                 loop_buffer.commit_read(to_send);
                 remain_to_send -= to_send;
-                println!("Chunks. ReqId{}. Sent: {}", request_id, to_send);
+                println!("Chunks. ReqId:{}. Sent: {}", request_id, to_send);
             }
         }
 
@@ -120,6 +126,8 @@ async fn transfer_chunk_data<
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
+
+        println!("Chunks. ReqId:{}. Uploaded: {}", request_id, read_size);
 
         loop_buffer.advance(read_size);
     }
