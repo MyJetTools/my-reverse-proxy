@@ -12,6 +12,7 @@ pub async fn transfer_known_size<
 ) -> Result<(), ProxyServerError> {
     loop {
         {
+            println!("Request {}, remaining: {}", request_id, remaining_size);
             let read_buf = loop_buffer.get_data();
 
             if read_buf.len() > 0 {
@@ -22,12 +23,18 @@ pub async fn transfer_known_size<
                 };
 
                 let result = write_stream
-                    .write_http_payload(request_id, read_buf, crate::consts::WRITE_TIMEOUT)
+                    .write_http_payload(
+                        request_id,
+                        &read_buf[..to_send],
+                        crate::consts::WRITE_TIMEOUT,
+                    )
                     .await;
 
                 if let Err(err) = result {
                     return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(err));
                 }
+
+                println!("Request {}, sent: {}", request_id, to_send);
 
                 remaining_size -= to_send;
                 loop_buffer.commit_read(to_send);
