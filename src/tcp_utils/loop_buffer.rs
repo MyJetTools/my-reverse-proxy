@@ -66,8 +66,4 @@ impl LoopBuffer {
     pub fn commit_read(&mut self, size: usize) {
         self.read_from += size;
     }
-
-    pub fn available_len(&self) -> usize {
-        self.read_to - self.read_from
-    }
 }

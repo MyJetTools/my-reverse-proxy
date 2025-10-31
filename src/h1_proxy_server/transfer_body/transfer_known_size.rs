@@ -10,7 +10,6 @@ pub async fn transfer_known_size<
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
 ) -> Result<(), ProxyServerError> {
-    let size = remaining_size;
     loop {
         {
             let read_buf = loop_buffer.get_data();
