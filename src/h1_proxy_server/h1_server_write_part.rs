@@ -104,8 +104,11 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
         for itm in write_access.current_requests.iter_mut() {
             if itm.request_id == request_id {
                 itm.buffer.extend_from_slice(buffer);
+                return;
             }
         }
+
+        println!("Somehow nowhere to write");
 
         Ok(())
     }
