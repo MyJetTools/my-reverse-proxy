@@ -45,6 +45,10 @@ pub async fn transfer_known_size<
         }
 
         if remaining_size == 0 {
+            println!(
+                "Read Body: ReqId:{}. Size: {} Exit read loop",
+                request_id, size,
+            );
             break;
         }
 
@@ -56,7 +60,13 @@ pub async fn transfer_known_size<
         println!("Read Body: ReqId:{}. Size: {} Reading", request_id, size);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
-            .await?;
+            .await;
+
+        if read_size.is_err() {
+            println!("ReqId:{}. Err: {:?}", request_id, read_size);
+        }
+
+        let read_size = read_size?;
 
         println!(
             "Read Body: ReqId:{}. Size: {} Uploaded: {}",
