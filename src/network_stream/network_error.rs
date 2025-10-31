@@ -18,6 +18,13 @@ impl NetworkError {
             _ => None,
         }
     }
+
+    pub fn is_timeout(&self) -> bool {
+        match self {
+            NetworkError::Timeout(duration) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<std::io::Error> for NetworkError {

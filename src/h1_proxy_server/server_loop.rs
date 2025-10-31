@@ -71,7 +71,10 @@ pub async fn serve_reverse_proxy<
                 //println!("Response Err: {:?}", err);
                 let content = match &err {
                     ProxyServerError::NetworkError(network_error) => {
-                        println!("Http Server connections network error. {:?}", network_error);
+                        if !network_error.is_timeout() {
+                            println!("Http Server connections network error. {:?}", network_error);
+                        }
+
                         break;
                     }
                     ProxyServerError::ParsingPayloadError(_) => {
@@ -123,11 +126,6 @@ pub async fn serve_reverse_proxy<
             }
         }
     }
-
-    println!(
-        "Server http connection {} is closed",
-        http_connection_info.listening_addr
-    )
 }
 
 async fn execute_request<
