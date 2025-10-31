@@ -87,27 +87,47 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
     ) -> Result<(), NetworkError> {
         let mut write_access = self.inner.lock().await;
 
+        let Some(mut write_part) = write_access.server_write_part.take() else {
+            return Err(NetworkError::Disconnected);
+        };
+
         if write_access.current_requests.len() == 0 {
-            if let Some(write_part) = write_access.server_write_part.as_mut() {
-                return write_part.write_all_with_timeout(buffer, timeout).await;
-            }
-            return Err(NetworkError::Disconnected);
+            write_part.write_all_with_timeout(buffer, timeout).await?;
+
+            write_access.server_write_part = Some(write_part);
+
+            return Ok(());
         }
 
-        if write_access.current_requests.get(0).unwrap().request_id == request_id {
-            if let Some(write_part) = write_access.server_write_part.as_mut() {
-                return write_part.write_all_with_timeout(buffer, timeout).await;
-            }
-            return Err(NetworkError::Disconnected);
-        }
-
-        for itm in write_access.current_requests.iter_mut() {
+        for (pos, itm) in write_access.current_requests.iter_mut().enumerate() {
             if itm.request_id == request_id {
-                itm.buffer.extend_from_slice(buffer);
-                return;
+                if pos > 0 {
+                    println!(
+                        "ReqId: {} Doing extension {} bytes of buffer",
+                        request_id,
+                        buffer.len()
+                    );
+                    itm.buffer.extend_from_slice(buffer);
+                } else {
+                    if itm.buffer.len() > 0 {
+                        println!(
+                            "ReqId: {} Writing {} bytes from buffer",
+                            request_id,
+                            itm.buffer.len()
+                        );
+                        write_part
+                            .write_all_with_timeout(itm.buffer.as_slice(), timeout)
+                            .await?;
+                        itm.buffer.clear();
+                    }
+                    write_part.write_all_with_timeout(buffer, timeout).await?;
+                }
+
+                break;
             }
         }
 
+        write_access.server_write_part = Some(write_part);
         println!("Somehow nowhere to write");
 
         Ok(())
