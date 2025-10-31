@@ -61,9 +61,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
-        if read_size == 0 {
-            return Err("Connection closed while reading chunk header".into());
-        }
+        loop_buffer.advance(read_size);
     }
 }
 
