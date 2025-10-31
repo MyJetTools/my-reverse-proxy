@@ -55,6 +55,8 @@ pub async fn transfer_known_size<
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
+        println!("Request {}. Uploaded {}", request_id, read_size);
+
         loop_buffer.advance(read_size);
     }
 
