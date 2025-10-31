@@ -37,6 +37,4 @@ pub async fn copy_streams<
 
         loop_buffer.advance(read_size);
     }
-
-    println!("Copy loop is done");
 }
