@@ -25,13 +25,17 @@ impl LoopBuffer {
     }
 
     fn gc(&mut self) {
-        if self.read_from == self.read_to && self.read_from > 0 {
+        if self.read_from == 0 {
+            return;
+        }
+
+        if self.read_from == self.read_to {
             self.read_from = 0;
             self.read_to = 0;
             return;
         }
 
-        if self.read_from == 0 {
+        if self.data.len() - self.read_to > 65535 {
             return;
         }
 
@@ -41,6 +45,8 @@ impl LoopBuffer {
             self.data[to] = b;
             to += 1;
         }
+        self.read_to -= self.read_from;
+        self.read_from = 0;
     }
 
     pub fn get_mut(&mut self) -> Option<&mut [u8]> {
