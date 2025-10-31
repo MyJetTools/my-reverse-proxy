@@ -36,21 +36,10 @@ pub async fn transfer_known_size<
 
                 remaining_size -= to_send;
                 loop_buffer.commit_read(to_send);
-
-                println!(
-                    "Read Body: ReqId:{}. Size: {} Sent: {}. Remains: {}",
-                    request_id, size, to_send, remaining_size
-                );
             }
         }
 
         if remaining_size == 0 {
-            println!(
-                "Read Body: ReqId:{}. Size: {} Exit read loop. Remains: {}",
-                request_id,
-                size,
-                loop_buffer.available_len()
-            );
             break;
         }
 
@@ -59,21 +48,9 @@ pub async fn transfer_known_size<
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
-        println!("Read Body: ReqId:{}. Size: {} Reading", request_id, size);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
-            .await;
-
-        if read_size.is_err() {
-            println!("ReqId:{}. Err: {:?}", request_id, read_size);
-        }
-
-        let read_size = read_size?;
-
-        println!(
-            "Read Body: ReqId:{}. Size: {} Uploaded: {}",
-            request_id, size, read_size
-        );
+            .await?;
 
         loop_buffer.advance(read_size);
     }

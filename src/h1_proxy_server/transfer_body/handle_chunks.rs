@@ -15,11 +15,9 @@ pub async fn transfer_chunked_body<
 ) -> Result<(), ProxyServerError> {
     loop {
         // Read chunk header line
-        let chunk_header = read_chunk_header(request_id, read_stream, loop_buffer).await?;
+        let chunk_header = read_chunk_header(read_stream, loop_buffer).await?;
 
         let chunk_size = chunk_header.chunk_size;
-
-        println!("Chunked ReqId: {}. Size: {}", request_id, chunk_size);
 
         transfer_chunk_data(
             request_id,
@@ -37,7 +35,6 @@ pub async fn transfer_chunked_body<
 }
 
 async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'static>(
-    request_id: u64,
     read_stream: &mut ReadPart,
     loop_buffer: &mut LoopBuffer,
 ) -> Result<ChunkHeader, ProxyServerError> {
@@ -58,12 +55,10 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
-        println!("Read Chunk Size. ReqId:{}. Reading data", request_id);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
-        println!("Read Chunk Size: {}. Uploaded: {}", request_id, read_size);
         loop_buffer.advance(read_size);
     }
 }
@@ -99,18 +94,7 @@ async fn transfer_chunk_data<
                 let to_send_buf = &buf[..to_send];
 
                 if to_send_buf.len() > 64 {
-                    println!(
-                        "ReqId: {}. Chunk: `{:?}`..`{:?}`",
-                        request_id,
-                        std::str::from_utf8(&to_send_buf[..16]),
-                        std::str::from_utf8(&to_send_buf[to_send_buf.len() - 16..])
-                    );
                 } else {
-                    println!(
-                        "ReqId: {}. Chunk: {:?}",
-                        request_id,
-                        std::str::from_utf8(to_send_buf),
-                    );
                 }
 
                 let write_error = remote_stream

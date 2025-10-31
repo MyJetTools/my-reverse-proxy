@@ -44,7 +44,6 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
     }
 
     pub async fn request_is_done(&self, request_id: u64) {
-        println!("ReqId:{} is done", request_id);
         let mut write_access = self.inner.lock().await;
 
         for itm in write_access.current_requests.iter_mut() {
@@ -102,20 +101,9 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
         for (pos, itm) in write_access.current_requests.iter_mut().enumerate() {
             if itm.request_id == request_id {
                 if pos > 0 {
-                    println!(
-                        "ReqId: {} Doing extension {} bytes of buffer",
-                        request_id,
-                        buffer.len()
-                    );
                     itm.buffer.extend_from_slice(buffer);
                 } else {
                     if itm.buffer.len() > 0 {
-                        println!(
-                            "ReqId: {} Writing {} bytes from buffer",
-                            request_id,
-                            itm.buffer.len()
-                        );
-
                         write_part
                             .write_all_with_timeout(itm.buffer.as_slice(), timeout)
                             .await?;
