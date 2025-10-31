@@ -10,6 +10,7 @@ pub async fn transfer_known_size<
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
 ) -> Result<(), ProxyServerError> {
+    let size = remaining_size;
     loop {
         {
             let read_buf = loop_buffer.get_data();
@@ -37,8 +38,8 @@ pub async fn transfer_known_size<
                 loop_buffer.commit_read(to_send);
 
                 println!(
-                    "Read Body: ReqId:{}. Sent: {}. Remains: {}",
-                    request_id, to_send, remaining_size
+                    "Read Body: ReqId:{}. Size: {} Sent: {}. Remains: {}",
+                    request_id, size, to_send, remaining_size
                 );
             }
         }
@@ -52,12 +53,15 @@ pub async fn transfer_known_size<
             return Err(ProxyServerError::BufferAllocationFail);
         };
 
-        println!("Read Body: ReqId:{}. Reading", request_id);
+        println!("Read Body: ReqId:{}. Size: {} Reading", request_id, size);
         let read_size = read_stream
             .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
             .await?;
 
-        println!("Read Body: ReqId:{}. Uploaded: {}", request_id, read_size);
+        println!(
+            "Read Body: ReqId:{}. Size: {} Uploaded: {}",
+            request_id, size, read_size
+        );
 
         loop_buffer.advance(read_size);
     }
