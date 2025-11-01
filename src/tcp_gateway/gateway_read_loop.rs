@@ -16,8 +16,9 @@ pub async fn gateway_read_loop(
     debug: bool,
 ) {
     let mut buf = crate::tcp_utils::allocated_read_buffer(None);
-
+    let mut payload_no: u64 = 0;
     loop {
+        payload_no += 1;
         let mut payload_size = [0u8; 4];
         let read_result = read.read_exact(&mut payload_size).await;
 
@@ -47,7 +48,7 @@ pub async fn gateway_read_loop(
 
             if payload_size > MAX_PAYLOAD_SIZE {
                 println!(
-                    "[1] Failed to read payload size from TCP Gateway at {}. Max payload size is overflows, PayloadSize: {payload_size}",
+                    "[1] Failed to read payload size from TCP Gateway at {}. Payload no: {payload_no}. Max payload size is overflown, PayloadSize: {payload_size}",
                     tcp_gateway.gateway_host.as_str(),
                 );
 
