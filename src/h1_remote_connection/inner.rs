@@ -1,7 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
 use my_ssh::SshCredentials;
-use rust_extensions::{remote_endpoint::RemoteEndpointOwned, UnsafeValue};
+use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 use tokio::sync::Mutex;
 
 use crate::{
@@ -13,18 +16,19 @@ pub struct H1RemoteConnectionReadPart<
     TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
 > {
     pub h1_reader: Mutex<Option<H1Reader<TNetworkReadPart>>>,
-    disconnected: Box<UnsafeValue<bool>>,
+    disconnected: AtomicBool,
 }
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
     H1RemoteConnectionReadPart<TNetworkReadPart>
 {
     pub fn get_disconnected(&self) -> bool {
-        self.disconnected.get_value()
+        self.disconnected.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn set_disconnected(&self) {
-        self.disconnected.set_value(true);
+        self.disconnected
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 }
 
@@ -82,7 +86,7 @@ impl<
             write_part: write_half,
             read_half: H1RemoteConnectionReadPart {
                 h1_reader: Mutex::new(Some(H1Reader::new(read_part, HttpTimeouts::default()))),
-                disconnected: Box::new(false.into()),
+                disconnected: AtomicBool::new(false),
             }
             .into(),
             ssh_session_handler,
@@ -92,7 +96,7 @@ impl<
     }
 
     pub fn is_disconnected(&self) -> bool {
-        self.read_half.disconnected.get_value()
+        self.read_half.get_disconnected()
     }
 
     pub async fn send_with_timeout(

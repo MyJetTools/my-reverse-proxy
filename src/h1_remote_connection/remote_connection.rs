@@ -583,15 +583,14 @@ async fn send_response_loop<
 
             remote_connection.set_disconnected();
 
-            connection_context
+            let result = connection_context
                 .h1_server_write_part
                 .write_http_payload_with_timeout(
                     connection_context.request_id,
                     crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
                     crate::consts::WRITE_TIMEOUT,
                 )
-                .await
-                .unwrap();
+                .await;
 
             connection_context
                 .h1_server_write_part
@@ -621,8 +620,8 @@ async fn send_response_loop<
                 crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
                 crate::consts::WRITE_TIMEOUT,
             )
-            .await
-            .unwrap();
+            .await;
+
         connection_context
             .h1_server_write_part
             .request_is_done(connection_context.request_id)
@@ -642,7 +641,7 @@ async fn send_response_loop<
         println!("Sending headers from remote to server: {:?}", err);
         drop(remote_read_part);
         remote_connection.set_disconnected();
-        let _ = connection_context
+        connection_context
             .h1_server_write_part
             .write_http_payload_with_timeout(
                 connection_context.request_id,
@@ -669,7 +668,7 @@ async fn send_response_loop<
         println!("Sending body from remote to server: {:?}", err);
         drop(remote_read_part);
         remote_connection.set_disconnected();
-        let _ = connection_context
+        connection_context
             .h1_server_write_part
             .write_http_payload(
                 connection_context.request_id,
