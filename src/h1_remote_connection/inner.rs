@@ -13,7 +13,7 @@ pub struct H1RemoteConnectionReadPart<
     TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
 > {
     pub h1_reader: Mutex<Option<H1Reader<TNetworkReadPart>>>,
-    disconnected: UnsafeValue<bool>,
+    disconnected: Box<UnsafeValue<bool>>,
 }
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
@@ -82,7 +82,7 @@ impl<
             write_part: write_half,
             read_half: H1RemoteConnectionReadPart {
                 h1_reader: Mutex::new(Some(H1Reader::new(read_part, HttpTimeouts::default()))),
-                disconnected: false.into(),
+                disconnected: Box::new(false.into()),
             }
             .into(),
             ssh_session_handler,

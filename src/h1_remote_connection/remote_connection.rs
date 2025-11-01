@@ -200,6 +200,7 @@ impl RemoteConnection {
     ) -> bool {
         match &mut self.inner {
             RemoteConnectionInner::Http1Direct(connection) => {
+                println!("Disconnected: {}", connection.is_disconnected());
                 if connection.is_disconnected() {
                     return false;
                 }
