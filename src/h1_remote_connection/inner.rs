@@ -1,10 +1,13 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        Arc,
+    },
     time::Duration,
 };
 
 use my_ssh::SshCredentials;
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, remote_endpoint::RemoteEndpointOwned};
 use tokio::sync::Mutex;
 
 use crate::{
@@ -12,12 +15,18 @@ use crate::{
     types::HttpTimeouts,
 };
 
+lazy_static::lazy_static!(
+       pub static ref CONN_ID: AtomicU64 = {
+            AtomicU64::new(0)
+    };
+);
+
 pub struct H1RemoteConnectionReadPart<
     TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static,
 > {
     pub h1_reader: Mutex<Option<H1Reader<TNetworkReadPart>>>,
     disconnected: AtomicBool,
-    location_id: i64,
+    id: u64,
 }
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
@@ -28,10 +37,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
     }
 
     pub fn set_disconnected(&self) {
-        println!(
-            "Settings disconnected true. Location id: {}",
-            self.location_id
-        );
+        println!("Settings disconnected true. Location id: {}", self.id);
         self.disconnected
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -57,7 +63,6 @@ impl<
             + Sync
             + 'static,
     >(
-        location_id: i64,
         gateway_id: Option<&Arc<String>>,
         ssh_credentials: Option<Arc<SshCredentials>>,
         server_name: Option<&str>,
@@ -91,7 +96,7 @@ impl<
         let result = Self {
             write_part: write_half,
             read_half: H1RemoteConnectionReadPart {
-                location_id,
+                id: CONN_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
                 h1_reader: Mutex::new(Some(H1Reader::new(read_part, HttpTimeouts::default()))),
                 disconnected: AtomicBool::new(false),
             }
@@ -102,8 +107,8 @@ impl<
         Ok(result)
     }
 
-    pub fn get_location_id(&self) -> i64 {
-        self.read_half.location_id
+    pub fn get_connection_id(&self) -> u64 {
+        self.read_half.id
     }
 
     pub fn is_disconnected(&self) -> bool {

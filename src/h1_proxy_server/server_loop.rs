@@ -160,8 +160,7 @@ async fn execute_request<
     let mut connection = match remote_connections.get_mut(&location.id) {
         Some(connection) => connection,
         None => {
-            let remote_connection =
-                RemoteConnection::connect(location.id, &location.proxy_pass_to).await;
+            let remote_connection = RemoteConnection::connect(&location.proxy_pass_to).await;
 
             match remote_connection {
                 Ok(remote_connection) => {
@@ -202,8 +201,7 @@ async fn execute_request<
 
         println!("Doing reconnection to remote connection");
 
-        let remote_connection =
-            RemoteConnection::connect(location.id, &location.proxy_pass_to).await;
+        let remote_connection = RemoteConnection::connect(&location.proxy_pass_to).await;
 
         match remote_connection {
             Ok(remote_connection) => {
