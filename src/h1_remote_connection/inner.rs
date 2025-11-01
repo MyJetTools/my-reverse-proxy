@@ -37,7 +37,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
     }
 
     pub fn set_disconnected(&self) {
-        println!("Settings disconnected true. Location id: {}", self.id);
+        println!("Disconnecting remote connection with id: {}", self.id);
         self.disconnected
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -90,7 +90,6 @@ impl<
         )
         .await?;
 
-        println!("Connected to {}", remote_endpoint.get_host_port().as_str());
         let (read_part, write_half) = result.split();
 
         let result = Self {
@@ -103,6 +102,12 @@ impl<
             .into(),
             ssh_session_handler,
         };
+
+        println!(
+            "Connected to {}. Id: {}",
+            remote_endpoint.get_host_port().as_str(),
+            result.get_connection_id()
+        );
 
         Ok(result)
     }
