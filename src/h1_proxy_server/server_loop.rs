@@ -68,7 +68,7 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                //println!("Response Err: {:?}", err);
+                println!("Response Err: {:?}", err);
                 let content = match &err {
                     ProxyServerError::NetworkError(network_error) => {
                         if !network_error.is_timeout() {
@@ -198,6 +198,8 @@ async fn execute_request<
 
     if !send_headers_result {
         remote_connections.remove(&location.id);
+
+        println!("Doing reconnection to remote connection");
 
         let remote_connection = RemoteConnection::connect(&location.proxy_pass_to).await;
 
