@@ -58,7 +58,10 @@ pub struct RemoteConnection {
 }
 
 impl RemoteConnection {
-    pub async fn connect(proxy_pass_to: &ProxyPassToConfig) -> Result<Self, NetworkError> {
+    pub async fn connect(
+        location_id: i64,
+        proxy_pass_to: &ProxyPassToConfig,
+    ) -> Result<Self, NetworkError> {
         match proxy_pass_to {
             ProxyPassToConfig::Http1(proxy_pass_to) => match &proxy_pass_to.remote_host {
                 crate::configurations::MyReverseProxyRemoteEndpoint::Gateway {
@@ -66,6 +69,7 @@ impl RemoteConnection {
                     remote_host,
                 } => {
                     let result = Http1ConnectionInner::connect::<TcpGatewayProxyForwardStream>(
+                        location_id,
                         Some(id),
                         None,
                         None,
@@ -88,6 +92,7 @@ impl RemoteConnection {
                     remote_host,
                 } => {
                     let result = Http1ConnectionInner::connect::<my_ssh::SshAsyncChannel>(
+                        location_id,
                         None,
                         Some(ssh_credentials.clone()),
                         None,
@@ -108,13 +113,17 @@ impl RemoteConnection {
                 crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     if let Some(scheme) = remote_host.get_scheme() {
                         if scheme.is_https() {
-                            let result =
-                                Http1ConnectionInner::connect::<
-                                    my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>,
-                                >(
-                                    None, None, None, remote_host, proxy_pass_to.connect_timeout
-                                )
-                                .await?;
+                            let result = Http1ConnectionInner::connect::<
+                                my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>,
+                            >(
+                                location_id,
+                                None,
+                                None,
+                                None,
+                                remote_host,
+                                proxy_pass_to.connect_timeout,
+                            )
+                            .await?;
 
                             return Ok(Self {
                                 inner: RemoteConnectionInner::Https1Direct(result),
@@ -127,6 +136,7 @@ impl RemoteConnection {
                         }
                     }
                     let result = Http1ConnectionInner::connect::<tokio::net::TcpStream>(
+                        location_id,
                         None,
                         None,
                         None,
@@ -153,6 +163,7 @@ impl RemoteConnection {
                 crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh { .. } => todo!(),
                 crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     let result = Http1ConnectionInner::connect::<tokio::net::UnixStream>(
+                        location_id,
                         None,
                         None,
                         None,
@@ -202,7 +213,11 @@ impl RemoteConnection {
             RemoteConnectionInner::Http1Direct(connection) => {
                 let disconnected = connection.is_disconnected();
 
-                println!("Disconnected: {}", disconnected);
+                println!(
+                    "Disconnected of location {}: {}",
+                    connection.get_location_id(),
+                    disconnected
+                );
                 if disconnected {
                     return false;
                 }

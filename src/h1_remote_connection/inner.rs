@@ -17,6 +17,7 @@ pub struct H1RemoteConnectionReadPart<
 > {
     pub h1_reader: Mutex<Option<H1Reader<TNetworkReadPart>>>,
     disconnected: AtomicBool,
+    location_id: i64,
 }
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
@@ -27,7 +28,10 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
     }
 
     pub fn set_disconnected(&self) {
-        println!("Settings disconnected true");
+        println!(
+            "Settings disconnected true. Location id: {}",
+            self.location_id
+        );
         self.disconnected
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
@@ -53,6 +57,7 @@ impl<
             + Sync
             + 'static,
     >(
+        location_id: i64,
         gateway_id: Option<&Arc<String>>,
         ssh_credentials: Option<Arc<SshCredentials>>,
         server_name: Option<&str>,
@@ -86,6 +91,7 @@ impl<
         let result = Self {
             write_part: write_half,
             read_half: H1RemoteConnectionReadPart {
+                location_id,
                 h1_reader: Mutex::new(Some(H1Reader::new(read_part, HttpTimeouts::default()))),
                 disconnected: AtomicBool::new(false),
             }
@@ -94,6 +100,10 @@ impl<
         };
 
         Ok(result)
+    }
+
+    pub fn get_location_id(&self) -> i64 {
+        self.read_half.location_id
     }
 
     pub fn is_disconnected(&self) -> bool {
