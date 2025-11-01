@@ -27,6 +27,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static>
     }
 
     pub fn set_disconnected(&self) {
+        println!("Settings disconnected true");
         self.disconnected
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
