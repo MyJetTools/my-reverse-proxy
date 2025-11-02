@@ -1,4 +1,6 @@
 #![allow(warnings)]
+use my_ssh::ssh2::DisconnectCode::ProtocolError;
+
 use crate::{google_auth::GoogleAuthError, network_stream::NetworkError};
 
 #[derive(Debug)]
@@ -14,6 +16,19 @@ pub enum ProxyServerError {
     LocationIsNotFound,
     NotAuthorized,
     HttpResponse(Vec<u8>),
+}
+
+impl ProxyServerError {
+    pub fn can_be_printed_as_debug(&self) -> bool {
+        match self {
+            Self::HttpResponse(_) => {
+                return false;
+            }
+            _ => {
+                return true;
+            }
+        }
+    }
 }
 
 impl From<NetworkError> for ProxyServerError {

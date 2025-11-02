@@ -57,7 +57,10 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                println!("Response Err: {:?}", err);
+                if err.can_be_printed_as_debug() {
+                    println!("Response Err: {:?}", err);
+                }
+
                 let content = match &err {
                     ProxyServerError::NetworkError(network_error) => {
                         if !network_error.is_timeout() {
