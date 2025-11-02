@@ -192,7 +192,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
 
     pub async fn transfer_body<WritePart: H1Writer + Send + Sync + 'static>(
         &mut self,
-        request_id: u64,
+        connection_id: u64,
         write_stream: &mut WritePart,
         content_length: HttpContentLength,
     ) -> Result<(), ProxyServerError> {
@@ -204,7 +204,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 }
 
                 let result = super::transfer_body::transfer_known_size(
-                    request_id,
+                    connection_id,
                     &mut self.read_part,
                     write_stream,
                     &mut self.loop_buffer,
@@ -216,7 +216,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
             }
             HttpContentLength::Chunked => {
                 let result = super::transfer_body::transfer_chunked_body(
-                    request_id,
+                    connection_id,
                     &mut self.read_part,
                     write_stream,
                     &mut self.loop_buffer,

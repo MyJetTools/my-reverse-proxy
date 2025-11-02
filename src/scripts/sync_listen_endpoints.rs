@@ -7,6 +7,8 @@ pub async fn sync_tcp_endpoints() {
         })
         .await;
 
+    println!("Ports ro be listened: {:?}", ports_to_be_listened);
+
     let mut listen_end_points = crate::app::APP_CTX.active_listen_ports.lock().await;
 
     for port_to_be_listened in &ports_to_be_listened {

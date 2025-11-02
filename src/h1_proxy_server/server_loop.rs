@@ -33,7 +33,6 @@ pub async fn serve_reverse_proxy<
     loop {
         request_id += 1;
         let execute_request_result = execute_request(
-            request_id,
             &mut http_connection_info,
             &mut h1_reader,
             &mut remote_connections,
@@ -48,20 +47,10 @@ pub async fn serve_reverse_proxy<
                         remote_connections.remove(&web_socket_upgrade.location_id)
                     {
                         let (server_read_part, loop_buffer) = h1_reader.into_read_part();
-                        let server_write_part = h1_server_write_part.into_write_part().await;
-                        let result = connection
-                            .web_socket_upgrade(server_read_part, server_write_part, loop_buffer)
+
+                        h1_server_write_part
+                            .add_web_socket_upgrade(connection, server_read_part, loop_buffer)
                             .await;
-
-                        if let Err(mut err) = result {
-                            let content =
-                                crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice();
-
-                            err.1
-                                .write_all_with_timeout(content, crate::consts::WRITE_TIMEOUT)
-                                .await
-                                .unwrap();
-                        }
 
                         return;
                     }
@@ -132,13 +121,15 @@ async fn execute_request<
     WritePart: NetworkStreamWritePart + Send + Sync + 'static,
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
 >(
-    request_id: u64,
     http_connection_info: &mut HttpConnectionInfo,
     h1_reader: &mut H1Reader<ReadPart>,
     remote_connections: &mut HashMap<i64, RemoteConnection>,
-    h1_server_write_part: &H1ServerWritePart<WritePart>,
+    h1_server_write_part: &H1ServerWritePart<WritePart, ReadPart>,
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
+    println!("Started reading headers");
     let request_headers = h1_reader.read_headers().await?;
+
+    println!("Got headers");
 
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
@@ -157,13 +148,22 @@ async fn execute_request<
         return Err(ProxyServerError::NotAuthorized);
     }
 
+    let http_connection_context = Http1ServerConnectionContext {
+        h1_server_write_part: h1_server_write_part.clone(),
+        http_connection_info: http_connection_info.clone(),
+        end_point_info: end_point_info.clone(),
+    };
+
     let mut connection = match remote_connections.get_mut(&location.id) {
         Some(connection) => connection,
         None => {
-            let remote_connection = RemoteConnection::connect(&location.proxy_pass_to).await;
+            println!("Connection to remote_source");
+            let remote_connection =
+                RemoteConnection::connect(&location.proxy_pass_to, &http_connection_context).await;
 
             match remote_connection {
                 Ok(remote_connection) => {
+                    println!("Connected to remote source");
                     remote_connections.insert(location.id, remote_connection);
                     remote_connections.get_mut(&location.id).unwrap()
                 }
@@ -182,26 +182,21 @@ async fn execute_request<
         connection.mcp_path.as_deref(),
     )?;
 
+    println!("Sending headers");
+
     let send_headers_result = connection
-        .send_h1_header(
-            request_id,
-            &h1_reader.h1_headers_builder,
-            crate::consts::WRITE_TIMEOUT,
-        )
+        .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
         .await;
 
-    if web_socket_upgrade {
-        return Ok(Some(WebSocketUpgradeResult {
-            location_id: location.id,
-        }));
-    }
+    println!("Sending headers result: {:?}", send_headers_result);
 
     if !send_headers_result {
         remote_connections.remove(&location.id);
 
         println!("Doing reconnection to remote connection");
 
-        let remote_connection = RemoteConnection::connect(&location.proxy_pass_to).await;
+        let remote_connection =
+            RemoteConnection::connect(&location.proxy_pass_to, &http_connection_context).await;
 
         match remote_connection {
             Ok(remote_connection) => {
@@ -212,11 +207,7 @@ async fn execute_request<
         }
 
         let send_headers_result = connection
-            .send_h1_header(
-                request_id,
-                &h1_reader.h1_headers_builder,
-                crate::consts::WRITE_TIMEOUT,
-            )
+            .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
             .await;
 
         if !send_headers_result {
@@ -226,21 +217,24 @@ async fn execute_request<
         }
     }
 
+    if web_socket_upgrade {
+        return Ok(Some(WebSocketUpgradeResult {
+            location_id: location.id,
+        }));
+    }
+
     h1_reader
-        .transfer_body(request_id, connection, content_length)
+        .transfer_body(connection.connection_id, connection, content_length)
         .await?;
 
-    h1_server_write_part.add_current_request(request_id).await;
+    h1_server_write_part
+        .add_current_request(connection.connection_id)
+        .await;
 
     //let server_single_threaded_part: Arc<Mutex<HttpServerSingleThreadedPart<WritePart>>> =
     //    server_single_threaded_part.clone();
 
-    let connected = connection.read_http_response(Http1ConnectionContext {
-        h1_server_write_part: h1_server_write_part.clone(),
-        http_connection_info: http_connection_info.clone(),
-        end_point_info: end_point_info.clone(),
-        request_id: request_id,
-    });
+    let connected = connection.read_http_response(http_connection_context);
 
     if !connected {
         return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(

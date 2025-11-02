@@ -21,6 +21,16 @@ impl Http1HeadersBuilder {
             401 => {
                 self.payload.extend_from_slice(b"HTTP/1.1 401 Unauthorized");
             }
+            403 => {
+                self.payload.extend_from_slice(b"HTTP/1.1 403 Forbidden");
+            }
+            404 => {
+                self.payload.extend_from_slice(b"HTTP/1.1 404 Not Found");
+            }
+            405 => {
+                self.payload
+                    .extend_from_slice(b"HTTP/1.1 405 Not Method Not Allowed");
+            }
             502 => {
                 self.payload.extend_from_slice(b"HTTP/1.1 502 Bad Gateway");
             }

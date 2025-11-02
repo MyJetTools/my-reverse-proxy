@@ -8,7 +8,7 @@ pub async fn transfer_chunked_body<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
     WritePart: H1Writer + Send + Sync + 'static,
 >(
-    request_id: u64,
+    connection_id: u64,
     read_stream: &mut ReadPart,
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
@@ -20,7 +20,7 @@ pub async fn transfer_chunked_body<
         let chunk_size = chunk_header.chunk_size;
 
         transfer_chunk_data(
-            request_id,
+            connection_id,
             read_stream,
             write_stream,
             loop_buffer,
@@ -67,7 +67,7 @@ async fn transfer_chunk_data<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
     WritePart: H1Writer + Send + Sync + 'static,
 >(
-    request_id: u64,
+    connection_id: u64,
     read_stream: &mut ReadPart,
     remote_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
@@ -93,7 +93,7 @@ async fn transfer_chunk_data<
                 }
 
                 let write_error = remote_stream
-                    .write_http_payload(request_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
+                    .write_http_payload(connection_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
                     .await;
 
                 if let Err(write_error) = write_error {

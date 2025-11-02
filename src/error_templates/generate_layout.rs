@@ -19,9 +19,15 @@ lazy_static::lazy_static! {
     };
 
 
+ pub static ref ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: Vec<u8> = {
+       generate_layout(405, "Forbidden", Some("Endpoint can not be upgraded to websocket".into()))
+    };
+
+
     pub static ref ERROR_TIMEOUT: Vec<u8> = {
        generate_layout(503, "Server Error", Some("Timeout".into()))
     };
+
      pub static ref ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: Vec<u8> = {
        generate_layout(502, "Server Error", Some("Bad gateway".into()))
     };

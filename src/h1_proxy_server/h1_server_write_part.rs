@@ -3,22 +3,41 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::network_stream::*;
+use crate::{h1_remote_connection::RemoteConnection, network_stream::*, tcp_utils::LoopBuffer};
 
-pub struct H1ServerWritePartInner<WritePart: NetworkStreamWritePart + Send + Sync + 'static> {
+pub struct WebSocketUpgradeHolder<ReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
+    pub remote_connection: RemoteConnection,
+    pub read_part: ReadPart,
+    pub loop_buffer: LoopBuffer,
+}
+
+pub struct H1ServerWritePartInner<
+    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+> {
     pub server_write_part: Option<WritePart>,
     pub current_requests: Vec<H1CurrentRequest>,
+    pub web_socket_upgrade: Option<WebSocketUpgradeHolder<ReadPart>>,
 }
 
-pub struct H1ServerWritePart<WritePart: NetworkStreamWritePart + Send + Sync + 'static> {
-    inner: Arc<Mutex<H1ServerWritePartInner<WritePart>>>,
+#[derive(Clone)]
+pub struct H1ServerWritePart<
+    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+> {
+    inner: Arc<Mutex<H1ServerWritePartInner<WritePart, ReadPart>>>,
 }
 
-impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePart<WritePart> {
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > H1ServerWritePart<WritePart, ReadPart>
+{
     pub fn new(server_write_part: WritePart) -> Self {
         let inner = H1ServerWritePartInner {
             server_write_part: Some(server_write_part),
             current_requests: vec![],
+            web_socket_upgrade: Default::default(),
         };
 
         Self {
@@ -26,28 +45,47 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
         }
     }
 
+    pub async fn add_web_socket_upgrade(
+        &self,
+        remote_connection: RemoteConnection,
+        read_part: ReadPart,
+        loop_buffer: LoopBuffer,
+    ) {
+        let mut write_access = self.inner.lock().await;
+        write_access.web_socket_upgrade = Some(WebSocketUpgradeHolder {
+            read_part,
+            loop_buffer,
+            remote_connection,
+        });
+    }
+
     pub fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
         }
     }
-    pub async fn into_write_part(self) -> WritePart {
+    pub async fn upgrade_web_socket(self) -> (WritePart, WebSocketUpgradeHolder<ReadPart>) {
         let mut write_access = self.inner.lock().await;
-        write_access.server_write_part.take().unwrap()
+        let write_part = write_access.server_write_part.take().unwrap();
+
+        let web_socket_upgrade = write_access.web_socket_upgrade.take().unwrap();
+
+        (write_part, web_socket_upgrade)
     }
 
-    pub async fn add_current_request(&self, request_id: u64) {
+    pub async fn add_current_request(&self, connection_id: u64) {
         let mut write_access = self.inner.lock().await;
         write_access
             .current_requests
-            .push(H1CurrentRequest::new(request_id));
+            .push(H1CurrentRequest::new(connection_id));
     }
 
-    pub async fn request_is_done(&self, request_id: u64) {
+    pub async fn request_is_done(&self, connection_id: u64) {
         let mut write_access = self.inner.lock().await;
 
+        println!("{:?}", write_access.current_requests);
         for itm in write_access.current_requests.iter_mut() {
-            if itm.request_id == request_id {
+            if itm.connection_id == connection_id {
                 itm.done = true;
                 break;
             }
@@ -73,6 +111,8 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
                         .await
                         .unwrap();
                 }
+            } else {
+                break;
             }
         }
 
@@ -81,7 +121,7 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
 
     pub async fn write_http_payload_with_timeout(
         &self,
-        request_id: u64,
+        connection_id: u64,
         buffer: &[u8],
         timeout: Duration,
     ) -> Result<(), NetworkError> {
@@ -99,7 +139,7 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
         }
 
         for (pos, itm) in write_access.current_requests.iter_mut().enumerate() {
-            if itm.request_id == request_id {
+            if itm.connection_id == connection_id {
                 if pos > 0 {
                     itm.buffer.extend_from_slice(buffer);
                 } else {
@@ -124,8 +164,10 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1ServerWritePar
 }
 
 #[async_trait::async_trait]
-impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1Writer
-    for H1ServerWritePart<WritePart>
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > H1Writer for H1ServerWritePart<WritePart, ReadPart>
 {
     async fn write_http_payload(
         &mut self,
@@ -139,8 +181,10 @@ impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> H1Writer
 }
 
 #[async_trait::async_trait]
-impl<WritePart: NetworkStreamWritePart + Send + Sync + 'static> NetworkStreamWritePart
-    for H1ServerWritePart<WritePart>
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > NetworkStreamWritePart for H1ServerWritePart<WritePart, ReadPart>
 {
     async fn shutdown_socket(&mut self) {
         let mut write_access = self.inner.lock().await;

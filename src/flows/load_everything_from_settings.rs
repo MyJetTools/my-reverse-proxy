@@ -6,6 +6,7 @@ pub async fn load_everything_from_settings() {
     crate::scripts::update_ssh_config_list(&settings_model).await;
 
     for (host_id, host_settings) in &settings_model.hosts {
+        println!("HostId: {}", host_id);
         let endpoint_host = match settings_model.get_endpoint_host_string(host_id) {
             Ok(host_id) => host_id,
             Err(err) => {
@@ -36,6 +37,8 @@ pub async fn load_everything_from_settings() {
             );
         }
     }
+
+    println!("Kicking off tcp endpoints");
 
     crate::scripts::sync_tcp_endpoints().await;
 }

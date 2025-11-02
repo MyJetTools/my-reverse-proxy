@@ -4,7 +4,7 @@ pub async fn transfer_known_size<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
     WritePart: H1Writer + Send + Sync + 'static,
 >(
-    request_id: u64,
+    connection_id: u64,
     read_stream: &mut ReadPart,
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
@@ -23,7 +23,7 @@ pub async fn transfer_known_size<
 
                 let result = write_stream
                     .write_http_payload(
-                        request_id,
+                        connection_id,
                         &read_buf[..to_send],
                         crate::consts::WRITE_TIMEOUT,
                     )
