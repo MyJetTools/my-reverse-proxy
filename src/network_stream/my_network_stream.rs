@@ -162,7 +162,6 @@ impl NetworkStream for tokio::net::TcpStream {
         timeout: Duration,
     ) -> Result<Self, NetworkError> {
         let host_port = remote_endpoint.get_host_port();
-        println!("Connecting to remote source {}", host_port.as_str());
         let connect = tokio::net::TcpStream::connect(host_port.as_str());
         let Ok(result) = tokio::time::timeout(timeout, connect).await else {
             return Err(NetworkError::Timeout(timeout));
