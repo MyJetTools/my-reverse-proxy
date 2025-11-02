@@ -182,13 +182,9 @@ async fn execute_request<
         connection.mcp_path.as_deref(),
     )?;
 
-    println!("Sending headers");
-
     let send_headers_result = connection
         .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
         .await;
-
-    println!("Sending headers result: {:?}", send_headers_result);
 
     if !send_headers_result {
         remote_connections.remove(&location.id);

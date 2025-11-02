@@ -83,7 +83,6 @@ impl<
     pub async fn request_is_done(&self, connection_id: u64) {
         let mut write_access = self.inner.lock().await;
 
-        println!("{:?}", write_access.current_requests);
         for itm in write_access.current_requests.iter_mut() {
             if itm.connection_id == connection_id {
                 itm.done = true;

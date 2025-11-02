@@ -87,8 +87,6 @@ pub async fn response_read_loop<
             }
         };
 
-        println!("Headers are compiled. WS upgrade: {}", web_socket_upgrade);
-
         if let Err(err) = server_write_part
             .h1_server_write_part
             .write_http_payload_with_timeout(
