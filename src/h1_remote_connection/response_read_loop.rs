@@ -21,10 +21,6 @@ pub async fn response_read_loop<
     mut server_write_part: Http1ServerConnectionContext<ServerWritePart, ServerReadPart>,
     ssh_session_handler: Option<SshSessionHandler>,
 ) {
-    println!(
-        "Started read loop {}",
-        server_write_part.http_connection_info.listening_addr
-    );
     let mut remote_h1_reader =
         H1Reader::new(remote_read_part, crate::types::HttpTimeouts::default());
     loop {

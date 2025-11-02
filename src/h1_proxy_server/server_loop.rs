@@ -162,7 +162,6 @@ async fn execute_request<
 
             match remote_connection {
                 Ok(remote_connection) => {
-                    println!("Connected to remote source");
                     remote_connections.insert(location.id, remote_connection);
                     remote_connections.get_mut(&location.id).unwrap()
                 }
