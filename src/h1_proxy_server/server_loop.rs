@@ -157,7 +157,6 @@ async fn execute_request<
     let mut connection = match remote_connections.get_mut(&location.id) {
         Some(connection) => connection,
         None => {
-            println!("Connection to remote_source");
             let remote_connection =
                 RemoteConnection::connect(&location.proxy_pass_to, &http_connection_context).await;
 

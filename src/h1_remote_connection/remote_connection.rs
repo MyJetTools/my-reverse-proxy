@@ -269,10 +269,6 @@ impl RemoteConnection {
             RemoteConnectionInner::Http1Direct(connection) => {
                 let disconnected = connection.is_disconnected();
 
-                println!(
-                    "Is connection {} disconnected: {}",
-                    self.connection_id, disconnected
-                );
                 if disconnected {
                     return false;
                 }

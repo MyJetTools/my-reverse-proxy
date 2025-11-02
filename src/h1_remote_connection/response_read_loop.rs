@@ -55,8 +55,6 @@ pub async fn response_read_loop<
 
         let content_length = resp_headers.content_length;
 
-        println!("Resp content len: {:?}", content_length);
-
         let web_socket_upgrade = match remote_h1_reader.compile_headers(
             resp_headers,
             &server_write_part.end_point_info.modify_response_headers,
