@@ -129,10 +129,7 @@ async fn execute_request<
     remote_connections: &mut HashMap<i64, RemoteConnection>,
     h1_server_write_part: &H1ServerWritePart<WritePart, ReadPart>,
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
-    println!("Started reading headers");
     let request_headers = h1_reader.read_headers().await?;
-
-    println!("Got headers");
 
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
