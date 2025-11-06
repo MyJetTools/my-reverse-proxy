@@ -307,6 +307,23 @@ hosts:
     - proxy_pass_to: remote_host:5123
 ```
 
+
+#### MCP endpoints examples
+```yaml
+hosts:
+  mcp.domain.com:443:
+    endpoint:
+      type: mcp
+    locations:
+    - path: /mcp_service_1
+      proxy_pass_to: http://internal_mcp_server:8100/internal_path
+
+    - path: /mcp_service_2
+      proxy_pass_to: http://internal_mcp_server:8101/internal_path_2
+
+```
+
+
 **Remote Host Configuration:**
 The `proxy_pass_to` field supports different formats:
 
@@ -642,21 +659,6 @@ Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to 
 
 ```
 
-
-### MCP endpoints examples
-```yaml
-hosts:
-  mcp.domain.com:443:
-    endpoint:
-      type: mcp
-    locations:
-    - path: /mcp_service_1
-      proxy_pass_to: http://internal_mcp_server:8100/internal_path
-
-    - path: /mcp_service_2
-      proxy_pass_to: http://internal_mcp_server:8101/internal_path_2
-
-```
 
 
 
