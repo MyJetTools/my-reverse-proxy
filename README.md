@@ -40,13 +40,6 @@ hosts:
     locations:      
     - proxy_pass_to: ssh:username@ssh_host:22->10.0.0.5:5123    
 
-  localhost:8004:
-    endpoint:
-      type: mcp
-      debug: true
-    locations:
-    - proxy_pass_to: remote_mcp_host:5123
-
   8005:
     endpoint:
       type: http2  
@@ -301,8 +294,9 @@ hosts:
 ```
 
 ### Mcp (Model Context Protocol)
-MCP endpoints provide TCP forwarding with enhanced debugging capabilities for Model Context Protocol connections.
+MCP endpoints provide TCP forwarding with enhanced debugging capabilities for Model Context Protocol connections. They forward raw TCP traffic to remote MCP servers.
 
+**Basic Configuration:**
 ```yaml
 hosts:
   localhost:8000:
@@ -313,18 +307,93 @@ hosts:
     - proxy_pass_to: remote_host:5123
 ```
 
+**Remote Host Configuration:**
+The `proxy_pass_to` field supports different formats:
+
+1. **Direct TCP connection:**
+```yaml
+locations:
+- proxy_pass_to: remote_host:5123
+```
+
+2. **With HTTP prefix (automatically stripped):**
+```yaml
+locations:
+- proxy_pass_to: http://remote_host:5123
+```
+
+3. **SSH tunneling:**
+```yaml
+locations:
+- proxy_pass_to: ssh:username@ssh_host:22->remote_host:5123
+```
+
+**Note:** HTTPS (`https://`) is not supported as a remote host format for MCP endpoints.
+
 **MCP Endpoint Features:**
 - TCP connection forwarding to remote MCP servers
 - Debug logging to monitor MCP protocol traffic
 - Support for SSH tunneling: `ssh:user@host:port->remote_host:port`
 - Connection timeout and buffer management
 - Bidirectional data streaming with detailed logging
+- Optional TLS encryption when SSL certificate is provided
 
 **Debug Mode:**
 When `debug: true` is enabled, MCP endpoints will log:
 - Connection establishment details
-- Bidirectional data flow (Server to Client / Client to Server)
-- Protocol message content for troubleshooting
+- Bidirectional data flow with markers:
+  - `->To MCP Server->` for client-to-server traffic
+  - `<-From MCP Server<-` for server-to-client traffic
+- Protocol message content (text messages shown as strings, binary as length)
+- Connection errors and graceful shutdowns
+- Connection ID tracking for multiple concurrent connections
+
+**Connection Settings:**
+- **Read Timeout**: 3 minutes (180 seconds) - maximum time to wait for data from either side
+- **Write Timeout**: 30 seconds - maximum time to wait for write operations
+- **Buffer Size**: 512 KB per connection (allocated for read operations)
+
+**Example: MCP Endpoint with SSH Tunneling:**
+```yaml
+hosts:
+  localhost:8443:
+    endpoint:
+      type: mcp
+      ssl_certificate: my_ssl_cert  # Optional: for TLS encryption
+      debug: true
+    locations:
+    - proxy_pass_to: ssh:user@bastion.example.com:22->mcp-server.internal:5123
+
+ssh:
+  user@bastion.example.com:
+    private_key_file: ~/.ssh/id_rsa
+    passphrase: optional_passphrase
+```
+
+**Example: Multiple MCP Endpoints:**
+```yaml
+hosts:
+  localhost:8443:
+    endpoint:
+      type: mcp
+      ssl_certificate: mcp_cert  # Optional: for TLS encryption
+      debug: true
+    locations:
+    - proxy_pass_to: mcp-server-1:5123
+
+  localhost:8444:
+    endpoint:
+      type: mcp
+      # No SSL certificate - plain TCP connection
+      debug: false  # Disable debug for production
+    locations:
+    - proxy_pass_to: mcp-server-2:5123
+```
+
+**Troubleshooting:**
+- If connections fail, check that the remote MCP server is accessible
+- Enable `debug: true` to see detailed connection and data flow information
+- Check firewall rules for both the listening port and remote host port
 
 ## Location types
 
@@ -570,6 +639,22 @@ Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to 
     - path: /service1
       type: http2  
       compress: true
+
+```
+
+
+### MCP endpoints examples
+```yaml
+hosts:
+  mcp.domain.com:443:
+    endpoint:
+      type: mcp
+    locations:
+    - path: /mcp_service_1
+      proxy_pass_to: http://internal_mcp_server:8100/internal_path
+
+    - path: /mcp_service_2
+      proxy_pass_to: http://internal_mcp_server:8101/internal_path_2
 
 ```
 
