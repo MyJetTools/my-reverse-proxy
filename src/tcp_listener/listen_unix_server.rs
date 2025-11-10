@@ -25,6 +25,8 @@ async fn accept_unix_connections_loop(
         panic!("Can not remove old unix socket: {}. Timeout", listen_host);
     };
 
+    println!("Listening unix socket: `{}`", listen_host.as_str());
+
     let listener = match tokio::net::UnixListener::bind(listen_host.as_str()) {
         Ok(listener) => listener,
         Err(err) => {
