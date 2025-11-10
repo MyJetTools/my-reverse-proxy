@@ -1,20 +1,22 @@
 use std::sync::Arc;
 
+use crate::types::ListenHost;
+
 use super::*;
 
 #[derive(Clone)]
 pub struct HttpListenPortConfiguration {
     pub endpoints: Vec<Arc<HttpEndpointInfo>>,
     pub listen_endpoint_type: ListenHttpEndpointType,
-    pub port: u16,
+    pub listen_host: ListenHost,
 }
 
 impl HttpListenPortConfiguration {
-    pub fn new(endpoint_info: Arc<HttpEndpointInfo>, port: u16) -> Self {
+    pub fn new(endpoint_info: Arc<HttpEndpointInfo>, listen_host: ListenHost) -> Self {
         let result = Self {
             listen_endpoint_type: endpoint_info.listen_endpoint_type,
             endpoints: vec![endpoint_info],
-            port,
+            listen_host,
         };
 
         result
@@ -40,7 +42,6 @@ impl HttpListenPortConfiguration {
         &self,
         endpoint_host_string: &EndpointHttpHostString,
     ) -> Option<Self> {
-        let port = self.port;
         let index = self
             .endpoints
             .iter()
@@ -53,7 +54,7 @@ impl HttpListenPortConfiguration {
         let result = Self {
             listen_endpoint_type: self.listen_endpoint_type,
             endpoints: result,
-            port,
+            listen_host: endpoint_host_string.get_listen_host(),
         };
 
         Some(result)

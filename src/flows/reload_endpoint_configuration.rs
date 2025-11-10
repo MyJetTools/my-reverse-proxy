@@ -17,7 +17,7 @@ pub async fn reload_endpoint_configuration(host_id_to_refresh: &str) -> Result<S
             )
             .await?;
 
-            crate::scripts::sync_tcp_endpoints().await;
+            crate::scripts::sync_endpoints().await;
             return Ok(format!(
                 "Host configuration {} has been reloaded",
                 host_id_to_refresh
@@ -28,7 +28,7 @@ pub async fn reload_endpoint_configuration(host_id_to_refresh: &str) -> Result<S
     match crate::scripts::delete_http_endpoint_if_exists(&settings_model, host_id_to_refresh).await
     {
         Ok(_) => {
-            crate::scripts::sync_tcp_endpoints().await;
+            crate::scripts::sync_endpoints().await;
             return Ok(format!(
                 "Host configuration {} has been reloaded",
                 host_id_to_refresh

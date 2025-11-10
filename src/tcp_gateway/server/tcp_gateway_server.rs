@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
@@ -14,12 +13,7 @@ pub struct TcpGatewayServer {
 }
 
 impl TcpGatewayServer {
-    pub fn new(
-        listen: String,
-        encryption: AesKey,
-        debug: bool,
-        allowed_ip_list: Option<HashSet<String>>,
-    ) -> Self {
+    pub fn new(listen: String, encryption: AesKey, debug: bool) -> Self {
         println!("Starting TCP Gateway Server at address: {}", listen);
         let inner = Arc::new(TcpGatewayInner::new(
             "ServerGateway".to_string(),

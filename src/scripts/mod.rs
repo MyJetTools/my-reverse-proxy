@@ -37,8 +37,8 @@ mod update_crl;
 pub use update_crl::*;
 
 pub mod ssh;
-mod sync_listen_endpoints;
-pub use sync_listen_endpoints::*;
+mod sync_tcp_endpoints;
+pub use sync_tcp_endpoints::*;
 mod update_host_configuration;
 pub use update_host_configuration::*;
 mod delete_http_endpoint_if_exists;
@@ -53,3 +53,5 @@ mod refresh_ip_list_from_settings;
 pub use refresh_ip_list_from_settings::*;
 mod populate_value;
 pub use populate_value::*;
+mod sync_unix_endpoints;
+pub use sync_unix_endpoints::*;

@@ -1,13 +1,13 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use my_ssh::SshCredentials;
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::{app::APP_CTX, configurations::*, tcp_listener::AcceptedTcpConnection};
+use crate::{app::APP_CTX, configurations::*, types::AcceptedServerConnection};
 
 pub async fn handle_connection(
-    mut accepted_server_connection: AcceptedTcpConnection,
-    _listening_addr: SocketAddr,
+    mut accepted_server_connection: AcceptedServerConnection,
+
     configuration: Arc<TcpEndpointHostConfig>,
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: Arc<RemoteEndpointOwned>,
@@ -16,13 +16,15 @@ pub async fn handle_connection(
 
     let remote_port = remote_endpoint.get_port();
 
+    let socket_addr = accepted_server_connection.get_addr();
+
     if remote_port.is_none() {
         println!(
-            "Remote port is not set for tcp port forward {}. Closing incoming connection: {}",
+            "Remote port is not set for tcp port forward {}. Closing incoming connection: {:?}",
             configuration.host_endpoint.as_str(),
-            accepted_server_connection.addr
+            socket_addr
         );
-        let _ = accepted_server_connection.network_stream.shutdown().await;
+        let _ = accepted_server_connection.shutdown().await;
         return;
     }
 
@@ -42,14 +44,14 @@ pub async fn handle_connection(
         Err(err) => {
             if configuration.debug {
                 println!(
-                    "Error connecting to remote tcp endpoint over ssh {}->{} server. Closing incoming connection: {}. Err: {:?}",
+                    "Error connecting to remote tcp endpoint over ssh {}->{} server. Closing incoming connection: {:?}. Err: {:?}",
                     ssh_credentials.to_string(),
                     remote_endpoint.as_str(),
-                    accepted_server_connection.addr,
+                    socket_addr,
                     err
                 );
             }
-            let _ = accepted_server_connection.network_stream.shutdown().await;
+            let _ = accepted_server_connection.shutdown().await;
             return;
         }
     };

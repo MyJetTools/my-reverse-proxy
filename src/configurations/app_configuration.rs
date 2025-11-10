@@ -33,20 +33,43 @@ impl AppConfiguration {
         host_id: &EndpointHttpHostString,
         error: String,
     ) {
-        let port = host_id.get_port();
+        let endpoint_port = host_id.get_port();
+
         let mut inner = self.inner.write().await;
 
-        if let Some(location) = inner.listen_endpoints.get_mut(&port) {
-            if let ListenConfiguration::Http(location) = location {
-                let location = location.delete_configuration(&host_id);
+        match endpoint_port {
+            EndpointPort::Tcp(port) => {
+                if let Some(location) = inner.listen_tcp_endpoints.get_mut(&port) {
+                    if let ListenConfiguration::Http(location) = location {
+                        let location = location.delete_configuration(&host_id);
 
-                if let Some(location) = location {
-                    if location.endpoints.len() == 0 {
-                        inner.listen_endpoints.remove(&port);
-                    } else {
-                        inner
-                            .listen_endpoints
-                            .insert(port, ListenConfiguration::Http(Arc::new(location)));
+                        if let Some(location) = location {
+                            if location.endpoints.len() == 0 {
+                                inner.listen_tcp_endpoints.remove(&port);
+                            } else {
+                                inner
+                                    .listen_tcp_endpoints
+                                    .insert(port, ListenConfiguration::Http(Arc::new(location)));
+                            }
+                        }
+                    }
+                }
+            }
+            EndpointPort::UnixSocket(unix_host) => {
+                if let Some(location) = inner.listen_unix_socket_endpoints.get_mut(&unix_host) {
+                    if let ListenConfiguration::Http(location) = location {
+                        let location = location.delete_configuration(&host_id);
+
+                        if let Some(location) = location {
+                            if location.endpoints.is_empty() {
+                                inner.listen_unix_socket_endpoints.remove(&unix_host);
+                            } else {
+                                inner.listen_unix_socket_endpoints.insert(
+                                    unix_host,
+                                    ListenConfiguration::Http(Arc::new(location)),
+                                );
+                            }
+                        }
                     }
                 }
             }

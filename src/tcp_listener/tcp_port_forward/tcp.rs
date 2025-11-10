@@ -1,51 +1,17 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 use tokio::net::TcpStream;
 
-use crate::{configurations::*, tcp_listener::AcceptedTcpConnection};
+use crate::{configurations::*, types::AcceptedServerConnection};
 
 pub async fn handle_connection(
-    mut accepted_server_connection: AcceptedTcpConnection,
-    _listening_addr: SocketAddr,
+    mut accepted_server_connection: AcceptedServerConnection,
+
     configuration: Arc<TcpEndpointHostConfig>,
     remote_host: Arc<RemoteEndpointOwned>,
 ) {
-    if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
-        let ip_white_list = crate::app::APP_CTX
-            .current_configuration
-            .get(|config| config.white_list_ip_list.get(ip_white_list_id))
-            .await;
-
-        let mut shut_down_connection = false;
-
-        match ip_white_list {
-            Some(white_list_ip) => {
-                if !white_list_ip.is_whitelisted(&accepted_server_connection.addr.ip()) {
-                    shut_down_connection = true;
-                    if configuration.debug {
-                        println!(
-                            "Incoming connection from {} is not whitelisted. Closing it",
-                            accepted_server_connection.addr
-                        );
-                    }
-                }
-            }
-            None => {
-                shut_down_connection = true;
-                if configuration.debug {
-                    println!(
-                        "Incoming connection from {} has invalid white_list_id {ip_white_list_id}. Closing it",
-                        accepted_server_connection.addr
-                    );
-                }
-            }
-        }
-        if shut_down_connection {
-            let _ = accepted_server_connection.network_stream.shutdown().await;
-            return;
-        }
-    }
+    let socket_addr = accepted_server_connection.get_addr();
 
     let remote_tcp_connection_result = tokio::time::timeout(
         crate::app::APP_CTX
@@ -58,12 +24,12 @@ pub async fn handle_connection(
     if remote_tcp_connection_result.is_err() {
         if configuration.debug {
             println!(
-                "Timeout while connecting to remote tcp {} server. Closing incoming connection: {}",
+                "Timeout while connecting to remote tcp {} server. Closing incoming connection: {:?}",
                 remote_host.as_str(),
-                accepted_server_connection.addr
+                socket_addr
             );
         }
-        let _ = accepted_server_connection.network_stream.shutdown().await;
+        let _ = accepted_server_connection.shutdown().await;
         return;
     }
 
@@ -74,13 +40,13 @@ pub async fn handle_connection(
         Err(err) => {
             if configuration.debug {
                 println!(
-                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
+                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {:?}",
                 remote_host.as_str(),
                 err,
-                accepted_server_connection.addr
+                socket_addr
             );
             }
-            let _ = accepted_server_connection.network_stream.shutdown().await;
+            let _ = accepted_server_connection.shutdown().await;
             return;
         }
     };

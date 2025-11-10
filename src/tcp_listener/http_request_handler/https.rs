@@ -1,20 +1,20 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 
-use crate::http_proxy_pass::HttpProxyPass;
+use crate::{http_proxy_pass::HttpProxyPass, types::ConnectionIp};
 
 pub struct HttpsRequestsHandler {
     proxy_pass: HttpProxyPass,
-    socket_addr: SocketAddr,
+    connection_ip: ConnectionIp,
 }
 
 impl HttpsRequestsHandler {
-    pub fn new(proxy_pass: HttpProxyPass, socket_addr: SocketAddr) -> Self {
+    pub fn new(proxy_pass: HttpProxyPass, connection_ip: ConnectionIp) -> Self {
         Self {
             proxy_pass,
-            socket_addr,
+            connection_ip,
         }
     }
 
@@ -22,7 +22,7 @@ impl HttpsRequestsHandler {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
     ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
-        super::handle_requests::handle_requests(req, &self.proxy_pass, &self.socket_addr).await
+        super::handle_requests::handle_requests(req, &self.proxy_pass, self.connection_ip).await
     }
 
     pub async fn dispose(&self) {

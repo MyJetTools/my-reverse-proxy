@@ -28,7 +28,7 @@ impl CurrentConfigurationHttpModel {
             .get(|config| {
                 let mut ports = Vec::new();
 
-                for (port, listen_port_config) in &config.listen_endpoints {
+                for (port, listen_port_config) in &config.listen_tcp_endpoints {
                     let item = PortConfigurationHttpModel::new(*port, listen_port_config);
                     ports.push(item);
                 }

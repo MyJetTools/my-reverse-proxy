@@ -23,8 +23,10 @@ pub fn populate_value<'s>(
             ContentToken::Text(text) => result.push_str(text),
             ContentToken::Placeholder(placeholder) => match placeholder {
                 "ENDPOINT_IP" => {
-                    let ip = format!("{}", http_connection_info.socket_addr);
-                    result.push_str(ip.as_str());
+                    if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
+                        let ip = format!("{}", ip);
+                        result.push_str(ip.as_str());
+                    }
                 }
 
                 "CLIENT_CERT_CN" => {

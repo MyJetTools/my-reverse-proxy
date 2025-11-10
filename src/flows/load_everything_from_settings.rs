@@ -40,5 +40,5 @@ pub async fn load_everything_from_settings() {
 
     println!("Kicking off tcp endpoints");
 
-    crate::scripts::sync_tcp_endpoints().await;
+    crate::scripts::sync_endpoints().await;
 }

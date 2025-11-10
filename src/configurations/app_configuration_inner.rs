@@ -20,20 +20,11 @@ impl ListenConfiguration {
             ListenConfiguration::Mpc(_) => None,
         }
     }
-
-    /*
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ListenConfiguration::Http(_) => "http",
-            ListenConfiguration::Tcp(_) => "tcp",
-            ListenConfiguration::Mpc(_) => "mcp",
-        }
-    }
-     */
 }
 
 pub struct AppConfigurationInner {
-    pub listen_endpoints: HashMap<u16, ListenConfiguration>,
+    pub listen_tcp_endpoints: HashMap<u16, ListenConfiguration>,
+    pub listen_unix_socket_endpoints: HashMap<Arc<String>, ListenConfiguration>,
     pub google_auth_credentials: GoogleAuthCredentialsList,
     pub white_list_ip_list: WhiteListedIpListConfigurations,
     pub error_configurations: BTreeMap<String, String>,
@@ -42,7 +33,8 @@ pub struct AppConfigurationInner {
 impl AppConfigurationInner {
     pub fn new() -> Self {
         Self {
-            listen_endpoints: HashMap::new(),
+            listen_tcp_endpoints: HashMap::new(),
+            listen_unix_socket_endpoints: HashMap::new(),
             google_auth_credentials: GoogleAuthCredentialsList::new(),
             white_list_ip_list: WhiteListedIpListConfigurations::new(),
             error_configurations: BTreeMap::new(),

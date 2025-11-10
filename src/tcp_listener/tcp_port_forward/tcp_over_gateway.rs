@@ -1,58 +1,22 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::{configurations::TcpEndpointHostConfig, tcp_listener::AcceptedTcpConnection};
+use crate::{configurations::TcpEndpointHostConfig, types::AcceptedServerConnection};
 
 pub async fn handle_connection(
-    mut accepted_server_connection: AcceptedTcpConnection,
-    _listening_addr: SocketAddr,
+    mut accepted_server_connection: AcceptedServerConnection,
     configuration: Arc<TcpEndpointHostConfig>,
     gateway_id: &Arc<String>,
     remote_endpoint: Arc<RemoteEndpointOwned>,
 ) {
+    let connection_ip = accepted_server_connection.get_addr();
     if configuration.debug {
         println!(
             "Accepted connection forwarded to {}->{}",
             gateway_id.as_str(),
             remote_endpoint.as_str()
         );
-    }
-
-    if let Some(ip_white_list_id) = configuration.ip_white_list_id.as_ref() {
-        let ip_white_list = crate::app::APP_CTX
-            .current_configuration
-            .get(|config| config.white_list_ip_list.get(ip_white_list_id))
-            .await;
-
-        let mut shut_down_connection = false;
-
-        match ip_white_list {
-            Some(white_list_ip) => {
-                if !white_list_ip.is_whitelisted(&accepted_server_connection.addr.ip()) {
-                    shut_down_connection = true;
-                    if configuration.debug {
-                        println!(
-                            "Incoming connection from {} is not whitelisted. Closing it",
-                            accepted_server_connection.addr
-                        );
-                    }
-                }
-            }
-            None => {
-                shut_down_connection = true;
-                if configuration.debug {
-                    println!(
-                        "Incoming connection from {} has invalid white_list_id {ip_white_list_id}. Closing it",
-                        accepted_server_connection.addr
-                    );
-                }
-            }
-        }
-        if shut_down_connection {
-            let _ = accepted_server_connection.network_stream.shutdown().await;
-            return;
-        }
     }
 
     let gateway_connection = crate::app::APP_CTX
@@ -62,13 +26,13 @@ pub async fn handle_connection(
     if gateway_connection.is_none() {
         if configuration.debug {
             println!(
-                "Error connecting to remote tcp {} server. Gateway connection [{}] is not found. Closing incoming connection: {}",
+                "Error connecting to remote tcp {} server. Gateway connection [{}] is not found. Closing incoming connection: {:?}",
                 remote_endpoint.as_str(),
                 gateway_id.as_str(),
-                accepted_server_connection.addr
+                connection_ip
             );
         }
-        let _ = accepted_server_connection.network_stream.shutdown().await;
+        let _ = accepted_server_connection.shutdown().await;
         return;
     }
 
@@ -85,13 +49,13 @@ pub async fn handle_connection(
     if let Err(err) = &connection_result {
         if configuration.debug {
             println!(
-                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {}",
+                "Error connecting to remote tcp {} server: {:?}. Closing incoming connection: {:?}",
                 remote_endpoint.as_str(),
                 err,
-                accepted_server_connection.addr
+                connection_ip
             );
         }
-        let _ = accepted_server_connection.network_stream.shutdown().await;
+        let _ = accepted_server_connection.shutdown().await;
         return;
     }
 

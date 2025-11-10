@@ -4,7 +4,6 @@ use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::{
     configurations::{HttpEndpointInfo, HttpListenPortConfiguration},
-    network_stream::MyNetworkStream,
     tcp_listener::https::ClientCertificateData,
 };
 
@@ -12,7 +11,7 @@ const RESOLVE_TLS_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub async fn lazy_accept_tcp_stream(
     endpoint_port: u16,
-    socket_stream: MyNetworkStream,
+    tcp_stream: tokio::net::TcpStream,
     configuration: Arc<HttpListenPortConfiguration>,
 ) -> Result<
     (
@@ -22,7 +21,7 @@ pub async fn lazy_accept_tcp_stream(
     ),
     String,
 > {
-    let future = lazy_accept_tcp_stream_internal(endpoint_port, socket_stream, configuration);
+    let future = lazy_accept_tcp_stream_internal(endpoint_port, tcp_stream, configuration);
 
     let result = tokio::time::timeout(RESOLVE_TLS_TIMEOUT, future).await;
 
@@ -38,7 +37,7 @@ pub async fn lazy_accept_tcp_stream(
 
 async fn lazy_accept_tcp_stream_internal(
     endpoint_port: u16,
-    socket_stream: MyNetworkStream,
+    tcp_stream: tokio::net::TcpStream,
     configuration: Arc<HttpListenPortConfiguration>,
 ) -> Result<
     (
@@ -48,13 +47,6 @@ async fn lazy_accept_tcp_stream_internal(
     ),
     String,
 > {
-    let tcp_stream = match socket_stream {
-        MyNetworkStream::Tcp(tcp_stream) => tcp_stream,
-        MyNetworkStream::UnixSocket(_) => {
-            panic!("TLS does not support unix sockets");
-        }
-    };
-
     let result: Result<
         Result<
             (

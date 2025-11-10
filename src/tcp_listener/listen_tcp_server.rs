@@ -1,15 +1,10 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::{configurations::ListenConfiguration, network_stream::*};
+use crate::configurations::ListenConfiguration;
 
 use super::ListenServerHandler;
 
-pub struct AcceptedTcpConnection {
-    pub network_stream: MyNetworkStream,
-    pub addr: SocketAddr,
-}
-
-pub fn start_listen_server(listening_addr: SocketAddr) -> Arc<ListenServerHandler> {
+pub fn start_listen_tcp_server(listening_addr: SocketAddr) -> Arc<ListenServerHandler> {
     let listen_server_handler = Arc::new(ListenServerHandler::new());
     tokio::spawn(accept_connections_loop(
         listening_addr,
@@ -55,14 +50,10 @@ async fn accept_connections_loop(
 
                 let (tcp_stream, addr) = accepted_connection.unwrap();
 
-                let accepted_connection = AcceptedTcpConnection{
-                    network_stream : tcp_stream.into(),
-                    addr
-                };
 
 
                 connection_id += 1;
-                handle_accepted_connection(accepted_connection, listening_addr, connection_id).await;
+                handle_accepted_connection(tcp_stream, addr, listening_addr, connection_id).await;
 
             }
             _ = stop_endpoint_feature => {
@@ -77,22 +68,23 @@ async fn accept_connections_loop(
 }
 
 async fn handle_accepted_connection(
-    mut accepted_connection: AcceptedTcpConnection,
-    listening_addr: SocketAddr,
+    mut accepted_connection: tokio::net::TcpStream,
+    socket_addr: SocketAddr,
+    listening_host: SocketAddr,
     connection_id: u64,
 ) {
-    let listen_port = listening_addr.port();
+    let listen_port = listening_host.port();
 
     let endpoint_type = crate::app::APP_CTX
         .current_configuration
         .get(|config| {
-            let listen_config = config.listen_endpoints.get(&listen_port).cloned();
+            let listen_config = config.listen_tcp_endpoints.get(&listen_port).cloned();
 
             if let Some(listen_config) = &listen_config {
                 if let Some(white_list_id) = listen_config.get_white_list_id() {
                     if !config
                         .white_list_ip_list
-                        .is_white_listed(white_list_id, &listening_addr.ip())
+                        .is_white_listed(white_list_id, &socket_addr.ip())
                     {
                         return None;
                     }
@@ -104,7 +96,8 @@ async fn handle_accepted_connection(
         .await;
 
     if endpoint_type.is_none() {
-        let _ = accepted_connection.network_stream.shutdown().await;
+        use tokio::io::AsyncWriteExt;
+        let _ = accepted_connection.shutdown().await;
         return;
     }
 
@@ -113,22 +106,27 @@ async fn handle_accepted_connection(
     match endpoint_type {
         ListenConfiguration::Http(configuration) => match configuration.listen_endpoint_type {
             crate::configurations::ListenHttpEndpointType::Http1 => {
-                crate::h1_proxy_server::kick_h1_reverse_proxy_server_from_http(
-                    listening_addr,
+                crate::h1_proxy_server::kick_h1_tcp_reverse_proxy_server_from_http(
                     accepted_connection,
+                    socket_addr,
                     configuration,
                 );
                 //super::http::handle_connection(accepted_connection, listening_addr, configuration)
                 //    .await;
             }
             crate::configurations::ListenHttpEndpointType::Http2 => {
-                super::http2::handle_connection(accepted_connection, listening_addr, configuration)
-                    .await;
+                super::http2::handle_connection(
+                    (accepted_connection, socket_addr).into(),
+                    listening_host.into(),
+                    configuration,
+                )
+                .await;
             }
             crate::configurations::ListenHttpEndpointType::Https1 => {
                 super::https::handle_connection(
                     accepted_connection,
-                    listening_addr,
+                    socket_addr,
+                    listening_host,
                     configuration,
                     connection_id,
                 )
@@ -137,7 +135,8 @@ async fn handle_accepted_connection(
             crate::configurations::ListenHttpEndpointType::Https2 => {
                 super::https::handle_connection(
                     accepted_connection,
-                    listening_addr,
+                    socket_addr,
+                    listening_host,
                     configuration,
                     connection_id,
                 )
@@ -146,7 +145,8 @@ async fn handle_accepted_connection(
             crate::configurations::ListenHttpEndpointType::Mcp => {
                 super::https::handle_connection(
                     accepted_connection,
-                    listening_addr,
+                    socket_addr,
+                    listening_host,
                     configuration,
                     connection_id,
                 )
@@ -157,8 +157,7 @@ async fn handle_accepted_connection(
         ListenConfiguration::Tcp(configuration) => match configuration.remote_host.as_ref() {
             crate::configurations::MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
                 super::tcp_port_forward::tcp_over_gateway::handle_connection(
-                    accepted_connection,
-                    listening_addr,
+                    (accepted_connection, socket_addr).into(),
                     configuration.clone(),
                     id,
                     remote_host.clone(),
@@ -170,8 +169,7 @@ async fn handle_accepted_connection(
                 remote_host,
             } => {
                 super::tcp_port_forward::tcp_over_ssh::handle_connection(
-                    accepted_connection,
-                    listening_addr,
+                    (accepted_connection, socket_addr).into(),
                     configuration.clone(),
                     ssh_credentials,
                     remote_host.clone(),
@@ -180,8 +178,7 @@ async fn handle_accepted_connection(
             }
             crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                 super::tcp_port_forward::tcp::handle_connection(
-                    accepted_connection,
-                    listening_addr,
+                    (accepted_connection, socket_addr).into(),
                     configuration.clone(),
                     remote_host.clone(),
                 )
@@ -192,7 +189,8 @@ async fn handle_accepted_connection(
         ListenConfiguration::Mpc(configuration) => {
             super::https::handle_connection(
                 accepted_connection,
-                listening_addr,
+                socket_addr,
+                listening_host,
                 configuration,
                 connection_id,
             )

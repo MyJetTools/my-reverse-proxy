@@ -1,9 +1,7 @@
-use std::net::SocketAddr;
-
-use crate::configurations::ListenHttpEndpointType;
+use crate::{configurations::ListenHttpEndpointType, types::ListenHost};
 
 #[derive(Clone)]
 pub struct HttpListenPortInfo {
     pub endpoint_type: ListenHttpEndpointType,
-    pub socket_addr: SocketAddr,
+    pub listen_host: ListenHost,
 }

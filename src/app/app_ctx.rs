@@ -106,7 +106,6 @@ impl AppContext {
                     format!("0.0.0.0:{}", gateway_server_settings.port,),
                     encryption,
                     gateway_server_settings.is_debug(),
-                    gateway_server_settings.get_allowed_ip_list(),
                 ))
             } else {
                 None

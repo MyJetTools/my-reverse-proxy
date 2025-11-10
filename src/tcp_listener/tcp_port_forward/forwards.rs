@@ -1,17 +1,17 @@
 use crate::{
-    app::SshSessionHandler, network_stream::*, tcp_listener::AcceptedTcpConnection,
-    tcp_utils::LoopBuffer,
+    app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer,
+    types::AcceptedServerConnection,
 };
 
 pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sync + 'static>(
-    server_stream: AcceptedTcpConnection,
+    server_stream: AcceptedServerConnection,
     remote_stream: TRemoteNetworkStream,
     ssh_session_handler: Option<SshSessionHandler>,
 ) {
     let (remote_reader, remote_writer) = remote_stream.split();
-    match server_stream.network_stream {
-        MyNetworkStream::Tcp(tcp_stream) => {
-            let (server_reader, server_writer) = tokio::io::split(tcp_stream);
+    match server_stream {
+        AcceptedServerConnection::Tcp { network_stream, .. } => {
+            let (server_reader, server_writer) = tokio::io::split(network_stream);
             tokio::spawn(crate::tcp_utils::copy_streams(
                 server_reader,
                 remote_writer,
@@ -25,7 +25,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                 None,
             ));
         }
-        MyNetworkStream::UnixSocket(unix_stream) => {
+        AcceptedServerConnection::Unix(unix_stream) => {
             let (server_reader, server_writer) = tokio::io::split(unix_stream);
             tokio::spawn(crate::tcp_utils::copy_streams(
                 server_reader,

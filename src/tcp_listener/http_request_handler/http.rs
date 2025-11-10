@@ -1,26 +1,26 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use tokio::sync::Mutex;
 
-use crate::{configurations::HttpListenPortConfiguration, http_proxy_pass::*};
+use crate::{configurations::HttpListenPortConfiguration, http_proxy_pass::*, types::ConnectionIp};
 
 pub struct HttpRequestHandler {
     proxy_pass: Mutex<Option<Arc<HttpProxyPass>>>,
-    socket_addr: SocketAddr,
+    connection_ip: ConnectionIp,
     listen_port_config: Arc<HttpListenPortConfiguration>,
 }
 
 impl HttpRequestHandler {
     pub fn new(
-        socket_addr: SocketAddr,
+        connection_ip: ConnectionIp,
         listen_port_config: Arc<HttpListenPortConfiguration>,
     ) -> Self {
         Self {
             proxy_pass: Mutex::new(None),
-            socket_addr,
+            connection_ip,
             listen_port_config,
         }
     }
@@ -67,11 +67,16 @@ impl HttpRequestHandler {
 
         let listening_port_info = HttpListenPortInfo {
             endpoint_type: http_endpoint_info.listen_endpoint_type,
-            socket_addr: self.socket_addr,
+            listen_host: self.listen_port_config.listen_host.clone(),
         };
 
-        let http_proxy_pass =
-            HttpProxyPass::new(http_endpoint_info, listening_port_info, None).await;
+        let http_proxy_pass = HttpProxyPass::new(
+            self.connection_ip,
+            http_endpoint_info,
+            listening_port_info,
+            None,
+        )
+        .await;
 
         let http_proxy_pass = Arc::new(http_proxy_pass);
 
@@ -86,7 +91,7 @@ impl HttpRequestHandler {
     ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
         match self.get_http_proxy_pass(&req).await {
             Ok(proxy_pass) => {
-                super::handle_requests::handle_requests(req, &proxy_pass, &self.socket_addr).await
+                super::handle_requests::handle_requests(req, &proxy_pass, self.connection_ip).await
             }
             Err(err) => err,
         }

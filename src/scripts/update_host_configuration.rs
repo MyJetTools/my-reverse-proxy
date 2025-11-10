@@ -7,7 +7,6 @@ pub async fn update_host_configuration(
     host_endpoint: EndpointHttpHostString,
     host_settings: &HostSettings,
 ) -> Result<(), String> {
-    let port = host_endpoint.get_port();
     let configuration = crate::scripts::compile_host_configuration(
         &settings_model,
         host_endpoint.clone(),
@@ -15,14 +14,35 @@ pub async fn update_host_configuration(
     )
     .await?;
 
-    crate::app::APP_CTX
-        .current_configuration
-        .write(move |config| {
-            config.error_configurations.remove(host_endpoint.as_str());
+    let host_endpoint_str = host_endpoint.as_str().to_string();
+    let tcp_port = host_endpoint.get_port();
 
-            config.listen_endpoints.insert(port, configuration);
-        })
-        .await;
+    match tcp_port {
+        crate::configurations::EndpointPort::Tcp(tcp_port) => {
+            crate::app::APP_CTX
+                .current_configuration
+                .write(move |config| {
+                    config
+                        .error_configurations
+                        .remove(host_endpoint_str.as_str());
+
+                    config.listen_tcp_endpoints.insert(tcp_port, configuration);
+                })
+                .await;
+        }
+        crate::configurations::EndpointPort::UnixSocket(unix_host) => {
+            crate::app::APP_CTX
+                .current_configuration
+                .write(move |config| {
+                    config.error_configurations.remove(unix_host.as_str());
+
+                    config
+                        .listen_unix_socket_endpoints
+                        .insert(unix_host, configuration);
+                })
+                .await;
+        }
+    }
 
     Ok(())
 }

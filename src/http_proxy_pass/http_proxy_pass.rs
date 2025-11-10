@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     configurations::*, http_proxy_pass::GoogleAuthResult,
-    tcp_listener::https::ClientCertificateData,
+    tcp_listener::https::ClientCertificateData, types::ConnectionIp,
 };
 
 use super::{
@@ -23,6 +23,7 @@ pub struct HttpProxyPass {
 
 impl HttpProxyPass {
     pub async fn new(
+        connection_ip: ConnectionIp,
         endpoint_info: Arc<HttpEndpointInfo>,
         listening_port_info: HttpListenPortInfo,
         client_cert: Option<Arc<ClientCertificateData>>,
@@ -34,6 +35,7 @@ impl HttpProxyPass {
                     client_cert.map(|itm| HttpProxyPassIdentity::ClientCert(itm)),
                     locations,
                     listening_port_info.clone(),
+                    connection_ip,
                 )
                 .into(),
             ),
@@ -46,7 +48,7 @@ impl HttpProxyPass {
     pub async fn send_payload(
         &self,
         req: hyper::Request<hyper::body::Incoming>,
-        connection_addr: &SocketAddr,
+        connection_ip: ConnectionIp,
         debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         if self.endpoint_info.debug {
@@ -105,18 +107,20 @@ impl HttpProxyPass {
                 println!("Request parts: {:?}", request.req_parts);
             }
 
-            if let Some(white_list_ip) = proxy_pass_location.config.ip_white_list_id.as_ref() {
-                if !crate::app::APP_CTX
-                    .current_configuration
-                    .get(|itm| {
-                        itm.white_list_ip_list
-                            .is_white_listed(white_list_ip, &connection_addr.ip())
-                    })
-                    .await
-                {
-                    return Err(ProxyPassError::IpRestricted(
-                        self.listening_port_info.socket_addr.ip().to_string(),
-                    ));
+            if let Some(ip_addr) = connection_ip.get_ip_addr() {
+                if let Some(white_list_ip) = proxy_pass_location.config.ip_white_list_id.as_ref() {
+                    if !crate::app::APP_CTX
+                        .current_configuration
+                        .get(|itm| {
+                            itm.white_list_ip_list
+                                .is_white_listed(white_list_ip, &ip_addr)
+                        })
+                        .await
+                    {
+                        return Err(ProxyPassError::IpRestricted(
+                            self.listening_port_info.listen_host.to_string(),
+                        ));
+                    }
                 }
             }
 

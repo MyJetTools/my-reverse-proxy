@@ -5,21 +5,32 @@ use crate::configurations::*;
 pub async fn merge_http_configuration_with_existing_port(
     http_endpoint_info: HttpEndpointInfo,
 ) -> Result<HttpListenPortConfiguration, String> {
-    let port = http_endpoint_info.host_endpoint.get_port();
+    let endpoint_port = http_endpoint_info.host_endpoint.get_port();
+    let host_key = http_endpoint_info.host_endpoint.as_str().to_string();
 
-    let configuration = crate::app::APP_CTX
-        .current_configuration
-        .get(move |config| config.listen_endpoints.get(&port).cloned())
-        .await;
+    let listen_config = match endpoint_port {
+        EndpointPort::Tcp(port) => {
+            crate::app::APP_CTX
+                .current_configuration
+                .get(move |config| config.listen_tcp_endpoints.get(&port).cloned())
+                .await
+        }
+        EndpointPort::UnixSocket(unix_host) => {
+            crate::app::APP_CTX
+                .current_configuration
+                .get(move |config| config.listen_unix_socket_endpoints.get(&unix_host).cloned())
+                .await
+        }
+    };
 
-    if configuration.is_none() {
+    let listen_host = http_endpoint_info.host_endpoint.get_listen_host();
+
+    let Some(configuration) = listen_config else {
         return Ok(HttpListenPortConfiguration::new(
             Arc::new(http_endpoint_info),
-            port,
+            listen_host,
         ));
-    }
-
-    let configuration = configuration.unwrap();
+    };
 
     match configuration {
         ListenConfiguration::Http(config) => {
@@ -30,9 +41,9 @@ pub async fn merge_http_configuration_with_existing_port(
         }
         ListenConfiguration::Tcp(_) => {
             return Err(format!(
-                "Can not apply endpoint {}. Port {} is already configured as TCP.",
+                "Can not apply endpoint {}. Endpoint {} is already configured as TCP.",
                 http_endpoint_info.host_endpoint.as_str(),
-                port
+                host_key
             ));
         }
         ListenConfiguration::Mpc(config) => {
@@ -56,10 +67,10 @@ fn check_endpoint_type(
     }
 
     return Err(format!(
-            "Can not apply endpoint {} which has {:?} type to the port {} is already configured as {:?}.",
+            "Can not apply endpoint {} which has {:?} type to the endpoint {} already configured as {:?}.",
             http_endpoint.host_endpoint.as_str(),
             http_endpoint.listen_endpoint_type,
-            http_endpoint.host_endpoint.get_port(),
+            http_endpoint.host_endpoint.as_str(),
             config.listen_endpoint_type
         ));
 }

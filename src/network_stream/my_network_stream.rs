@@ -4,7 +4,10 @@ use my_ssh::SshSession;
 use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream;
+use crate::{
+    tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
+    types::AcceptedServerConnection,
+};
 
 use super::*;
 
@@ -12,6 +15,18 @@ pub enum MyNetworkStream {
     Tcp(tokio::net::TcpStream),
     #[cfg(unix)]
     UnixSocket(tokio::net::UnixStream),
+}
+
+impl Into<MyNetworkStream> for AcceptedServerConnection {
+    fn into(self) -> MyNetworkStream {
+        match self {
+            AcceptedServerConnection::Tcp {
+                network_stream,
+                addr: _,
+            } => MyNetworkStream::Tcp(network_stream),
+            AcceptedServerConnection::Unix(unix_stream) => MyNetworkStream::UnixSocket(unix_stream),
+        }
+    }
 }
 
 impl MyNetworkStream {

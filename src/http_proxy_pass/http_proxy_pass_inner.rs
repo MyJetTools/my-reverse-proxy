@@ -1,7 +1,7 @@
 use rust_common::placeholders::*;
 use rust_extensions::StrOrString;
 
-use crate::types::HttpRequestReader;
+use crate::types::{ConnectionIp, HttpRequestReader};
 
 use super::{HttpListenPortInfo, HttpProxyPassIdentity, ProxyPassLocations};
 
@@ -9,6 +9,7 @@ pub struct HttpProxyPassInner {
     pub identity: Option<HttpProxyPassIdentity>,
     pub locations: ProxyPassLocations,
     pub http_listen_port_info: HttpListenPortInfo,
+    pub connection_ip: ConnectionIp,
 }
 
 impl HttpProxyPassInner {
@@ -16,11 +17,13 @@ impl HttpProxyPassInner {
         identity: Option<HttpProxyPassIdentity>,
         locations: ProxyPassLocations,
         http_listen_port_info: HttpListenPortInfo,
+        connection_ip: ConnectionIp,
     ) -> Self {
         Self {
             identity,
             locations,
             http_listen_port_info,
+            connection_ip,
         }
     }
 
@@ -40,9 +43,9 @@ impl HttpProxyPassInner {
                 ContentToken::Text(text) => result.push_str(text),
                 ContentToken::Placeholder(placeholder) => match placeholder {
                     "ENDPOINT_IP" => {
-                        result.push_str(
-                            format!("{}", self.http_listen_port_info.socket_addr.ip()).as_str(),
-                        );
+                        if let Some(ip) = self.connection_ip.get_ip_addr() {
+                            result.push_str(format!("{}", ip).as_str());
+                        }
                     }
 
                     "PATH_AND_QUERY" => {

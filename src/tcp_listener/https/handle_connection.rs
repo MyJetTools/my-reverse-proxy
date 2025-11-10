@@ -6,20 +6,24 @@ use tokio::io::AsyncWriteExt;
 use crate::configurations::*;
 use crate::http_proxy_pass::{HttpListenPortInfo, HttpProxyPass};
 use crate::tcp_listener::http_request_handler::https::HttpsRequestsHandler;
-use crate::tcp_listener::AcceptedTcpConnection;
+use crate::types::ConnectionIp;
 
 use super::ClientCertificateData;
 
 pub async fn handle_connection(
-    accepted_connection: AcceptedTcpConnection,
+    accepted_tcp_stream: tokio::net::TcpStream,
+    connection_ip: impl Into<ConnectionIp>,
     listening_addr: SocketAddr,
     configuration: Arc<HttpListenPortConfiguration>,
     connection_id: u64,
 ) {
     let endpoint_port = listening_addr.port();
+
+    let connection_ip = connection_ip.into();
+
     let result = super::utils::lazy_accept_tcp_stream(
         endpoint_port,
-        accepted_connection.network_stream,
+        accepted_tcp_stream,
         configuration.clone(),
     )
     .await;
@@ -49,8 +53,7 @@ pub async fn handle_connection(
     match endpoint_info.listen_endpoint_type {
         ListenHttpEndpointType::Http1 => {
             crate::h1_proxy_server::kick_h1_reverse_proxy_server(
-                listening_addr,
-                accepted_connection.addr,
+                connection_ip,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
@@ -60,7 +63,7 @@ pub async fn handle_connection(
         ListenHttpEndpointType::Http2 => {
             kick_off_https2(
                 listening_addr,
-                accepted_connection.addr,
+                connection_ip,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
@@ -70,8 +73,7 @@ pub async fn handle_connection(
         }
         ListenHttpEndpointType::Https1 => {
             crate::h1_proxy_server::kick_h1_reverse_proxy_server(
-                listening_addr,
-                accepted_connection.addr,
+                connection_ip,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
@@ -81,7 +83,7 @@ pub async fn handle_connection(
         ListenHttpEndpointType::Https2 => {
             kick_off_https2(
                 listening_addr,
-                accepted_connection.addr,
+                connection_ip,
                 endpoint_info,
                 tls_stream,
                 cn_user_name,
@@ -98,7 +100,7 @@ pub async fn handle_connection(
 
 async fn kick_off_https2(
     listening_addr: SocketAddr,
-    socket_addr: SocketAddr,
+    connection_ip: ConnectionIp,
     endpoint_info: Arc<HttpEndpointInfo>,
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     client_certificate: Option<Arc<ClientCertificateData>>,
@@ -125,17 +127,18 @@ async fn kick_off_https2(
 
         let listening_port_info = HttpListenPortInfo {
             endpoint_type: endpoint_info.listen_endpoint_type,
-            socket_addr,
+            listen_host: listening_addr.into(),
         };
 
         let http_proxy_pass = HttpProxyPass::new(
+            connection_ip,
             endpoint_info.clone(),
             listening_port_info,
             client_certificate,
         )
         .await;
 
-        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, socket_addr);
+        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, connection_ip);
 
         let https_requests_handler = Arc::new(https_requests_handler);
 
@@ -163,7 +166,7 @@ async fn kick_off_https2(
             .update(|itm| itm.connection_by_port.dec(&endpoint_port))
             .await;
 
-        println!("Http2 connection is gone {}", socket_addr);
+        println!("Http2 connection is gone {:?}", connection_ip);
 
         https_requests_handler_dispose.dispose().await;
     });

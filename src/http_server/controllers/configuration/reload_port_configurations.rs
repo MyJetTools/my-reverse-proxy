@@ -21,7 +21,7 @@ async fn handle_request(
     input_data: ReloadPortHttpInput,
     _ctx: &HttpContext,
 ) -> Result<HttpOkResult, HttpFailResult> {
-    match crate::flows::reload_port_configurations(input_data.port).await {
+    match crate::flows::reload_tcp_port_configurations(input_data.port).await {
         Ok(result) => HttpOutput::as_text(result).into_ok_result(true),
         Err(err) => Err(HttpFailResult::as_validation_error(err)),
     }

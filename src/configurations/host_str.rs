@@ -1,14 +1,35 @@
-use std::sync::Arc;
+use std::{
+    net::{Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
+
+use crate::types::ListenHost;
+
+#[derive(Clone)]
+pub enum EndpointPort {
+    Tcp(u16),
+    UnixSocket(Arc<String>),
+}
 
 #[derive(Clone)]
 pub struct EndpointHttpHostString {
     src: Arc<String>,
-    port: u16,
+    port: Option<u16>,
     index: Option<usize>,
 }
 
 impl EndpointHttpHostString {
     pub fn new(host: String) -> Result<Self, String> {
+        let is_unix_socket = host.starts_with('/') || host.starts_with("~/");
+
+        if is_unix_socket {
+            return Ok(Self {
+                src: Arc::new(host),
+                port: None,
+                index: None,
+            });
+        }
+
         let index = host.find(':');
 
         let port_str = match index {
@@ -25,7 +46,7 @@ impl EndpointHttpHostString {
 
         let result = Self {
             src: Arc::new(host),
-            port,
+            port: Some(port),
             index,
         };
 
@@ -53,7 +74,26 @@ impl EndpointHttpHostString {
         &self.src
     }
 
-    pub fn get_port(&self) -> u16 {
-        self.port
+    pub fn get_port(&self) -> EndpointPort {
+        match self.port {
+            Some(port) => EndpointPort::Tcp(port),
+            None => EndpointPort::UnixSocket(self.src.clone()),
+        }
+    }
+
+    pub fn is_unix_socket(&self) -> bool {
+        self.port.is_none()
+    }
+
+    pub fn get_listen_host(&self) -> ListenHost {
+        match self.get_port() {
+            EndpointPort::Tcp(port) => {
+                let socket_addr =
+                    SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+
+                return ListenHost::Tcp(socket_addr);
+            }
+            EndpointPort::UnixSocket(host) => ListenHost::Unix(host),
+        }
     }
 }

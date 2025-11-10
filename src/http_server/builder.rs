@@ -30,6 +30,10 @@ pub fn build_controllers() -> ControllersMiddleware {
     ));
 
     result.register_post_action(Arc::new(
+        super::controllers::configuration::ReloadUnixHostAction,
+    ));
+
+    result.register_post_action(Arc::new(
         super::controllers::configuration::RefreshSslCertificateAction,
     ));
 
