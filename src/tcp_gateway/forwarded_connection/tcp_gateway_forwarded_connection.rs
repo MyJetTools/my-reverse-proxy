@@ -35,6 +35,13 @@ impl TcpGatewayForwardConnection {
             connect_to_tcp_socket(remote_endpoint_str, connection_id, timeout).await?
         };
 
+        println!(
+            "Gateway:[{}]. Established Forwarded connection to endpoint {} with id {}",
+            gateway_connection.get_gateway_id().await,
+            remote_endpoint.as_str(),
+            connection_id
+        );
+
         let (read, write) = tcp_stream.into_split();
 
         let (inner, receiver) = TcpConnectionInner::new(write, aes_key);
