@@ -159,7 +159,7 @@ async fn connect_to_tcp_socket(
 
     let Ok(result) = result else {
         return Err(format!(
-            "Can not connect to {} with id {}. Err: Timeout {:?}",
+            "Can not connect to tcp-socket {} with id {}. Err: Timeout {:?}",
             remote_endpoint, connection_id, timeout
         ));
     };
@@ -168,7 +168,7 @@ async fn connect_to_tcp_socket(
         Ok(tcp_stream) => Ok(MyNetworkStream::Tcp(tcp_stream)),
         Err(err) => {
             return Err(format!(
-                "Can not connect to {} with id {}. Err: {:?}",
+                "Can not connect to tcp-socket {} with id {}. Err: {:?}",
                 remote_endpoint, connection_id, err
             ));
         }
@@ -186,7 +186,7 @@ async fn connect_to_unix_socket(
 
     let Ok(result) = result else {
         return Err(format!(
-            "Can not connect to {} with id {}. Err: Timeout {:?}",
+            "Can not connect to unix socket {} with id {}. Err: Timeout {:?}",
             remote_endpoint, connection_id, timeout
         ));
     };
@@ -195,7 +195,7 @@ async fn connect_to_unix_socket(
         Ok(tcp_stream) => Ok(MyNetworkStream::UnixSocket(tcp_stream)),
         Err(err) => {
             return Err(format!(
-                "Can not connect to {} with id {}. Err: {:?}",
+                "Can not connect to unix socket {} with id {}. Err: {:?}",
                 remote_endpoint, connection_id, err
             ));
         }
