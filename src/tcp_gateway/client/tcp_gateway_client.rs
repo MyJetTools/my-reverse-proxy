@@ -120,7 +120,7 @@ async fn connection_loop(
 
         let gateway_connection = TcpGatewayConnection::new(
             inner.gateway_host.clone(),
-            write,
+            write.into(),
             inner.encryption.clone(),
             supported_compression,
             inner.allow_incoming_forward_connections,

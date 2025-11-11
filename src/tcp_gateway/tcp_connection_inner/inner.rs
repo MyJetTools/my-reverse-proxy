@@ -2,14 +2,16 @@ use std::{sync::Arc, time::Duration};
 
 use encryption::aes::AesKey;
 use rust_extensions::UnsafeValue;
-use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf, sync::Mutex};
+use tokio::sync::Mutex;
+
+use crate::network_stream::{MyOwnedWriteHalf, NetworkError, NetworkStreamWritePart};
 
 use super::SendBuffer;
 
 const SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TcpConnectionInner {
-    pub connection: Mutex<Option<OwnedWriteHalf>>,
+    pub connection: Mutex<Option<MyOwnedWriteHalf>>,
     pub buffer: Mutex<SendBuffer>,
     sender: Arc<tokio::sync::mpsc::Sender<()>>,
     is_connected: Box<UnsafeValue<bool>>,
@@ -18,7 +20,7 @@ pub struct TcpConnectionInner {
 
 impl TcpConnectionInner {
     pub fn new(
-        connection: OwnedWriteHalf,
+        connection: MyOwnedWriteHalf,
         aes_key: Arc<AesKey>,
     ) -> (Self, tokio::sync::mpsc::Receiver<()>) {
         let (sender, receiver) = tokio::sync::mpsc::channel(1024);
@@ -92,17 +94,9 @@ impl TcpConnectionInner {
 
             let mut connection_access = self.connection.lock().await;
             if let Some(connection) = &mut *connection_access {
-                let write_future = connection.write_all(&payload_to_send);
-
-                let write_result = tokio::time::timeout(SEND_TIMEOUT, write_future).await;
-
-                let Ok(write_result) = write_result else {
-                    println!(
-                        "Timeout sending payload to socket with size {}",
-                        payload_to_send.len()
-                    );
-                    return false;
-                };
+                let write_result = connection
+                    .write_all_with_timeout(&payload_to_send, SEND_TIMEOUT)
+                    .await;
 
                 if write_result.is_err() {
                     return false;
@@ -111,10 +105,10 @@ impl TcpConnectionInner {
         }
     }
 
-    pub async fn flush(&self) -> Result<(), std::io::Error> {
+    pub async fn flush(&self) -> Result<(), NetworkError> {
         let mut connection_access = self.connection.lock().await;
         if let Some(connection) = &mut *connection_access {
-            return connection.flush().await;
+            return connection.flush_it().await;
         }
 
         Ok(())

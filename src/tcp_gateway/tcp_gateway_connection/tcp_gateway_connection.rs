@@ -14,9 +14,9 @@ use rust_extensions::{
     remote_endpoint::RemoteEndpointOwned,
     AtomicDuration, AtomicStopWatch, SliceOrVec,
 };
-use tokio::{net::tcp::OwnedWriteHalf, sync::Mutex};
+use tokio::sync::Mutex;
 
-use crate::metrics::PerSecondAccumulator;
+use crate::{metrics::PerSecondAccumulator, network_stream::MyOwnedWriteHalf};
 
 use super::{super::forwarded_connection::*, super::*};
 
@@ -42,7 +42,7 @@ pub struct TcpGatewayConnection {
 impl TcpGatewayConnection {
     pub fn new(
         addr: Arc<String>,
-        write_half: OwnedWriteHalf,
+        write_half: MyOwnedWriteHalf,
         aes_key: Arc<AesKey>,
         supported_compression: bool,
         allow_incoming_forward_connection: bool,

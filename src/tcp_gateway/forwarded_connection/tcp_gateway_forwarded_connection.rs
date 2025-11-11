@@ -1,18 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
 use encryption::aes::AesKey;
-use tokio::{
-    io::AsyncReadExt,
-    net::{tcp::OwnedReadHalf, TcpStream},
-};
 
-use crate::tcp_gateway::*;
+use crate::{network_stream::*, tcp_gateway::*};
 
 pub struct TcpGatewayForwardConnection {
     inner: Arc<TcpConnectionInner>,
     connection_id: u32,
     receiver: Option<tokio::sync::mpsc::Receiver<()>>,
-    read: Option<OwnedReadHalf>,
+    read: Option<MyOwnedReadHalf>,
     gateway_connection: Arc<TcpGatewayConnection>,
     remote_endpoint: Arc<String>,
 }
@@ -31,31 +27,12 @@ impl TcpGatewayForwardConnection {
             remote_endpoint.as_str(),
             connection_id
         );
-        let connect_future = TcpStream::connect(remote_endpoint.as_str());
 
-        let result = tokio::time::timeout(timeout, connect_future).await;
-
-        if result.is_err() {
-            return Err(format!(
-                "Can not connect to {} with id {}. Err: Timeout {:?}",
-                remote_endpoint.as_str(),
-                connection_id,
-                timeout
-            ));
-        }
-
-        let result = result.unwrap();
-
-        let tcp_stream = match result {
-            Ok(tcp_stream) => tcp_stream,
-            Err(err) => {
-                return Err(format!(
-                    "Can not connect to {} with id {}. Err: {:?}",
-                    remote_endpoint.as_str(),
-                    connection_id,
-                    err
-                ));
-            }
+        let remote_endpoint_str = remote_endpoint.as_str();
+        let tcp_stream = if remote_endpoint.starts_with('/') {
+            connect_to_unix_socket(remote_endpoint_str, connection_id, timeout).await?
+        } else {
+            connect_to_tcp_socket(remote_endpoint_str, connection_id, timeout).await?
         };
 
         let (read, write) = tcp_stream.into_split();
@@ -112,7 +89,7 @@ impl TcpGatewayForwardConnection {
 }
 
 async fn read_loop(
-    mut read: OwnedReadHalf,
+    mut read: MyOwnedReadHalf,
     gateway_connection: Arc<TcpGatewayConnection>,
     write: Arc<TcpConnectionInner>,
     connection_id: u32,
@@ -168,5 +145,59 @@ async fn read_loop(
         gateway_connection
             .send_backward_payload(connection_id, buffer)
             .await;
+    }
+}
+
+async fn connect_to_tcp_socket(
+    remote_endpoint: &str,
+    connection_id: u32,
+    timeout: Duration,
+) -> Result<MyNetworkStream, String> {
+    let connect_future = tokio::net::TcpStream::connect(remote_endpoint);
+
+    let result = tokio::time::timeout(timeout, connect_future).await;
+
+    let Ok(result) = result else {
+        return Err(format!(
+            "Can not connect to {} with id {}. Err: Timeout {:?}",
+            remote_endpoint, connection_id, timeout
+        ));
+    };
+
+    match result {
+        Ok(tcp_stream) => Ok(MyNetworkStream::Tcp(tcp_stream)),
+        Err(err) => {
+            return Err(format!(
+                "Can not connect to {} with id {}. Err: {:?}",
+                remote_endpoint, connection_id, err
+            ));
+        }
+    }
+}
+
+async fn connect_to_unix_socket(
+    remote_endpoint: &str,
+    connection_id: u32,
+    timeout: Duration,
+) -> Result<MyNetworkStream, String> {
+    let connect_future = tokio::net::UnixStream::connect(remote_endpoint);
+
+    let result = tokio::time::timeout(timeout, connect_future).await;
+
+    let Ok(result) = result else {
+        return Err(format!(
+            "Can not connect to {} with id {}. Err: Timeout {:?}",
+            remote_endpoint, connection_id, timeout
+        ));
+    };
+
+    match result {
+        Ok(tcp_stream) => Ok(MyNetworkStream::UnixSocket(tcp_stream)),
+        Err(err) => {
+            return Err(format!(
+                "Can not connect to {} with id {}. Err: {:?}",
+                remote_endpoint, connection_id, err
+            ));
+        }
     }
 }

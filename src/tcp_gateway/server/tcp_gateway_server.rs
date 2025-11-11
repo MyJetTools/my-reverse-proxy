@@ -104,7 +104,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
 
         let tcp_gateway_connection = TcpGatewayConnection::new(
             tcp_gateway.gateway_host.clone(),
-            write,
+            write.into(),
             tcp_gateway.encryption.clone(),
             true,
             false,
