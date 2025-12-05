@@ -24,6 +24,12 @@ impl ProxyServerError {
             Self::HttpResponse(_) => {
                 return false;
             }
+            Self::LocationIsNotFound => {
+                return false;
+            }
+            Self::NotAuthorized => {
+                return false;
+            }
             _ => {
                 return true;
             }
