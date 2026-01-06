@@ -49,7 +49,14 @@ pub async fn response_read_loop<
             }
         };
 
-        resp_headers.write_hsts_headers = true;
+        if server_write_part
+            .http_connection_info
+            .listen_config
+            .listen_endpoint_type
+            .is_https()
+        {
+            resp_headers.write_hsts_headers = true;
+        }
 
         let content_length = resp_headers.content_length;
 
