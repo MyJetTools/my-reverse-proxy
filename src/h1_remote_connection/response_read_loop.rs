@@ -23,6 +23,13 @@ pub async fn response_read_loop<
 ) {
     let mut remote_h1_reader =
         H1Reader::new(remote_read_part, crate::types::HttpTimeouts::default());
+
+    let is_https = server_write_part
+        .http_connection_info
+        .listen_config
+        .listen_endpoint_type
+        .is_https();
+
     loop {
         let mut resp_headers = match remote_h1_reader.read_headers().await {
             Ok(headers) => headers,
@@ -49,12 +56,7 @@ pub async fn response_read_loop<
             }
         };
 
-        if server_write_part
-            .http_connection_info
-            .listen_config
-            .listen_endpoint_type
-            .is_https()
-        {
+        if is_https {
             resp_headers.write_hsts_headers = true;
         }
 
