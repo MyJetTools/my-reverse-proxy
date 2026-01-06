@@ -174,6 +174,14 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
             self.h1_headers_builder
                 .push_header(add_header.0, value.as_str());
         }
+
+        if http_headers.write_hsts_headers {
+            self.h1_headers_builder.push_header(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains; preload",
+            );
+        }
+
         self.h1_headers_builder.push_cl_cr();
 
         let mut web_socket_upgrade = false;

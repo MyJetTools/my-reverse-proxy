@@ -24,7 +24,7 @@ pub async fn response_read_loop<
     let mut remote_h1_reader =
         H1Reader::new(remote_read_part, crate::types::HttpTimeouts::default());
     loop {
-        let resp_headers = match remote_h1_reader.read_headers().await {
+        let mut resp_headers = match remote_h1_reader.read_headers().await {
             Ok(headers) => headers,
             Err(err) => {
                 println!("Reading header from remote: {:?}", err);
@@ -48,6 +48,8 @@ pub async fn response_read_loop<
                 return;
             }
         };
+
+        resp_headers.write_hsts_headers = true;
 
         let content_length = resp_headers.content_length;
 

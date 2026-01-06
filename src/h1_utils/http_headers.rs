@@ -15,6 +15,7 @@ pub struct Http1Headers {
     pub host_value: Option<HeaderPosition>,
     pub cookie_value: Option<HeaderPosition>,
     pub upgrade_value: Option<HeaderPosition>,
+    pub write_hsts_headers: bool,
 }
 
 impl Http1Headers {
@@ -44,6 +45,7 @@ impl Http1Headers {
 
             if end == header_start_pos {
                 return Some(Self {
+                    write_hsts_headers: false,
                     first_line_end,
                     host_value,
                     cookie_value,
