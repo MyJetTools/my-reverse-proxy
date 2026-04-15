@@ -18,10 +18,9 @@ async fn handle_request(
     let content = super::render_content(&config_model).await;
     HttpOutput::Content {
         status_code: 200,
-        headers: None,
-        content_type: WebContentType::Html.into(),
+        headers: WebContentType::Html.into(),
         content: content.into_bytes(),
-        set_cookies: None,
+
     }
     .into_ok_result(false)
 }

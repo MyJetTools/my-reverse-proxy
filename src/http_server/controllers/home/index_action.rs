@@ -17,10 +17,8 @@ async fn handle_request(
     let config = CurrentConfigurationHttpModel::new().await;
     HttpOutput::Content {
         status_code: 200,
-        headers: None,
-        content_type: WebContentType::Html.into(),
+        headers: WebContentType::Html.into(),
         content: create_html_content(config).await.into_bytes(),
-        set_cookies: None,
     }
     .into_ok_result(false)
 }
