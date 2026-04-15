@@ -6,6 +6,16 @@ use super::*;
 
 use crate::h1_remote_connection::*;
 
+struct Http1ConnectionGauge(String);
+
+impl Drop for Http1ConnectionGauge {
+    fn drop(&mut self) {
+        crate::app::APP_CTX
+            .prometheus
+            .dec_http1_server_connections(&self.0);
+    }
+}
+
 pub async fn serve_reverse_proxy<
     WritePart: NetworkStreamWritePart + Send + Sync + 'static,
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
@@ -14,14 +24,18 @@ pub async fn serve_reverse_proxy<
     server_stream: TServerStream,
     mut http_connection_info: HttpConnectionInfo,
 ) {
+    let listen_addr = http_connection_info.listen_config.listen_host.to_string();
+    crate::app::APP_CTX
+        .prometheus
+        .inc_http1_server_connections(&listen_addr);
+    let _conn_gauge = Http1ConnectionGauge(listen_addr);
+
     let mut remote_connections: HashMap<i64, RemoteConnection> = HashMap::new();
 
     let (server_read_part, server_write_part) = server_stream.split();
 
     let timeouts = crate::types::HttpTimeouts {
         read_timeout: crate::consts::READ_TIMEOUT,
-        write_timeout: crate::consts::WRITE_TIMEOUT,
-        connect_timeout: crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
     };
 
     let mut h1_reader = H1Reader::new(server_read_part, timeouts);
@@ -58,7 +72,11 @@ pub async fn serve_reverse_proxy<
             }
             Err(err) => {
                 if err.can_be_printed_as_debug() {
-                    println!("Response Err: {:?}", err);
+                    println!(
+                        "[{}] Response Err: {:?}",
+                        http_connection_info.listen_config.listen_host.to_string(),
+                        err
+                    );
                 }
 
                 let content = match &err {
@@ -85,7 +103,10 @@ pub async fn serve_reverse_proxy<
                         crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
                             .as_slice()
                     }
-                    ProxyServerError::CanNotConnectToRemoteResource(err) => {
+                    ProxyServerError::CanNotConnectToRemoteResource {
+                        remote_resource: _,
+                        err,
+                    } => {
                         if err.as_timeout().is_some() {
                             crate::error_templates::ERROR_TIMEOUT.as_slice()
                         } else {
@@ -107,14 +128,13 @@ pub async fn serve_reverse_proxy<
                     }
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
-                h1_server_write_part
+                let _ = h1_server_write_part
                     .write_http_payload_with_timeout(
                         request_id,
                         content,
                         crate::consts::WRITE_TIMEOUT,
                     )
-                    .await
-                    .unwrap();
+                    .await;
             }
         }
     }
@@ -165,7 +185,12 @@ async fn execute_request<
                     remote_connections.insert(location.id, remote_connection);
                     remote_connections.get_mut(&location.id).unwrap()
                 }
-                Err(err) => return Err(ProxyServerError::CanNotConnectToRemoteResource(err)),
+                Err(err) => {
+                    return Err(ProxyServerError::CanNotConnectToRemoteResource {
+                        remote_resource: location.proxy_pass_to.to_string(),
+                        err,
+                    })
+                }
             }
         }
     };
@@ -197,7 +222,12 @@ async fn execute_request<
                 remote_connections.insert(location.id, remote_connection);
                 connection = remote_connections.get_mut(&location.id).unwrap();
             }
-            Err(err) => return Err(ProxyServerError::CanNotConnectToRemoteResource(err)),
+            Err(err) => {
+                return Err(ProxyServerError::CanNotConnectToRemoteResource {
+                    remote_resource: location.proxy_pass_to.to_string(),
+                    err,
+                })
+            }
         }
 
         let send_headers_result = connection
@@ -217,16 +247,18 @@ async fn execute_request<
         }));
     }
 
-    h1_reader
-        .transfer_body(connection.connection_id, connection, content_length)
-        .await?;
-
     h1_server_write_part
         .add_current_request(connection.connection_id)
         .await;
 
-    //let server_single_threaded_part: Arc<Mutex<HttpServerSingleThreadedPart<WritePart>>> =
-    //    server_single_threaded_part.clone();
+    if let Err(err) = h1_reader
+        .transfer_body(connection.connection_id, connection, content_length)
+        .await
+    {
+        // Remote may have received partial body — connection is desynced, drop from pool
+        remote_connections.remove(&location.id);
+        return Err(err);
+    }
 
     let connected = connection.read_http_response(http_connection_context);
 

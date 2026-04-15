@@ -25,10 +25,6 @@ pub async fn handle_connection(
 
     let builder = http2_builder.clone();
 
-    crate::app::APP_CTX
-        .prometheus
-        .inc_http1_server_connections(listening_addr_str.as_str());
-
     let port = listen_host.get_port();
 
     if let Some(port) = port.as_ref() {

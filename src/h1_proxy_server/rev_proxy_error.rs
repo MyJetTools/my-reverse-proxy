@@ -10,7 +10,10 @@ pub enum ProxyServerError {
     BufferAllocationFail,
     ChunkHeaderParseError,
     HeadersParseError(&'static str),
-    CanNotConnectToRemoteResource(NetworkError),
+    CanNotConnectToRemoteResource {
+        remote_resource: String,
+        err: NetworkError,
+    },
     CanNotWriteContentToRemoteConnection(NetworkError),
     HttpConfigurationIsNotFound,
     LocationIsNotFound,

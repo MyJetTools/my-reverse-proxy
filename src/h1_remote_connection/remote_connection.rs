@@ -51,10 +51,20 @@ pub enum RemoteConnectionInner {
     LocalFiles(Arc<LocalPathContent>),
 }
 
+pub struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 pub struct RemoteConnection {
     pub inner: RemoteConnectionInner,
     pub mcp_path: Option<String>,
     pub connection_id: u64,
+    #[allow(dead_code)]
+    response_loop_handle: Option<AbortOnDrop>,
 }
 
 impl RemoteConnection {
@@ -84,7 +94,7 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    tokio::spawn(super::response_read_loop(
+                    let response_loop_handle = tokio::spawn(super::response_read_loop(
                         connection_id,
                         read_part,
                         result.get_remote_disconnect_trigger(),
@@ -100,6 +110,7 @@ impl RemoteConnection {
                         } else {
                             None
                         },
+                        response_loop_handle: Some(AbortOnDrop(response_loop_handle)),
                     });
                 }
                 crate::configurations::MyReverseProxyRemoteEndpoint::OverSsh {
@@ -118,7 +129,7 @@ impl RemoteConnection {
                     )
                     .await?;
 
-                    tokio::spawn(super::response_read_loop(
+                    let response_loop_handle = tokio::spawn(super::response_read_loop(
                         connection_id,
                         read_part,
                         result.get_remote_disconnect_trigger(),
@@ -134,6 +145,7 @@ impl RemoteConnection {
                         } else {
                             None
                         },
+                        response_loop_handle: Some(AbortOnDrop(response_loop_handle)),
                     });
                 }
                 crate::configurations::MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
@@ -152,7 +164,7 @@ impl RemoteConnection {
                                 )
                                 .await?;
 
-                            tokio::spawn(super::response_read_loop(
+                            let response_loop_handle = tokio::spawn(super::response_read_loop(
                                 connection_id,
                                 read_part,
                                 result.get_remote_disconnect_trigger(),
@@ -168,6 +180,7 @@ impl RemoteConnection {
                                 } else {
                                     None
                                 },
+                                response_loop_handle: Some(AbortOnDrop(response_loop_handle)),
                             });
                         }
                     }
@@ -180,7 +193,7 @@ impl RemoteConnection {
                         )
                         .await?;
 
-                    tokio::spawn(super::response_read_loop(
+                    let response_loop_handle = tokio::spawn(super::response_read_loop(
                         connection_id,
                         read_part,
                         result.get_remote_disconnect_trigger(),
@@ -196,6 +209,7 @@ impl RemoteConnection {
                         } else {
                             None
                         },
+                        response_loop_handle: Some(AbortOnDrop(response_loop_handle)),
                     });
                 }
             },
@@ -217,7 +231,7 @@ impl RemoteConnection {
                         .await?;
 
                     println!("Starting response read loop");
-                    tokio::spawn(super::response_read_loop(
+                    let response_loop_handle = tokio::spawn(super::response_read_loop(
                         connection_id,
                         read_part,
                         result.get_remote_disconnect_trigger(),
@@ -233,6 +247,7 @@ impl RemoteConnection {
                         } else {
                             None
                         },
+                        response_loop_handle: Some(AbortOnDrop(response_loop_handle)),
                     });
                 }
             },
@@ -248,6 +263,7 @@ impl RemoteConnection {
                     inner: RemoteConnectionInner::LocalFiles(Arc::new(path_content)),
 
                     mcp_path: None,
+                    response_loop_handle: None,
                 });
             }
             ProxyPassToConfig::Static(config) => {
@@ -255,6 +271,7 @@ impl RemoteConnection {
                     connection_id,
                     inner: RemoteConnectionInner::StaticContent(config.clone()),
                     mcp_path: None,
+                    response_loop_handle: None,
                 });
             }
         }

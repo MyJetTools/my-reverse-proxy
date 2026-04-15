@@ -6,7 +6,7 @@ use crate::{
 use super::*;
 
 impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<TNetworkReadPart> {
-    pub async fn authorize<'s>(
+    pub async fn authorize(
         &self,
         endpoint_info: &HttpEndpointInfo,
         http_connection_info: &HttpConnectionInfo,
