@@ -129,6 +129,9 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
 
         let mut pos = http_headers.first_line_end + crate::consts::HTTP_CR_LF.len();
 
+        let client_ip = http_connection_info.connection_ip.get_ip_addr();
+        let mut xff_written = false;
+
         loop {
             let next_pos = data
                 .find_sequence_pos(crate::consts::HTTP_CR_LF, pos)
@@ -151,12 +154,37 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 unsafe { std::str::from_utf8_unchecked(&header[..header_name_end_pos]) };
 
             if !modify_headers.has_to_be_removed(header_name) {
-                self.h1_headers_builder.push_raw_payload(header);
-                self.h1_headers_builder
-                    .push_raw_payload(crate::consts::HTTP_CR_LF);
+                if header_name.eq_ignore_ascii_case("x-forwarded-for") {
+                    if let Some(ip) = client_ip {
+                        let value_bytes = &header[header_name_end_pos + 1..];
+                        let value_str = std::str::from_utf8(value_bytes)
+                            .unwrap_or("")
+                            .trim();
+                        let new_value = format!("{},{}", value_str, ip);
+                        self.h1_headers_builder
+                            .push_header("X-Forwarded-For", &new_value);
+                        xff_written = true;
+                    } else {
+                        self.h1_headers_builder.push_raw_payload(header);
+                        self.h1_headers_builder
+                            .push_raw_payload(crate::consts::HTTP_CR_LF);
+                        xff_written = true;
+                    }
+                } else {
+                    self.h1_headers_builder.push_raw_payload(header);
+                    self.h1_headers_builder
+                        .push_raw_payload(crate::consts::HTTP_CR_LF);
+                }
             }
 
             pos = next_pos + crate::consts::HTTP_CR_LF.len();
+        }
+
+        if !xff_written {
+            if let Some(ip) = client_ip {
+                self.h1_headers_builder
+                    .push_header("X-Forwarded-For", &ip.to_string());
+            }
         }
 
         let http_request_reader = HttpHeadersReader {

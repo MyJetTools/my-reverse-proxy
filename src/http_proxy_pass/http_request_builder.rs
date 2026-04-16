@@ -267,7 +267,29 @@ impl HttpRequestBuilder {
             &mut self.parts,
             &proxy_pass.endpoint_info.modify_request_headers,
         );
+
+        apply_auto_x_forwarded_for(&mut self.parts, inner);
     }
+}
+
+fn apply_auto_x_forwarded_for(parts: &mut Parts, inner: &HttpProxyPassInner) {
+    let Some(ip) = inner.connection_ip.get_ip_addr() else {
+        return;
+    };
+    let ip_str = ip.to_string();
+
+    let new_value = match parts.headers.get("x-forwarded-for") {
+        Some(existing) => match existing.to_str() {
+            Ok(s) => format!("{},{}", s, ip_str),
+            Err(_) => ip_str,
+        },
+        None => ip_str,
+    };
+
+    parts.headers.insert(
+        HeaderName::from_static("x-forwarded-for"),
+        new_value.parse().unwrap(),
+    );
 }
 
 fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {
