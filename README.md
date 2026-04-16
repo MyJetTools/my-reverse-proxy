@@ -510,8 +510,11 @@ hosts:
       inject_country: true
 ```
 
-The geolocation database is compiled into the binary as a static lookup table.
-IPv6 clients are not currently resolved.
+The IPv4 geolocation database is compiled into the binary as a static lookup
+table. IPv6 lookups use an IP2Location LITE DB1 `.BIN` file
+(`ip_v6/IP2LOCATION-LITE-DB1.IPV6.BIN`) loaded via mmap at startup; the file
+is shipped alongside the binary in the Docker image. If the `.BIN` file is
+missing, IPv6 clients simply do not receive the header.
 
 
 ## Settings up SSH tunnels.

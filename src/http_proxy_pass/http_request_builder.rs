@@ -304,13 +304,10 @@ fn apply_cf_ip_country(
     let Some(ip) = inner.connection_ip.get_ip_addr() else {
         return;
     };
-    let std::net::IpAddr::V4(v4) = ip else {
+    let Some(code) = crate::ip_db::lookup_country(ip) else {
         return;
     };
-    let Some(code) = crate::ip_db::lookup_country(v4) else {
-        return;
-    };
-    let value = HeaderValue::from_bytes(code).unwrap();
+    let value = HeaderValue::from_bytes(&code).unwrap();
     parts
         .headers
         .insert(HeaderName::from_static("cf-ipcountry"), value);

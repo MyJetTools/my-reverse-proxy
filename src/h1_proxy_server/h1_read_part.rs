@@ -218,11 +218,9 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         }
 
         if inject_country_enabled {
-            if let Some(std::net::IpAddr::V4(v4)) =
-                http_connection_info.connection_ip.get_ip_addr()
-            {
-                if let Some(code) = crate::ip_db::lookup_country(v4) {
-                    let code_str = std::str::from_utf8(code).unwrap();
+            if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
+                if let Some(code) = crate::ip_db::lookup_country(ip) {
+                    let code_str = std::str::from_utf8(&code).unwrap();
                     self.h1_headers_builder.push_header("CF-IPCountry", code_str);
                 }
             }
