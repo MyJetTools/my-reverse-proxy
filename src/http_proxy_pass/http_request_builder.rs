@@ -334,14 +334,17 @@ fn modify_headers<'s>(
     }
 
     for (header, value) in modify_headers.iter_add() {
-        if !value.as_str().is_empty() {
-            let value = inner.populate_value(value, parts);
-            //println!("Adding Header: '{}'='{}'", add_header.name, value.as_str());
-            parts.headers.insert(
-                HeaderName::from_bytes(header.as_bytes()).unwrap(),
-                value.as_str().parse().unwrap(),
-            );
+        if value.as_str().is_empty() {
+            continue;
         }
+        let value = inner.populate_value(value, parts);
+        if value.as_str().is_empty() {
+            continue;
+        }
+        parts.headers.insert(
+            HeaderName::from_bytes(header.as_bytes()).unwrap(),
+            value.as_str().parse().unwrap(),
+        );
     }
 }
 

@@ -234,12 +234,18 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         };
 
         for add_header in modify_headers.iter_add() {
+            if add_header.1.is_empty() {
+                continue;
+            }
             let value = crate::scripts::populate_value(
                 http_request_reader,
                 http_connection_info,
                 identity,
                 add_header.1.as_str(),
             );
+            if value.as_str().is_empty() {
+                continue;
+            }
             self.h1_headers_builder
                 .push_header(add_header.0, value.as_str());
         }
