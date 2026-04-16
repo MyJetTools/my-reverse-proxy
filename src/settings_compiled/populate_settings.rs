@@ -110,6 +110,7 @@ impl SettingsCompiled {
                         variables,
                     )?,
                     debug: host_settings.endpoint.debug,
+                    inject_country: host_settings.endpoint.inject_country,
                     whitelisted_ip: variables
                         .apply_variables_opt(host_settings.endpoint.whitelisted_ip)?,
                     template_id: variables

@@ -21,6 +21,7 @@ pub struct EndpointSettings {
     pub google_auth: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub debug: Option<bool>,
+    pub inject_country: Option<bool>,
     pub whitelisted_ip: Option<String>,
     pub template_id: Option<String>,
     pub allowed_users: Option<String>,
@@ -29,6 +30,10 @@ pub struct EndpointSettings {
 impl EndpointSettings {
     pub fn get_debug(&self) -> bool {
         self.debug.unwrap_or(false)
+    }
+
+    pub fn get_inject_country(&self) -> bool {
+        self.inject_country.unwrap_or(false)
     }
 
     pub fn get_endpoint_type(&self) -> Result<EndpointTypeSettings, String> {

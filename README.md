@@ -486,6 +486,34 @@ hosts:
       debug: true
 ```       
 
+## Auto-injected request headers
+
+Regardless of `modify_http_headers` configuration, the reverse-proxy always injects
+the following headers into proxied HTTP/1.1 and HTTP/2 requests:
+
+* **`X-Forwarded-For`** — appends the incoming client IP per RFC 7239. If the
+  request already carries `X-Forwarded-For`, the client IP is appended to the
+  existing value (`{existing},{client_ip}`). No header is added for Unix socket
+  clients. This cannot be disabled.
+
+* **`CF-IPCountry`** — only when `inject_country: true` is set on the endpoint.
+  The 2-letter ISO country code of the client IP is looked up from the bundled
+  IPv4 geolocation database and written as `CF-IPCountry: XX`. Any client-supplied
+  `CF-IPCountry` header is overwritten. If the IP cannot be resolved to a
+  country, the header is not added.
+
+```yaml
+hosts:
+  localhost:8000:
+    endpoint:
+      type: http
+      inject_country: true
+```
+
+The geolocation database is compiled into the binary as a static lookup table.
+IPv6 clients are not currently resolved.
+
+
 ## Settings up SSH tunnels.
 
 By default if there is no settings for SSH tunnel - SSH agent is used.

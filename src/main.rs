@@ -26,6 +26,7 @@ mod scripts;
 mod error_templates;
 mod h1_proxy_server;
 mod h1_utils;
+mod ip_db;
 mod http2_client_pool;
 mod http_client_pool;
 mod http_clients;

@@ -269,6 +269,7 @@ impl HttpRequestBuilder {
         );
 
         apply_auto_x_forwarded_for(&mut self.parts, inner);
+        apply_cf_ip_country(&mut self.parts, inner, &proxy_pass.endpoint_info);
     }
 }
 
@@ -290,6 +291,29 @@ fn apply_auto_x_forwarded_for(parts: &mut Parts, inner: &HttpProxyPassInner) {
         HeaderName::from_static("x-forwarded-for"),
         new_value.parse().unwrap(),
     );
+}
+
+fn apply_cf_ip_country(
+    parts: &mut Parts,
+    inner: &HttpProxyPassInner,
+    endpoint: &HttpEndpointInfo,
+) {
+    if !endpoint.inject_country {
+        return;
+    }
+    let Some(ip) = inner.connection_ip.get_ip_addr() else {
+        return;
+    };
+    let std::net::IpAddr::V4(v4) = ip else {
+        return;
+    };
+    let Some(code) = crate::ip_db::lookup_country(v4) else {
+        return;
+    };
+    let value = HeaderValue::from_bytes(code).unwrap();
+    parts
+        .headers
+        .insert(HeaderName::from_static("cf-ipcountry"), value);
 }
 
 fn into_full_body(src: Bytes, debug: bool) -> Full<Bytes> {

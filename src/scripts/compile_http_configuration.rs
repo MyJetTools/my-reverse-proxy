@@ -48,6 +48,7 @@ pub async fn compile_http_configuration(
         host_endpoint,
         http_type,
         host_settings.endpoint.get_debug(),
+        host_settings.endpoint.get_inject_country(),
         g_auth,
         ssl_cert_id,
         client_cert_ca,

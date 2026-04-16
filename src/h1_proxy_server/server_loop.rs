@@ -199,7 +199,7 @@ async fn execute_request<
 
     let web_socket_upgrade = h1_reader.compile_headers(
         request_headers,
-        &end_point_info.modify_request_headers,
+        H1HeadersKind::Request(end_point_info),
         &http_connection_info,
         &identity,
         connection.mcp_path.as_deref(),

@@ -89,6 +89,7 @@ mod tests {
                     client_certificate_ca: None,
                     modify_http_headers: None,
                     debug: None,
+                    inject_country: None,
                     google_auth: None,
                     whitelisted_ip: None,
                     template_id: None,

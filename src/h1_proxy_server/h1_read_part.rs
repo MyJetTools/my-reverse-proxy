@@ -13,6 +13,20 @@ use crate::{
     types::HttpTimeouts,
 };
 
+pub enum H1HeadersKind<'a> {
+    Request(&'a HttpEndpointInfo),
+    Response(&'a ModifyHeadersConfig),
+}
+
+impl<'a> H1HeadersKind<'a> {
+    fn modify_headers(&self) -> &ModifyHeadersConfig {
+        match self {
+            H1HeadersKind::Request(info) => &info.modify_request_headers,
+            H1HeadersKind::Response(cfg) => cfg,
+        }
+    }
+}
+
 use crate::tcp_utils::LoopBuffer;
 
 pub struct H1Reader<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
@@ -105,11 +119,16 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
     pub fn compile_headers(
         &mut self,
         http_headers: Http1Headers,
-        modify_headers: &ModifyHeadersConfig,
+        kind: H1HeadersKind<'_>,
         http_connection_info: &HttpConnectionInfo,
         identity: &Option<HttpProxyPassIdentity>,
         mcp_path: Option<&str>,
     ) -> Result<bool, ProxyServerError> {
+        let modify_headers = kind.modify_headers();
+        let request_endpoint = match &kind {
+            H1HeadersKind::Request(info) => Some(*info),
+            H1HeadersKind::Response(_) => None,
+        };
         self.h1_headers_builder.clear();
         let data = self.loop_buffer.get_data();
 
@@ -129,7 +148,14 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
 
         let mut pos = http_headers.first_line_end + crate::consts::HTTP_CR_LF.len();
 
-        let client_ip = http_connection_info.connection_ip.get_ip_addr();
+        let is_request = request_endpoint.is_some();
+        let client_ip = if is_request {
+            http_connection_info.connection_ip.get_ip_addr()
+        } else {
+            None
+        };
+        let inject_country_enabled =
+            request_endpoint.map(|e| e.inject_country).unwrap_or(false);
         let mut xff_written = false;
 
         loop {
@@ -170,6 +196,10 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                             .push_raw_payload(crate::consts::HTTP_CR_LF);
                         xff_written = true;
                     }
+                } else if inject_country_enabled
+                    && header_name.eq_ignore_ascii_case("cf-ipcountry")
+                {
+                    // drop client-supplied value; we'll write our own below
                 } else {
                     self.h1_headers_builder.push_raw_payload(header);
                     self.h1_headers_builder
@@ -184,6 +214,17 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
             if let Some(ip) = client_ip {
                 self.h1_headers_builder
                     .push_header("X-Forwarded-For", &ip.to_string());
+            }
+        }
+
+        if inject_country_enabled {
+            if let Some(std::net::IpAddr::V4(v4)) =
+                http_connection_info.connection_ip.get_ip_addr()
+            {
+                if let Some(code) = crate::ip_db::lookup_country(v4) {
+                    let code_str = std::str::from_utf8(code).unwrap();
+                    self.h1_headers_builder.push_header("CF-IPCountry", code_str);
+                }
             }
         }
 

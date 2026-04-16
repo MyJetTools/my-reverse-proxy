@@ -12,6 +12,7 @@ pub enum AuthorizationRequired<'s> {
 pub struct HttpEndpointInfo {
     pub host_endpoint: EndpointHttpHostString,
     pub debug: bool,
+    pub inject_country: bool,
     pub listen_endpoint_type: ListenHttpEndpointType,
     pub g_auth: Option<String>,
     pub ssl_certificate_id: Option<SslCertificateId>,
@@ -28,6 +29,7 @@ impl HttpEndpointInfo {
         host_endpoint: EndpointHttpHostString,
         listen_endpoint_type: ListenHttpEndpointType,
         debug: bool,
+        inject_country: bool,
         g_auth: Option<String>,
         ssl_certificate_id: Option<SslCertificateId>,
         client_certificate_id: Option<SslCertificateId>,
@@ -42,6 +44,7 @@ impl HttpEndpointInfo {
         Self {
             host_endpoint,
             debug,
+            inject_country,
             listen_endpoint_type,
             g_auth,
             client_certificate_id,
