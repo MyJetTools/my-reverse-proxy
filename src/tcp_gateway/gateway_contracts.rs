@@ -17,6 +17,8 @@ const RECEIVE_PAYLOAD_PACKET_ID: u8 = 7;
 const UPDATE_PING_TIME_PACKET_ID: u8 = 8;
 const GET_FILE_REQUEST_PACKET_ID: u8 = 9;
 const GET_FILE_RESPONSE_PACKET_ID: u8 = 10;
+const SYNC_SSL_CERTIFICATES_PACKET_ID: u8 = 11;
+const SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID: u8 = 12;
 
 #[derive(Debug)]
 pub enum GetFileStatus {
@@ -80,6 +82,14 @@ pub enum TcpGatewayContract<'s> {
         request_id: u32,
         status: GetFileStatus,
         content: SliceOrVec<'s, u8>,
+    },
+    SyncSslCertificates {
+        cert_id: &'s str,
+        cert_pem: SliceOrVec<'s, u8>,
+        private_key_pem: SliceOrVec<'s, u8>,
+    },
+    SyncSslCertificatesRequest {
+        cert_ids: Vec<&'s str>,
     },
 }
 
@@ -198,6 +208,66 @@ impl<'s> TcpGatewayContract<'s> {
                 });
             }
 
+            SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID => {
+                let mut offset = 0usize;
+                let count = read_u32(payload, offset)? as usize;
+                offset += 4;
+
+                let mut cert_ids = Vec::with_capacity(count);
+                for _ in 0..count {
+                    let id_len = read_u32(payload, offset)? as usize;
+                    offset += 4;
+                    let id_end = offset + id_len;
+                    if payload.len() < id_end {
+                        return Err("CLIENT_SSL_CERT_REQUEST: truncated cert_id".to_string());
+                    }
+                    let id = std::str::from_utf8(&payload[offset..id_end]).map_err(|_| {
+                        "CLIENT_SSL_CERT_REQUEST: invalid UTF-8 in cert_id".to_string()
+                    })?;
+                    offset = id_end;
+                    cert_ids.push(id);
+                }
+
+                return Ok(Self::SyncSslCertificatesRequest { cert_ids });
+            }
+
+            SYNC_SSL_CERTIFICATES_PACKET_ID => {
+                let mut offset = 0usize;
+
+                let cert_id_len = read_u32(payload, offset)? as usize;
+                offset += 4;
+                let cert_id_end = offset + cert_id_len;
+                if payload.len() < cert_id_end {
+                    return Err("SERVER_SSL_CERT_PUSH: truncated cert_id".to_string());
+                }
+                let cert_id = std::str::from_utf8(&payload[offset..cert_id_end])
+                    .map_err(|_| "SERVER_SSL_CERT_PUSH: invalid UTF-8 in cert_id".to_string())?;
+                offset = cert_id_end;
+
+                let cert_pem_len = read_u32(payload, offset)? as usize;
+                offset += 4;
+                let cert_pem_end = offset + cert_pem_len;
+                if payload.len() < cert_pem_end {
+                    return Err("SERVER_SSL_CERT_PUSH: truncated cert_pem".to_string());
+                }
+                let cert_pem = &payload[offset..cert_pem_end];
+                offset = cert_pem_end;
+
+                let pk_pem_len = read_u32(payload, offset)? as usize;
+                offset += 4;
+                let pk_pem_end = offset + pk_pem_len;
+                if payload.len() < pk_pem_end {
+                    return Err("SERVER_SSL_CERT_PUSH: truncated private_key_pem".to_string());
+                }
+                let private_key_pem = &payload[offset..pk_pem_end];
+
+                return Ok(Self::SyncSslCertificates {
+                    cert_id,
+                    cert_pem: SliceOrVec::AsSlice(cert_pem),
+                    private_key_pem: SliceOrVec::AsSlice(private_key_pem),
+                });
+            }
+
             PING => {
                 return Ok(Self::Ping);
             }
@@ -303,6 +373,34 @@ impl<'s> TcpGatewayContract<'s> {
                 result.push(status.as_u8());
                 push_content(&mut result, content.as_slice(), support_compression);
             }
+            Self::SyncSslCertificates {
+                cert_id,
+                cert_pem,
+                private_key_pem,
+            } => {
+                result.push(SYNC_SSL_CERTIFICATES_PACKET_ID);
+
+                let id_bytes = cert_id.as_bytes();
+                push_u32(&mut result, id_bytes.len() as u32);
+                result.extend_from_slice(id_bytes);
+
+                let cp = cert_pem.as_slice();
+                push_u32(&mut result, cp.len() as u32);
+                result.extend_from_slice(cp);
+
+                let pk = private_key_pem.as_slice();
+                push_u32(&mut result, pk.len() as u32);
+                result.extend_from_slice(pk);
+            }
+            Self::SyncSslCertificatesRequest { cert_ids } => {
+                result.push(SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID);
+                push_u32(&mut result, cert_ids.len() as u32);
+                for id in cert_ids {
+                    let bytes = id.as_bytes();
+                    push_u32(&mut result, bytes.len() as u32);
+                    result.extend_from_slice(bytes);
+                }
+            }
             Self::Ping => {
                 result.push(PING);
             }
@@ -344,6 +442,18 @@ fn push_content(result: &mut Vec<u8>, payload: &[u8], support_compression: bool)
 
 fn push_u32(result: &mut Vec<u8>, value: u32) {
     result.extend_from_slice(value.to_le_bytes().as_slice());
+}
+
+fn read_u32(payload: &[u8], offset: usize) -> Result<u32, String> {
+    if payload.len() < offset + 4 {
+        return Err("truncated u32".to_string());
+    }
+    Ok(u32::from_le_bytes([
+        payload[offset],
+        payload[offset + 1],
+        payload[offset + 2],
+        payload[offset + 3],
+    ]))
 }
 
 fn extract_content(payload: &[u8]) -> Result<SliceOrVec<'_, u8>, String> {

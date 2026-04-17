@@ -731,10 +731,14 @@ gateway_clients:
     encryption_key: 12345678901234567890
     connect_timeout_seconds: 5
     compress: true 
-    allow_incoming_forward_connections: true 
+    allow_incoming_forward_connections: true
+    sync_ssl_certificates:
+      - my_ssl_cert
+      - another_ssl_cert
 ```
 
 - allow_incoming_forward_connections - is optional. Without this parameters - no Forward connections are allowed through gateway from Client side to Server side.
+- sync_ssl_certificates - is optional. List of SSL certificate ids to pull from the remote Gateway Server. See the `SSL Certificate Sync via Gateway` section below.
 
 
 To Setup location through gateway
@@ -759,6 +763,77 @@ hosts:
 encryption_key - is mandatory and recommended to be 48 symbols and random as possible
 
 allow_incoming_forward_connections  - is optional. Without this parameters - no Forward connections are allowed through gateway from Server side to Client side.
+
+
+
+## SSL Certificate Sync via Gateway
+
+SSL certificates can be distributed centrally from the Gateway Server to one or more Gateway Clients. The server stores and renews certificates as usual; clients request the ones they need by id through the Gateway channel and keep them in memory.
+
+### How it works
+
+1. The Gateway Server holds the source of truth: certificates are loaded from `ssl_certificates:` (local files, SSH, etc.) the same way as a standalone proxy.
+2. Each Gateway Client lists the certificate ids it wants in `sync_ssl_certificates`.
+3. Right after the handshake, the client sends a `SyncSslCertificatesRequest` with its list. The server replies with one `SyncSslCertificates` packet per matching id, and the client caches the certificate in-memory (overwrites any existing entry with the same id).
+4. A timer on the client wakes up every 60 seconds, checks the cached sync-origin certificates, and re-requests any id that is missing or has 1 day or less before expiry. Fresh certs on the server are therefore picked up automatically without a reconnect.
+5. On client reconnect the full list is requested again, so transient disconnects never leave the client out of date.
+
+The certificate with id `self_signed` is never pushed over the wire — self-signed certs are generated locally on demand.
+
+### Server side
+
+No extra configuration is required on the server beyond the usual `ssl_certificates:` block and a running `gateway_server`:
+
+```yaml
+gateway_server:
+  port: 30000
+  encryption_key: 12345678901234567890
+
+ssl_certificates:
+  - id: my_ssl_cert
+    certificate: ~/certs/cert.cer
+    private_key: ~/certs/cert.key
+  - id: another_ssl_cert
+    certificate: ~/certs/another_cert.cer
+    private_key: ~/certs/another_cert.key
+```
+
+### Client side
+
+Add `sync_ssl_certificates` to the Gateway Client entry with the list of certificate ids that should be pulled from the server. The ids must match those defined on the server.
+
+```yaml
+gateway_clients:
+  gateway_name:
+    remote_host: 10.0.0.0:30000
+    encryption_key: 12345678901234567890
+    sync_ssl_certificates:
+      - my_ssl_cert
+      - another_ssl_cert
+
+hosts:
+  localhost:443:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert
+    locations:
+    - type: http
+      proxy_pass_to: http://backend:5123
+```
+
+The client does not need its own `ssl_certificates:` entry for ids listed in `sync_ssl_certificates` — HTTPS listeners resolve the certificate from the in-memory cache that the gateway sync populates. If both a local `ssl_certificates:` entry and a pushed cert share an id, the pushed one overwrites the local one on each sync.
+
+On the console the client prints a line for every cert it receives, e.g.:
+
+```
+received ssl_certificate 'my_ssl_cert' from gateway [gateway_name]
+```
+
+### When to use it
+
+- One or more edge proxies (clients) need to terminate TLS for domains whose certificates are managed centrally (Let's Encrypt renewals, rotation, compliance).
+- You want to avoid distributing private keys via configuration management or SSH to each node.
+- Certificates on the server are renewed by the existing `SslCertsRefreshTimer` — clients converge to the new cert within a minute without a restart or reconnect.
 
 
 

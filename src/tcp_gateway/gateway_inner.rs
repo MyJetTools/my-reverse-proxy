@@ -15,6 +15,7 @@ pub struct TcpGatewayInner {
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
     pub encryption: Arc<AesKey>,
     pub allow_incoming_forward_connections: bool,
+    pub sync_ssl_certificates: Vec<String>,
 }
 
 impl TcpGatewayInner {
@@ -23,6 +24,7 @@ impl TcpGatewayInner {
         addr: String,
         allow_incoming_forward_connections: bool,
         encryption: AesKey,
+        sync_ssl_certificates: Vec<String>,
     ) -> Self {
         Self {
             gateway_id: Arc::new(gateway_id),
@@ -31,6 +33,7 @@ impl TcpGatewayInner {
             connection: Mutex::default(),
             encryption: Arc::new(encryption),
             allow_incoming_forward_connections,
+            sync_ssl_certificates,
         }
     }
 

@@ -1,7 +1,9 @@
 use my_ssh::ssh_settings::OverSshConnectionSettings;
 
 use crate::{
-    configurations::SslCertificateIdRef, settings_compiled::SettingsCompiled, ssl::SslCertificate,
+    configurations::SslCertificateIdRef,
+    settings_compiled::SettingsCompiled,
+    ssl::{SslCertificate, SslCertificateOrigin},
 };
 
 pub async fn refresh_ssl_certs_from_sources<'s>(
@@ -49,14 +51,23 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
     let certificate =
         super::load_file(&cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
 
-    let ssl_certificate = SslCertificate::new(private_key, certificate)?;
+    let ssl_certificate = SslCertificate::new(private_key.clone(), certificate.clone())?;
+
+    let origin = SslCertificateOrigin::LocalSource {
+        private_key_src,
+        cert_src,
+    };
 
     crate::app::APP_CTX
         .ssl_certificates_cache
         .write(|config| {
-            config
-                .ssl_certs
-                .add_or_update(ssl_cert_id, ssl_certificate, private_key_src, cert_src);
+            config.ssl_certs.add_or_update(
+                ssl_cert_id,
+                ssl_certificate,
+                origin,
+                certificate,
+                private_key,
+            );
         })
         .await;
 

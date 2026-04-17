@@ -20,6 +20,7 @@ impl TcpGatewayServer {
             listen,
             true,
             encryption,
+            Vec::new(),
         ));
         let result = Self {
             inner: inner.clone(),

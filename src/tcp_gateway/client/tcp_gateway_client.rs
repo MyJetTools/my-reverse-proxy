@@ -22,12 +22,14 @@ impl TcpGatewayClient {
         allow_incoming_forward_connections: bool,
         connect_timeout: Duration,
         debug: bool,
+        sync_ssl_certificates: Vec<String>,
     ) -> Self {
         let inner = Arc::new(TcpGatewayInner::new(
             id,
             remote_endpoint,
             allow_incoming_forward_connections,
             encryption,
+            sync_ssl_certificates,
         ));
         let result = Self {
             inner: inner.clone(),
@@ -64,6 +66,10 @@ impl TcpGatewayClient {
         for connection in self.get_gateway_connections().await {
             connection.one_second_timer_tick().await;
         }
+    }
+
+    pub fn get_sync_ssl_certificates(&self) -> &[String] {
+        self.inner.sync_ssl_certificates.as_slice()
     }
 }
 

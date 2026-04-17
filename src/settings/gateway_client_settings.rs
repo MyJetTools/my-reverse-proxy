@@ -12,6 +12,7 @@ pub struct GatewayClientSettings {
     pub debug: Option<bool>,
     pub allow_incoming_forward_connections: Option<bool>,
     pub connect_timeout_seconds: Option<u64>,
+    pub sync_ssl_certificates: Option<Vec<String>>,
 }
 
 impl GatewayClientSettings {
@@ -29,6 +30,10 @@ impl GatewayClientSettings {
 
     pub fn get_connect_timeout(&self) -> Duration {
         Duration::from_secs(self.connect_timeout_seconds.unwrap_or(5))
+    }
+
+    pub fn get_sync_ssl_certificates(&self) -> Vec<String> {
+        self.sync_ssl_certificates.clone().unwrap_or_default()
     }
 
     pub fn get_encryption_key(&self) -> Result<AesKey, String> {

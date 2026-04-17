@@ -305,6 +305,7 @@ impl SettingsCompiled {
                         debug: itm.debug,
                         allow_incoming_forward_connections: itm.allow_incoming_forward_connections,
                         connect_timeout_seconds: itm.connect_timeout_seconds,
+                        sync_ssl_certificates: itm.sync_ssl_certificates,
                     },
                 );
             }

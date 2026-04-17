@@ -123,6 +123,7 @@ impl AppContext {
                 client_settings.get_allow_incoming_forward_connections(),
                 client_settings.get_connect_timeout(),
                 client_settings.is_debug(),
+                client_settings.get_sync_ssl_certificates(),
             );
 
             gateway_clients.insert(id.clone(), client);

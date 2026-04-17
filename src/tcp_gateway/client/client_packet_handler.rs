@@ -39,6 +39,18 @@ impl TcpGatewayClientPacketHandler {
                 tcp_gateway
                     .set_gateway_connection(gateway_name, gateway_connection.clone().into())
                     .await;
+
+                let sync_ids: Vec<&str> = tcp_gateway
+                    .sync_ssl_certificates
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect();
+                if !sync_ids.is_empty() {
+                    let request = TcpGatewayContract::SyncSslCertificatesRequest {
+                        cert_ids: sync_ids,
+                    };
+                    gateway_connection.send_payload(&request).await;
+                }
             }
             TcpGatewayContract::Connect {
                 connection_id,
@@ -143,6 +155,54 @@ impl TcpGatewayClientPacketHandler {
             }
 
             TcpGatewayContract::UpdatePingTime { duration: _ } => {}
+
+            TcpGatewayContract::SyncSslCertificatesRequest { .. } => {
+                // Clients do not serve cert sync requests.
+            }
+
+            TcpGatewayContract::SyncSslCertificates {
+                cert_id,
+                cert_pem,
+                private_key_pem,
+            } => {
+                let cert_id = cert_id.to_string();
+                let gw_id = gateway_connection.get_gateway_id().await;
+                let cert_vec: Vec<u8> = cert_pem.as_slice().to_vec();
+                let pk_vec: Vec<u8> = private_key_pem.as_slice().to_vec();
+
+                match crate::ssl::SslCertificate::new(pk_vec.clone(), cert_vec.clone()) {
+                    Ok(ssl_cert) => {
+                        let gw_id_owned = gw_id.to_string();
+                        crate::app::APP_CTX
+                            .ssl_certificates_cache
+                            .write(|config| {
+                                let id_ref = crate::configurations::SslCertificateIdRef::new(
+                                    cert_id.as_str(),
+                                );
+                                config.ssl_certs.add_or_update(
+                                    id_ref,
+                                    ssl_cert,
+                                    crate::ssl::SslCertificateOrigin::GatewayPushed {
+                                        gateway_id: gw_id_owned,
+                                    },
+                                    cert_vec,
+                                    pk_vec,
+                                );
+                            })
+                            .await;
+                        println!(
+                            "received ssl_certificate '{}' from gateway [{}]",
+                            cert_id, gw_id
+                        );
+                    }
+                    Err(err) => {
+                        eprintln!(
+                            "Gateway client: failed to parse pushed SSL cert '{}' from [{}]: {}",
+                            cert_id, gw_id, err
+                        );
+                    }
+                }
+            }
         }
     }
 }

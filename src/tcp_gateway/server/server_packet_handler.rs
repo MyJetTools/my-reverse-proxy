@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rust_extensions::date_time::DateTimeAsMicroseconds;
+use rust_extensions::{date_time::DateTimeAsMicroseconds, SliceOrVec};
 
 use crate::tcp_gateway::*;
 
@@ -128,7 +128,69 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     .notify_file_response(request_id, status, content)
                     .await;
             }
+            TcpGatewayContract::SyncSslCertificatesRequest { cert_ids } => {
+                let requested: Vec<String> = cert_ids.iter().map(|s| s.to_string()).collect();
+                spawn_reply_sync_ssl_certificates(gateway_connection.clone(), requested);
+            }
+            TcpGatewayContract::SyncSslCertificates { .. } => {
+                // Server does not expect to receive SyncSslCertificates from clients.
+            }
         }
         Ok(())
     }
+}
+
+fn spawn_reply_sync_ssl_certificates(
+    gateway_connection: Arc<TcpGatewayConnection>,
+    requested_ids: Vec<String>,
+) {
+    tokio::spawn(async move {
+        if requested_ids.is_empty() {
+            return;
+        }
+
+        let gateway_name = gateway_connection.get_gateway_id().await;
+
+        let mut sent_count = 0usize;
+        for cert_id in &requested_ids {
+            if cert_id.as_str() == crate::self_signed_cert::SELF_SIGNED_CERT_NAME {
+                continue;
+            }
+
+            let holder = crate::app::APP_CTX
+                .ssl_certificates_cache
+                .read(|c| {
+                    c.ssl_certs
+                        .get(crate::configurations::SslCertificateIdRef::new(cert_id))
+                })
+                .await;
+
+            let Some(holder) = holder else {
+                continue;
+            };
+
+            let pkt = TcpGatewayContract::SyncSslCertificates {
+                cert_id: cert_id.as_str(),
+                cert_pem: SliceOrVec::AsSlice(holder.cert_pem.as_slice()),
+                private_key_pem: SliceOrVec::AsSlice(holder.private_key_pem.as_slice()),
+            };
+
+            if !gateway_connection.send_payload(&pkt).await {
+                eprintln!(
+                    "Gateway server: sync cert reply to [{}] failed at id={}, aborting",
+                    gateway_name, cert_id
+                );
+                return;
+            }
+
+            sent_count += 1;
+        }
+
+        if sent_count > 0 {
+            println!(
+                "Gateway server: replied with {} SSL certs to client [{}]",
+                sent_count, gateway_name
+            );
+        }
+    });
 }

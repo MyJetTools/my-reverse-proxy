@@ -1,7 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use rust_extensions::MyTimer;
-use timers::{CrlRefresherTimer, GcConnectionsTimer, MetricsTimer, SslCertsRefreshTimer};
+use timers::{
+    CrlRefresherTimer, GatewaySyncCertsTimer, GcConnectionsTimer, MetricsTimer,
+    SslCertsRefreshTimer,
+};
 
 mod app;
 mod flows;
@@ -74,6 +77,7 @@ async fn main() {
     let mut gc_connections_time = rust_extensions::MyTimer::new(Duration::from_secs(60));
 
     gc_connections_time.register_timer("GcConnections", Arc::new(GcConnectionsTimer));
+    gc_connections_time.register_timer("GatewaySyncCerts", Arc::new(GatewaySyncCertsTimer));
 
     gc_connections_time.start(
         crate::app::APP_CTX.states.clone(),

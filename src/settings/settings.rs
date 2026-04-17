@@ -145,6 +145,7 @@ mod tests {
                 compress: None,
                 allow_incoming_forward_connections: None,
                 connect_timeout_seconds: None,
+                sync_ssl_certificates: None,
             },
         );
 

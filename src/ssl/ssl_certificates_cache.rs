@@ -9,10 +9,22 @@ use super::SslCertificate;
 
 use crate::configurations::*;
 
+pub enum SslCertificateOrigin {
+    LocalSource {
+        private_key_src: OverSshConnectionSettings,
+        cert_src: OverSshConnectionSettings,
+    },
+    GatewayPushed {
+        #[allow(dead_code)]
+        gateway_id: String,
+    },
+}
+
 pub struct SslCertificateHolder {
     pub ssl_cert: SslCertificate,
-    pub private_key_src: OverSshConnectionSettings,
-    pub cert_src: OverSshConnectionSettings,
+    pub origin: SslCertificateOrigin,
+    pub cert_pem: Vec<u8>,
+    pub private_key_pem: Vec<u8>,
 }
 
 pub struct SslCertificatesCache {
@@ -30,15 +42,17 @@ impl SslCertificatesCache {
         &mut self,
         cert_id: SslCertificateIdRef,
         ssl_cert: SslCertificate,
-        private_key_src: OverSshConnectionSettings,
-        cert_src: OverSshConnectionSettings,
+        origin: SslCertificateOrigin,
+        cert_pem: Vec<u8>,
+        private_key_pem: Vec<u8>,
     ) {
         self.data.insert(
             cert_id.to_string(),
             SslCertificateHolder {
                 ssl_cert,
-                private_key_src,
-                cert_src,
+                origin,
+                cert_pem,
+                private_key_pem,
             }
             .into(),
         );
@@ -60,11 +74,4 @@ impl SslCertificatesCache {
         }
         result
     }
-    /*
-    pub fn get_ssl_key(&self, cert_id: &SslCertificateId) -> Option<Arc<SslCertificate>> {
-        self.data
-            .get(cert_id.as_str())
-            .map(|ssl_cert| ssl_cert.clone())
-    }
-     */
 }

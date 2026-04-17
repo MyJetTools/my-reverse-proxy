@@ -4,7 +4,7 @@ use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
 
 use crate::{
     configurations::SslCertificateId,
-    ssl::{SslCertificate, SslCertificateHolder},
+    ssl::{SslCertificate, SslCertificateHolder, SslCertificateOrigin},
 };
 
 pub struct SslCertsRefreshTimer;
@@ -33,6 +33,16 @@ async fn try_renew_cert(
     ssl_holder: Arc<SslCertificateHolder>,
     now: DateTimeAsMicroseconds,
 ) {
+    let (private_key_src, cert_src) = match &ssl_holder.origin {
+        SslCertificateOrigin::LocalSource {
+            private_key_src,
+            cert_src,
+        } => (private_key_src.clone(), cert_src.clone()),
+        SslCertificateOrigin::GatewayPushed { .. } => {
+            return;
+        }
+    };
+
     let ssl_cert_info = ssl_holder.ssl_cert.get_cert_info().await;
 
     let expires_in = ssl_cert_info.expires.duration_since(now);
@@ -47,11 +57,8 @@ async fn try_renew_cert(
         return;
     }
 
-    let certificates_content = crate::scripts::load_file(
-        &ssl_holder.cert_src,
-        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
-    )
-    .await;
+    let certificates_content =
+        crate::scripts::load_file(&cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await;
 
     if let Err(err) = &certificates_content {
         println!(
@@ -65,7 +72,7 @@ async fn try_renew_cert(
     let certificates_content = certificates_content.unwrap();
 
     let private_key_content = crate::scripts::load_file(
-        &ssl_holder.private_key_src,
+        &private_key_src,
         crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
     )
     .await;
@@ -80,7 +87,7 @@ async fn try_renew_cert(
 
     let private_key_content = private_key_content.unwrap();
 
-    let ssl_cert = SslCertificate::new(private_key_content, certificates_content);
+    let ssl_cert = SslCertificate::new(private_key_content.clone(), certificates_content.clone());
 
     if let Err(err) = &ssl_cert {
         println!(
@@ -93,14 +100,20 @@ async fn try_renew_cert(
 
     let ssl_cert = ssl_cert.unwrap();
 
+    let origin = SslCertificateOrigin::LocalSource {
+        private_key_src,
+        cert_src,
+    };
+
     crate::app::APP_CTX
         .ssl_certificates_cache
         .write(|config| {
             config.ssl_certs.add_or_update(
                 cert_id.as_ref(),
                 ssl_cert,
-                ssl_holder.private_key_src.clone(),
-                ssl_holder.cert_src.clone(),
+                origin,
+                certificates_content,
+                private_key_content,
             );
         })
         .await;

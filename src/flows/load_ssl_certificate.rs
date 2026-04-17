@@ -5,6 +5,8 @@ pub struct SslCertificateResult {
     pub cert_src: FileSource,
     pub private_key_src: FileSource,
     pub cert: SslCertificate,
+    pub cert_pem: Vec<u8>,
+    pub private_key_pem: Vec<u8>,
 }
 
 pub async fn load_ssl_certificate(
@@ -33,10 +35,14 @@ pub async fn load_ssl_certificate(
         .load_file_content(Some(files_cache), init_on_start)
         .await?;
 
+    let cert = SslCertificate::new(private_key.clone(), certificates.clone())?;
+
     let result = SslCertificateResult {
         cert_src,
         private_key_src,
-        cert: SslCertificate::new(private_key, certificates)?,
+        cert,
+        cert_pem: certificates,
+        private_key_pem: private_key,
     };
 
     Ok(result)
