@@ -774,9 +774,10 @@ SSL certificates can be distributed centrally from the Gateway Server to one or 
 
 1. The Gateway Server holds the source of truth: certificates are loaded from `ssl_certificates:` (local files, SSH, etc.) the same way as a standalone proxy.
 2. Each Gateway Client lists the certificate ids it wants in `sync_ssl_certificates`.
-3. Right after the handshake, the client sends a `SyncSslCertificatesRequest` with its list. The server replies with one `SyncSslCertificates` packet per matching id, and the client caches the certificate in-memory (overwrites any existing entry with the same id).
+3. Right after the handshake, the client sends a `SyncSslCertificatesRequest` with its list. For each requested id the server replies either with a `SyncSslCertificates` packet (if it has that cert) or with `SyncSslCertificateNotFound` (if it does not). The client caches received certs in-memory, overwriting any existing entry with the same id.
 4. A timer on the client wakes up every 60 seconds, checks the cached sync-origin certificates, and re-requests any id that is missing or has 1 day or less before expiry. Fresh certs on the server are therefore picked up automatically without a reconnect.
-5. On client reconnect the full list is requested again, so transient disconnects never leave the client out of date.
+5. If the server responds with `SyncSslCertificateNotFound` for a previously cached gateway-pushed cert, the client removes it from its cache. Local (non-gateway-pushed) certificates with the same id are never touched — the client's own `ssl_certificates:` entries are safe. If the server restarts and a cert hasn't finished loading when a request arrives, the client temporarily loses it and then re-fetches it on the next 60s tick — so transient gaps self-heal in under a minute.
+6. On client reconnect the full list is requested again, so transient disconnects never leave the client out of date.
 
 The certificate with id `self_signed` is never pushed over the wire — self-signed certs are generated locally on demand.
 
@@ -827,6 +828,12 @@ On the console the client prints a line for every cert it receives, e.g.:
 
 ```
 received ssl_certificate 'my_ssl_cert' from gateway [gateway_name]
+```
+
+And when the server reports a cert as missing, the client removes its cached copy:
+
+```
+removed ssl_certificate 'my_ssl_cert' — not present on gateway [gateway_name]
 ```
 
 ### When to use it

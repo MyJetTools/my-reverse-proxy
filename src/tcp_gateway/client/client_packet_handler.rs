@@ -160,6 +160,44 @@ impl TcpGatewayClientPacketHandler {
                 // Clients do not serve cert sync requests.
             }
 
+            TcpGatewayContract::SyncSslCertificateNotFound { cert_id } => {
+                let cert_id = cert_id.to_string();
+                let gw_id = gateway_connection.get_gateway_id().await;
+
+                let existing = crate::app::APP_CTX
+                    .ssl_certificates_cache
+                    .read(|c| {
+                        c.ssl_certs
+                            .get(crate::configurations::SslCertificateIdRef::new(cert_id.as_str()))
+                    })
+                    .await;
+
+                let Some(holder) = existing else {
+                    return;
+                };
+
+                if !matches!(
+                    holder.origin,
+                    crate::ssl::SslCertificateOrigin::GatewayPushed { .. }
+                ) {
+                    return;
+                }
+
+                crate::app::APP_CTX
+                    .ssl_certificates_cache
+                    .write(|c| {
+                        c.ssl_certs.remove(crate::configurations::SslCertificateIdRef::new(
+                            cert_id.as_str(),
+                        ));
+                    })
+                    .await;
+
+                println!(
+                    "removed ssl_certificate '{}' — not present on gateway [{}]",
+                    cert_id, gw_id
+                );
+            }
+
             TcpGatewayContract::SyncSslCertificates {
                 cert_id,
                 cert_pem,

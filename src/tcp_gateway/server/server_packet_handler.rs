@@ -135,6 +135,9 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             TcpGatewayContract::SyncSslCertificates { .. } => {
                 // Server does not expect to receive SyncSslCertificates from clients.
             }
+            TcpGatewayContract::SyncSslCertificateNotFound { .. } => {
+                // Server does not expect to receive SyncSslCertificateNotFound from clients.
+            }
         }
         Ok(())
     }
@@ -151,28 +154,30 @@ fn spawn_reply_sync_ssl_certificates(
 
         let gateway_name = gateway_connection.get_gateway_id().await;
 
-        let mut sent_count = 0usize;
+        let mut sent_certs = 0usize;
+        let mut sent_not_found = 0usize;
         for cert_id in &requested_ids {
-            if cert_id.as_str() == crate::self_signed_cert::SELF_SIGNED_CERT_NAME {
-                continue;
-            }
-
-            let holder = crate::app::APP_CTX
-                .ssl_certificates_cache
-                .read(|c| {
-                    c.ssl_certs
-                        .get(crate::configurations::SslCertificateIdRef::new(cert_id))
-                })
-                .await;
-
-            let Some(holder) = holder else {
-                continue;
+            let holder = if cert_id.as_str() == crate::self_signed_cert::SELF_SIGNED_CERT_NAME {
+                None
+            } else {
+                crate::app::APP_CTX
+                    .ssl_certificates_cache
+                    .read(|c| {
+                        c.ssl_certs
+                            .get(crate::configurations::SslCertificateIdRef::new(cert_id))
+                    })
+                    .await
             };
 
-            let pkt = TcpGatewayContract::SyncSslCertificates {
-                cert_id: cert_id.as_str(),
-                cert_pem: SliceOrVec::AsSlice(holder.cert_pem.as_slice()),
-                private_key_pem: SliceOrVec::AsSlice(holder.private_key_pem.as_slice()),
+            let pkt = match &holder {
+                Some(h) => TcpGatewayContract::SyncSslCertificates {
+                    cert_id: cert_id.as_str(),
+                    cert_pem: SliceOrVec::AsSlice(h.cert_pem.as_slice()),
+                    private_key_pem: SliceOrVec::AsSlice(h.private_key_pem.as_slice()),
+                },
+                None => TcpGatewayContract::SyncSslCertificateNotFound {
+                    cert_id: cert_id.as_str(),
+                },
             };
 
             if !gateway_connection.send_payload(&pkt).await {
@@ -183,13 +188,17 @@ fn spawn_reply_sync_ssl_certificates(
                 return;
             }
 
-            sent_count += 1;
+            if holder.is_some() {
+                sent_certs += 1;
+            } else {
+                sent_not_found += 1;
+            }
         }
 
-        if sent_count > 0 {
+        if sent_certs > 0 || sent_not_found > 0 {
             println!(
-                "Gateway server: replied with {} SSL certs to client [{}]",
-                sent_count, gateway_name
+                "Gateway server: replied to client [{}] — {} cert(s), {} not-found",
+                gateway_name, sent_certs, sent_not_found
             );
         }
     });

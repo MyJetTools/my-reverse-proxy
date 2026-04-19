@@ -19,6 +19,7 @@ const GET_FILE_REQUEST_PACKET_ID: u8 = 9;
 const GET_FILE_RESPONSE_PACKET_ID: u8 = 10;
 const SYNC_SSL_CERTIFICATES_PACKET_ID: u8 = 11;
 const SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID: u8 = 12;
+const SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID: u8 = 13;
 
 #[derive(Debug)]
 pub enum GetFileStatus {
@@ -90,6 +91,9 @@ pub enum TcpGatewayContract<'s> {
     },
     SyncSslCertificatesRequest {
         cert_ids: Vec<&'s str>,
+    },
+    SyncSslCertificateNotFound {
+        cert_id: &'s str,
     },
 }
 
@@ -206,6 +210,21 @@ impl<'s> TcpGatewayContract<'s> {
                     status,
                     content,
                 });
+            }
+
+            SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID => {
+                let mut offset = 0usize;
+                let id_len = read_u32(payload, offset)? as usize;
+                offset += 4;
+                let id_end = offset + id_len;
+                if payload.len() < id_end {
+                    return Err("SYNC_SSL_CERTIFICATE_NOT_FOUND: truncated cert_id".to_string());
+                }
+                let cert_id = std::str::from_utf8(&payload[offset..id_end]).map_err(|_| {
+                    "SYNC_SSL_CERTIFICATE_NOT_FOUND: invalid UTF-8 in cert_id".to_string()
+                })?;
+
+                return Ok(Self::SyncSslCertificateNotFound { cert_id });
             }
 
             SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID => {
@@ -400,6 +419,12 @@ impl<'s> TcpGatewayContract<'s> {
                     push_u32(&mut result, bytes.len() as u32);
                     result.extend_from_slice(bytes);
                 }
+            }
+            Self::SyncSslCertificateNotFound { cert_id } => {
+                result.push(SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID);
+                let bytes = cert_id.as_bytes();
+                push_u32(&mut result, bytes.len() as u32);
+                result.extend_from_slice(bytes);
             }
             Self::Ping => {
                 result.push(PING);
