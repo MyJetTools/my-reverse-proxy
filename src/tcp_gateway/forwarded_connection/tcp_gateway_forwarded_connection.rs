@@ -7,7 +7,6 @@ use crate::{network_stream::*, tcp_gateway::*};
 pub struct TcpGatewayForwardConnection {
     inner: Arc<TcpConnectionInner>,
     connection_id: u32,
-    receiver: Option<tokio::sync::mpsc::Receiver<()>>,
     read: Option<MyOwnedReadHalf>,
     gateway_connection: Arc<TcpGatewayConnection>,
     remote_endpoint: Arc<String>,
@@ -44,14 +43,11 @@ impl TcpGatewayForwardConnection {
 
         let (read, write) = tcp_stream.into_split();
 
-        let (inner, receiver) = TcpConnectionInner::new(write, aes_key);
-
-        let inner = Arc::new(inner);
+        let inner = TcpConnectionInner::new(write, aes_key);
 
         let result = Self {
             connection_id,
-            inner: inner.clone(),
-            receiver: Some(receiver),
+            inner,
             read: Some(read),
             gateway_connection,
             remote_endpoint,
@@ -60,12 +56,12 @@ impl TcpGatewayForwardConnection {
         Ok(result)
     }
 
-    pub async fn send_payload(&self, payload: &[u8]) -> bool {
+    pub async fn send_payload(&self, payload: Vec<u8>) -> bool {
+        let len = payload.len();
         if !self.inner.send_payload(payload) {
             println!(
                 "Connection: {}. Send to Forward Connection {}",
-                self.connection_id,
-                payload.len()
+                self.connection_id, len
             );
             self.inner.disconnect().await;
             return false;
@@ -78,11 +74,6 @@ impl TcpGatewayForwardConnection {
     }
 
     pub fn start(&mut self) {
-        super::super::tcp_connection_inner::start_write_loop(
-            self.inner.clone(),
-            self.receiver.take().unwrap(),
-        );
-
         let read = self.read.take().unwrap();
 
         tokio::spawn(read_loop(

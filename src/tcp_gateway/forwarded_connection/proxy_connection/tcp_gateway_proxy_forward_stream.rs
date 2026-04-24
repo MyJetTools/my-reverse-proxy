@@ -17,7 +17,7 @@ pub struct TcpGatewayProxyForwardStream {
 
 impl TcpGatewayProxyForwardStream {
     pub fn send_payload(&self, payload: &[u8]) -> bool {
-        let payload = TcpGatewayContract::ForwardPayload {
+        let frame = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
             payload: payload.into(),
         }
@@ -26,15 +26,14 @@ impl TcpGatewayProxyForwardStream {
             self.support_compression,
         );
 
-        self.gateway_connection_inner
-            .send_payload(payload.as_slice())
+        self.gateway_connection_inner.send_payload(frame)
     }
 
     pub fn disconnect(&self) {
         if self.receive_buffer.disconnect() {
             return;
         }
-        let payload = TcpGatewayContract::ConnectionError {
+        let frame = TcpGatewayContract::ConnectionError {
             connection_id: self.connection_id,
             error: "",
         }
@@ -43,7 +42,7 @@ impl TcpGatewayProxyForwardStream {
             self.support_compression,
         );
 
-        self.gateway_connection_inner.send_payload(payload.as_slice());
+        self.gateway_connection_inner.send_payload(frame);
     }
 }
 

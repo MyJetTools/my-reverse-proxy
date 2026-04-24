@@ -49,12 +49,11 @@ impl TcpGatewayConnection {
         supported_compression: bool,
         allow_incoming_forward_connection: bool,
     ) -> Self {
-        let (inner, receiver) = TcpConnectionInner::new(write_half, aes_key);
-        let inner = Arc::new(inner);
-        let result = Self {
+        let inner = TcpConnectionInner::new(write_half, aes_key);
+        Self {
             gateway_id: ArcSwap::from_pointee(String::new()),
             addr,
-            inner: inner.clone(),
+            inner,
             forward_connections: Arc::new(Mutex::default()),
             forward_proxy_handlers: Arc::new(tokio::sync::Mutex::default()),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
@@ -68,11 +67,7 @@ impl TcpGatewayConnection {
             out_per_second: PerSecondAccumulator::new(),
             connection_timestamp: AtomicI64::new(0),
             created_at: DateTimeAsMicroseconds::now(),
-        };
-
-        super::super::tcp_connection_inner::start_write_loop(inner, receiver);
-
-        result
+        }
     }
 
     pub fn set_connection_timestamp(&self, value: DateTimeAsMicroseconds) {
@@ -367,9 +362,10 @@ impl TcpGatewayConnection {
     pub fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
         let supported_compression = self.get_supported_compression();
         let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
+        let len = vec.len();
 
-        if self.inner.send_payload(vec.as_slice()) {
-            self.out_per_second.add(vec.len());
+        if self.inner.send_payload(vec) {
+            self.out_per_second.add(len);
             return true;
         }
 
