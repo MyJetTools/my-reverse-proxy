@@ -23,7 +23,7 @@ impl TcpGatewayForwardConnection {
     ) -> Result<Self, String> {
         println!(
             "Gateway:[{}]. Establishing Forwarded connection to endpoint {} with id {}",
-            gateway_connection.get_gateway_id().await,
+            gateway_connection.get_gateway_id(),
             remote_endpoint.as_str(),
             connection_id
         );
@@ -37,7 +37,7 @@ impl TcpGatewayForwardConnection {
 
         println!(
             "Gateway:[{}]. Established Forwarded connection to endpoint {} with id {}",
-            gateway_connection.get_gateway_id().await,
+            gateway_connection.get_gateway_id(),
             remote_endpoint.as_str(),
             connection_id
         );
@@ -113,7 +113,7 @@ async fn read_loop(
                 let dt = gateway_connection.get_connection_timestamp();
                 let err = format!(
                     "Gateway:[{}]. ReadLoop. Can not read from connection {} with id {connection_id} created at: {} ConnectionError: {:?}",
-                    gateway_connection.get_gateway_id().await,
+                    gateway_connection.get_gateway_id(),
                     remote_host.as_str(),
                     dt.to_rfc3339(),
                     err

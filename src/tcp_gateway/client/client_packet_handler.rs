@@ -35,7 +35,7 @@ impl TcpGatewayClientPacketHandler {
                     timestamp.to_rfc3339()
                 );
 
-                gateway_connection.set_gateway_id(gateway_name).await;
+                gateway_connection.set_gateway_id(gateway_name);
                 tcp_gateway
                     .set_gateway_connection(gateway_name, gateway_connection.clone().into())
                     .await;
@@ -93,7 +93,7 @@ impl TcpGatewayClientPacketHandler {
             } => {
                 println!(
                     "Gateway: [{}]. Connection error with id {}. Message: {}",
-                    gateway_connection.get_gateway_id().await,
+                    gateway_connection.get_gateway_id(),
                     connection_id,
                     error
                 );
@@ -162,7 +162,7 @@ impl TcpGatewayClientPacketHandler {
 
             TcpGatewayContract::SyncSslCertificateNotFound { cert_id } => {
                 let cert_id = cert_id.to_string();
-                let gw_id = gateway_connection.get_gateway_id().await;
+                let gw_id = gateway_connection.get_gateway_id();
 
                 let existing = crate::app::APP_CTX
                     .ssl_certificates_cache
@@ -204,7 +204,7 @@ impl TcpGatewayClientPacketHandler {
                 private_key_pem,
             } => {
                 let cert_id = cert_id.to_string();
-                let gw_id = gateway_connection.get_gateway_id().await;
+                let gw_id = gateway_connection.get_gateway_id();
                 let cert_vec: Vec<u8> = cert_pem.as_slice().to_vec();
                 let pk_vec: Vec<u8> = private_key_pem.as_slice().to_vec();
 

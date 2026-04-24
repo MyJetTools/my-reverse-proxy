@@ -39,7 +39,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
 
                 gateway_connection.set_connection_timestamp(timestamp);
 
-                gateway_connection.set_gateway_id(gateway_name).await;
+                gateway_connection.set_gateway_id(gateway_name);
                 tcp_gateway
                     .set_gateway_connection(gateway_name, gateway_connection.clone().into())
                     .await;
@@ -99,7 +99,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
             } => {
                 println!(
                     "Gateway: [{}]. Connection error with id {}. Message: {}",
-                    gateway_connection.get_gateway_id().await,
+                    gateway_connection.get_gateway_id(),
                     connection_id,
                     error
                 );
@@ -152,7 +152,7 @@ fn spawn_reply_sync_ssl_certificates(
             return;
         }
 
-        let gateway_name = gateway_connection.get_gateway_id().await;
+        let gateway_name = gateway_connection.get_gateway_id();
 
         let mut sent_certs = 0usize;
         let mut sent_not_found = 0usize;

@@ -43,7 +43,7 @@ async fn try_renew_cert(
         }
     };
 
-    let ssl_cert_info = ssl_holder.ssl_cert.get_cert_info().await;
+    let ssl_cert_info = ssl_holder.ssl_cert.get_cert_info();
 
     let expires_in = ssl_cert_info.expires.duration_since(now);
 

@@ -8,7 +8,7 @@ pub async fn send_connection_error(
     is_error: bool,
 ) {
     if is_error {
-        let gateway_id = gateway_connection.get_gateway_id().await;
+        let gateway_id = gateway_connection.get_gateway_id();
         println!("Gateway:[{}] {}", gateway_id.as_str(), err);
     }
 

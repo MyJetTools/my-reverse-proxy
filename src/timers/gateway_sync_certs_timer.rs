@@ -38,7 +38,7 @@ impl MyTimerTick for GatewaySyncCertsTimer {
                         if !matches!(h.origin, SslCertificateOrigin::GatewayPushed { .. }) {
                             continue;
                         }
-                        let info = h.ssl_cert.get_cert_info().await;
+                        let info = h.ssl_cert.get_cert_info();
                         let days = info.expires.duration_since(now).get_full_days();
                         if days <= 1 {
                             need.push(id.clone());

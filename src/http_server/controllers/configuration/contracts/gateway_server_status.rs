@@ -52,7 +52,7 @@ impl GatewayConnection {
             };
 
             result.push(Self {
-                name: connection.get_gateway_id().await.to_string(),
+                name: connection.get_gateway_id().to_string(),
                 forward_connections: connection.get_forward_connections_amount().await,
                 proxy_connections: connection.get_forward_proxy_connections_amount().await,
                 ping_time: format!("{:?}", ping),

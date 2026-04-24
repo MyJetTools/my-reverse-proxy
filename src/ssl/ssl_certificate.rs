@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwapOption;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 
 use my_tls::tokio_rustls;
-use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct SslCertInfo {
@@ -15,7 +15,7 @@ pub struct SslCertInfo {
 #[derive(Clone, Debug)]
 pub struct SslCertificate {
     pub cert_key: Arc<tokio_rustls::rustls::sign::CertifiedKey>,
-    cert_info: Arc<Mutex<Option<SslCertInfo>>>,
+    cert_info: Arc<ArcSwapOption<SslCertInfo>>,
 }
 
 impl SslCertificate {
@@ -27,17 +27,15 @@ impl SslCertificate {
 
         let result = SslCertificate {
             cert_key: Arc::new(cert_key),
-            cert_info: Arc::new(Mutex::new(None)),
+            cert_info: Arc::new(ArcSwapOption::empty()),
         };
 
         Ok(result)
     }
 
-    pub async fn get_cert_info(&self) -> SslCertInfo {
-        let mut cert_info = self.cert_info.lock().await;
-
-        if let Some(cert_info) = &*cert_info {
-            return cert_info.clone();
+    pub fn get_cert_info(&self) -> SslCertInfo {
+        if let Some(cert_info) = self.cert_info.load_full() {
+            return (*cert_info).clone();
         }
 
         use x509_parser::prelude::FromDer;
@@ -81,9 +79,7 @@ impl SslCertificate {
             expires: DateTimeAsMicroseconds::from(expires.unwrap()),
         };
 
-        if cert_info.is_some() {
-            *cert_info = Some(result.clone());
-        }
+        self.cert_info.store(Some(Arc::new(result.clone())));
 
         result
     }

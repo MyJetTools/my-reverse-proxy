@@ -114,7 +114,7 @@ pub async fn render_content(config_model: &CurrentConfigurationHttpModel) -> Str
 
                     match cert {
                         Some(holder) => {
-                            let cert_info = holder.ssl_cert.get_cert_info().await;
+                            let cert_info = holder.ssl_cert.get_cert_info();
 
                             let expires = cert_info.expires.duration_since(now);
                             let badge_type = match expires {

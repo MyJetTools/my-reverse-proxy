@@ -27,7 +27,7 @@ async fn handle_request(
 
     let mut result: Vec<CurrentSslCertificateHttpModel> = Vec::new();
     for (key, holder) in config {
-        let cert_info = holder.ssl_cert.get_cert_info().await;
+        let cert_info = holder.ssl_cert.get_cert_info();
         let cert = CurrentSslCertificateHttpModel {
             id: key,
             cn: cert_info.cn.to_string(),

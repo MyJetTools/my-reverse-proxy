@@ -7,6 +7,7 @@ use std::{
     time::Duration,
 };
 
+use arc_swap::ArcSwap;
 use encryption::aes::AesKey;
 
 use rust_extensions::{
@@ -21,7 +22,7 @@ use crate::{metrics::PerSecondAccumulator, network_stream::MyOwnedWriteHalf};
 use super::{super::forwarded_connection::*, super::*};
 
 pub struct TcpGatewayConnection {
-    gateway_id: Mutex<Arc<String>>,
+    gateway_id: ArcSwap<String>,
     pub addr: Arc<String>,
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
@@ -50,7 +51,7 @@ impl TcpGatewayConnection {
         let (inner, receiver) = TcpConnectionInner::new(write_half, aes_key);
         let inner = Arc::new(inner);
         let result = Self {
-            gateway_id: Mutex::new(Arc::new(String::new())),
+            gateway_id: ArcSwap::from_pointee(String::new()),
             addr,
             inner: inner.clone(),
             forward_connections: Arc::new(Mutex::default()),
@@ -119,14 +120,12 @@ impl TcpGatewayConnection {
             .store(value, std::sync::atomic::Ordering::Relaxed);
     }
 
-    pub async fn set_gateway_id(&self, id: &str) {
-        let mut gateway_id = self.gateway_id.lock().await;
-        *gateway_id = Arc::new(id.to_string());
+    pub fn set_gateway_id(&self, id: &str) {
+        self.gateway_id.store(Arc::new(id.to_string()));
     }
 
-    pub async fn get_gateway_id(&self) -> Arc<String> {
-        let gateway = self.gateway_id.lock().await;
-        gateway.clone()
+    pub fn get_gateway_id(&self) -> Arc<String> {
+        self.gateway_id.load_full()
     }
 
     pub async fn add_forward_connection(
@@ -179,7 +178,7 @@ impl TcpGatewayConnection {
             ));
         }
 
-        let gateway_id = self.get_gateway_id().await;
+        let gateway_id = self.get_gateway_id();
 
         println!(
             "Connecting to {}->{} with timeout {:?} and id {}",
@@ -339,7 +338,7 @@ impl TcpGatewayConnection {
         let proxy_connection = proxy_connection_access.get_mut(&connection_id);
 
         if proxy_connection.is_none() {
-            let gateway_id = self.get_gateway_id().await;
+            let gateway_id = self.get_gateway_id();
             println!(
                 "Gateway:[{}]. Proxy connection with id {} not found",
                 gateway_id, connection_id
@@ -353,14 +352,14 @@ impl TcpGatewayConnection {
 
         match status {
             TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection => {
-                let gateway_id = self.get_gateway_id().await;
+                let gateway_id = self.get_gateway_id();
                 println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is not acknowledged yet", gateway_id.as_str(), payload.len(), connection_id);
             }
             TcpGatewayProxyForwardedConnectionStatus::Connected => {
                 proxy_connection.enqueue_receive_payload(payload).await;
             }
             TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
-                let gateway_id = self.get_gateway_id().await;
+                let gateway_id = self.get_gateway_id();
                 println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is disconnected with err: {}", gateway_id.as_str(), payload.len(), connection_id,  err);
             }
         }

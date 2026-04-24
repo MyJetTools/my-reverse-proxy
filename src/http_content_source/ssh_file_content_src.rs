@@ -1,9 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
+use arc_swap::ArcSwapOption;
 use hyper::Uri;
 use my_http_server::WebContentType;
 use my_ssh::SshSession;
-use tokio::sync::Mutex;
 
 use crate::http_proxy_pass::{content_source::HttpResponse, ProxyPassError};
 
@@ -11,7 +11,7 @@ use super::{RequestExecutor, RequestExecutorResult};
 
 pub struct PathOverSshContentSource {
     ssh_session: Arc<SshSession>,
-    home_value: Arc<Mutex<Option<String>>>,
+    home_value: Arc<ArcSwapOption<String>>,
     default_file: Option<String>,
     pub file_path: String,
     execute_timeout: Duration,
@@ -27,7 +27,7 @@ impl PathOverSshContentSource {
         Self {
             ssh_session,
             file_path,
-            home_value: Arc::new(Mutex::new(None)),
+            home_value: Arc::new(ArcSwapOption::empty()),
             default_file,
             execute_timeout,
         }
@@ -69,7 +69,7 @@ impl PathOverSshContentSource {
 pub struct FileOverSshRequestExecutor {
     ssh_session: Arc<SshSession>,
     file_path: String,
-    home_value: Arc<Mutex<Option<String>>>,
+    home_value: Arc<ArcSwapOption<String>>,
     execute_timeout: Duration,
 }
 
@@ -77,18 +77,20 @@ pub struct FileOverSshRequestExecutor {
 impl RequestExecutor for FileOverSshRequestExecutor {
     async fn execute_request(&self) -> Result<RequestExecutorResult, ProxyPassError> {
         let file_path = if self.file_path.contains("~") {
-            let mut home_value = self.home_value.lock().await;
+            let home_value = match self.home_value.load_full() {
+                Some(value) => value,
+                None => {
+                    let (home, _) = self
+                        .ssh_session
+                        .execute_command("echo $HOME", self.execute_timeout)
+                        .await?;
+                    let value = Arc::new(home.trim().to_string());
+                    self.home_value.store(Some(value.clone()));
+                    value
+                }
+            };
 
-            if home_value.is_none() {
-                let (home, _) = self
-                    .ssh_session
-                    .execute_command("echo $HOME", self.execute_timeout)
-                    .await?;
-                home_value.replace(home.trim().to_string());
-            }
-
-            let result = self.file_path.replace("~", home_value.as_ref().unwrap());
-            result
+            self.file_path.replace("~", home_value.as_str())
         } else {
             self.file_path.clone()
         };
