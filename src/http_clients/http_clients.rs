@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 pub struct HttpClients<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + 'static,
@@ -21,13 +21,13 @@ impl<
         }
     }
 
-    pub async fn get_or_create(
+    pub fn get_or_create(
         &self,
         id: i64,
         crate_client: impl Fn() -> MyHttpClient<TStream, TConnector>,
     ) -> Arc<MyHttpClient<TStream, TConnector>> {
         {
-            let read_access = self.data.lock().await;
+            let read_access = self.data.lock();
 
             if let Some(client) = read_access.get(&id) {
                 return client.clone();
@@ -38,15 +38,15 @@ impl<
 
         let client = Arc::new(client);
 
-        let mut write_access = self.data.lock().await;
+        let mut write_access = self.data.lock();
 
         write_access.insert(id, client.clone());
 
         client
     }
 
-    pub async fn remove(&self, id: i64) {
-        let mut write_access = self.data.lock().await;
+    pub fn remove(&self, id: i64) {
+        let mut write_access = self.data.lock();
         write_access.remove(&id);
     }
 }

@@ -20,7 +20,6 @@ impl MyHttpClientConnector<TcpGatewayProxyForwardStream> for HttpOverGatewayConn
     async fn connect(&self) -> Result<TcpGatewayProxyForwardStream, MyHttpClientError> {
         let Some(gateway) = crate::app::APP_CTX
             .get_gateway_by_id_with_next_connection_id(self.gateway_id.as_str())
-            .await
         else {
             return Err(MyHttpClientError::CanNotConnectToRemoteHost(format!(
                 "Gateway {} is not found",

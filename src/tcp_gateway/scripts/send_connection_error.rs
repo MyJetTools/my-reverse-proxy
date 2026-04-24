@@ -14,7 +14,6 @@ pub async fn send_connection_error(
 
     let removed = gateway_connection
         .remove_forward_connection(connection_id)
-        .await
         .is_some();
 
     if send_force || removed {

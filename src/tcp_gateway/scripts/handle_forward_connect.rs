@@ -9,10 +9,7 @@ pub async fn handle_forward_connect(
     timeout: Duration,
     gateway_connection: Arc<TcpGatewayConnection>,
 ) {
-    if gateway_connection
-        .has_forward_connection(connection_id)
-        .await
-    {
+    if gateway_connection.has_forward_connection(connection_id) {
 
         let err = 
         format!("Attempt to establish client forward connection is fail. ConnectionId {} is already has a connection", connection_id);
@@ -39,7 +36,7 @@ pub async fn handle_forward_connect(
 
         let forward_connection = Arc::new(forward_connection);
 
-        gateway_connection.add_forward_connection(connection_id, forward_connection).await;
+        gateway_connection.add_forward_connection(connection_id, forward_connection);
   
         },
         Err(err) => {

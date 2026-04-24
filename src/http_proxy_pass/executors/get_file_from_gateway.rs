@@ -10,7 +10,7 @@ pub async fn get_file_from_gateway(
     default_file: &Option<String>,
     req: &hyper::Request<Full<Bytes>>,
 ) -> Result<RequestExecutorResult, ProxyPassError> {
-    let gateway = crate::app::APP_CTX.get_gateway_by_id(gateway_id).await;
+    let gateway = crate::app::APP_CTX.get_gateway_by_id(gateway_id);
 
     if gateway.is_none() {
         return Err(ProxyPassError::GatewayError);

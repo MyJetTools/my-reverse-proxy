@@ -12,7 +12,7 @@ pub async fn handle_connection(
     ssh_credentials: &Arc<SshCredentials>,
     remote_endpoint: Arc<RemoteEndpointOwned>,
 ) {
-    let ssh_session_handler = APP_CTX.ssh_sessions_pool.get(ssh_credentials).await;
+    let ssh_session_handler = APP_CTX.ssh_sessions_pool.get(ssh_credentials);
 
     let remote_port = remote_endpoint.get_port();
 

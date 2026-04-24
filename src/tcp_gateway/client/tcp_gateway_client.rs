@@ -51,20 +51,20 @@ impl TcpGatewayClient {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub async fn get_gateway_connection(
+    pub fn get_gateway_connection(
         &self,
         gateway_id: &str,
     ) -> Option<Arc<TcpGatewayConnection>> {
-        self.inner.get_gateway_connection(gateway_id).await
+        self.inner.get_gateway_connection(gateway_id)
     }
 
-    pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
-        self.inner.get_gateway_connections().await
+    pub fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
+        self.inner.get_gateway_connections()
     }
 
     pub async fn timer_1s(&self) {
-        for connection in self.get_gateway_connections().await {
-            connection.one_second_timer_tick().await;
+        for connection in self.get_gateway_connections() {
+            connection.one_second_timer_tick();
         }
     }
 
@@ -86,7 +86,7 @@ async fn connection_loop(
     debug: bool,
 ) {
     while inner.is_running() {
-        inner.set_gateway_connection(&inner.gateway_id, None).await;
+        inner.set_gateway_connection(&inner.gateway_id, None);
         println!(
             "Gateway:[{}] Connecting to remote gateway with host '{}' and with timeout: {:?}",
             inner.get_gateway_id(),
@@ -133,9 +133,7 @@ async fn connection_loop(
         );
 
         let gateway_connection = Arc::new(gateway_connection);
-        inner
-            .set_gateway_connection(&inner.gateway_id, gateway_connection.clone().into())
-            .await;
+        inner.set_gateway_connection(&inner.gateway_id, gateway_connection.clone().into());
 
         tokio::spawn(crate::tcp_gateway::gateway_read_loop(
             inner.clone(),

@@ -30,8 +30,7 @@ pub async fn handle_connection(
     if let Some(port) = port.as_ref() {
         crate::app::APP_CTX
             .metrics
-            .update(|itm| itm.connection_by_port.inc(port))
-            .await;
+            .update(|itm| itm.connection_by_port.inc(port));
     }
 
     let listening_addr_str = listening_addr_str.clone();
@@ -106,8 +105,7 @@ pub async fn handle_connection(
         if let Some(port) = port.as_ref() {
             crate::app::APP_CTX
                 .metrics
-                .update(|itm| itm.connection_by_port.dec(port))
-                .await;
+                .update(|itm| itm.connection_by_port.dec(port));
         }
 
         crate::app::APP_CTX

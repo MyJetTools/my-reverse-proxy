@@ -34,8 +34,7 @@ impl UnixHttp2ContentSource {
                 result.set_connect_timeout(self.connect_timeout);
 
                 result
-            })
-            .await;
+            });
 
         let http_response = h2_client.do_request(req, self.request_timeout).await?;
 
@@ -45,13 +44,8 @@ impl UnixHttp2ContentSource {
 
 impl Drop for UnixHttp2ContentSource {
     fn drop(&mut self) {
-        let connection_id = self.connection_id;
-
-        tokio::spawn(async move {
-            APP_CTX
-                .unix_socket_h2_socket_per_connection
-                .remove(connection_id)
-                .await;
-        });
+        APP_CTX
+            .unix_socket_h2_socket_per_connection
+            .remove(self.connection_id);
     }
 }

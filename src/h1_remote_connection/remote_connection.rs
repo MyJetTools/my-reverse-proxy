@@ -333,9 +333,7 @@ impl RemoteConnection {
             }
             RemoteConnectionInner::StaticContent { .. } => true,
             RemoteConnectionInner::LocalFiles(local_files) => {
-                local_files
-                    .send_headers(self.connection_id, h1_headers)
-                    .await;
+                local_files.send_headers(self.connection_id, h1_headers);
                 true
             }
         }

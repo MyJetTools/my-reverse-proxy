@@ -19,7 +19,7 @@ impl MyTimerTick for GatewaySyncCertsTimer {
                 continue;
             }
 
-            let connections = gateway_client.get_gateway_connections().await;
+            let connections = gateway_client.get_gateway_connections();
             if connections.is_empty() {
                 continue;
             }

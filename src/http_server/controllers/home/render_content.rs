@@ -25,8 +25,7 @@ pub async fn render_content(config_model: &CurrentConfigurationHttpModel) -> Str
     for port_configuration in &config_model.ports {
         let connections = crate::app::APP_CTX
             .metrics
-            .get(|itm| itm.connection_by_port.get(&port_configuration.port))
-            .await;
+            .get(|itm| itm.connection_by_port.get(&port_configuration.port));
 
         let class = if connections > 0 {
             "text-bg-success"

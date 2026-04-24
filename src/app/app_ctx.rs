@@ -170,33 +170,33 @@ impl AppContext {
         self.id.fetch_add(1, Ordering::SeqCst)
     }
 
-    pub async fn get_gateway_by_id_with_next_connection_id(
+    pub fn get_gateway_by_id_with_next_connection_id(
         &self,
         gateway_id: &str,
     ) -> Option<(Arc<TcpGatewayConnection>, u32)> {
         if let Some(server_gateway) = self.gateway_server.as_ref() {
-            if let Some(result) = server_gateway.get_gateway_connection(gateway_id).await {
+            if let Some(result) = server_gateway.get_gateway_connection(gateway_id) {
                 return Some((result, server_gateway.get_next_connection_id()));
             }
         }
 
         let gateway_client = self.gateway_clients.get(gateway_id)?;
 
-        let result = gateway_client.get_gateway_connection(gateway_id).await?;
+        let result = gateway_client.get_gateway_connection(gateway_id)?;
 
         Some((result, gateway_client.get_next_connection_id()))
     }
 
-    pub async fn get_gateway_by_id(&self, gateway_id: &str) -> Option<Arc<TcpGatewayConnection>> {
+    pub fn get_gateway_by_id(&self, gateway_id: &str) -> Option<Arc<TcpGatewayConnection>> {
         if let Some(server_gateway) = self.gateway_server.as_ref() {
-            if let Some(result) = server_gateway.get_gateway_connection(gateway_id).await {
+            if let Some(result) = server_gateway.get_gateway_connection(gateway_id) {
                 return Some(result);
             }
         }
 
         let gateway_client = self.gateway_clients.get(gateway_id)?;
 
-        gateway_client.get_gateway_connection(gateway_id).await
+        gateway_client.get_gateway_connection(gateway_id)
     }
 }
 

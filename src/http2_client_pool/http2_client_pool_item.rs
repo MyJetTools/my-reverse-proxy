@@ -70,8 +70,6 @@ impl<
         let pool = self.pool.take().unwrap();
 
         let end_point = self.end_point.take().unwrap();
-        tokio::spawn(async move {
-            pool.return_back(end_point, http_client).await;
-        });
+        pool.return_back(end_point, http_client);
     }
 }

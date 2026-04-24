@@ -37,8 +37,7 @@ impl UnixHttp1ContentSource {
                 http_client.set_connect_timeout(self.connect_timeout);
 
                 http_client
-            })
-            .await;
+            });
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 
@@ -63,13 +62,6 @@ impl UnixHttp1ContentSource {
 
 impl Drop for UnixHttp1ContentSource {
     fn drop(&mut self) {
-        let connection_id = self.connection_id;
-
-        tokio::spawn(async move {
-            APP_CTX
-                .unix_sockets_per_connection
-                .remove(connection_id)
-                .await;
-        });
+        APP_CTX.unix_sockets_per_connection.remove(self.connection_id);
     }
 }

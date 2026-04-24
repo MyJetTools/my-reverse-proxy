@@ -119,8 +119,7 @@ async fn kick_off_https2(
 
     crate::app::APP_CTX
         .metrics
-        .update(|itm| itm.connection_by_port.inc(&endpoint_port))
-        .await;
+        .update(|itm| itm.connection_by_port.inc(&endpoint_port));
 
     tokio::spawn(async move {
         let http_builder = Builder::new(TokioExecutor::new());
@@ -163,8 +162,7 @@ async fn kick_off_https2(
 
         crate::app::APP_CTX
             .metrics
-            .update(|itm| itm.connection_by_port.dec(&endpoint_port))
-            .await;
+            .update(|itm| itm.connection_by_port.dec(&endpoint_port));
 
         println!("Http2 connection is gone {:?}", connection_ip);
 

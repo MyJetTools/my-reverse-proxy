@@ -9,13 +9,13 @@ use std::{
 
 use arc_swap::ArcSwap;
 use encryption::aes::AesKey;
+use parking_lot::Mutex;
 
 use rust_extensions::{
     date_time::{AtomicDateTimeAsMicroseconds, DateTimeAsMicroseconds},
     remote_endpoint::RemoteEndpointOwned,
     AtomicDuration, AtomicStopWatch, SliceOrVec,
 };
-use tokio::sync::Mutex;
 
 use crate::{metrics::PerSecondAccumulator, network_stream::MyOwnedWriteHalf};
 
@@ -27,7 +27,8 @@ pub struct TcpGatewayConnection {
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Arc<Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>>,
-    forward_proxy_handlers: Arc<Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
+    forward_proxy_handlers:
+        Arc<tokio::sync::Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
     allow_incoming_forward_connection: bool,
     support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
@@ -55,7 +56,7 @@ impl TcpGatewayConnection {
             addr,
             inner: inner.clone(),
             forward_connections: Arc::new(Mutex::default()),
-            forward_proxy_handlers: Arc::new(Mutex::default()),
+            forward_proxy_handlers: Arc::new(tokio::sync::Mutex::default()),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
             support_compression: AtomicBool::new(supported_compression),
             ping_stop_watch: AtomicStopWatch::new(),
@@ -97,11 +98,11 @@ impl TcpGatewayConnection {
         result > 0
     }
 
-    pub async fn one_second_timer_tick(&self) {
+    pub fn one_second_timer_tick(&self) {
         let in_per_second = self.in_per_second.get_per_second();
         let out_per_second = self.out_per_second.get_per_second();
 
-        let mut write_access = self.metrics.lock().await;
+        let mut write_access = self.metrics.lock();
         write_access.in_per_second.add(in_per_second);
         write_access.out_per_second.add(out_per_second);
     }
@@ -128,38 +129,38 @@ impl TcpGatewayConnection {
         self.gateway_id.load_full()
     }
 
-    pub async fn add_forward_connection(
+    pub fn add_forward_connection(
         &self,
         connection_id: u32,
         connection: Arc<TcpGatewayForwardConnection>,
     ) {
-        let mut write_access = self.forward_connections.lock().await;
+        let mut write_access = self.forward_connections.lock();
         write_access.insert(connection_id, connection);
     }
 
-    pub async fn get_forward_connection(
+    pub fn get_forward_connection(
         &self,
         connection_id: u32,
     ) -> Option<Arc<TcpGatewayForwardConnection>> {
-        let write_access = self.forward_connections.lock().await;
+        let write_access = self.forward_connections.lock();
         write_access.get(&connection_id).cloned()
     }
 
-    pub async fn has_forward_connection(&self, connection_id: u32) -> bool {
-        let read_access = self.forward_connections.lock().await;
+    pub fn has_forward_connection(&self, connection_id: u32) -> bool {
+        let read_access = self.forward_connections.lock();
         read_access.contains_key(&connection_id)
     }
 
-    pub async fn get_forward_connections_amount(&self) -> usize {
-        let write_access = self.forward_connections.lock().await;
+    pub fn get_forward_connections_amount(&self) -> usize {
+        let write_access = self.forward_connections.lock();
         write_access.len()
     }
 
-    pub async fn remove_forward_connection(
+    pub fn remove_forward_connection(
         &self,
         connection_id: u32,
     ) -> Option<Arc<TcpGatewayForwardConnection>> {
-        let mut write_access = self.forward_connections.lock().await;
+        let mut write_access = self.forward_connections.lock();
         write_access.remove(&connection_id)
     }
 
@@ -279,7 +280,7 @@ impl TcpGatewayConnection {
             return Err(FileRequestError::GatewayDisconnected);
         }
 
-        let (task_completion, request_id) = self.file_requests.start_request().await;
+        let (task_completion, request_id) = self.file_requests.start_request();
 
         {
             let request = TcpGatewayContract::GetFileRequest { path, request_id };
@@ -298,13 +299,11 @@ impl TcpGatewayConnection {
         match status {
             GetFileStatus::Ok => {
                 self.file_requests
-                    .set_content(request_id, content.into_vec())
-                    .await;
+                    .set_content(request_id, content.into_vec());
             }
             GetFileStatus::Error => {
                 self.file_requests
-                    .set_error(request_id, FileRequestError::FileNotFound)
-                    .await
+                    .set_error(request_id, FileRequestError::FileNotFound);
             }
         }
     }
@@ -322,7 +321,7 @@ impl TcpGatewayConnection {
     }
 
     pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
-        if self.has_forward_connection(connection_id).await {
+        if self.has_forward_connection(connection_id) {
             let payload = TcpGatewayContract::BackwardPayload {
                 connection_id,
                 payload: payload.into(),
@@ -356,7 +355,7 @@ impl TcpGatewayConnection {
                 println!("Gateway:[{}] Can not accept payload with size: {} to connection {}. Connection is not acknowledged yet", gateway_id.as_str(), payload.len(), connection_id);
             }
             TcpGatewayProxyForwardedConnectionStatus::Connected => {
-                proxy_connection.enqueue_receive_payload(payload).await;
+                proxy_connection.enqueue_receive_payload(payload);
             }
             TcpGatewayProxyForwardedConnectionStatus::Disconnected(err) => {
                 let gateway_id = self.get_gateway_id();
@@ -402,7 +401,12 @@ impl TcpGatewayConnection {
 impl Drop for TcpGatewayConnection {
     fn drop(&mut self) {
         let proxy_connections = self.forward_proxy_handlers.clone();
-        let forward_connections = self.forward_connections.clone();
+        let forward_connections: Vec<_> = self
+            .forward_connections
+            .lock()
+            .values()
+            .cloned()
+            .collect();
         tokio::spawn(async move {
             {
                 let write_access = proxy_connections.lock().await;
@@ -411,11 +415,8 @@ impl Drop for TcpGatewayConnection {
                 }
             }
 
-            {
-                let write_access = forward_connections.lock().await;
-                for itm in write_access.values() {
-                    itm.disconnect().await;
-                }
+            for itm in forward_connections {
+                itm.disconnect().await;
             }
         });
     }

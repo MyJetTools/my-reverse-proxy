@@ -12,7 +12,7 @@ const SEND_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct TcpConnectionInner {
     pub connection: Mutex<Option<MyOwnedWriteHalf>>,
-    pub buffer: Mutex<SendBuffer>,
+    pub buffer: parking_lot::Mutex<SendBuffer>,
     sender: Arc<tokio::sync::mpsc::Sender<()>>,
     is_connected: Box<UnsafeValue<bool>>,
     pub aes_key: Arc<AesKey>,
@@ -26,7 +26,7 @@ impl TcpConnectionInner {
         let (sender, receiver) = tokio::sync::mpsc::channel(1024);
         let result = Self {
             connection: Mutex::new(Some(connection)),
-            buffer: Mutex::new(SendBuffer::new()),
+            buffer: parking_lot::Mutex::new(SendBuffer::new()),
             sender: Arc::new(sender),
             is_connected: Box::new(true.into()),
             aes_key,
@@ -37,7 +37,7 @@ impl TcpConnectionInner {
 
     pub async fn send_payload(&self, payload: &[u8]) -> bool {
         {
-            let mut buffer_access = self.buffer.lock().await;
+            let mut buffer_access = self.buffer.lock();
 
             if buffer_access.disconnected {
                 return false;
@@ -68,7 +68,7 @@ impl TcpConnectionInner {
         };
 
         if connection.is_some() {
-            let mut buffer_access = self.buffer.lock().await;
+            let mut buffer_access = self.buffer.lock();
             buffer_access.disconnect();
         }
         connection.is_some()
@@ -77,7 +77,7 @@ impl TcpConnectionInner {
     pub async fn push_payload_to_socket(&self) -> bool {
         loop {
             let payload_to_send = {
-                let mut write_access = self.buffer.lock().await;
+                let mut write_access = self.buffer.lock();
 
                 if write_access.disconnected {
                     return false;

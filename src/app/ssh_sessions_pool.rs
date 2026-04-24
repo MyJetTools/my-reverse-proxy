@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use my_ssh::{SshCredentials, SshSession};
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 pub struct SshSessionUsage {
     instance: Arc<SshSession>,
@@ -24,9 +24,9 @@ impl SshSessionsPool {
             data: Default::default(),
         }
     }
-    pub async fn get(&self, credentials: &Arc<SshCredentials>) -> SshSessionHandler {
+    pub fn get(&self, credentials: &Arc<SshCredentials>) -> SshSessionHandler {
         let as_string = credentials.to_string();
-        let mut write_access = self.data.lock().await;
+        let mut write_access = self.data.lock();
         if let Some(result) = write_access.get_mut(as_string.as_str()) {
             result.usage += 1;
             return SshSessionHandler {
@@ -43,10 +43,10 @@ impl SshSessionsPool {
         SshSessionHandler { ssh_session }
     }
 
-    pub async fn connection_is_dropped(&self, credentials: &Arc<SshCredentials>) {
+    pub fn connection_is_dropped(&self, credentials: &Arc<SshCredentials>) {
         let as_string = credentials.to_string();
 
-        let mut write_access = self.data.lock().await;
+        let mut write_access = self.data.lock();
 
         let mut delete = false;
         if let Some(item) = write_access.get_mut(as_string.as_str()) {
@@ -70,13 +70,8 @@ pub struct SshSessionHandler {
 
 impl Drop for SshSessionHandler {
     fn drop(&mut self) {
-        let ssh_session = self.ssh_session.clone();
-
-        tokio::spawn(async move {
-            crate::app::APP_CTX
-                .ssh_sessions_pool
-                .connection_is_dropped(ssh_session.get_ssh_credentials())
-                .await
-        });
+        crate::app::APP_CTX
+            .ssh_sessions_pool
+            .connection_is_dropped(self.ssh_session.get_ssh_credentials());
     }
 }

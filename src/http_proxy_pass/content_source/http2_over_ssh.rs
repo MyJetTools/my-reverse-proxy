@@ -35,8 +35,7 @@ impl Http2OverSshContentSource {
                         crate::app::APP_CTX.prometheus.clone(),
                     )
                 },
-            )
-            .await;
+            );
 
         let response = http_client.do_request(req, self.request_timeout).await?;
         return Ok(HttpResponse::Response(response));

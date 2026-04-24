@@ -37,8 +37,7 @@ impl TcpGatewayClientPacketHandler {
 
                 gateway_connection.set_gateway_id(gateway_name);
                 tcp_gateway
-                    .set_gateway_connection(gateway_name, gateway_connection.clone().into())
-                    .await;
+                    .set_gateway_connection(gateway_name, gateway_connection.clone().into());
 
                 let sync_ids: Vec<&str> = tcp_gateway
                     .sync_ssl_certificates

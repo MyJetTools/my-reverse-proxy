@@ -16,7 +16,7 @@ impl GatewayServerStatus {
 
         let result = Self {
             connections: GatewayConnection::new(
-                server_gateway.get_gateway_connections().await.as_slice(),
+                server_gateway.get_gateway_connections().as_slice(),
             )
             .await,
         };
@@ -45,7 +45,7 @@ impl GatewayConnection {
             let ping = connection.last_ping_duration.to_duration();
 
             let (in_history, out_history) = {
-                let metrics_access = connection.metrics.lock().await;
+                let metrics_access = connection.metrics.lock();
                 let in_history = metrics_access.in_per_second.get_metrics();
                 let out_history = metrics_access.out_per_second.get_metrics();
                 (in_history, out_history)
@@ -53,7 +53,7 @@ impl GatewayConnection {
 
             result.push(Self {
                 name: connection.get_gateway_id().to_string(),
-                forward_connections: connection.get_forward_connections_amount().await,
+                forward_connections: connection.get_forward_connections_amount(),
                 proxy_connections: connection.get_forward_proxy_connections_amount().await,
                 ping_time: format!("{:?}", ping),
                 is_incoming_forward_connection_allowed: connection

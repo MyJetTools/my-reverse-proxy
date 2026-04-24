@@ -57,28 +57,23 @@ impl CurrentConfigurationHttpModel {
 
         crate::app::APP_CTX
             .http_clients_pool
-            .fill_connections_amount(&mut remote_connections)
-            .await;
+            .fill_connections_amount(&mut remote_connections);
 
         crate::app::APP_CTX
             .http2_clients_pool
-            .fill_connections_amount(&mut remote_connections)
-            .await;
+            .fill_connections_amount(&mut remote_connections);
 
         crate::app::APP_CTX
             .https_clients_pool
-            .fill_connections_amount(&mut remote_connections)
-            .await;
+            .fill_connections_amount(&mut remote_connections);
 
         crate::app::APP_CTX
             .http_over_ssh_clients_pool
-            .fill_connections_amount(&mut remote_connections)
-            .await;
+            .fill_connections_amount(&mut remote_connections);
 
         crate::app::APP_CTX
             .http2_over_ssh_clients_pool
-            .fill_connections_amount(&mut remote_connections)
-            .await;
+            .fill_connections_amount(&mut remote_connections);
 
         Self {
             ports,

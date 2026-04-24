@@ -3,8 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use my_http_client::{
     http2::MyHttp2Client, hyper::MyHttpHyperClientMetrics, MyHttpClientConnector,
 };
+use parking_lot::Mutex;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
-use tokio::sync::Mutex;
 
 pub struct Http2ClientPoolInner<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
@@ -25,8 +25,8 @@ impl<
         }
     }
 
-    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
-        let items = self.items.lock().await;
+    pub fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        let items = self.items.lock();
         for (key, value) in items.iter() {
             if value.len() > 0 {
                 dest.insert(key.clone(), value.len());
@@ -34,7 +34,7 @@ impl<
         }
     }
 
-    pub async fn get_or_create(
+    pub fn get_or_create(
         &self,
         remote_endpoint: &str,
         connect_timeout: std::time::Duration,
@@ -43,7 +43,7 @@ impl<
             Arc<dyn MyHttpHyperClientMetrics + Send + Sync + 'static>,
         ),
     ) -> MyHttp2Client<TStream, TConnector> {
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         match items_access.get_mut(remote_endpoint) {
             Some(pool) => {
@@ -66,13 +66,13 @@ impl<
         }
     }
 
-    pub async fn return_back(
+    pub fn return_back(
         &self,
         remote_endpoint: String,
         my_http_client: MyHttp2Client<TStream, TConnector>,
     ) {
         let now = DateTimeAsMicroseconds::now();
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         match items_access.get_mut(remote_endpoint.as_str()) {
             Some(pool) => pool.push((now, my_http_client)),
@@ -82,9 +82,9 @@ impl<
         }
     }
 
-    pub async fn gc(&self) {
+    pub fn gc(&self) {
         let now = DateTimeAsMicroseconds::now();
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         for v in items_access.values_mut() {
             while v.len() > 0 {

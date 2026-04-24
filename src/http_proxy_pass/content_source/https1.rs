@@ -30,8 +30,7 @@ impl Https1ContentSource {
                     debug: self.debug,
                     domain_name: self.domain_name.clone(),
                 },
-            )
-            .await;
+            );
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 

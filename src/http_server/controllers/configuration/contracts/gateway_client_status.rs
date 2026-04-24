@@ -16,7 +16,7 @@ impl GatewayClientStatus {
             let itm = Self {
                 name: name.to_string(),
                 connections: GatewayConnection::new(
-                    client_gateway.get_gateway_connections().await.as_slice(),
+                    client_gateway.get_gateway_connections().as_slice(),
                 )
                 .await,
             };

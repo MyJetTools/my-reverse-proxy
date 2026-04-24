@@ -20,8 +20,7 @@ pub async fn get_ssh_session(
                 let passphrase = if pass_phrase.is_none() {
                     let ssh_pass_key = crate::app::APP_CTX
                         .ssh_cert_pass_keys
-                        .get(ssh_credentials.as_ref())
-                        .await;
+                        .get(ssh_credentials.as_ref());
                     ssh_pass_key
                 } else {
                     pass_phrase.clone()

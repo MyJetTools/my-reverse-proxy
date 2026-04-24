@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use futures::lock::Mutex;
+use parking_lot::Mutex;
 use rust_extensions::{file_utils::FilePath, SliceOrVec};
 
 use crate::h1_utils::*;
@@ -20,17 +20,16 @@ impl LocalPathContent {
         }
     }
 
-    pub async fn send_headers(&self, request_id: u64, h1_headers: &Http1HeadersBuilder) {
+    pub fn send_headers(&self, request_id: u64, h1_headers: &Http1HeadersBuilder) {
         let first_line = h1_headers.get_first_line();
         let (verb, path) = first_line.get_verb_and_path();
         self.requests
             .lock()
-            .await
             .insert(request_id, (verb.to_string(), path.to_string()));
     }
 
     pub async fn get_content(&self, request_id: u64) -> SliceOrVec<'static, u8> {
-        let verb_and_path = self.requests.lock().await.remove(&request_id);
+        let verb_and_path = self.requests.lock().remove(&request_id);
 
         let Some(verb_and_path) = verb_and_path else {
             return crate::error_templates::NOT_FOUND.as_slice().into();

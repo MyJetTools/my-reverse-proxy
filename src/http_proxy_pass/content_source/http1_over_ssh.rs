@@ -31,8 +31,7 @@ impl Http1OverSshContentSource {
                     ssh_session: self.ssh_session.clone(),
                     connect_timeout: self.connect_timeout,
                 },
-            )
-            .await;
+            );
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 

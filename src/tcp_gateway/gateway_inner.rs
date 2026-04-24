@@ -4,7 +4,7 @@ use std::{
 };
 
 use encryption::aes::AesKey;
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 use super::TcpGatewayConnection;
 
@@ -37,12 +37,12 @@ impl TcpGatewayInner {
         }
     }
 
-    pub async fn set_gateway_connection(
+    pub fn set_gateway_connection(
         &self,
         id: &str,
         connection: Option<Arc<TcpGatewayConnection>>,
     ) {
-        let mut connection_access = self.connection.lock().await;
+        let mut connection_access = self.connection.lock();
 
         match connection {
             Some(connection) => {
@@ -54,13 +54,13 @@ impl TcpGatewayInner {
         }
     }
 
-    pub async fn get_gateway_connection(&self, id: &str) -> Option<Arc<TcpGatewayConnection>> {
-        let connection_access = self.connection.lock().await;
+    pub fn get_gateway_connection(&self, id: &str) -> Option<Arc<TcpGatewayConnection>> {
+        let connection_access = self.connection.lock();
         connection_access.get(id).cloned()
     }
 
-    pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
-        let connection_access = self.connection.lock().await;
+    pub fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
+        let connection_access = self.connection.lock();
         connection_access.values().cloned().collect()
     }
 

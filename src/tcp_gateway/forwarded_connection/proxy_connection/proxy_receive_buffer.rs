@@ -1,5 +1,5 @@
+use parking_lot::Mutex;
 use rust_extensions::TaskCompletion;
-use tokio::sync::Mutex;
 
 #[derive(Default)]
 pub struct AwaitingContent {
@@ -22,7 +22,7 @@ impl ProxyReceiveBuffer {
     pub async fn get_data(&self, out: &mut [u8]) -> Result<usize, std::io::Error> {
         loop {
             let awaiter = {
-                let mut write_access = self.buffer.lock().await;
+                let mut write_access = self.buffer.lock();
                 if write_access.disconnected {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::ConnectionAborted,
@@ -56,15 +56,15 @@ impl ProxyReceiveBuffer {
         }
     }
 
-    pub async fn extend_from_slice(&self, payload: &[u8]) {
-        let mut buffer_access = self.buffer.lock().await;
+    pub fn extend_from_slice(&self, payload: &[u8]) {
+        let mut buffer_access = self.buffer.lock();
         buffer_access.buffer.extend_from_slice(payload);
         if let Some(mut task_completion) = buffer_access.awaiter.take() {
             task_completion.set_ok(());
         }
     }
-    pub async fn disconnect(&self) -> bool {
-        let mut buffer_access = self.buffer.lock().await;
+    pub fn disconnect(&self) -> bool {
+        let mut buffer_access = self.buffer.lock();
         if buffer_access.disconnected {
             return false;
         }

@@ -1,3 +1,4 @@
+use arc_swap::ArcSwapOption;
 use rust_common::placeholders::*;
 use rust_extensions::StrOrString;
 
@@ -6,7 +7,7 @@ use crate::types::{ConnectionIp, HttpRequestReader};
 use super::{HttpListenPortInfo, HttpProxyPassIdentity, ProxyPassLocations};
 
 pub struct HttpProxyPassInner {
-    pub identity: Option<HttpProxyPassIdentity>,
+    pub identity: ArcSwapOption<HttpProxyPassIdentity>,
     pub locations: ProxyPassLocations,
     pub http_listen_port_info: HttpListenPortInfo,
     pub connection_ip: ConnectionIp,
@@ -20,7 +21,7 @@ impl HttpProxyPassInner {
         connection_ip: ConnectionIp,
     ) -> Self {
         Self {
-            identity,
+            identity: ArcSwapOption::from(identity.map(std::sync::Arc::new)),
             locations,
             http_listen_port_info,
             connection_ip,
@@ -61,7 +62,7 @@ impl HttpProxyPassInner {
                     }
 
                     "CLIENT_CERT_CN" => {
-                        if let Some(identity) = self.identity.as_ref() {
+                        if let Some(identity) = self.identity.load_full() {
                             result.push_str(identity.as_str());
                         }
                     }

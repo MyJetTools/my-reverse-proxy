@@ -24,8 +24,7 @@ async fn handle_request(
 ) -> Result<HttpOkResult, HttpFailResult> {
     crate::app::APP_CTX
         .ssh_cert_pass_keys
-        .add(input_data.id, input_data.pass_key)
-        .await;
+        .add(input_data.id, input_data.pass_key);
 
     HttpOutput::Empty.into_ok_result(true).into()
 }

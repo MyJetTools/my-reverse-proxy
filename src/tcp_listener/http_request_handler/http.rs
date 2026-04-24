@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use tokio::sync::Mutex;
 
 use crate::{configurations::HttpListenPortConfiguration, http_proxy_pass::*, types::ConnectionIp};
 
 pub struct HttpRequestHandler {
-    proxy_pass: Mutex<Option<Arc<HttpProxyPass>>>,
+    proxy_pass: ArcSwapOption<HttpProxyPass>,
     connection_ip: ConnectionIp,
     listen_port_config: Arc<HttpListenPortConfiguration>,
 }
@@ -19,7 +19,7 @@ impl HttpRequestHandler {
         listen_port_config: Arc<HttpListenPortConfiguration>,
     ) -> Self {
         Self {
-            proxy_pass: Mutex::new(None),
+            proxy_pass: ArcSwapOption::empty(),
             connection_ip,
             listen_port_config,
         }
@@ -29,9 +29,7 @@ impl HttpRequestHandler {
         &self,
         req: &hyper::Request<hyper::body::Incoming>,
     ) -> Result<Arc<HttpProxyPass>, hyper::Result<hyper::Response<BoxBody<Bytes, String>>>> {
-        let mut write_access = self.proxy_pass.lock().await;
-
-        if let Some(proxy_pass) = write_access.clone() {
+        if let Some(proxy_pass) = self.proxy_pass.load_full() {
             return Ok(proxy_pass);
         }
 
@@ -80,7 +78,7 @@ impl HttpRequestHandler {
 
         let http_proxy_pass = Arc::new(http_proxy_pass);
 
-        *write_access = Some(http_proxy_pass.clone());
+        self.proxy_pass.store(Some(http_proxy_pass.clone()));
 
         Ok(http_proxy_pass)
     }
@@ -98,9 +96,7 @@ impl HttpRequestHandler {
     }
 
     pub async fn dispose(&self) {
-        let proxy_pass = self.proxy_pass.lock().await.take();
-
-        if let Some(proxy_pass) = proxy_pass {
+        if let Some(proxy_pass) = self.proxy_pass.swap(None) {
             proxy_pass.dispose().await;
         }
     }

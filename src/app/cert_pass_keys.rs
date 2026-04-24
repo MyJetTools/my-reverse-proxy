@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use my_ssh::SshCredentials;
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 #[derive(Debug, Default)]
 pub struct CertPassKeysInner {
@@ -20,8 +20,8 @@ impl CertPassKeys {
         }
     }
 
-    pub async fn add(&self, key: String, pass_key: String) {
-        let mut write_access = self.inner.lock().await;
+    pub fn add(&self, key: String, pass_key: String) {
+        let mut write_access = self.inner.lock();
         if key == "*" {
             write_access.master_pass_key = Some(pass_key);
         } else {
@@ -29,9 +29,9 @@ impl CertPassKeys {
         }
     }
 
-    pub async fn get(&self, ssh_credentials: &SshCredentials) -> Option<String> {
+    pub fn get(&self, ssh_credentials: &SshCredentials) -> Option<String> {
         let id = ssh_credentials.to_string();
-        let read_access = self.inner.lock().await;
+        let read_access = self.inner.lock();
         if let Some(pass_key) = read_access.pass_keys.get(id.as_str()) {
             return Some(pass_key.clone());
         }

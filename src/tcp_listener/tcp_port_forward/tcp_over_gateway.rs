@@ -19,9 +19,8 @@ pub async fn handle_connection(
         );
     }
 
-    let gateway_connection = crate::app::APP_CTX
-        .get_gateway_by_id_with_next_connection_id(&gateway_id)
-        .await;
+    let gateway_connection =
+        crate::app::APP_CTX.get_gateway_by_id_with_next_connection_id(&gateway_id);
 
     if gateway_connection.is_none() {
         if configuration.debug {

@@ -28,8 +28,7 @@ impl Http1ContentSource {
                     remote_endpoint: self.remote_endpoint.clone(),
                     debug: self.debug,
                 },
-            )
-            .await;
+            );
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 

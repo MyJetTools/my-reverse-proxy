@@ -37,20 +37,20 @@ impl TcpGatewayServer {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub async fn get_gateway_connection(
+    pub fn get_gateway_connection(
         &self,
         gateway_id: &str,
     ) -> Option<Arc<TcpGatewayConnection>> {
-        self.inner.get_gateway_connection(gateway_id).await
+        self.inner.get_gateway_connection(gateway_id)
     }
 
-    pub async fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
-        self.inner.get_gateway_connections().await
+    pub fn get_gateway_connections(&self) -> Vec<Arc<TcpGatewayConnection>> {
+        self.inner.get_gateway_connections()
     }
 
     pub async fn timer_1s(&self) {
-        for connection in self.get_gateway_connections().await {
-            connection.one_second_timer_tick().await;
+        for connection in self.get_gateway_connections() {
+            connection.one_second_timer_tick();
         }
     }
 }

@@ -41,8 +41,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
 
                 gateway_connection.set_gateway_id(gateway_name);
                 tcp_gateway
-                    .set_gateway_connection(gateway_name, gateway_connection.clone().into())
-                    .await;
+                    .set_gateway_connection(gateway_name, gateway_connection.clone().into());
                 gateway_connection.send_payload(&contract).await;
             }
             TcpGatewayContract::Connect {

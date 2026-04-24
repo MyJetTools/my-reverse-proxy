@@ -1,8 +1,8 @@
 use std::{collections::HashMap, time::Duration};
 
 use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
+use parking_lot::Mutex;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
-use tokio::sync::Mutex;
 
 pub struct HttpClientPoolInner<
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + Sync + 'static,
@@ -22,13 +22,13 @@ impl<
         }
     }
 
-    pub async fn get_or_create(
+    pub fn get_or_create(
         &self,
         remote_endpoint: &str,
         connect_timeout: Duration,
         create_connector: impl FnOnce() -> TConnector,
     ) -> MyHttpClient<TStream, TConnector> {
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         match items_access.get_mut(remote_endpoint) {
             Some(pool) => {
@@ -48,8 +48,8 @@ impl<
         }
     }
 
-    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
-        let items = self.items.lock().await;
+    pub fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        let items = self.items.lock();
         for (key, value) in items.iter() {
             if value.len() > 0 {
                 dest.insert(key.clone(), value.len());
@@ -57,9 +57,9 @@ impl<
         }
     }
 
-    pub async fn gc(&self) {
+    pub fn gc(&self) {
         let now = DateTimeAsMicroseconds::now();
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         for v in items_access.values_mut() {
             while v.len() > 0 {
@@ -77,13 +77,13 @@ impl<
         }
     }
 
-    pub async fn return_back(
+    pub fn return_back(
         &self,
         remote_endpoint: String,
         my_http_client: MyHttpClient<TStream, TConnector>,
     ) {
         let now = DateTimeAsMicroseconds::now();
-        let mut items_access = self.items.lock().await;
+        let mut items_access = self.items.lock();
 
         match items_access.get_mut(remote_endpoint.as_str()) {
             Some(pool) => pool.push((now, my_http_client)),

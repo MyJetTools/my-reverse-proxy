@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
 use my_http_client::utils::into_full_body_response;
-use tokio::sync::Mutex;
 
 use crate::{
     configurations::*, http_proxy_pass::GoogleAuthResult,
@@ -16,7 +16,7 @@ use super::{
 };
 
 pub struct HttpProxyPass {
-    pub inner: Mutex<Option<HttpProxyPassInner>>,
+    pub inner: ArcSwapOption<HttpProxyPassInner>,
     pub listening_port_info: HttpListenPortInfo,
     pub endpoint_info: Arc<HttpEndpointInfo>,
 }
@@ -30,15 +30,12 @@ impl HttpProxyPass {
     ) -> Self {
         let locations = ProxyPassLocations::new(&endpoint_info).await;
         Self {
-            inner: Mutex::new(
-                HttpProxyPassInner::new(
-                    client_cert.map(|itm| HttpProxyPassIdentity::ClientCert(itm)),
-                    locations,
-                    listening_port_info.clone(),
-                    connection_ip,
-                )
-                .into(),
-            ),
+            inner: ArcSwapOption::from(Some(Arc::new(HttpProxyPassInner::new(
+                client_cert.map(|itm| HttpProxyPassIdentity::ClientCert(itm)),
+                locations,
+                listening_port_info.clone(),
+                connection_ip,
+            )))),
 
             listening_port_info,
             endpoint_info,
@@ -63,16 +60,16 @@ impl HttpProxyPass {
         let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
         let (request, content_source, location_index, trace_payload) = {
-            let mut inner = self.inner.lock().await;
-            if inner.is_none() {
+            let Some(inner) = self.inner.load_full() else {
                 return Err(ProxyPassError::Disposed);
-            }
+            };
 
-            let inner = inner.as_mut().unwrap();
             match self.handle_auth_with_g_auth(&req).await {
                 GoogleAuthResult::Passed(user) => {
                     if let Some(email) = user {
-                        inner.identity = HttpProxyPassIdentity::GoogleUser(email).into();
+                        inner
+                            .identity
+                            .store(Some(Arc::new(HttpProxyPassIdentity::GoogleUser(email))));
                     }
                 }
                 GoogleAuthResult::Content(content) => return Ok(content),
@@ -82,7 +79,7 @@ impl HttpProxyPass {
             }
 
             if let Some(allowed_user_list_id) = self.endpoint_info.allowed_user_list_id.as_ref() {
-                if let Some(identity) = inner.identity.as_ref() {
+                if let Some(identity) = inner.identity.load_full() {
                     if !crate::app::APP_CTX
                         .allowed_users_list
                         .is_allowed(allowed_user_list_id, identity.as_str())
@@ -246,15 +243,13 @@ impl HttpProxyPass {
             }
         };
 
-        let inner = self.inner.lock().await;
-
-        if inner.is_none() {
+        let Some(inner) = self.inner.load_full() else {
             return Err(ProxyPassError::Disposed);
-        }
+        };
 
         super::http_response_builder::modify_resp_headers(
             self,
-            inner.as_ref().unwrap(),
+            &inner,
             &request.req_parts,
             response.headers_mut(),
             &location_index,
@@ -264,7 +259,6 @@ impl HttpProxyPass {
     }
 
     pub async fn dispose(&self) {
-        let mut inner = self.inner.lock().await;
-        *inner = None
+        self.inner.store(None);
     }
 }

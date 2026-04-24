@@ -50,8 +50,7 @@ impl<TNetworkWritePart: NetworkStreamWritePart + Send + Sync + 'static>
         let ssh_session_handler = if let Some(ssh_credentials) = ssh_credentials.as_ref() {
             let ssh_session = crate::app::APP_CTX
                 .ssh_sessions_pool
-                .get(ssh_credentials)
-                .await;
+                .get(ssh_credentials);
             Some(ssh_session)
         } else {
             None

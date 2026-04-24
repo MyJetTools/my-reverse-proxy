@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
 #[derive(Default)]
 pub struct MetricsValues<TKey: Clone + std::cmp::Eq + std::hash::Hash> {
@@ -63,13 +63,13 @@ impl Metrics {
         }
     }
 
-    pub async fn update(&self, access: impl Fn(&mut MetricsInner)) {
-        let mut inner = self.inner.lock().await;
+    pub fn update(&self, access: impl Fn(&mut MetricsInner)) {
+        let mut inner = self.inner.lock();
         access(&mut inner);
     }
 
-    pub async fn get<TResult>(&self, access: impl Fn(&MetricsInner) -> TResult) -> TResult {
-        let inner = self.inner.lock().await;
+    pub fn get<TResult>(&self, access: impl Fn(&MetricsInner) -> TResult) -> TResult {
+        let inner = self.inner.lock();
         access(&inner)
     }
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use parking_lot::Mutex;
 use rust_extensions::{TaskCompletion, TaskCompletionAwaiter};
-use tokio::sync::Mutex;
 
 pub enum FileRequestError {
     FileNotFound,
@@ -32,20 +32,20 @@ impl FileRequests {
         }
     }
 
-    pub async fn start_request(&self) -> (TaskCompletionAwaiter<Vec<u8>, FileRequestError>, u32) {
+    pub fn start_request(&self) -> (TaskCompletionAwaiter<Vec<u8>, FileRequestError>, u32) {
         let mut task_completion = TaskCompletion::new();
         task_completion.set_drop_error(FileRequestError::GatewayDisconnected);
         let awaiter = task_completion.get_awaiter();
-        let mut write_access = self.inner.lock().await;
+        let mut write_access = self.inner.lock();
         let request_id = write_access.get_next_request_id();
         write_access.requests.insert(request_id, task_completion);
 
         (awaiter, request_id)
     }
 
-    pub async fn set_content(&self, request_id: u32, content: Vec<u8>) {
+    pub fn set_content(&self, request_id: u32, content: Vec<u8>) {
         let item = {
-            let mut write_access = self.inner.lock().await;
+            let mut write_access = self.inner.lock();
             write_access.requests.remove(&request_id)
         };
 
@@ -54,9 +54,9 @@ impl FileRequests {
         }
     }
 
-    pub async fn set_error(&self, request_id: u32, error: FileRequestError) {
+    pub fn set_error(&self, request_id: u32, error: FileRequestError) {
         let item = {
-            let mut write_access = self.inner.lock().await;
+            let mut write_access = self.inner.lock();
             write_access.requests.remove(&request_id)
         };
 

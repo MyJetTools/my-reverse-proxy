@@ -32,7 +32,7 @@ impl TcpGatewayProxyForwardStream {
     }
 
     pub async fn disconnect(&self) {
-        if self.receive_buffer.disconnect().await {
+        if self.receive_buffer.disconnect() {
             return;
         }
         let payload = TcpGatewayContract::ConnectionError {

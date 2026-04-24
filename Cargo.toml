@@ -64,3 +64,4 @@ prometheus = "*"
 url-utils = { tag = "0.1.4", git = "https://github.com/MyJetTools/url-utils.git" }
 ip2location = "0.6"
 arc-swap = "1"
+parking_lot = "0.12"

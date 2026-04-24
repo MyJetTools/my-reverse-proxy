@@ -116,9 +116,7 @@ pub async fn gateway_read_loop(
     }
 
     let gateway_id = gateway_connection.get_gateway_id();
-    tcp_gateway
-        .set_gateway_connection(gateway_id.as_str(), None)
-        .await;
+    tcp_gateway.set_gateway_connection(gateway_id.as_str(), None);
     gateway_connection.disconnect_gateway().await;
 }
 

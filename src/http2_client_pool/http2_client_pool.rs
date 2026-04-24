@@ -22,15 +22,15 @@ impl<
         Self { inner }
     }
 
-    pub async fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
-        self.inner.fill_connections_amount(dest).await;
+    pub fn fill_connections_amount(&self, dest: &mut HashMap<String, usize>) {
+        self.inner.fill_connections_amount(dest);
     }
 
-    pub async fn gc(&self) {
-        self.inner.gc().await;
+    pub fn gc(&self) {
+        self.inner.gc();
     }
 
-    pub async fn get<'s>(
+    pub fn get<'s>(
         &self,
         remote_endpoint: StrOrString<'s>,
         connect_timeout: std::time::Duration,
@@ -40,10 +40,9 @@ impl<
             Arc<dyn MyHttpHyperClientMetrics + Send + Sync + 'static>,
         ),
     ) -> Http2ClientPoolItem<TStream, TConnector> {
-        let my_http_client = self
-            .inner
-            .get_or_create(remote_endpoint.as_str(), connect_timeout, create_connector)
-            .await;
+        let my_http_client =
+            self.inner
+                .get_or_create(remote_endpoint.as_str(), connect_timeout, create_connector);
 
         Http2ClientPoolItem::new(
             my_http_client,
