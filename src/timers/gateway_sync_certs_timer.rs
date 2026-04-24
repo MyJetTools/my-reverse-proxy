@@ -57,7 +57,7 @@ impl MyTimerTick for GatewaySyncCertsTimer {
             };
 
             for conn in connections {
-                conn.send_payload(&request).await;
+                conn.send_payload(&request);
             }
 
             println!(

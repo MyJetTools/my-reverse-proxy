@@ -22,6 +22,6 @@ pub async fn send_connection_error(
             error: err,
         };
 
-        gateway_connection.send_payload(&connection_fail).await;
+        gateway_connection.send_payload(&connection_fail);
     }
 }

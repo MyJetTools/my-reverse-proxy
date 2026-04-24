@@ -29,7 +29,7 @@ pub async fn handle_forward_connect(
     match connection_result{
         Ok(mut forward_connection) => {
             let connected_payload = TcpGatewayContract::Connected { connection_id } ;
-        gateway_connection.send_payload(&connected_payload).await;
+        gateway_connection.send_payload(&connected_payload);
 
 
         forward_connection.start();

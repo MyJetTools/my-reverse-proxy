@@ -35,7 +35,7 @@ impl TcpConnectionInner {
         (result, receiver)
     }
 
-    pub async fn send_payload(&self, payload: &[u8]) -> bool {
+    pub fn send_payload(&self, payload: &[u8]) -> bool {
         {
             let mut buffer_access = self.buffer.lock();
 
@@ -46,11 +46,7 @@ impl TcpConnectionInner {
             buffer_access.push(payload);
         }
 
-        let sender = self.sender.clone();
-
-        tokio::spawn(async move {
-            let _ = sender.send(()).await;
-        });
+        let _ = self.sender.try_send(());
 
         true
     }

@@ -155,7 +155,7 @@ async fn connection_loop(
             gateway_name: inner.get_gateway_id(),
         };
 
-        gateway_connection.send_payload(&handshake_contract).await;
+        gateway_connection.send_payload(&handshake_contract);
 
         super::gateway_ping_loop(gateway_connection, debug).await;
     }

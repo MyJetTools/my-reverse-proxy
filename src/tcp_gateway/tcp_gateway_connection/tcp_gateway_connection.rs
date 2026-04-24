@@ -208,7 +208,7 @@ impl TcpGatewayConnection {
             remote_host: remote_host_port.as_str(),
         };
 
-        if !self.send_payload(&connect_contract).await {
+        if !self.send_payload(&connect_contract) {
             return Err(format!(
                 "Connection to endpoint {} is lost",
                 remote_host_port.as_str()
@@ -284,7 +284,7 @@ impl TcpGatewayConnection {
 
         {
             let request = TcpGatewayContract::GetFileRequest { path, request_id };
-            self.send_payload(&request).await;
+            self.send_payload(&request);
         }
 
         task_completion.get_result().await
@@ -320,14 +320,14 @@ impl TcpGatewayConnection {
         self.allow_incoming_forward_connection
     }
 
-    pub async fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
+    pub fn send_backward_payload(&self, connection_id: u32, payload: &[u8]) {
         if self.has_forward_connection(connection_id) {
             let payload = TcpGatewayContract::BackwardPayload {
                 connection_id,
                 payload: payload.into(),
             };
 
-            self.send_payload(&payload).await;
+            self.send_payload(&payload);
         }
     }
 
@@ -364,11 +364,11 @@ impl TcpGatewayConnection {
         }
     }
 
-    pub async fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
+    pub fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
         let supported_compression = self.get_supported_compression();
         let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
 
-        if self.inner.send_payload(vec.as_slice()).await {
+        if self.inner.send_payload(vec.as_slice()) {
             self.out_per_second.add(vec.len());
             return true;
         }

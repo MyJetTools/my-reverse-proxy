@@ -16,7 +16,7 @@ pub struct TcpGatewayProxyForwardStream {
 }
 
 impl TcpGatewayProxyForwardStream {
-    pub async fn send_payload(&self, payload: &[u8]) -> bool {
+    pub fn send_payload(&self, payload: &[u8]) -> bool {
         let payload = TcpGatewayContract::ForwardPayload {
             connection_id: self.connection_id,
             payload: payload.into(),
@@ -28,10 +28,9 @@ impl TcpGatewayProxyForwardStream {
 
         self.gateway_connection_inner
             .send_payload(payload.as_slice())
-            .await
     }
 
-    pub async fn disconnect(&self) {
+    pub fn disconnect(&self) {
         if self.receive_buffer.disconnect() {
             return;
         }
@@ -44,11 +43,7 @@ impl TcpGatewayProxyForwardStream {
             self.support_compression,
         );
 
-        let inner = self.gateway_connection_inner.clone();
-
-        tokio::spawn(async move {
-            inner.send_payload(payload.as_slice()).await;
-        });
+        self.gateway_connection_inner.send_payload(payload.as_slice());
     }
 }
 
@@ -63,10 +58,10 @@ impl NetworkStreamReadPart for TcpGatewayProxyForwardStream {
 #[async_trait::async_trait]
 impl NetworkStreamWritePart for TcpGatewayProxyForwardStream {
     async fn shutdown_socket(&mut self) {
-        self.disconnect().await;
+        self.disconnect();
     }
     async fn write_to_socket(&mut self, buffer: &[u8]) -> Result<(), std::io::Error> {
-        if !self.send_payload(buffer).await {
+        if !self.send_payload(buffer) {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotConnected,
                 "No connection",

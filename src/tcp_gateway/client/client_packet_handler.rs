@@ -48,7 +48,7 @@ impl TcpGatewayClientPacketHandler {
                     let request = TcpGatewayContract::SyncSslCertificatesRequest {
                         cert_ids: sync_ids,
                     };
-                    gateway_connection.send_payload(&request).await;
+                    gateway_connection.send_payload(&request);
                 }
             }
             TcpGatewayContract::Connect {
@@ -132,7 +132,7 @@ impl TcpGatewayClientPacketHandler {
 
                 gateway_connection.last_ping_duration.update(duration);
                 let update_ping_time = TcpGatewayContract::UpdatePingTime { duration };
-                gateway_connection.send_payload(&update_ping_time).await;
+                gateway_connection.send_payload(&update_ping_time);
             }
             TcpGatewayContract::GetFileRequest { path, request_id } => {
                 crate::tcp_gateway::scripts::serve_file(

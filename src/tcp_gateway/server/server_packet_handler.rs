@@ -42,7 +42,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 gateway_connection.set_gateway_id(gateway_name);
                 tcp_gateway
                     .set_gateway_connection(gateway_name, gateway_connection.clone().into());
-                gateway_connection.send_payload(&contract).await;
+                gateway_connection.send_payload(&contract);
             }
             TcpGatewayContract::Connect {
                 connection_id,
@@ -82,9 +82,7 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                     .await;
             }
             TcpGatewayContract::Ping => {
-                gateway_connection
-                    .send_payload(&TcpGatewayContract::Pong)
-                    .await;
+                gateway_connection.send_payload(&TcpGatewayContract::Pong);
             }
             TcpGatewayContract::Pong => {}
             TcpGatewayContract::Connected { connection_id } => {
@@ -179,7 +177,7 @@ fn spawn_reply_sync_ssl_certificates(
                 },
             };
 
-            if !gateway_connection.send_payload(&pkt).await {
+            if !gateway_connection.send_payload(&pkt) {
                 eprintln!(
                     "Gateway server: sync cert reply to [{}] failed at id={}, aborting",
                     gateway_name, cert_id

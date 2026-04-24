@@ -29,9 +29,7 @@ pub async fn gateway_ping_loop(gateway_connection: Arc<TcpGatewayConnection>, de
         }
 
         gateway_connection.ping_stop_watch.reset_and_start();
-        let sent_ok = gateway_connection
-            .send_payload(&TcpGatewayContract::Ping)
-            .await;
+        let sent_ok = gateway_connection.send_payload(&TcpGatewayContract::Ping);
 
         if !sent_ok {
             break;

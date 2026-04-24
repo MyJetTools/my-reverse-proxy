@@ -34,6 +34,6 @@ pub async fn serve_file(
             }
         };
 
-        gateway_connection.send_payload(&payload).await;
+        gateway_connection.send_payload(&payload);
     });
 }
