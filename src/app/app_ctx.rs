@@ -10,6 +10,7 @@ use super::*;
 use encryption::aes::AesKey;
 use my_ssh::SshAsyncChannel;
 use my_tls::tokio_rustls::client::TlsStream;
+use my_tls::tokio_rustls::rustls::sign::CertifiedKey;
 use rust_extensions::{AppStates, UnsafeValue};
 use tokio::{net::TcpStream, sync::Mutex};
 
@@ -86,6 +87,8 @@ pub struct AppContext {
     pub http_control_port: Option<u16>,
 
     pub ssh_sessions_pool: SshSessionsPool,
+
+    pub self_signed_cert: Arc<CertifiedKey>,
 }
 
 impl AppContext {
@@ -163,6 +166,12 @@ impl AppContext {
             gateway_clients: gateway_clients,
             http_control_port,
             ssh_sessions_pool: SshSessionsPool::new(),
+            self_signed_cert: Arc::new(
+                crate::self_signed_cert::generate(
+                    crate::self_signed_cert::SELF_SIGNED_CERT_NAME.to_string(),
+                )
+                .unwrap(),
+            ),
         }
     }
 

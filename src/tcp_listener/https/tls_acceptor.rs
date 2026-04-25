@@ -63,7 +63,7 @@ pub async fn create_config(
             })
             .await?;
 
-        let certified_key = Arc::new(crate::self_signed_cert::generate(server_name.to_string())?);
+        let certified_key = crate::app::APP_CTX.self_signed_cert.clone();
         (certified_key, client_ca)
     } else {
         crate::app::APP_CTX

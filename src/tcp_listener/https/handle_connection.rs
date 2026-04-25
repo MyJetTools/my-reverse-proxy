@@ -122,7 +122,8 @@ async fn kick_off_https2(
         .update(|itm| itm.connection_by_port.inc(&endpoint_port));
 
     tokio::spawn(async move {
-        let http_builder = Builder::new(TokioExecutor::new());
+        let mut http_builder = Builder::new(TokioExecutor::new());
+        http_builder.http2().enable_connect_protocol();
 
         let listening_port_info = HttpListenPortInfo {
             endpoint_type: endpoint_info.listen_endpoint_type,

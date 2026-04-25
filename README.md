@@ -285,6 +285,21 @@ hosts:
       ssl_certificate: my_ssl_cert        
 ```
 
+#### WebSocket support on Http2 / Https2
+
+`Http2` and `Https2` endpoints accept WebSocket connections over HTTP/2 using
+the Extended CONNECT mechanism (RFC 8441). The server announces
+`SETTINGS_ENABLE_CONNECT_PROTOCOL = 1`, browsers send `:method = CONNECT` with
+`:protocol = websocket`, and the proxy converts the handshake to a regular
+HTTP/1.1 `Upgrade: websocket` request when forwarding to an h1 upstream. After
+both handshakes complete, payload bytes are pumped between the two sides
+without inspecting WebSocket frames.
+
+Currently supported: **h2 client → h1 upstream** (the typical browser case;
+real WebSocket servers are almost always h1). h2 client → h2 upstream is not
+supported yet — extended CONNECT on the outgoing side would require the h2
+client pool to expose an upgraded byte stream.
+
 ### Tcp
 ```yaml
 hosts:
@@ -841,6 +856,17 @@ removed ssl_certificate 'my_ssl_cert' — not present on gateway [gateway_name]
 - One or more edge proxies (clients) need to terminate TLS for domains whose certificates are managed centrally (Let's Encrypt renewals, rotation, compliance).
 - You want to avoid distributing private keys via configuration management or SSH to each node.
 - Certificates on the server are renewed by the existing `SslCertsRefreshTimer` — clients converge to the new cert within a minute without a restart or reconnect.
+
+
+
+## Gateway reliability
+
+The gateway TCP transport uses a race-free single-channel writer internally —
+outgoing payloads travel through a bounded `mpsc` channel that carries the bytes
+themselves rather than separate "wake the writer" signal events. This eliminates
+a class of lost-wakeup bugs that could cause a long-running gateway to silently
+stall after extended uptime under heavy traffic. From a configuration standpoint
+nothing changes; the improvement is purely internal.
 
 
 

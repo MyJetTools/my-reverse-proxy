@@ -19,9 +19,9 @@ pub async fn handle_connection(
     let listening_addr_str =
         listen_host.to_pretty_string(configuration.listen_endpoint_type.is_https());
 
-    let http2_builder = Arc::new(hyper::server::conn::http2::Builder::new(
-        TokioExecutor::new(),
-    ));
+    let mut http2_builder = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
+    http2_builder.enable_connect_protocol();
+    let http2_builder = Arc::new(http2_builder);
 
     let builder = http2_builder.clone();
 

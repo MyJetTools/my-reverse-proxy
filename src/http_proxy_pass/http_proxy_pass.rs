@@ -3,7 +3,10 @@ use std::sync::Arc;
 use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
+use hyper_util::rt::TokioIo;
 use my_http_client::utils::into_full_body_response;
+use my_http_client::MyHttpClientDisconnect;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     configurations::*, http_proxy_pass::GoogleAuthResult,
@@ -12,7 +15,7 @@ use crate::{
 
 use super::{
     HttpListenPortInfo, HttpProxyPassIdentity, HttpProxyPassInner, HttpRequestBuilder,
-    ProxyPassError, ProxyPassLocations,
+    ProxyPassError, ProxyPassLocations, WebSocketUpgrade,
 };
 
 pub struct HttpProxyPass {
@@ -151,93 +154,46 @@ impl HttpProxyPass {
                 }
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                tcp_stream,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
+                        spawn_websocket_pump(
+                            request.web_socket_upgrade,
+                            tcp_stream,
+                            response,
+                            self.endpoint_info.debug,
+                            disconnection,
+                            trace_payload,
+                        )
                     }
 
-                    super::content_source::WebSocketUpgradeStream::UnixStream(tcp_stream) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                tcp_stream,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
+                    super::content_source::WebSocketUpgradeStream::UnixStream(unix_stream) => {
+                        spawn_websocket_pump(
+                            request.web_socket_upgrade,
+                            unix_stream,
+                            response,
+                            self.endpoint_info.debug,
+                            disconnection,
+                            trace_payload,
+                        )
                     }
 
-                    /*
-                    super::content_source::WebSocketUpgradeStream::Hyper(hyper_web_socket) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-
-                            let web_socket = hyper_web_socket.await.unwrap();
-
-                            tokio::spawn(super::start_hyper_web_socket_loop(
-                                server_web_socket,
-                                web_socket,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
-                    }
-                     */
                     super::content_source::WebSocketUpgradeStream::TlsStream(tls_stream) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                tls_stream,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
+                        spawn_websocket_pump(
+                            request.web_socket_upgrade,
+                            tls_stream,
+                            response,
+                            self.endpoint_info.debug,
+                            disconnection,
+                            trace_payload,
+                        )
                     }
                     super::content_source::WebSocketUpgradeStream::SshChannel(async_channel) => {
-                        if let Some(web_socket_upgrade) = request.web_socket_upgrade {
-                            let server_web_socket = web_socket_upgrade.server_web_socket;
-                            tokio::spawn(super::start_web_socket_loop(
-                                server_web_socket,
-                                async_channel,
-                                self.endpoint_info.debug,
-                                disconnection,
-                                trace_payload,
-                            ));
-
-                            into_full_body_response(web_socket_upgrade.upgrade_response)
-                        } else {
-                            response
-                        }
+                        spawn_websocket_pump(
+                            request.web_socket_upgrade,
+                            async_channel,
+                            response,
+                            self.endpoint_info.debug,
+                            disconnection,
+                            trace_payload,
+                        )
                     }
                 }
             }
@@ -261,4 +217,83 @@ impl HttpProxyPass {
     pub async fn dispose(&self) {
         self.inner.store(None);
     }
+}
+
+fn spawn_websocket_pump<S>(
+    web_socket_upgrade: Option<WebSocketUpgrade>,
+    upstream: S,
+    fallback_response: hyper::Response<BoxBody<Bytes, String>>,
+    debug: bool,
+    disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+    trace_payload: bool,
+) -> hyper::Response<BoxBody<Bytes, String>>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
+{
+    let Some(web_socket_upgrade) = web_socket_upgrade else {
+        return fallback_response;
+    };
+
+    match web_socket_upgrade {
+        WebSocketUpgrade::H1 {
+            upgrade_response,
+            server_web_socket,
+        } => {
+            tokio::spawn(super::start_web_socket_loop(
+                server_web_socket,
+                upstream,
+                debug,
+                disconnection,
+                trace_payload,
+            ));
+            into_full_body_response(upgrade_response)
+        }
+        WebSocketUpgrade::H2 {
+            upgrade_response,
+            on_upgrade,
+        } => {
+            tokio::spawn(pump_h2_extended_connect(
+                on_upgrade,
+                upstream,
+                debug,
+                disconnection,
+            ));
+            into_full_body_response(upgrade_response)
+        }
+    }
+}
+
+async fn pump_h2_extended_connect<S>(
+    on_upgrade: hyper::upgrade::OnUpgrade,
+    mut upstream: S,
+    debug: bool,
+    disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+) where
+    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
+{
+    let upgraded = match on_upgrade.await {
+        Ok(upgraded) => upgraded,
+        Err(err) => {
+            if debug {
+                println!("h2 extended-CONNECT upgrade failed: {:?}", err);
+            }
+            disconnection.web_socket_disconnect();
+            return;
+        }
+    };
+
+    let mut upgraded = TokioIo::new(upgraded);
+    let copy_result = tokio::io::copy_bidirectional(&mut upgraded, &mut upstream).await;
+
+    if debug {
+        match copy_result {
+            Ok((from_client, from_upstream)) => println!(
+                "h2 ext-CONNECT WS pump finished. client->upstream={} bytes, upstream->client={} bytes",
+                from_client, from_upstream
+            ),
+            Err(err) => println!("h2 ext-CONNECT WS pump error: {:?}", err),
+        }
+    }
+
+    disconnection.web_socket_disconnect();
 }

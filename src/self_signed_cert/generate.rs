@@ -14,13 +14,20 @@ fn generate_pk(cn_name: String) -> (CertificateDer<'static>, String) {
 
     let subject_alt_names = vec![cn_name];
 
-    let certified_key = generate_simple_self_signed(subject_alt_names).unwrap();
+    let key_pair = KeyPair::generate().unwrap();
 
-    let cert = certified_key.cert.der().clone();
+    let mut params = CertificateParams::new(subject_alt_names).unwrap();
 
-    let key_pair = certified_key.signing_key.serialize_pem();
+    let now = time::OffsetDateTime::now_utc();
+    params.not_before = now;
+    params.not_after = now + time::Duration::days(365 * 10);
 
-    (cert, key_pair)
+    let cert = params.self_signed(&key_pair).unwrap();
+
+    let cert_der = cert.der().clone();
+    let key_pem = key_pair.serialize_pem();
+
+    (cert_der, key_pem)
 }
 
 #[cfg(test)]

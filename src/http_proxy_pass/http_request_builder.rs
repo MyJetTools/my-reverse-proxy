@@ -3,16 +3,22 @@ use std::io::Write;
 use bytes::Bytes;
 use flate2::{write::GzEncoder, Compression};
 use http_body_util::{BodyExt, Full};
-use hyper::{body::Incoming, header::*, Request, Uri};
+use hyper::{body::Incoming, header::*, Method, Request, Uri};
 use hyper_tungstenite::{tungstenite::http::request::Parts, HyperWebsocket};
 
 use crate::{configurations::*, types::*};
 
 use super::{HttpProxyPass, HttpProxyPassInner, ProxyPassError, ProxyPassLocation};
 
-pub struct WebSocketUpgrade {
-    pub upgrade_response: hyper::Response<Full<Bytes>>,
-    pub server_web_socket: HyperWebsocket,
+pub enum WebSocketUpgrade {
+    H1 {
+        upgrade_response: hyper::Response<Full<Bytes>>,
+        server_web_socket: HyperWebsocket,
+    },
+    H2 {
+        upgrade_response: hyper::Response<Full<Bytes>>,
+        on_upgrade: hyper::upgrade::OnUpgrade,
+    },
 }
 
 pub struct TransformedRequest {
@@ -25,6 +31,18 @@ pub struct HttpRequestBuilder {
     pub parts: Parts,
     body: Incoming,
     src_http_type: ListenHttpEndpointType,
+}
+
+fn is_h2_websocket_connect(parts: &Parts) -> bool {
+    if parts.method != Method::CONNECT {
+        return false;
+    }
+
+    let Some(protocol) = parts.extensions.get::<hyper::ext::Protocol>() else {
+        return false;
+    };
+
+    protocol.as_ref().eq_ignore_ascii_case(b"websocket")
 }
 
 impl HttpRequestBuilder {
@@ -50,6 +68,14 @@ impl HttpRequestBuilder {
 
         let dest_http1 = location.is_http1();
         //let (compress, dest_http1, debug) = { (item.compress, item.is_http1(), item.debug) };
+
+        if is_h2_websocket_connect(&self.parts) {
+            if matches!(dest_http1, Some(true)) {
+                return self.h2_websocket_to_h1_websocket(proxy_pass, location).await;
+            }
+            // For non-h1 destinations Extended CONNECT WebSocket is not supported in this scope
+            // and falls through to the normal path which will not perform the upgrade.
+        }
 
         if dest_http1.is_none() {
             let (parts, body) = self
@@ -82,7 +108,7 @@ impl HttpRequestBuilder {
             let upgrade_req = hyper::Request::from_parts(parts.clone(), body.clone());
             let upgrade_response = hyper_tungstenite::upgrade(upgrade_req, None)?;
 
-            web_socket_upgrade = Some(WebSocketUpgrade {
+            web_socket_upgrade = Some(WebSocketUpgrade::H1 {
                 upgrade_response: upgrade_response.0,
                 server_web_socket: upgrade_response.1,
             });
@@ -95,6 +121,99 @@ impl HttpRequestBuilder {
             web_socket_upgrade,
         });
         //return Ok((location_index, ));
+    }
+
+    async fn h2_websocket_to_h1_websocket(
+        mut self,
+        proxy_pass: &HttpProxyPass,
+        location: &ProxyPassLocation,
+    ) -> Result<TransformedRequest, ProxyPassError> {
+        if proxy_pass.endpoint_info.debug {
+            println!("Detected h2 extended-CONNECT WebSocket -> h1 upgrade");
+        }
+
+        let on_upgrade = self
+            .parts
+            .extensions
+            .remove::<hyper::upgrade::OnUpgrade>()
+            .ok_or(ProxyPassError::NoWebSocketUpgrade)?;
+
+        let path_and_query = if let Some(path_and_query) = self.parts.uri.path_and_query() {
+            path_and_query.as_str()
+        } else {
+            "/"
+        };
+
+        let uri: Uri = path_and_query.parse().unwrap();
+
+        let host_header = if let Some(host) = self.parts.uri.host() {
+            if let Some(port) = self.parts.uri.port() {
+                format!("{}:{}", host, port)
+            } else {
+                host.to_string()
+            }
+        } else if let Some(host) = self.parts.headers.get("host") {
+            host.to_str().unwrap().to_string()
+        } else {
+            return Err(ProxyPassError::NoWebSocketUpgrade);
+        };
+
+        let ws_key = hyper_tungstenite::tungstenite::handshake::client::generate_key();
+
+        let mut builder = Request::builder()
+            .uri(uri)
+            .method(Method::GET)
+            .version(hyper::Version::HTTP_11)
+            .header(HOST, host_header)
+            .header(CONNECTION, "Upgrade")
+            .header(UPGRADE, "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", ws_key);
+
+        for (name, value) in self.parts.headers.iter() {
+            let n = name.as_str();
+            if matches!(
+                n,
+                "host"
+                    | "connection"
+                    | "upgrade"
+                    | "transfer-encoding"
+                    | "te"
+                    | "keep-alive"
+                    | "proxy-connection"
+                    | "sec-websocket-version"
+                    | "sec-websocket-key"
+                    | "sec-websocket-accept"
+            ) {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+
+        let request = builder.body(Full::new(Bytes::new())).unwrap();
+        let req_parts = self.parts.clone();
+
+        let upgrade_response = hyper::Response::builder()
+            .status(hyper::StatusCode::OK)
+            .body(Full::<Bytes>::new(Bytes::new()))
+            .unwrap();
+
+        if location.debug {
+            println!(
+                "[{}]. h2->h1 WS handshake to upstream: {:?}",
+                request.uri(),
+                request.headers()
+            );
+        }
+
+        Ok(TransformedRequest {
+            req_parts,
+            request,
+            web_socket_upgrade: Some(WebSocketUpgrade::H2 {
+                upgrade_response,
+                on_upgrade,
+            }),
+        })
     }
 
     async fn http2_to_http1(
