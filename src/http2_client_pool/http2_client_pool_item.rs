@@ -53,6 +53,27 @@ impl<
 
         result
     }
+
+    pub async fn do_extended_connect(
+        &self,
+        path: &str,
+        headers: hyper::HeaderMap,
+        request_timeout: std::time::Duration,
+    ) -> Result<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>, MyHttpClientError> {
+        let result = self
+            .my_http_client
+            .as_ref()
+            .unwrap()
+            .do_extended_connect(path, headers, request_timeout)
+            .await;
+
+        if result.is_err() {
+            self.disposed
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        result
+    }
 }
 
 impl<

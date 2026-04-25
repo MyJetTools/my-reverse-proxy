@@ -195,6 +195,15 @@ impl HttpProxyPass {
                             trace_payload,
                         )
                     }
+                    super::content_source::WebSocketUpgradeStream::H2Upgraded(h2_upgraded) => {
+                        spawn_h2_websocket_pump(
+                            request.web_socket_upgrade,
+                            h2_upgraded,
+                            response,
+                            self.endpoint_info.debug,
+                            disconnection,
+                        )
+                    }
                 }
             }
         };
@@ -263,13 +272,51 @@ where
     }
 }
 
+fn spawn_h2_websocket_pump<S>(
+    web_socket_upgrade: Option<WebSocketUpgrade>,
+    upstream: S,
+    fallback_response: hyper::Response<BoxBody<Bytes, String>>,
+    debug: bool,
+    disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+) -> hyper::Response<BoxBody<Bytes, String>>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    let Some(web_socket_upgrade) = web_socket_upgrade else {
+        return fallback_response;
+    };
+
+    match web_socket_upgrade {
+        WebSocketUpgrade::H2 {
+            upgrade_response,
+            on_upgrade,
+        } => {
+            tokio::spawn(pump_h2_extended_connect(
+                on_upgrade,
+                upstream,
+                debug,
+                disconnection,
+            ));
+            into_full_body_response(upgrade_response)
+        }
+        WebSocketUpgrade::H1 { upgrade_response, .. } => {
+            if debug {
+                println!(
+                    "Unexpected h1 WebSocketUpgrade for h2 upstream — returning fallback response"
+                );
+            }
+            into_full_body_response(upgrade_response)
+        }
+    }
+}
+
 async fn pump_h2_extended_connect<S>(
     on_upgrade: hyper::upgrade::OnUpgrade,
     mut upstream: S,
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
 ) where
-    S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
     let upgraded = match on_upgrade.await {
         Ok(upgraded) => upgraded,

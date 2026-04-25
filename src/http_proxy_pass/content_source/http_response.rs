@@ -19,6 +19,7 @@ pub enum WebSocketUpgradeStream {
     UnixStream(tokio::net::UnixStream),
     TlsStream(my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>),
     SshChannel(SshAsyncChannel),
+    H2Upgraded(hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>),
     //HttpOverGatewayStream(TcpGatewayProxyForwardStream),
     // Hyper(HyperWebsocket),
 }

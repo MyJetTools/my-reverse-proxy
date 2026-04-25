@@ -73,8 +73,9 @@ impl HttpRequestBuilder {
             if matches!(dest_http1, Some(true)) {
                 return self.h2_websocket_to_h1_websocket(proxy_pass, location).await;
             }
-            // For non-h1 destinations Extended CONNECT WebSocket is not supported in this scope
-            // and falls through to the normal path which will not perform the upgrade.
+            if matches!(dest_http1, Some(false)) {
+                return self.h2_websocket_to_h2_websocket(proxy_pass, location).await;
+            }
         }
 
         if dest_http1.is_none() {
@@ -121,6 +122,76 @@ impl HttpRequestBuilder {
             web_socket_upgrade,
         });
         //return Ok((location_index, ));
+    }
+
+    async fn h2_websocket_to_h2_websocket(
+        mut self,
+        proxy_pass: &HttpProxyPass,
+        location: &ProxyPassLocation,
+    ) -> Result<TransformedRequest, ProxyPassError> {
+        if proxy_pass.endpoint_info.debug {
+            println!("Detected h2 extended-CONNECT WebSocket -> h2 upstream");
+        }
+
+        let on_upgrade = self
+            .parts
+            .extensions
+            .remove::<hyper::upgrade::OnUpgrade>()
+            .ok_or(ProxyPassError::NoWebSocketUpgrade)?;
+
+        let mut builder = Request::builder()
+            .uri(self.parts.uri.clone())
+            .method(Method::CONNECT)
+            .version(hyper::Version::HTTP_2);
+
+        for (name, value) in self.parts.headers.iter() {
+            let n = name.as_str();
+            if matches!(
+                n,
+                "host"
+                    | "connection"
+                    | "upgrade"
+                    | "transfer-encoding"
+                    | "te"
+                    | "keep-alive"
+                    | "proxy-connection"
+                    | "sec-websocket-version"
+                    | "sec-websocket-key"
+                    | "sec-websocket-accept"
+            ) {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+
+        let mut request = builder.body(Full::new(Bytes::new())).unwrap();
+        request
+            .extensions_mut()
+            .insert(hyper::ext::Protocol::from_static("websocket"));
+
+        let req_parts = self.parts.clone();
+
+        let upgrade_response = hyper::Response::builder()
+            .status(hyper::StatusCode::OK)
+            .body(Full::<Bytes>::new(Bytes::new()))
+            .unwrap();
+
+        if location.debug {
+            println!(
+                "[{}]. h2->h2 ext-CONNECT WS handshake to upstream: {:?}",
+                request.uri(),
+                request.headers()
+            );
+        }
+
+        Ok(TransformedRequest {
+            req_parts,
+            request,
+            web_socket_upgrade: Some(WebSocketUpgrade::H2 {
+                upgrade_response,
+                on_upgrade,
+            }),
+        })
     }
 
     async fn h2_websocket_to_h1_websocket(
