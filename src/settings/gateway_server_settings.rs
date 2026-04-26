@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
-use encryption::aes::AesKey;
+use ed25519_dalek::VerifyingKey;
 use serde::*;
+use ssh_key::PublicKey;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GatewayServerSettings {
     pub port: u16,
-    pub encryption_key: String,
+    pub authorized_keys: Vec<String>,
     pub allowed_ip: Option<Vec<String>>,
     pub debug: Option<bool>,
 }
@@ -16,24 +17,36 @@ impl GatewayServerSettings {
         self.debug.unwrap_or(false)
     }
 
-    pub fn get_encryption_key(&self) -> Result<AesKey, String> {
-        if self.encryption_key.len() < 16 {
+    pub fn load_authorized_keys(&self) -> Result<Vec<VerifyingKey>, String> {
+        if self.authorized_keys.is_empty() {
             return Err(
-                "Encryption key for ServerGateway must have at least 16 symbols".to_string(),
+                "Gateway server: 'authorized_keys' must contain at least one path".to_string(),
             );
         }
 
-        let mut result = self.encryption_key.as_bytes().to_vec();
+        let mut keys = Vec::with_capacity(self.authorized_keys.len());
+        for path in &self.authorized_keys {
+            let resolved = rust_extensions::file_utils::format_path(path).to_string();
+            let content = std::fs::read_to_string(resolved.as_str()).map_err(|err| {
+                format!("Gateway server: cannot read pubkey file '{resolved}': {err}")
+            })?;
 
-        while result.len() < 48 {
-            result.extend_from_slice(self.encryption_key.as_bytes());
+            let pub_key = PublicKey::from_openssh(content.trim()).map_err(|err| {
+                format!("Gateway server: cannot parse pubkey '{resolved}': {err}")
+            })?;
+
+            let ed25519 = pub_key.key_data().ed25519().ok_or_else(|| {
+                format!("Gateway server: pubkey '{resolved}' is not Ed25519")
+            })?;
+
+            let verifying = VerifyingKey::from_bytes(&ed25519.0).map_err(|err| {
+                format!("Gateway server: invalid Ed25519 pubkey in '{resolved}': {err}")
+            })?;
+
+            keys.push(verifying);
         }
 
-        if result.len() > 48 {
-            result.truncate(48);
-        }
-
-        Ok(AesKey::new(result.as_slice()))
+        Ok(keys)
     }
 
     pub fn get_allowed_ip_list(&self) -> Option<HashSet<String>> {

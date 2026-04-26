@@ -1,7 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use encryption::aes::AesKey;
-
 use crate::{network_stream::*, tcp_gateway::*};
 
 pub struct TcpGatewayForwardConnection {
@@ -18,7 +16,6 @@ impl TcpGatewayForwardConnection {
         gateway_connection: Arc<TcpGatewayConnection>,
         remote_endpoint: Arc<String>,
         timeout: Duration,
-        aes_key: Arc<AesKey>,
     ) -> Result<Self, String> {
         println!(
             "Gateway:[{}]. Establishing Forwarded connection to endpoint {} with id {}",
@@ -43,7 +40,7 @@ impl TcpGatewayForwardConnection {
 
         let (read, write) = tcp_stream.into_split();
 
-        let inner = TcpConnectionInner::new(write, aes_key);
+        let inner = TcpConnectionInner::new_raw_passthrough(write);
 
         let result = Self {
             connection_id,

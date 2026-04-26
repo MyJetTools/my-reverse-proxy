@@ -104,10 +104,11 @@ impl AppContext {
 
         let gateway_server =
             if let Some(gateway_server_settings) = settings_model.get_gateway_server() {
-                let encryption = gateway_server_settings.get_encryption_key().unwrap();
+                let authorized_keys = gateway_server_settings.load_authorized_keys().unwrap();
                 Some(TcpGatewayServer::new(
                     format!("0.0.0.0:{}", gateway_server_settings.port,),
-                    encryption,
+                    authorized_keys,
+                    false,
                     gateway_server_settings.is_debug(),
                 ))
             } else {
@@ -116,12 +117,15 @@ impl AppContext {
 
         let mut gateway_clients = HashMap::new();
 
+        let ssh_registry = &settings_model.ssh;
         for (id, client_settings) in settings_model.gateway_clients.iter() {
-            let encryption = client_settings.get_encryption_key().unwrap();
+            let signing_key = client_settings
+                .load_signing_key(id.as_str(), ssh_registry)
+                .unwrap();
             let client = TcpGatewayClient::new(
                 id.to_string(),
                 client_settings.remote_host.to_string(),
-                encryption,
+                signing_key,
                 client_settings.get_supported_compression(),
                 client_settings.get_allow_incoming_forward_connections(),
                 client_settings.get_connect_timeout(),

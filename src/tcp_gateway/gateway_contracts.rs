@@ -1,14 +1,10 @@
-use std::{
-    io::{Read, Write},
-    time::Duration,
-};
+use std::time::Duration;
 
 use encryption::aes::AesKey;
 use rust_extensions::SliceOrVec;
 
 const PING: u8 = 0;
 const PONG: u8 = 1;
-const HANDSHAKE_PACKET_ID: u8 = 2;
 const CONNECT_PACKET_ID: u8 = 3;
 const CONNECT_OK_PACKET_ID: u8 = 4;
 const CONNECTION_ERROR_PACKET_ID: u8 = 5;
@@ -20,6 +16,9 @@ const GET_FILE_RESPONSE_PACKET_ID: u8 = 10;
 const SYNC_SSL_CERTIFICATES_PACKET_ID: u8 = 11;
 const SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID: u8 = 12;
 const SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID: u8 = 13;
+pub const COMPRESSED_BATCH_PACKET_ID: u8 = 20;
+
+pub const COMPRESSION_ALGO_ZSTD: u8 = 0;
 
 #[derive(Debug)]
 pub enum GetFileStatus {
@@ -45,11 +44,6 @@ impl GetFileStatus {
 
 #[derive(Debug)]
 pub enum TcpGatewayContract<'s> {
-    Handshake {
-        timestamp: i64,
-        support_compression: bool,
-        gateway_name: &'s str,
-    },
     Connect {
         connection_id: u32,
         timeout: Duration,
@@ -98,27 +92,17 @@ pub enum TcpGatewayContract<'s> {
 }
 
 impl<'s> TcpGatewayContract<'s> {
+    /// Parse a single inner frame body: `[u8 TYPE][PAYLOAD]`. The caller has
+    /// already decrypted and (if needed) decompressed the bytes. Frames of
+    /// type `COMPRESSED_BATCH` must be unwrapped by the caller before being
+    /// passed here.
     pub fn parse(payload: &'s [u8]) -> Result<Self, String> {
+        if payload.is_empty() {
+            return Err("Empty packet".to_string());
+        }
         let packet_type = payload[0];
         let payload = &payload[1..];
         match packet_type {
-            HANDSHAKE_PACKET_ID => {
-                let timestamp = i64::from_le_bytes([
-                    payload[0], payload[1], payload[2], payload[3], payload[4], payload[5],
-                    payload[6], payload[7],
-                ]);
-
-                let support_compression = payload[8] == 1;
-
-                let gateway_name = convert_to_string(&payload[9..], "HANDSHAKE")?;
-
-                return Ok(Self::Handshake {
-                    gateway_name,
-                    support_compression,
-                    timestamp,
-                });
-            }
-
             CONNECT_PACKET_ID => {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
@@ -154,13 +138,11 @@ impl<'s> TcpGatewayContract<'s> {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let compressed = payload[4] == 1;
-
-                let payload = decompress_payload(&payload[5..], compressed)?;
+                let payload_bytes: SliceOrVec<'_, u8> = (&payload[4..]).into();
 
                 return Ok(Self::ForwardPayload {
                     connection_id,
-                    payload,
+                    payload: payload_bytes,
                 });
             }
 
@@ -168,12 +150,11 @@ impl<'s> TcpGatewayContract<'s> {
                 let connection_id =
                     u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
 
-                let compressed = payload[4] == 1;
+                let payload_bytes: SliceOrVec<'_, u8> = (&payload[4..]).into();
 
-                let payload = decompress_payload(&payload[5..], compressed)?;
                 return Ok(Self::BackwardPayload {
                     connection_id,
-                    payload,
+                    payload: payload_bytes,
                 });
             }
 
@@ -203,7 +184,7 @@ impl<'s> TcpGatewayContract<'s> {
 
                 let status = GetFileStatus::from_u8(payload[4]);
 
-                let content = extract_content(&payload[5..])?;
+                let content: SliceOrVec<'_, u8> = (&payload[5..]).into();
 
                 return Ok(Self::GetFileResponse {
                     request_id,
@@ -294,175 +275,148 @@ impl<'s> TcpGatewayContract<'s> {
                 return Ok(Self::Pong);
             }
 
+            COMPRESSED_BATCH_PACKET_ID => {
+                return Err(
+                    "COMPRESSED_BATCH must be unwrapped by the read loop, not by parse()"
+                        .to_string(),
+                );
+            }
+
             _ => {
                 return Err(format!("Unknown packet type: {}", packet_type));
             }
         }
     }
 
-    /*
-       pub fn is_ping_or_pong(&self) -> bool {
-           match self {
-               Self::Ping => true,
-               Self::Pong => true,
-               Self::UpdatePingTime { .. } => true,
-               _ => false,
-           }
-       }
-    */
-    pub fn to_vec(&self, aes_key: &AesKey, support_compression: bool) -> Vec<u8> {
-        let mut result = Vec::new();
+    /// Serialize the contract into its plaintext inner-frame form:
+    /// `[u32 LEN][u8 TYPE][PAYLOAD]`. Encryption and outer framing happen at
+    /// the writer task on flush, after deciding whether to wrap multiple
+    /// frames into a `COMPRESSED_BATCH`.
+    pub fn to_plain_frame(&self) -> Vec<u8> {
+        let mut body = Vec::new();
 
         match self {
-            Self::Handshake {
-                gateway_name,
-                support_compression,
-                timestamp,
-            } => {
-                result.push(HANDSHAKE_PACKET_ID);
-                result.extend_from_slice(&timestamp.to_le_bytes());
-
-                if *support_compression {
-                    result.push(1);
-                } else {
-                    result.push(0);
-                }
-
-                result.extend_from_slice(gateway_name.as_bytes());
-            }
             Self::Connect {
                 connection_id,
                 timeout,
                 remote_host,
             } => {
-                result.push(CONNECT_PACKET_ID);
-                push_u32(&mut result, *connection_id);
-                result.push(timeout.as_secs() as u8);
-                result.extend_from_slice(remote_host.as_bytes());
+                body.push(CONNECT_PACKET_ID);
+                push_u32(&mut body, *connection_id);
+                body.push(timeout.as_secs() as u8);
+                body.extend_from_slice(remote_host.as_bytes());
             }
 
             Self::Connected { connection_id } => {
-                result.push(CONNECT_OK_PACKET_ID);
-                push_u32(&mut result, *connection_id);
+                body.push(CONNECT_OK_PACKET_ID);
+                push_u32(&mut body, *connection_id);
             }
             Self::ConnectionError {
                 connection_id,
                 error,
             } => {
-                result.push(CONNECTION_ERROR_PACKET_ID);
-                push_u32(&mut result, *connection_id);
-                result.extend_from_slice(error.as_bytes());
+                body.push(CONNECTION_ERROR_PACKET_ID);
+                push_u32(&mut body, *connection_id);
+                body.extend_from_slice(error.as_bytes());
             }
 
             Self::ForwardPayload {
                 connection_id,
                 payload,
             } => {
-                result.push(SEND_PAYLOAD_PACKET_ID);
-                push_u32(&mut result, *connection_id);
-                push_content(&mut result, payload.as_slice(), support_compression);
+                body.push(SEND_PAYLOAD_PACKET_ID);
+                push_u32(&mut body, *connection_id);
+                body.extend_from_slice(payload.as_slice());
             }
             Self::BackwardPayload {
                 connection_id,
                 payload,
             } => {
-                result.push(RECEIVE_PAYLOAD_PACKET_ID);
-                push_u32(&mut result, *connection_id);
-
-                push_content(&mut result, payload.as_slice(), support_compression);
+                body.push(RECEIVE_PAYLOAD_PACKET_ID);
+                push_u32(&mut body, *connection_id);
+                body.extend_from_slice(payload.as_slice());
             }
 
             Self::UpdatePingTime { duration } => {
-                let miros = duration.as_micros() as u64;
-                result.push(UPDATE_PING_TIME_PACKET_ID);
-                result.extend_from_slice(&miros.to_le_bytes());
+                let micros = duration.as_micros() as u64;
+                body.push(UPDATE_PING_TIME_PACKET_ID);
+                body.extend_from_slice(&micros.to_le_bytes());
             }
             Self::GetFileRequest { path, request_id } => {
-                result.push(GET_FILE_REQUEST_PACKET_ID);
-                result.extend_from_slice(request_id.to_le_bytes().as_slice());
-                result.extend_from_slice(path.as_bytes());
+                body.push(GET_FILE_REQUEST_PACKET_ID);
+                body.extend_from_slice(request_id.to_le_bytes().as_slice());
+                body.extend_from_slice(path.as_bytes());
             }
             Self::GetFileResponse {
                 request_id,
                 status,
                 content,
             } => {
-                result.push(GET_FILE_RESPONSE_PACKET_ID);
-                result.extend_from_slice(request_id.to_le_bytes().as_slice());
-                result.push(status.as_u8());
-                push_content(&mut result, content.as_slice(), support_compression);
+                body.push(GET_FILE_RESPONSE_PACKET_ID);
+                body.extend_from_slice(request_id.to_le_bytes().as_slice());
+                body.push(status.as_u8());
+                body.extend_from_slice(content.as_slice());
             }
             Self::SyncSslCertificates {
                 cert_id,
                 cert_pem,
                 private_key_pem,
             } => {
-                result.push(SYNC_SSL_CERTIFICATES_PACKET_ID);
+                body.push(SYNC_SSL_CERTIFICATES_PACKET_ID);
 
                 let id_bytes = cert_id.as_bytes();
-                push_u32(&mut result, id_bytes.len() as u32);
-                result.extend_from_slice(id_bytes);
+                push_u32(&mut body, id_bytes.len() as u32);
+                body.extend_from_slice(id_bytes);
 
                 let cp = cert_pem.as_slice();
-                push_u32(&mut result, cp.len() as u32);
-                result.extend_from_slice(cp);
+                push_u32(&mut body, cp.len() as u32);
+                body.extend_from_slice(cp);
 
                 let pk = private_key_pem.as_slice();
-                push_u32(&mut result, pk.len() as u32);
-                result.extend_from_slice(pk);
+                push_u32(&mut body, pk.len() as u32);
+                body.extend_from_slice(pk);
             }
             Self::SyncSslCertificatesRequest { cert_ids } => {
-                result.push(SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID);
-                push_u32(&mut result, cert_ids.len() as u32);
+                body.push(SYNC_SSL_CERTIFICATES_REQUEST_PACKET_ID);
+                push_u32(&mut body, cert_ids.len() as u32);
                 for id in cert_ids {
                     let bytes = id.as_bytes();
-                    push_u32(&mut result, bytes.len() as u32);
-                    result.extend_from_slice(bytes);
+                    push_u32(&mut body, bytes.len() as u32);
+                    body.extend_from_slice(bytes);
                 }
             }
             Self::SyncSslCertificateNotFound { cert_id } => {
-                result.push(SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID);
+                body.push(SYNC_SSL_CERTIFICATE_NOT_FOUND_PACKET_ID);
                 let bytes = cert_id.as_bytes();
-                push_u32(&mut result, bytes.len() as u32);
-                result.extend_from_slice(bytes);
+                push_u32(&mut body, bytes.len() as u32);
+                body.extend_from_slice(bytes);
             }
             Self::Ping => {
-                result.push(PING);
+                body.push(PING);
             }
             Self::Pong => {
-                result.push(PONG);
+                body.push(PONG);
             }
         }
 
-        let encrypted = aes_key.encrypt(&result);
-
-        let encrypted = encrypted.as_slice();
-
-        let len = encrypted.len();
-
-        let mut result = Vec::with_capacity(len + 4);
-
-        let len = (len as u32).to_le_bytes();
-
-        result.extend_from_slice(&len);
-        result.extend_from_slice(encrypted);
-
+        let len = body.len();
+        let mut result = Vec::with_capacity(4 + len);
+        result.extend_from_slice(&(len as u32).to_le_bytes());
+        result.extend_from_slice(&body);
         result
     }
 }
 
-fn push_content(result: &mut Vec<u8>, payload: &[u8], support_compression: bool) {
-    let (compressed, payload) = compress_payload_if_require(payload, support_compression);
-
-    if compressed {
-        result.push(1);
-    } else {
-        result.push(0);
-    }
-
-    if payload.get_len() > 0 {
-        result.extend_from_slice(payload.as_slice());
-    }
+/// Encrypt a plaintext inner-frame body and frame it for the wire.
+/// `body` is `[u8 TYPE][PAYLOAD]` (without the length prefix).
+pub fn encrypt_frame(body: &[u8], aes: &AesKey) -> Vec<u8> {
+    let encrypted = aes.encrypt(body);
+    let encrypted = encrypted.as_slice();
+    let len = (encrypted.len() as u32).to_le_bytes();
+    let mut out = Vec::with_capacity(4 + encrypted.len());
+    out.extend_from_slice(&len);
+    out.extend_from_slice(encrypted);
+    out
 }
 
 fn push_u32(result: &mut Vec<u8>, value: u32) {
@@ -481,70 +435,11 @@ fn read_u32(payload: &[u8], offset: usize) -> Result<u32, String> {
     ]))
 }
 
-fn extract_content(payload: &[u8]) -> Result<SliceOrVec<'_, u8>, String> {
-    let compressed = payload[0] == 1;
-
-    decompress_payload(&payload[1..], compressed)
-}
-
-pub fn compress_payload_if_require<'s>(
-    payload: &'s [u8],
-    try_compress_payload: bool,
-) -> (bool, SliceOrVec<'s, u8>) {
-    use flate2::{write::GzEncoder, Compression};
-
-    if try_compress_payload {
-        if payload.len() < 64 {
-            return (false, SliceOrVec::AsSlice(payload));
-        }
-
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(payload).unwrap();
-        let compressed = encoder.finish().unwrap();
-
-        if compressed.len() < payload.len() {
-            return (true, SliceOrVec::AsVec(compressed));
-        }
-    }
-
-    (false, SliceOrVec::AsSlice(payload))
-}
-
 fn convert_to_string<'s>(payload: &'s [u8], packet_type: &str) -> Result<&'s str, String> {
-    if payload.len() == 0 {
+    if payload.is_empty() {
         return Ok("");
     }
 
     std::str::from_utf8(payload)
         .map_err(|_| format!("Can not convert path to string during parsing [{packet_type}]."))
-}
-
-pub fn decompress_payload<'s>(
-    src: &'s [u8],
-    compressed: bool,
-) -> Result<SliceOrVec<'s, u8>, String> {
-    if !compressed {
-        return Ok(src.into());
-    }
-
-    let mut decompressor = flate2::read::GzDecoder::new(src);
-
-    let mut result = Vec::new();
-    let mut buffer = [0u8; 1024 * 4];
-
-    loop {
-        let read_amount = decompressor.read(&mut buffer);
-
-        if read_amount.is_err() {
-            return Err("Can not decompress deflate payload".to_string());
-        }
-
-        let read_amount = read_amount.unwrap();
-
-        if read_amount == 0 {
-            return Ok(result.into());
-        }
-
-        result.extend_from_slice(&buffer[..read_amount]);
-    }
 }

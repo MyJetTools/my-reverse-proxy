@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rust_extensions::{date_time::DateTimeAsMicroseconds, SliceOrVec};
+use rust_extensions::SliceOrVec;
 
 use crate::tcp_gateway::*;
 
@@ -11,39 +11,10 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
     async fn handle_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        tcp_gateway: &Arc<TcpGatewayInner>,
+        _tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
     ) -> Result<(), String> {
         match contract {
-            TcpGatewayContract::Handshake {
-                gateway_name,
-                support_compression,
-                timestamp,
-            } => {
-                let timestamp = DateTimeAsMicroseconds::new(timestamp);
-
-                gateway_connection.set_supported_compression(support_compression);
-
-                println!(
-                    "Got handshake from gateway {}. Timestamp: {}",
-                    gateway_name,
-                    timestamp.to_rfc3339()
-                );
-
-                let now = DateTimeAsMicroseconds::now();
-
-                let loading_packet = now - timestamp;
-                if loading_packet.get_full_seconds() > 5 {
-                    return Err(format!("Handshake packet is too old. {:?}", loading_packet));
-                }
-
-                gateway_connection.set_connection_timestamp(timestamp);
-
-                gateway_connection.set_gateway_id(gateway_name);
-                tcp_gateway
-                    .set_gateway_connection(gateway_name, gateway_connection.clone().into());
-                gateway_connection.send_payload(&contract);
-            }
             TcpGatewayContract::Connect {
                 connection_id,
                 timeout,

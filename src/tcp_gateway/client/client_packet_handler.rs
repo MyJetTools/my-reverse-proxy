@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use rust_extensions::date_time::DateTimeAsMicroseconds;
-
 use crate::tcp_gateway::{
     TcpGatewayConnection, TcpGatewayContract, TcpGatewayInner, TcpGatewayPacketHandler,
 };
@@ -18,39 +16,10 @@ impl TcpGatewayClientPacketHandler {
     async fn handle_client_packet<'d>(
         &self,
         contract: TcpGatewayContract<'d>,
-        tcp_gateway: &Arc<TcpGatewayInner>,
+        _tcp_gateway: &Arc<TcpGatewayInner>,
         gateway_connection: &Arc<TcpGatewayConnection>,
     ) {
         match contract {
-            TcpGatewayContract::Handshake {
-                gateway_name,
-                support_compression: _,
-                timestamp,
-            } => {
-                let timestamp = DateTimeAsMicroseconds::new(timestamp);
-                gateway_connection.set_connection_timestamp(timestamp);
-                println!(
-                    "Got handshake confirm from server gateway with id {} and timestamp {}",
-                    gateway_name,
-                    timestamp.to_rfc3339()
-                );
-
-                gateway_connection.set_gateway_id(gateway_name);
-                tcp_gateway
-                    .set_gateway_connection(gateway_name, gateway_connection.clone().into());
-
-                let sync_ids: Vec<&str> = tcp_gateway
-                    .sync_ssl_certificates
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect();
-                if !sync_ids.is_empty() {
-                    let request = TcpGatewayContract::SyncSslCertificatesRequest {
-                        cert_ids: sync_ids,
-                    };
-                    gateway_connection.send_payload(&request);
-                }
-            }
             TcpGatewayContract::Connect {
                 connection_id,
                 timeout,

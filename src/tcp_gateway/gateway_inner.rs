@@ -3,7 +3,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use encryption::aes::AesKey;
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use parking_lot::Mutex;
 
 use super::TcpGatewayConnection;
@@ -13,27 +13,51 @@ pub struct TcpGatewayInner {
     pub gateway_host: Arc<String>,
     running: AtomicBool,
     connection: Mutex<HashMap<String, Arc<TcpGatewayConnection>>>,
-    pub encryption: Arc<AesKey>,
     pub allow_incoming_forward_connections: bool,
     pub sync_ssl_certificates: Vec<String>,
+    pub authorized_keys: Option<Arc<Vec<VerifyingKey>>>,
+    pub signing_key: Option<Arc<SigningKey>>,
+    pub compress_outbound: bool,
 }
 
 impl TcpGatewayInner {
-    pub fn new(
+    pub fn new_server(
         gateway_id: String,
         addr: String,
-        allow_incoming_forward_connections: bool,
-        encryption: AesKey,
-        sync_ssl_certificates: Vec<String>,
+        authorized_keys: Vec<VerifyingKey>,
+        compress_outbound: bool,
     ) -> Self {
         Self {
             gateway_id: Arc::new(gateway_id),
             gateway_host: Arc::new(addr),
             running: AtomicBool::new(true),
             connection: Mutex::default(),
-            encryption: Arc::new(encryption),
+            allow_incoming_forward_connections: true,
+            sync_ssl_certificates: Vec::new(),
+            authorized_keys: Some(Arc::new(authorized_keys)),
+            signing_key: None,
+            compress_outbound,
+        }
+    }
+
+    pub fn new_client(
+        gateway_id: String,
+        addr: String,
+        signing_key: SigningKey,
+        allow_incoming_forward_connections: bool,
+        sync_ssl_certificates: Vec<String>,
+        compress_outbound: bool,
+    ) -> Self {
+        Self {
+            gateway_id: Arc::new(gateway_id),
+            gateway_host: Arc::new(addr),
+            running: AtomicBool::new(true),
+            connection: Mutex::default(),
             allow_incoming_forward_connections,
             sync_ssl_certificates,
+            authorized_keys: None,
+            signing_key: Some(Arc::new(signing_key)),
+            compress_outbound,
         }
     }
 

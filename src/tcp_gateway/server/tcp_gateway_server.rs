@@ -1,11 +1,13 @@
 use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 
-use encryption::aes::AesKey;
-use tokio::net::TcpListener;
+use ed25519_dalek::VerifyingKey;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
+use tokio::net::{TcpListener, TcpStream};
 
 use super::super::*;
 use super::*;
+use crate::tcp_gateway::handshake::perform_server_handshake;
 
 pub struct TcpGatewayServer {
     inner: Arc<TcpGatewayInner>,
@@ -13,14 +15,18 @@ pub struct TcpGatewayServer {
 }
 
 impl TcpGatewayServer {
-    pub fn new(listen: String, encryption: AesKey, debug: bool) -> Self {
+    pub fn new(
+        listen: String,
+        authorized_keys: Vec<VerifyingKey>,
+        compress_outbound: bool,
+        debug: bool,
+    ) -> Self {
         println!("Starting TCP Gateway Server at address: {}", listen);
-        let inner = Arc::new(TcpGatewayInner::new(
+        let inner = Arc::new(TcpGatewayInner::new_server(
             "ServerGateway".to_string(),
             listen,
-            true,
-            encryption,
-            Vec::new(),
+            authorized_keys,
+            compress_outbound,
         ));
         let result = Self {
             inner: inner.clone(),
@@ -101,24 +107,62 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             );
         }
 
-        let (read, write) = tcp_stream.into_split();
-
-        let tcp_gateway_connection = TcpGatewayConnection::new(
-            tcp_gateway.gateway_host.clone(),
-            write.into(),
-            tcp_gateway.encryption.clone(),
-            true,
-            false,
-        );
-
-        let tcp_gateway_connection = Arc::new(tcp_gateway_connection);
-
-        tokio::spawn(crate::tcp_gateway::gateway_read_loop(
-            tcp_gateway.clone(),
-            read,
-            tcp_gateway_connection,
-            TcpGatewayServerPacketHandler,
-            debug,
-        ));
+        let tcp_gateway_clone = tcp_gateway.clone();
+        tokio::spawn(handle_inbound(tcp_gateway_clone, tcp_stream, debug));
     }
+}
+
+async fn handle_inbound(tcp_gateway: Arc<TcpGatewayInner>, mut stream: TcpStream, debug: bool) {
+    let authorized_keys = match tcp_gateway.authorized_keys.as_ref() {
+        Some(keys) => keys.clone(),
+        None => {
+            eprintln!("Gateway server: no authorized_keys configured, dropping inbound");
+            return;
+        }
+    };
+
+    let outcome = match perform_server_handshake(&mut stream, authorized_keys.as_slice()).await {
+        Ok(outcome) => outcome,
+        Err(err) => {
+            eprintln!(
+                "Gateway server handshake failed at {}: {err}",
+                tcp_gateway.gateway_host.as_str()
+            );
+            return;
+        }
+    };
+
+    if debug {
+        println!(
+            "Gateway server handshake ok with client '{}' (timestamp_us={})",
+            outcome.gateway_name, outcome.timestamp_us
+        );
+    }
+
+    let (read, write) = stream.into_split();
+
+    let gateway_connection = TcpGatewayConnection::new(
+        tcp_gateway.gateway_host.clone(),
+        write.into(),
+        outcome.session_key.clone(),
+        tcp_gateway.compress_outbound,
+        true,
+    );
+
+    let gateway_connection = Arc::new(gateway_connection);
+    let timestamp = DateTimeAsMicroseconds::new(outcome.timestamp_us);
+    gateway_connection.set_connection_timestamp(timestamp);
+    gateway_connection.set_gateway_id(outcome.gateway_name.as_str());
+    tcp_gateway.set_gateway_connection(
+        outcome.gateway_name.as_str(),
+        Some(gateway_connection.clone()),
+    );
+
+    tokio::spawn(crate::tcp_gateway::gateway_read_loop(
+        tcp_gateway,
+        read,
+        gateway_connection,
+        TcpGatewayServerPacketHandler,
+        debug,
+    ));
 }

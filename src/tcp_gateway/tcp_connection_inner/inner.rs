@@ -8,53 +8,70 @@ use crate::network_stream::{MyOwnedWriteHalf, NetworkError};
 
 const WRITE_CHANNEL_CAPACITY: usize = 1024;
 
-/// Bug fix for the long-running gateway hang.
+/// Channel-backed writer wrapper used by both gateway peer and forwarded
+/// downstream connections.
 ///
-/// Previous implementation used a `SendBuffer` (under `parking_lot::Mutex`) +
-/// a signal-channel `mpsc::Sender<()>` to wake the writer task. This had a
-/// lost-wakeup race: producer pushes into `SendBuffer`, then `try_send(())`
-/// could fail silently when the signal channel was momentarily full while the
-/// writer was just returning to `recv().await`. The data stayed in the buffer
-/// but no one woke the writer ⇒ permanent hang.
+/// In **gateway peer** mode the writer treats `send_payload` items as
+/// plaintext inner frames (`[u32 LEN][u8 TYPE][PAYLOAD]`) and on each flush
+/// either encrypts each one individually (no compression) or wraps the
+/// whole accumulator into a `COMPRESSED_BATCH` frame and encrypts that.
 ///
-/// New implementation uses a single bounded `mpsc::Sender<Vec<u8>>` that
-/// carries **the payload itself**, not a notification. Lost-wakeup is
-/// impossible by construction: every payload that enters the channel gets
-/// delivered or returns an explicit `Err` to the producer.
+/// In **raw passthrough** mode the writer just concatenates whatever bytes
+/// it receives and writes them to the socket unmodified — used for the
+/// forwarded TCP stream toward the downstream service.
 pub struct TcpConnectionInner {
-    /// `None` once `disconnect()` has run — drops all senders so the writer
-    /// task observes channel close and exits cleanly.
     sender: parking_lot::Mutex<Option<mpsc::Sender<Vec<u8>>>>,
     is_connected: Box<UnsafeValue<bool>>,
-    pub aes_key: Arc<AesKey>,
+    aes_key_opt: Option<Arc<AesKey>>,
 }
 
 impl TcpConnectionInner {
-    /// Construct the inner and immediately spawn its write loop. The caller
-    /// only ever needs the `Arc<Self>` — the channel is fully encapsulated.
-    pub fn new(write_half: MyOwnedWriteHalf, aes_key: Arc<AesKey>) -> Arc<Self> {
+    pub fn new_gateway_peer(
+        write_half: MyOwnedWriteHalf,
+        aes_key: Arc<AesKey>,
+        compress_outbound: bool,
+    ) -> Arc<Self> {
         let (sender, receiver) = mpsc::channel::<Vec<u8>>(WRITE_CHANNEL_CAPACITY);
         let result = Arc::new(Self {
             sender: parking_lot::Mutex::new(Some(sender)),
             is_connected: Box::new(true.into()),
-            aes_key,
+            aes_key_opt: Some(aes_key.clone()),
         });
 
-        // Reuse the new race-free writer from `session::gateway_write_loop`.
         tokio::spawn(crate::tcp_gateway::session::gateway_write_loop(
+            write_half,
+            receiver,
+            aes_key,
+            compress_outbound,
+        ));
+
+        result
+    }
+
+    pub fn new_raw_passthrough(write_half: MyOwnedWriteHalf) -> Arc<Self> {
+        let (sender, receiver) = mpsc::channel::<Vec<u8>>(WRITE_CHANNEL_CAPACITY);
+        let result = Arc::new(Self {
+            sender: parking_lot::Mutex::new(Some(sender)),
+            is_connected: Box::new(true.into()),
+            aes_key_opt: None,
+        });
+
+        tokio::spawn(crate::tcp_gateway::session::raw_write_loop(
             write_half, receiver,
         ));
 
         result
     }
 
-    /// Best-effort enqueue. **Takes ownership** of the encoded frame so the
-    /// caller's `Vec<u8>` (typically the result of `TcpGatewayContract::to_vec`)
-    /// is moved into the write channel without an extra copy.
-    ///
-    /// Returns `false` when the connection is already disconnected or the
-    /// write channel is at capacity. In those cases the `payload` is dropped
-    /// — equivalent to the old behavior of silent loss along that path.
+    /// Returns the gateway peer's AES key. Panics if invoked on a raw
+    /// passthrough writer (which is a programming error: only gateway peer
+    /// inners hold a key).
+    pub fn aes_key(&self) -> &Arc<AesKey> {
+        self.aes_key_opt
+            .as_ref()
+            .expect("aes_key() invoked on raw passthrough writer")
+    }
+
     pub fn send_payload(&self, payload: Vec<u8>) -> bool {
         if !self.is_connected.get_value() {
             return false;
@@ -70,8 +87,6 @@ impl TcpConnectionInner {
         self.is_connected.get_value()
     }
 
-    /// Drop the writer's sender — the bounded channel closes, the writer task
-    /// drains any in-flight bytes, calls `shutdown_socket`, and exits.
     pub async fn disconnect(&self) -> bool {
         let was_connected = self.is_connected.get_value();
         self.is_connected.set_value(false);
@@ -79,12 +94,6 @@ impl TcpConnectionInner {
         was_connected
     }
 
-    /// No-op: the underlying write half is owned by the writer task and cannot
-    /// be flushed from outside without sending an explicit `Flush` sentinel
-    /// through the channel. For TCP this is harmless — `AsyncWriteExt::flush`
-    /// on `tokio::net::tcp::OwnedWriteHalf` is itself a no-op. If a future
-    /// flush-ack signal becomes necessary, it can be added without changing
-    /// this signature.
     pub async fn flush(&self) -> Result<(), NetworkError> {
         Ok(())
     }

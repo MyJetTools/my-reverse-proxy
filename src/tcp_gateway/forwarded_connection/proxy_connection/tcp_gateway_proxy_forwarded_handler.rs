@@ -26,8 +26,6 @@ pub struct TcpGatewayProxyForwardConnectionHandler {
     pub status: TcpGatewayProxyForwardedConnectionStatus,
     connection_inner: Arc<TcpConnectionInner>,
     pub connection_id: u32,
-    //pub receive_buffer: Mutex<ProxyReceiveBuffer>,
-    pub support_compression: bool,
     receive_buffer: Arc<ProxyReceiveBuffer>,
 }
 
@@ -35,14 +33,12 @@ impl TcpGatewayProxyForwardConnectionHandler {
     pub fn new(
         connection_id: u32,
         connection_inner: Arc<TcpConnectionInner>,
-        support_compression: bool,
     ) -> Self {
         Self {
             status: TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection,
             connection_id,
             connection_inner,
             receive_buffer: ProxyReceiveBuffer::new().into(),
-            support_compression,
         }
     }
 
@@ -77,7 +73,6 @@ impl TcpGatewayProxyForwardConnectionHandler {
             receive_buffer: self.receive_buffer.clone(),
             connection_id: self.connection_id,
             gateway_connection_inner: self.connection_inner.clone(),
-            support_compression: self.support_compression,
         }
     }
 

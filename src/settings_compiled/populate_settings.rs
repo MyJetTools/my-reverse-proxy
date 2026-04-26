@@ -278,10 +278,14 @@ impl SettingsCompiled {
         variables: &VariablesCompiled,
     ) -> Result<(), String> {
         if let Some(itm) = settings_model.gateway_server.take() {
+            let mut authorized_keys = Vec::with_capacity(itm.authorized_keys.len());
+            for path in itm.authorized_keys {
+                authorized_keys.push(variables.apply_variables(path)?);
+            }
             self.gateway_server = Some(GatewayServerSettings {
                 port: itm.port,
                 allowed_ip: itm.allowed_ip.clone(),
-                encryption_key: variables.apply_variables(itm.encryption_key)?,
+                authorized_keys,
                 debug: itm.debug,
             });
         }
@@ -300,7 +304,7 @@ impl SettingsCompiled {
                     variables.apply_variables(key)?,
                     GatewayClientSettings {
                         remote_host: variables.apply_variables(itm.remote_host)?,
-                        encryption_key: variables.apply_variables(itm.encryption_key)?,
+                        ssh_credentials: variables.apply_variables(itm.ssh_credentials)?,
                         compress: itm.compress,
                         debug: itm.debug,
                         allow_incoming_forward_connections: itm.allow_incoming_forward_connections,

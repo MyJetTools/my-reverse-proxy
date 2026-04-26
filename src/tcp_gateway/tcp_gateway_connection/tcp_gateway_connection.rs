@@ -1,9 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, AtomicI64},
-        Arc,
-    },
+    sync::{atomic::AtomicI64, Arc},
     time::Duration,
 };
 
@@ -30,7 +27,6 @@ pub struct TcpGatewayConnection {
     forward_proxy_handlers:
         Arc<tokio::sync::Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
     allow_incoming_forward_connection: bool,
-    support_compression: AtomicBool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
     pub file_requests: FileRequests,
@@ -46,10 +42,10 @@ impl TcpGatewayConnection {
         addr: Arc<String>,
         write_half: MyOwnedWriteHalf,
         aes_key: Arc<AesKey>,
-        supported_compression: bool,
+        compress_outbound: bool,
         allow_incoming_forward_connection: bool,
     ) -> Self {
-        let inner = TcpConnectionInner::new(write_half, aes_key);
+        let inner = TcpConnectionInner::new_gateway_peer(write_half, aes_key, compress_outbound);
         Self {
             gateway_id: ArcSwap::from_pointee(String::new()),
             addr,
@@ -57,7 +53,6 @@ impl TcpGatewayConnection {
             forward_connections: Arc::new(Mutex::default()),
             forward_proxy_handlers: Arc::new(tokio::sync::Mutex::default()),
             last_incoming_payload_time: AtomicDateTimeAsMicroseconds::now(),
-            support_compression: AtomicBool::new(supported_compression),
             ping_stop_watch: AtomicStopWatch::new(),
             last_ping_duration: AtomicDuration::from_micros(0),
             file_requests: FileRequests::new(),
@@ -103,17 +98,7 @@ impl TcpGatewayConnection {
     }
 
     pub fn get_aes_key(&self) -> &Arc<AesKey> {
-        &self.inner.aes_key
-    }
-
-    pub fn get_supported_compression(&self) -> bool {
-        self.support_compression
-            .load(std::sync::atomic::Ordering::Relaxed)
-    }
-
-    pub fn set_supported_compression(&self, value: bool) {
-        self.support_compression
-            .store(value, std::sync::atomic::Ordering::Relaxed);
+        self.inner.aes_key()
     }
 
     pub fn set_gateway_id(&self, id: &str) {
@@ -187,7 +172,6 @@ impl TcpGatewayConnection {
         let connection = TcpGatewayProxyForwardConnectionHandler::new(
             connection_id,
             self.inner.clone(),
-            self.get_supported_compression(),
         );
 
         {
@@ -360,8 +344,7 @@ impl TcpGatewayConnection {
     }
 
     pub fn send_payload<'d>(&self, payload: &TcpGatewayContract<'d>) -> bool {
-        let supported_compression = self.get_supported_compression();
-        let vec = payload.to_vec(&self.inner.aes_key, supported_compression);
+        let vec = payload.to_plain_frame();
         let len = vec.len();
 
         if self.inner.send_payload(vec) {

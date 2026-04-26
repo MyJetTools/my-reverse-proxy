@@ -3,9 +3,11 @@ use std::{
     time::Duration,
 };
 
-use encryption::aes::AesKey;
+use ed25519_dalek::SigningKey;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 use tokio::net::TcpStream;
 
+use crate::tcp_gateway::handshake::perform_client_handshake;
 use crate::tcp_gateway::{client::*, *};
 
 pub struct TcpGatewayClient {
@@ -17,31 +19,27 @@ impl TcpGatewayClient {
     pub fn new(
         id: String,
         remote_endpoint: String,
-        encryption: AesKey,
-        supported_compression: bool,
+        signing_key: SigningKey,
+        compress_outbound: bool,
         allow_incoming_forward_connections: bool,
         connect_timeout: Duration,
         debug: bool,
         sync_ssl_certificates: Vec<String>,
     ) -> Self {
-        let inner = Arc::new(TcpGatewayInner::new(
+        let inner = Arc::new(TcpGatewayInner::new_client(
             id,
             remote_endpoint,
+            signing_key,
             allow_incoming_forward_connections,
-            encryption,
             sync_ssl_certificates,
+            compress_outbound,
         ));
         let result = Self {
             inner: inner.clone(),
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(
-            inner.clone(),
-            supported_compression,
-            connect_timeout,
-            debug,
-        ));
+        tokio::spawn(connection_loop(inner.clone(), connect_timeout, debug));
 
         result
     }
@@ -81,7 +79,6 @@ impl Drop for TcpGatewayClient {
 
 async fn connection_loop(
     inner: Arc<TcpGatewayInner>,
-    supported_compression: bool,
     connect_timeout: Duration,
     debug: bool,
 ) {
@@ -95,19 +92,20 @@ async fn connection_loop(
         );
         let connect_feature = TcpStream::connect(inner.gateway_host.as_str());
 
-        let connect_timeout = tokio::time::timeout(connect_timeout, connect_feature).await;
+        let connect_result = tokio::time::timeout(connect_timeout, connect_feature).await;
 
-        if connect_timeout.is_err() {
+        if connect_result.is_err() {
             println!(
                 "Gateway:[{}] Can not connect to Gateway Server with host '{}'. Timeout: {:?}",
                 inner.get_gateway_id(),
                 inner.gateway_host.as_str(),
                 connect_timeout
             );
+            tokio::time::sleep(Duration::from_secs(5)).await;
             continue;
         }
 
-        let tcp_stream = match connect_timeout.unwrap() {
+        let mut tcp_stream = match connect_result.unwrap() {
             Ok(tcp_stream) => tcp_stream,
             Err(err) => {
                 println!(
@@ -115,9 +113,33 @@ async fn connection_loop(
                     inner.get_gateway_id(),
                     err
                 );
-
                 tokio::time::sleep(Duration::from_secs(5)).await;
+                continue;
+            }
+        };
 
+        let signing_key = inner
+            .signing_key
+            .as_ref()
+            .expect("Gateway client missing signing_key")
+            .as_ref()
+            .clone();
+
+        let session_key = match perform_client_handshake(
+            &mut tcp_stream,
+            &signing_key,
+            inner.gateway_id.as_str(),
+        )
+        .await
+        {
+            Ok(key) => key,
+            Err(err) => {
+                eprintln!(
+                    "Gateway:[{}] handshake to '{}' failed: {err}",
+                    inner.get_gateway_id(),
+                    inner.gateway_host.as_str(),
+                );
+                tokio::time::sleep(Duration::from_secs(5)).await;
                 continue;
             }
         };
@@ -127,13 +149,16 @@ async fn connection_loop(
         let gateway_connection = TcpGatewayConnection::new(
             inner.gateway_host.clone(),
             write.into(),
-            inner.encryption.clone(),
-            supported_compression,
+            session_key,
+            inner.compress_outbound,
             inner.allow_incoming_forward_connections,
         );
 
         let gateway_connection = Arc::new(gateway_connection);
-        inner.set_gateway_connection(&inner.gateway_id, gateway_connection.clone().into());
+        let now = DateTimeAsMicroseconds::now();
+        gateway_connection.set_connection_timestamp(now);
+        gateway_connection.set_gateway_id(inner.gateway_id.as_str());
+        inner.set_gateway_connection(&inner.gateway_id, Some(gateway_connection.clone()));
 
         tokio::spawn(crate::tcp_gateway::gateway_read_loop(
             inner.clone(),
@@ -143,19 +168,15 @@ async fn connection_loop(
             debug,
         ));
 
-        println!(
-            "Gateway: [{}] Sending handshake with timestamp {}",
-            inner.gateway_id.as_str(),
-            gateway_connection.created_at.unix_microseconds
-        );
-
-        let handshake_contract = TcpGatewayContract::Handshake {
-            timestamp: gateway_connection.created_at.unix_microseconds,
-            support_compression: supported_compression,
-            gateway_name: inner.get_gateway_id(),
-        };
-
-        gateway_connection.send_payload(&handshake_contract);
+        let sync_ids: Vec<&str> = inner
+            .sync_ssl_certificates
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        if !sync_ids.is_empty() {
+            let request = TcpGatewayContract::SyncSslCertificatesRequest { cert_ids: sync_ids };
+            gateway_connection.send_payload(&request);
+        }
 
         super::gateway_ping_loop(gateway_connection, debug).await;
     }

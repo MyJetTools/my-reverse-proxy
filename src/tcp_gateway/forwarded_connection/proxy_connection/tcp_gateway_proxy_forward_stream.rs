@@ -11,7 +11,6 @@ use super::ProxyReceiveBuffer;
 pub struct TcpGatewayProxyForwardStream {
     pub connection_id: u32,
     pub gateway_connection_inner: Arc<TcpConnectionInner>,
-    pub support_compression: bool,
     pub receive_buffer: Arc<ProxyReceiveBuffer>,
 }
 
@@ -21,10 +20,7 @@ impl TcpGatewayProxyForwardStream {
             connection_id: self.connection_id,
             payload: payload.into(),
         }
-        .to_vec(
-            &self.gateway_connection_inner.aes_key,
-            self.support_compression,
-        );
+        .to_plain_frame();
 
         self.gateway_connection_inner.send_payload(frame)
     }
@@ -37,10 +33,7 @@ impl TcpGatewayProxyForwardStream {
             connection_id: self.connection_id,
             error: "",
         }
-        .to_vec(
-            &self.gateway_connection_inner.aes_key,
-            self.support_compression,
-        );
+        .to_plain_frame();
 
         self.gateway_connection_inner.send_payload(frame);
     }
