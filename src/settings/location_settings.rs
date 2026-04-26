@@ -34,12 +34,12 @@ impl LocationType {
                     left_part = right_part;
                 }
 
-                if left_part.starts_with("unix+http") {
-                    return Ok(Self::UnixSocketHttp);
-                };
-
                 if left_part.starts_with("unix+http2") {
                     return Ok(Self::UnixSocketHttp2);
+                };
+
+                if left_part.starts_with("unix+http") {
+                    return Ok(Self::UnixSocketHttp);
                 };
 
                 if left_part.starts_with("https") {

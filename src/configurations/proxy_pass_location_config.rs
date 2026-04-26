@@ -141,7 +141,14 @@ impl ProxyPassLocationConfig {
                             return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
-                            panic!("HTTP1 UnixSocket is not supported as remote content source");
+                            let model = UnixHttp1ContentSource {
+                                remote_endpoint: remote_host.to_owned(),
+                                debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
+                                connection_id: self.id,
+                            };
+                            return HttpProxyPassContentSource::UnixHttp1(model);
                         }
                     }
                 }
@@ -223,7 +230,14 @@ impl ProxyPassLocationConfig {
                             return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
-                            panic!("HTTP2 UnixSocket is not supported as remote content source");
+                            let model = UnixHttp2ContentSource {
+                                remote_endpoint: remote_host.to_owned(),
+                                debug,
+                                request_timeout: proxy_pass.request_timeout,
+                                connect_timeout: proxy_pass.connect_timeout,
+                                connection_id: self.id,
+                            };
+                            return HttpProxyPassContentSource::UnixHttp2(model);
                         }
                     }
                 }

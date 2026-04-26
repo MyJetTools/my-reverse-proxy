@@ -287,18 +287,22 @@ hosts:
 
 #### WebSocket support on Http2 / Https2
 
-`Http2` and `Https2` endpoints accept WebSocket connections over HTTP/2 using
-the Extended CONNECT mechanism (RFC 8441). The server announces
-`SETTINGS_ENABLE_CONNECT_PROTOCOL = 1`, browsers send `:method = CONNECT` with
-`:protocol = websocket`, and the proxy converts the handshake to a regular
-HTTP/1.1 `Upgrade: websocket` request when forwarding to an h1 upstream. After
-both handshakes complete, payload bytes are pumped between the two sides
-without inspecting WebSocket frames.
+`Http2` and `Https2` endpoints accept WebSocket connections from the client
+side. Supported endpoint × upstream combinations:
 
-Currently supported: **h2 client → h1 upstream** (the typical browser case;
-real WebSocket servers are almost always h1). h2 client → h2 upstream is not
-supported yet — extended CONNECT on the outgoing side would require the h2
-client pool to expose an upgraded byte stream.
+| Client endpoint | Upstream location type | Works |
+|-----------------|------------------------|-------|
+| `https2`        | `http`                 | yes   |
+| `https2`        | `http2`                | yes   |
+| `https1`        | `http`                 | yes   |
+| `http2`         | `http` / `http2`       | yes (non-browser h2 clients only) |
+
+Notes:
+- Browsers do WebSocket over HTTP/2 only on TLS — use `https2` for
+  browser-initiated WebSocket.
+- For an upstream of type `http2` (or `unix+http2`) the upstream service must
+  itself support WebSocket-over-HTTP/2. Services built on `MyHttpServer`
+  support it from version `0.8.3`.
 
 ### Tcp
 ```yaml
@@ -459,33 +463,40 @@ localhost:8001:
 
 ### Unix+Http
 
-Used for http/1.1 connections through unix socket
+Used for http/1.1 connections through a Unix domain socket.
 
-Unix socket address must be started with '/' or '~'
+Unix socket path must start with `/` or `~`. A leading `~/` is expanded to
+`$HOME/…` at connect time, so configs are portable across users.
 
 ```yaml
 localhost:8001:
     endpoint:
       type: http
-    locations:      
+    locations:
     - type: unix+http
-      proxy_pass_to: /socket.sock
+      proxy_pass_to: /var/run/myapp.sock
+
+    - type: unix+http
+      proxy_pass_to: ~/sockets/myapp.sock     # expands to $HOME/sockets/myapp.sock
 ```
 
 ### Unix+Http2
 
-Used for http/2 connections
-
-Unix socket address must be started with '/' or '~'
+Used for http/2 connections through a Unix domain socket. Same path rules as
+`unix+http` (leading `~/` expands to `$HOME/…`).
 
 ```yaml
 localhost:8001:
     endpoint:
       type: http
-    locations:      
+    locations:
     - type: unix+http2
-      proxy_pass_to: /socket.sock
+      proxy_pass_to: /var/run/myapp.sock
+
+    - type: unix+http2
+      proxy_pass_to: ~/sockets/myapp.sock
 ```
+
 
 
 

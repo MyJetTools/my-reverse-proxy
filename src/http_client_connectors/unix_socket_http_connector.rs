@@ -21,8 +21,9 @@ impl MyHttpClientConnector<tokio::net::UnixStream> for UnixSocketHttpConnector {
 
     async fn connect(&self) -> Result<tokio::net::UnixStream, MyHttpClientError> {
         let host_port = self.remote_endpoint.get_host_port();
+        let socket_path = expand_tilde(host_port.as_str());
 
-        let connect_feature = tokio::net::UnixStream::connect(host_port.as_str());
+        let connect_feature = tokio::net::UnixStream::connect(socket_path.as_str());
 
         match connect_feature.await {
             Ok(tcp_stream) => Ok(tcp_stream),
@@ -42,4 +43,17 @@ impl MyHttpClientConnector<tokio::net::UnixStream> for UnixSocketHttpConnector {
     ) -> tokio::net::UnixStream {
         read.unsplit(write)
     }
+}
+
+fn expand_tilde(path: &str) -> String {
+    if let Some(stripped) = path.strip_prefix("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            return format!("{}/{}", home.trim_end_matches('/'), stripped);
+        }
+    } else if path == "~" {
+        if let Ok(home) = std::env::var("HOME") {
+            return home;
+        }
+    }
+    path.to_string()
 }
