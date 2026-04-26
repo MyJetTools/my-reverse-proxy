@@ -19,24 +19,21 @@ impl Https2ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let http_client = crate::app::APP_CTX
-            .https2_clients_pool
-            .get(
-                self.remote_endpoint.as_str().into(),
-                self.connect_timeout,
-                || {
-                    (
-                        HttpTlsConnector {
-                            remote_endpoint: self.remote_endpoint.clone(),
-                            debug: self.debug,
-                            domain_name: self.domain_name.clone(),
-                        },
-                        crate::app::APP_CTX.prometheus.clone(),
-                    )
-                },
-            );
+        let http_client = crate::app::APP_CTX.https2_clients_pool.get(
+            self.remote_endpoint.as_str().into(),
+            self.connect_timeout,
+            || {
+                (
+                    HttpTlsConnector {
+                        remote_endpoint: self.remote_endpoint.clone(),
+                        debug: self.debug,
+                        domain_name: self.domain_name.clone(),
+                    },
+                    crate::app::APP_CTX.prometheus.clone(),
+                )
+            },
+        );
 
-        let response = http_client.do_request(req, self.request_timeout).await?;
-        return Ok(HttpResponse::Response(response));
+        execute_h2(&http_client, req, self.request_timeout).await
     }
 }
