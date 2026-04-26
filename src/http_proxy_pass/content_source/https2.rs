@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::sync::{atomic::Ordering, Arc};
+
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::{http_proxy_pass::ProxyPassError, upstream_h2_pool::PoolKey};
 
@@ -21,26 +23,31 @@ impl Https2ContentSource {
 
         let is_ws = is_h2_extended_connect(&req);
 
-        let client = if is_ws {
-            pool.create_connection()
-                .await
-                .map_err(|_| ProxyPassError::UpstreamUnavailable)?
-        } else {
-            pool.get_connection()
-                .ok_or(ProxyPassError::UpstreamUnavailable)?
-        };
-
-        let mut response = execute_h2(&client, req, self.request_timeout).await?;
-
         if is_ws {
+            let client = pool
+                .create_connection()
+                .await
+                .map_err(|_| ProxyPassError::UpstreamUnavailable)?;
+            let mut response = execute_h2(&client, req, self.request_timeout).await?;
             if let HttpResponse::WebSocketUpgrade { disconnection, .. } = &mut response {
                 *disconnection = Arc::new(H2WsActiveGuard::new(
                     self.pool_key.endpoint_label(),
                     client,
                 ));
             }
+            return Ok(response);
         }
 
-        Ok(response)
+        let entry = pool
+            .get_connection()
+            .await
+            .map_err(|_| ProxyPassError::UpstreamUnavailable)?;
+        let client = entry.client.load_full();
+        let result = execute_h2(&client, req, self.request_timeout).await;
+        match &result {
+            Ok(_) => entry.last_success.update(DateTimeAsMicroseconds::now()),
+            Err(_) => entry.dead.store(true, Ordering::Relaxed),
+        }
+        result
     }
 }

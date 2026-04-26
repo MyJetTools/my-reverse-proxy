@@ -1,20 +1,12 @@
-use std::sync::Arc;
-
 use my_http_client::http1::*;
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::{
-    app::APP_CTX, http_client_connectors::UnixSocketHttpConnector, http_proxy_pass::ProxyPassError,
-};
+use crate::{http_proxy_pass::ProxyPassError, upstream_h1_pool::PoolKey};
 
 use super::*;
 
 pub struct UnixHttp1ContentSource {
-    pub remote_endpoint: Arc<RemoteEndpointOwned>,
-    pub debug: bool,
+    pub pool_key: PoolKey,
     pub request_timeout: std::time::Duration,
-    pub connect_timeout: std::time::Duration,
-    pub connection_id: i64,
 }
 
 impl UnixHttp1ContentSource {
@@ -22,46 +14,43 @@ impl UnixHttp1ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let http_client = crate::app::APP_CTX
-            .unix_sockets_per_connection
-            .get_or_create(self.connection_id, || {
-                let mut http_client: my_http_client::http1::MyHttpClient<
-                    tokio::net::UnixStream,
-                    UnixSocketHttpConnector,
-                > = UnixSocketHttpConnector {
-                    remote_endpoint: self.remote_endpoint.clone(),
-                    debug: self.debug,
-                }
-                .into();
+        let pool = crate::app::APP_CTX
+            .h1_uds_pools
+            .get(&self.pool_key)
+            .ok_or(ProxyPassError::UpstreamUnavailable)?;
 
-                http_client.set_connect_timeout(self.connect_timeout);
+        let is_ws = is_h1_websocket_upgrade(&req);
 
-                http_client
-            });
+        let mut http_client = if is_ws {
+            pool.create_connection()
+                .await
+                .map_err(|_| ProxyPassError::UpstreamUnavailable)?
+        } else {
+            match pool.get_connection() {
+                Some(c) => c,
+                None => pool
+                    .create_connection()
+                    .await
+                    .map_err(|_| ProxyPassError::UpstreamUnavailable)?,
+            }
+        };
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 
         match http_client.do_request(&req, self.request_timeout).await? {
-            MyHttpResponse::Response(response) => {
-                return Ok(HttpResponse::Response(response));
-            }
+            MyHttpResponse::Response(response) => Ok(HttpResponse::Response(response)),
             MyHttpResponse::WebSocketUpgrade {
                 stream,
                 response,
                 disconnection,
             } => {
-                return Ok(HttpResponse::WebSocketUpgrade {
+                http_client.upgraded_to_websocket();
+                Ok(HttpResponse::WebSocketUpgrade {
                     stream: WebSocketUpgradeStream::UnixStream(stream),
                     response,
                     disconnection,
-                });
+                })
             }
         }
-    }
-}
-
-impl Drop for UnixHttp1ContentSource {
-    fn drop(&mut self) {
-        APP_CTX.unix_sockets_per_connection.remove(self.connection_id);
     }
 }

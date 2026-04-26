@@ -16,6 +16,8 @@ mod unix_http2;
 pub use unix_http2::*;
 mod h2_dispatch;
 pub use h2_dispatch::*;
+mod h1_dispatch;
+pub use h1_dispatch::*;
 //mod http1_over_gateway;
 //pub use http1_over_gateway::*;
 mod path_over_gateway;

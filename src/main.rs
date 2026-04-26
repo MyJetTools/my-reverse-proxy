@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::MyTimer;
 use timers::{
     CrlRefresherTimer, GatewaySyncCertsTimer, GcConnectionsTimer, MetricsTimer,
-    SslCertsRefreshTimer,
+    PoolSupervisorTimer, SslCertsRefreshTimer,
 };
 
 mod app;
@@ -32,7 +32,6 @@ mod h1_utils;
 mod ip_db;
 mod http2_client_pool;
 mod http_client_pool;
-mod http_clients;
 
 mod h1_remote_connection;
 mod metrics;
@@ -41,6 +40,7 @@ mod ssl;
 mod tcp_gateway;
 mod timers;
 mod types;
+mod upstream_h1_pool;
 mod upstream_h2_pool;
 mod utils;
 
@@ -81,6 +81,15 @@ async fn main() {
     gc_connections_time.register_timer("GatewaySyncCerts", Arc::new(GatewaySyncCertsTimer));
 
     gc_connections_time.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
+    );
+
+    let mut pool_supervisor_timer = rust_extensions::MyTimer::new(Duration::from_secs(10));
+
+    pool_supervisor_timer.register_timer("PoolSupervisor", Arc::new(PoolSupervisorTimer));
+
+    pool_supervisor_timer.start(
         crate::app::APP_CTX.states.clone(),
         my_logger::LOGGER.clone(),
     );

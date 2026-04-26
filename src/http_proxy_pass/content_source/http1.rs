@@ -1,17 +1,12 @@
-use std::sync::Arc;
-
 use my_http_client::http1::*;
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
 
-use crate::{http_client_connectors::HttpConnector, http_proxy_pass::ProxyPassError};
+use crate::{http_proxy_pass::ProxyPassError, upstream_h1_pool::PoolKey};
 
 use super::*;
 
 pub struct Http1ContentSource {
-    pub remote_endpoint: Arc<RemoteEndpointOwned>,
-    pub debug: bool,
+    pub pool_key: PoolKey,
     pub request_timeout: std::time::Duration,
-    pub connect_timeout: std::time::Duration,
 }
 
 impl Http1ContentSource {
@@ -19,34 +14,42 @@ impl Http1ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let mut http_client = crate::app::APP_CTX
-            .http_clients_pool
-            .get(
-                self.remote_endpoint.as_str().into(),
-                self.connect_timeout,
-                || HttpConnector {
-                    remote_endpoint: self.remote_endpoint.clone(),
-                    debug: self.debug,
-                },
-            );
+        let pool = crate::app::APP_CTX
+            .h1_tcp_pools
+            .get(&self.pool_key)
+            .ok_or(ProxyPassError::UpstreamUnavailable)?;
+
+        let is_ws = is_h1_websocket_upgrade(&req);
+
+        let mut http_client = if is_ws {
+            pool.create_connection()
+                .await
+                .map_err(|_| ProxyPassError::UpstreamUnavailable)?
+        } else {
+            match pool.get_connection() {
+                Some(c) => c,
+                None => pool
+                    .create_connection()
+                    .await
+                    .map_err(|_| ProxyPassError::UpstreamUnavailable)?,
+            }
+        };
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 
         match http_client.do_request(&req, self.request_timeout).await? {
-            MyHttpResponse::Response(response) => {
-                return Ok(HttpResponse::Response(response));
-            }
+            MyHttpResponse::Response(response) => Ok(HttpResponse::Response(response)),
             MyHttpResponse::WebSocketUpgrade {
                 stream,
                 response,
                 disconnection,
             } => {
                 http_client.upgraded_to_websocket();
-                return Ok(HttpResponse::WebSocketUpgrade {
+                Ok(HttpResponse::WebSocketUpgrade {
                     stream: WebSocketUpgradeStream::TcpStream(stream),
                     response,
                     disconnection,
-                });
+                })
             }
         }
     }

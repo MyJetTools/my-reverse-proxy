@@ -19,11 +19,11 @@ use crate::{
     http2_client_pool::Http2ClientPool,
     http_client_connectors::*,
     http_client_pool::HttpClientPool,
-    http_clients::HttpClients,
     settings::ConnectionsSettingsModel,
     settings_compiled::SettingsCompiled,
     ssl::CertificatesCache,
     tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer, TcpGatewayConnection},
+    upstream_h1_pool::H1PoolRegistry,
     upstream_h2_pool::H2PoolRegistry,
 };
 
@@ -40,19 +40,17 @@ lazy_static::lazy_static! {
 }
 
 pub struct AppContext {
-    pub http_clients_pool: HttpClientPool<TcpStream, HttpConnector>,
-
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,
-
-    pub unix_sockets_per_connection: HttpClients<tokio::net::UnixStream, UnixSocketHttpConnector>,
-
-    pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
 
     pub h2_tcp_pools: H2PoolRegistry<TcpStream, HttpConnector>,
     pub h2_tls_pools: H2PoolRegistry<TlsStream<TcpStream>, HttpTlsConnector>,
     pub h2_uds_pools: H2PoolRegistry<tokio::net::UnixStream, UnixSocketHttpConnector>,
+
+    pub h1_tcp_pools: H1PoolRegistry<TcpStream, HttpConnector>,
+    pub h1_tls_pools: H1PoolRegistry<TlsStream<TcpStream>, HttpTlsConnector>,
+    pub h1_uds_pools: H1PoolRegistry<tokio::net::UnixStream, UnixSocketHttpConnector>,
 
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
@@ -150,15 +148,15 @@ impl AppContext {
             ssh_config_list: SshConfigList::new(),
             allowed_users_list: AllowedUsersList::new(),
             ssh_cert_pass_keys: CertPassKeys::new(),
-            http_clients_pool: HttpClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
 
-            https_clients_pool: HttpClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
             h2_tcp_pools: H2PoolRegistry::new(),
             h2_tls_pools: H2PoolRegistry::new(),
             h2_uds_pools: H2PoolRegistry::new(),
-            unix_sockets_per_connection: HttpClients::new(),
+            h1_tcp_pools: H1PoolRegistry::new(),
+            h1_tls_pools: H1PoolRegistry::new(),
+            h1_uds_pools: H1PoolRegistry::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,

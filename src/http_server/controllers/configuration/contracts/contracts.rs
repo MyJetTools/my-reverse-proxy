@@ -56,14 +56,6 @@ impl CurrentConfigurationHttpModel {
         let mut remote_connections = HashMap::new();
 
         crate::app::APP_CTX
-            .http_clients_pool
-            .fill_connections_amount(&mut remote_connections);
-
-        crate::app::APP_CTX
-            .https_clients_pool
-            .fill_connections_amount(&mut remote_connections);
-
-        crate::app::APP_CTX
             .http_over_ssh_clients_pool
             .fill_connections_amount(&mut remote_connections);
 
@@ -71,17 +63,23 @@ impl CurrentConfigurationHttpModel {
             .http2_over_ssh_clients_pool
             .fill_connections_amount(&mut remote_connections);
 
-        for (key, ready, total) in crate::app::APP_CTX.h2_tcp_pools.snapshot() {
-            remote_connections.insert(format!("h2://{}:{}", key.host, key.port), ready);
-            let _ = total;
+        for (key, ready, _total) in crate::app::APP_CTX.h1_tcp_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
         }
-        for (key, ready, total) in crate::app::APP_CTX.h2_tls_pools.snapshot() {
-            remote_connections.insert(format!("h2s://{}:{}", key.host, key.port), ready);
-            let _ = total;
+        for (key, ready, _total) in crate::app::APP_CTX.h1_tls_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
         }
-        for (key, ready, total) in crate::app::APP_CTX.h2_uds_pools.snapshot() {
-            remote_connections.insert(format!("uds-h2://{}", key.host), ready);
-            let _ = total;
+        for (key, ready, _total) in crate::app::APP_CTX.h1_uds_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
+        }
+        for (key, ready, _total) in crate::app::APP_CTX.h2_tcp_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
+        }
+        for (key, ready, _total) in crate::app::APP_CTX.h2_tls_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
+        }
+        for (key, ready, _total) in crate::app::APP_CTX.h2_uds_pools.snapshot() {
+            remote_connections.insert(key.endpoint_label(), ready);
         }
 
         Self {

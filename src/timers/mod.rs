@@ -8,3 +8,5 @@ mod metrics_timer;
 pub use metrics_timer::*;
 mod gateway_sync_certs_timer;
 pub use gateway_sync_certs_timer::*;
+mod pool_supervisor_timer;
+pub use pool_supervisor_timer::*;

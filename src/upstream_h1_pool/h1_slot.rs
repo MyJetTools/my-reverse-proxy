@@ -1,21 +1,20 @@
-use std::sync::atomic::{AtomicI64, AtomicU8};
+use std::sync::atomic::{AtomicBool, AtomicU8};
 
 use arc_swap::ArcSwapOption;
-use my_http_client::{http2::MyHttp2Client, MyHttpClientConnector};
+use my_http_client::{http1::MyHttpClient, MyHttpClientConnector};
 
-pub struct H2Slot<TStream, TConnector>
+pub struct H1Slot<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pub client: ArcSwapOption<MyHttp2Client<TStream, TConnector>>,
-    pub fail_count: AtomicU8,
-    // Reserved for active health-check (currently disabled — see PoolParams::default).
+    pub client: ArcSwapOption<MyHttpClient<TStream, TConnector>>,
+    pub rented: AtomicBool,
     #[allow(dead_code)]
-    pub last_health_check: AtomicI64,
+    pub fail_count: AtomicU8,
 }
 
-impl<TStream, TConnector> H2Slot<TStream, TConnector>
+impl<TStream, TConnector> H1Slot<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
@@ -23,13 +22,13 @@ where
     pub fn new() -> Self {
         Self {
             client: ArcSwapOption::const_empty(),
+            rented: AtomicBool::new(false),
             fail_count: AtomicU8::new(0),
-            last_health_check: AtomicI64::new(0),
         }
     }
 }
 
-impl<TStream, TConnector> Default for H2Slot<TStream, TConnector>
+impl<TStream, TConnector> Default for H1Slot<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,

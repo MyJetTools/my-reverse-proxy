@@ -16,6 +16,9 @@ pub struct Prometheus {
     pub h2_pool_size: IntGaugeVec,
     pub h2_pool_alive: IntGaugeVec,
     pub h2_ws_active: IntGaugeVec,
+
+    pub h1_pool_size: IntGaugeVec,
+    pub h1_pool_alive: IntGaugeVec,
     registry: Registry,
 }
 
@@ -94,6 +97,18 @@ impl Prometheus {
             "Active on-demand h2 WebSocket connections to upstream",
         );
 
+        let h1_pool_size = create_endpoint_gauge_vec(
+            &registry,
+            "h1_pool_size",
+            "Configured slot count for the per-endpoint h1 upstream pool",
+        );
+
+        let h1_pool_alive = create_endpoint_gauge_vec(
+            &registry,
+            "h1_pool_alive",
+            "Currently connected reusable slots in the per-endpoint h1 upstream pool",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -107,6 +122,8 @@ impl Prometheus {
             h2_pool_size,
             h2_pool_alive,
             h2_ws_active,
+            h1_pool_size,
+            h1_pool_alive,
             registry,
         };
 
@@ -117,12 +134,18 @@ impl Prometheus {
         self.h2_pool_size.with_label_values(&[endpoint]).set(n);
     }
 
+    #[allow(dead_code)]
     pub fn inc_h2_pool_alive(&self, endpoint: &str) {
         self.h2_pool_alive.with_label_values(&[endpoint]).inc();
     }
 
+    #[allow(dead_code)]
     pub fn dec_h2_pool_alive(&self, endpoint: &str) {
         self.h2_pool_alive.with_label_values(&[endpoint]).dec();
+    }
+
+    pub fn set_h2_pool_alive(&self, endpoint: &str, n: i64) {
+        self.h2_pool_alive.with_label_values(&[endpoint]).set(n);
     }
 
     pub fn inc_h2_ws_active(&self, endpoint: &str) {
@@ -136,6 +159,24 @@ impl Prometheus {
     pub fn reset_h2_pool(&self, endpoint: &str) {
         self.h2_pool_size.with_label_values(&[endpoint]).set(0);
         self.h2_pool_alive.with_label_values(&[endpoint]).set(0);
+    }
+
+    pub fn set_h1_pool_size(&self, endpoint: &str, n: i64) {
+        self.h1_pool_size.with_label_values(&[endpoint]).set(n);
+    }
+
+    pub fn inc_h1_pool_alive(&self, endpoint: &str) {
+        self.h1_pool_alive.with_label_values(&[endpoint]).inc();
+    }
+
+    #[allow(dead_code)]
+    pub fn dec_h1_pool_alive(&self, endpoint: &str) {
+        self.h1_pool_alive.with_label_values(&[endpoint]).dec();
+    }
+
+    pub fn reset_h1_pool(&self, endpoint: &str) {
+        self.h1_pool_size.with_label_values(&[endpoint]).set(0);
+        self.h1_pool_alive.with_label_values(&[endpoint]).set(0);
     }
 
     pub fn inc_http1_server_connections(&self, endpoint: &str) {
