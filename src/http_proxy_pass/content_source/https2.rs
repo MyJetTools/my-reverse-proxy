@@ -2,12 +2,18 @@ use std::sync::{atomic::Ordering, Arc};
 
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::{http_proxy_pass::ProxyPassError, upstream_h2_pool::PoolKey};
+use crate::{
+    http_client_connectors::HttpTlsConnector,
+    http_proxy_pass::ProxyPassError,
+    upstream_h2_pool::{ConnectorFactory, PoolKey, PoolParams},
+};
 
 use super::*;
 
 pub struct Https2ContentSource {
     pub pool_key: PoolKey,
+    pub pool_params: PoolParams,
+    pub factory: ConnectorFactory<HttpTlsConnector>,
     pub request_timeout: std::time::Duration,
 }
 
@@ -16,10 +22,14 @@ impl Https2ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let pool = crate::app::APP_CTX
-            .h2_tls_pools
-            .get(&self.pool_key)
-            .ok_or(ProxyPassError::UpstreamUnavailable)?;
+        let pool = match crate::app::APP_CTX.h2_tls_pools.get(&self.pool_key) {
+            Some(p) => p,
+            None => crate::app::APP_CTX.h2_tls_pools.ensure_pool(
+                self.pool_key.clone(),
+                self.pool_params.clone(),
+                self.factory.clone(),
+            ),
+        };
 
         let is_ws = is_h2_extended_connect(&req);
 

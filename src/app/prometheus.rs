@@ -165,6 +165,7 @@ impl Prometheus {
         self.h1_pool_size.with_label_values(&[endpoint]).set(n);
     }
 
+    #[allow(dead_code)]
     pub fn inc_h1_pool_alive(&self, endpoint: &str) {
         self.h1_pool_alive.with_label_values(&[endpoint]).inc();
     }
@@ -172,6 +173,10 @@ impl Prometheus {
     #[allow(dead_code)]
     pub fn dec_h1_pool_alive(&self, endpoint: &str) {
         self.h1_pool_alive.with_label_values(&[endpoint]).dec();
+    }
+
+    pub fn set_h1_pool_alive(&self, endpoint: &str, n: i64) {
+        self.h1_pool_alive.with_label_values(&[endpoint]).set(n);
     }
 
     pub fn reset_h1_pool(&self, endpoint: &str) {

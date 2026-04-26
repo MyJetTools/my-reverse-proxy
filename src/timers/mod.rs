@@ -10,3 +10,5 @@ mod gateway_sync_certs_timer;
 pub use gateway_sync_certs_timer::*;
 mod pool_supervisor_timer;
 pub use pool_supervisor_timer::*;
+mod gc_pools_timer;
+pub use gc_pools_timer::*;

@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use rust_extensions::MyTimer;
 use timers::{
-    CrlRefresherTimer, GatewaySyncCertsTimer, GcConnectionsTimer, MetricsTimer,
+    CrlRefresherTimer, GatewaySyncCertsTimer, GcConnectionsTimer, GcPoolsTimer, MetricsTimer,
     PoolSupervisorTimer, SslCertsRefreshTimer,
 };
 
@@ -90,6 +90,15 @@ async fn main() {
     pool_supervisor_timer.register_timer("PoolSupervisor", Arc::new(PoolSupervisorTimer));
 
     pool_supervisor_timer.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
+    );
+
+    let mut gc_pools_timer = rust_extensions::MyTimer::new(Duration::from_secs(60));
+
+    gc_pools_timer.register_timer("GcPools", Arc::new(GcPoolsTimer));
+
+    gc_pools_timer.start(
         crate::app::APP_CTX.states.clone(),
         my_logger::LOGGER.clone(),
     );

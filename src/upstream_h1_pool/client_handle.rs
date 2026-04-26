@@ -5,24 +5,34 @@ use my_http_client::{
     http1::{MyHttpClient, MyHttpRequest, MyHttpResponse},
     MyHttpClientConnector, MyHttpClientError,
 };
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use super::H1Slot;
+use super::{H1Entry, DISPOSABLE_COUNTER};
 
-/// RAII wrapper around an h1 upstream client.
+/// h1 client handle returned by `H1Pool::get_connection` / `create_ws_connection`.
 ///
-/// `rental = Some(slot)` — reusable: on `Drop` the slot's `rented` flag is reset
-/// and the client stays in the pool for the next request.
-///
-/// `rental = None` — disposable: on `Drop` the inner `MyHttpClient` is the only
-/// reference left, so the underlying TCP connection is closed via
-/// `MyHttpClient::Drop`.
-pub struct H1ClientHandle<TStream, TConnector>
+/// - **Reusable** — the client lives in the pool. Drop releases the rent flag
+///   so the next request can pick this entry. `do_request` updates the entry's
+///   `last_success` / `dead` based on result.
+/// - **Disposable** — overflow client (or Phase 0 race-lost). Drop decrements
+///   the global `DISPOSABLE_COUNTER`. Underlying TCP closes when Arc dies.
+/// - **Ws** — fresh client created for a WebSocket session. Drop is a no-op;
+///   the WS-upgraded TCP keeps the Arc alive until the session closes.
+pub enum H1ClientHandle<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    client: Arc<MyHttpClient<TStream, TConnector>>,
-    rental: Option<Arc<H1Slot<TStream, TConnector>>>,
+    Reusable {
+        client: Arc<MyHttpClient<TStream, TConnector>>,
+        entry: Arc<H1Entry<TStream, TConnector>>,
+    },
+    Disposable {
+        client: Arc<MyHttpClient<TStream, TConnector>>,
+    },
+    Ws {
+        client: Arc<MyHttpClient<TStream, TConnector>>,
+    },
 }
 
 impl<TStream, TConnector> H1ClientHandle<TStream, TConnector>
@@ -32,18 +42,24 @@ where
 {
     pub(super) fn reusable(
         client: Arc<MyHttpClient<TStream, TConnector>>,
-        slot: Arc<H1Slot<TStream, TConnector>>,
+        entry: Arc<H1Entry<TStream, TConnector>>,
     ) -> Self {
-        Self {
-            client,
-            rental: Some(slot),
-        }
+        Self::Reusable { client, entry }
     }
 
     pub(super) fn disposable(client: Arc<MyHttpClient<TStream, TConnector>>) -> Self {
-        Self {
-            client,
-            rental: None,
+        Self::Disposable { client }
+    }
+
+    pub(super) fn ws(client: Arc<MyHttpClient<TStream, TConnector>>) -> Self {
+        Self::Ws { client }
+    }
+
+    fn client(&self) -> &Arc<MyHttpClient<TStream, TConnector>> {
+        match self {
+            Self::Reusable { client, .. } => client,
+            Self::Disposable { client } => client,
+            Self::Ws { client } => client,
         }
     }
 
@@ -52,20 +68,14 @@ where
         req: &MyHttpRequest,
         request_timeout: Duration,
     ) -> Result<MyHttpResponse<TStream>, MyHttpClientError> {
-        self.client.do_request(req, request_timeout).await
-    }
-
-    /// Marks the underlying connection as transitioned to WebSocket. After this
-    /// the connection cannot serve further HTTP requests, so a reusable handle
-    /// drops its rental link — the slot stays empty until the supervisor
-    /// reconnects it.
-    pub fn upgraded_to_websocket(&mut self) {
-        if let Some(slot) = self.rental.as_ref() {
-            // Take the live client out of the slot — once the WS-upgraded TCP
-            // is gone, this MyHttpClient is no longer reusable.
-            slot.client.store(None);
+        let result = self.client().do_request(req, request_timeout).await;
+        if let Self::Reusable { entry, .. } = self {
+            match &result {
+                Ok(_) => entry.last_success.update(DateTimeAsMicroseconds::now()),
+                Err(_) => entry.dead.store(true, Ordering::Relaxed),
+            }
         }
-        self.rental = None;
+        result
     }
 }
 
@@ -75,8 +85,12 @@ where
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     fn drop(&mut self) {
-        if let Some(slot) = self.rental.take() {
-            slot.rented.store(false, Ordering::Release);
+        match self {
+            Self::Reusable { entry, .. } => entry.release_rent(),
+            Self::Disposable { .. } => {
+                DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+            }
+            Self::Ws { .. } => {}
         }
     }
 }

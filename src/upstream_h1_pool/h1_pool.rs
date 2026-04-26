@@ -2,10 +2,16 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
 };
+use std::time::Duration;
 
+use arc_swap::ArcSwap;
 use my_http_client::{http1::MyHttpClient, MyHttpClientConnector, MyHttpClientError};
+use parking_lot::Mutex;
+use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use super::{ConnectorFactory, H1ClientHandle, H1Slot, PoolKey, PoolParams};
+use super::{ConnectorFactory, H1ClientHandle, H1Entry, PoolKey, PoolParams, DISPOSABLE_COUNTER, MAX_DISPOSABLE};
+
+const OVERFLOW_RETRY_SLEEP: Duration = Duration::from_millis(10);
 
 pub struct H1Pool<TStream, TConnector>
 where
@@ -14,7 +20,10 @@ where
 {
     pub key: PoolKey,
     pub params: PoolParams,
-    pub slots: Vec<Arc<H1Slot<TStream, TConnector>>>,
+    pub clients: ArcSwap<Vec<Arc<H1Entry<TStream, TConnector>>>>,
+    /// Held briefly (no await) only during a Path 0 push. Connect happens
+    /// before acquiring this — never held across await.
+    pub grow_lock: Mutex<()>,
     pub next: AtomicUsize,
     pub shutdown: AtomicBool,
     pub factory: ConnectorFactory<TConnector>,
@@ -30,88 +39,154 @@ where
         params: PoolParams,
         factory: ConnectorFactory<TConnector>,
     ) -> Self {
-        let slots = (0..params.pool_size as usize)
-            .map(|_| Arc::new(H1Slot::new()))
-            .collect();
         Self {
             key,
             params,
-            slots,
+            clients: ArcSwap::from_pointee(Vec::new()),
+            grow_lock: Mutex::new(()),
             next: AtomicUsize::new(0),
             shutdown: AtomicBool::new(false),
             factory,
         }
     }
 
-    /// Round-robin pick of a non-rented, populated slot. Acquires the slot by
-    /// flipping `rented` from false to true atomically. Returns None if every
-    /// populated slot is currently rented or every slot is empty.
-    pub fn get_connection(&self) -> Option<H1ClientHandle<TStream, TConnector>> {
-        let n = self.slots.len();
-        if n == 0 {
-            return None;
-        }
-        for _ in 0..n {
-            let idx = self.next.fetch_add(1, Ordering::Relaxed) % n;
-            let slot = &self.slots[idx];
-            let Some(client) = slot.client.load_full() else {
-                continue;
-            };
-            if slot
-                .rented
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-                .is_ok()
-            {
-                return Some(H1ClientHandle::reusable(client, slot.clone()));
-            }
-        }
-        None
-    }
-
-    /// Fresh client created via the same factory the supervisor uses, but not
-    /// stored in any slot — caller owns its lifetime via the returned handle.
-    pub async fn create_connection(
+    /// Acquires a client handle for one in-flight h1 request. Three-phase loop:
+    ///
+    /// - **Phase 0** — pool below target: connect a fresh client, push it
+    ///   pre-rented under `grow_lock` with re-check; if race lost, hand it out
+    ///   as Disposable (counter inc'd).
+    /// - **Phase 1** — pool at target: round-robin scan, `compare_exchange` to
+    ///   rent the first free entry. Alive → Path A. Dead → Path B (revive).
+    /// - **Phase 2** — pool full and all rented: overflow disposable up to
+    ///   `MAX_DISPOSABLE`. Above limit → sleep 10ms and retry whole loop.
+    pub async fn get_connection(
         &self,
     ) -> Result<H1ClientHandle<TStream, TConnector>, MyHttpClientError> {
+        let target = self.params.pool_size as usize;
+
+        loop {
+            if self.shutdown.load(Ordering::Relaxed) {
+                return Err(MyHttpClientError::Disposed);
+            }
+
+            let snap = self.clients.load_full();
+            let len = snap.len();
+
+            // Phase 0 — grow
+            if len < target {
+                let new_client = Arc::new(self.connect_one().await?);
+                let new_entry = Arc::new(H1Entry::new(new_client.clone()));
+                new_entry.rented.store(true, Ordering::Relaxed);
+
+                let _g = self.grow_lock.lock();
+                let cur = self.clients.load_full();
+                if cur.len() < target {
+                    let mut new_vec: Vec<_> = (*cur).clone();
+                    new_vec.push(new_entry.clone());
+                    self.clients.store(Arc::new(new_vec));
+                    drop(_g);
+                    return Ok(H1ClientHandle::reusable(new_client, new_entry));
+                }
+                // Race lost — pool already at target. Don't waste the connect:
+                // hand it out as Disposable (counter inc'd so Drop dec'es).
+                drop(_g);
+                DISPOSABLE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                return Ok(H1ClientHandle::disposable(new_client));
+            }
+
+            // Phase 1 — rent scan (pool at target).
+            let start = self.next.fetch_add(1, Ordering::Relaxed) % len;
+            for offset in 0..len {
+                let i = (start + offset) % len;
+                let entry = &snap[i];
+                if !entry.try_rent() {
+                    continue;
+                }
+                if !entry.dead.load(Ordering::Relaxed) {
+                    // Path A
+                    let client = entry.client.load_full();
+                    return Ok(H1ClientHandle::reusable(client, entry.clone()));
+                }
+                // Path B — revive under per-entry lock.
+                match self.revive_entry(entry).await {
+                    Ok(()) => {
+                        let client = entry.client.load_full();
+                        return Ok(H1ClientHandle::reusable(client, entry.clone()));
+                    }
+                    Err(e) => {
+                        entry.release_rent();
+                        return Err(e);
+                    }
+                }
+            }
+
+            // Phase 2 — all rented; need overflow disposable.
+            {
+                let cur = DISPOSABLE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if cur < MAX_DISPOSABLE {
+                    match self.connect_one().await {
+                        Ok(client) => {
+                            return Ok(H1ClientHandle::disposable(Arc::new(client)));
+                        }
+                        Err(e) => {
+                            // Connect failed — undo counter inc and bubble up.
+                            DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+                            return Err(e);
+                        }
+                    }
+                }
+                // Limit reached — undo and sleep before retrying.
+                DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+                tokio::time::sleep(OVERFLOW_RETRY_SLEEP).await;
+            }
+        }
+    }
+
+    /// Fresh `MyHttpClient` for a WebSocket session. Not stored anywhere; not
+    /// counted against `DISPOSABLE_COUNTER`. The handle's Drop is a no-op —
+    /// the underlying TCP closes via `MyHttpClient::Drop` when the WS Arc dies.
+    pub async fn create_ws_connection(
+        &self,
+    ) -> Result<H1ClientHandle<TStream, TConnector>, MyHttpClientError> {
+        let client = Arc::new(self.connect_one().await?);
+        Ok(H1ClientHandle::ws(client))
+    }
+
+    async fn connect_one(&self) -> Result<MyHttpClient<TStream, TConnector>, MyHttpClientError> {
         let (connector, metrics) = (self.factory)();
         let mut client = MyHttpClient::new_with_metrics(connector, metrics);
         client.set_connect_timeout(self.params.connect_timeout);
-        let client = Arc::new(client);
         client.connect().await?;
-        Ok(H1ClientHandle::disposable(client))
+        Ok(client)
     }
 
-    pub fn ready_slots(&self) -> usize {
-        self.slots
+    /// Revive a dead entry under its `revive_lock`. Used by Path B (foreground)
+    /// and the supervisor's spawned revive task. Re-checks `dead` after lock —
+    /// if already revived by a parallel caller, returns Ok without doing work.
+    pub async fn revive_entry(
+        &self,
+        entry: &Arc<H1Entry<TStream, TConnector>>,
+    ) -> Result<(), MyHttpClientError> {
+        let _g = entry.revive_lock.lock().await;
+        if !entry.dead.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        let new_client = self.connect_one().await?;
+        entry.client.store(Arc::new(new_client));
+        entry.last_success.update(DateTimeAsMicroseconds::now());
+        entry.dead.store(false, Ordering::Relaxed);
+        Ok(())
+    }
+
+    pub fn alive_count(&self) -> usize {
+        self.clients
+            .load()
             .iter()
-            .filter(|s| s.client.load().is_some())
+            .filter(|e| !e.dead.load(Ordering::Relaxed))
             .count()
     }
 
-    /// One supervisor pass: refill empty slots. Driven externally by a MyTimer
-    /// tick (panic-safe — the timer keeps ticking even if a tick panics).
-    pub async fn supervisor_tick(&self) {
-        if self.shutdown.load(Ordering::Relaxed) {
-            return;
-        }
-
-        let label = self.key.endpoint_label();
-        for slot in self.slots.iter() {
-            if self.shutdown.load(Ordering::Relaxed) {
-                return;
-            }
-            if slot.client.load().is_some() {
-                continue;
-            }
-            let (connector, metrics) = (self.factory)();
-            let mut client = MyHttpClient::new_with_metrics(connector, metrics);
-            client.set_connect_timeout(self.params.connect_timeout);
-            let client_arc = Arc::new(client);
-            if client_arc.connect().await.is_ok() {
-                slot.client.store(Some(client_arc));
-                slot.fail_count.store(0, Ordering::Relaxed);
-                crate::app::APP_CTX.prometheus.inc_h1_pool_alive(&label);
-            }
-        }
+    pub fn total_count(&self) -> usize {
+        self.clients.load().len()
     }
 }

@@ -1,8 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::{atomic::Ordering, Arc},
-};
+use std::sync::{atomic::Ordering, Arc};
 
+use ahash::{AHashMap, AHashSet};
+use arc_swap::ArcSwap;
 use my_http_client::MyHttpClientConnector;
 use parking_lot::Mutex;
 
@@ -15,7 +14,12 @@ where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pools: Mutex<HashMap<PoolKey, Arc<H1Pool<TStream, TConnector>>>>,
+    /// Lock-free reads via `load()` for the hot get/list/snapshot paths.
+    pools: ArcSwap<AHashMap<PoolKey, Arc<H1Pool<TStream, TConnector>>>>,
+    /// Serializes writes (`ensure_pool`, `drain_unused`) so they don't race
+    /// with each other and accidentally drop a freshly-added pool. Held
+    /// briefly — no `await` inside.
+    write_lock: Mutex<()>,
 }
 
 impl<TStream, TConnector> H1PoolRegistry<TStream, TConnector>
@@ -25,7 +29,8 @@ where
 {
     pub fn new() -> Self {
         Self {
-            pools: Mutex::new(HashMap::new()),
+            pools: ArcSwap::from_pointee(AHashMap::new()),
+            write_lock: Mutex::new(()),
         }
     }
 
@@ -35,48 +40,57 @@ where
         params: PoolParams,
         factory: ConnectorFactory<TConnector>,
     ) -> Arc<H1Pool<TStream, TConnector>> {
-        let mut pools = self.pools.lock();
-        if let Some(existing) = pools.get(&key) {
+        // Fast path — lock-free check.
+        if let Some(existing) = self.pools.load().get(&key) {
+            return existing.clone();
+        }
+
+        let _g = self.write_lock.lock();
+        let cur = self.pools.load_full();
+        if let Some(existing) = cur.get(&key) {
             return existing.clone();
         }
 
         let label = key.endpoint_label();
         let pool_size = params.pool_size as i64;
         let pool = Arc::new(H1Pool::new(key.clone(), params, factory));
-        pools.insert(key, pool.clone());
+        let mut new_map = (*cur).clone();
+        new_map.insert(key, pool.clone());
+        self.pools.store(Arc::new(new_map));
         APP_CTX.prometheus.set_h1_pool_size(&label, pool_size);
         pool
     }
 
     pub fn list_pools(&self) -> Vec<Arc<H1Pool<TStream, TConnector>>> {
-        self.pools.lock().values().cloned().collect()
+        self.pools.load().values().cloned().collect()
     }
 
     pub fn get(&self, key: &PoolKey) -> Option<Arc<H1Pool<TStream, TConnector>>> {
-        self.pools.lock().get(key).cloned()
+        self.pools.load().get(key).cloned()
     }
 
-    // Hot-reload support: removes pools whose endpoint is no longer referenced. Not wired
-    // yet — needs the configuration reloader to compute the active key-set first.
-    #[allow(dead_code)]
-    pub fn drain_unused(&self, active_keys: &HashSet<PoolKey>) {
-        let mut pools = self.pools.lock();
-        pools.retain(|key, pool| {
+    /// Removes pools whose endpoint is no longer referenced. Called periodically
+    /// by `GcPoolsTimer`.
+    pub fn drain_unused(&self, active_keys: &AHashSet<PoolKey>) {
+        let _g = self.write_lock.lock();
+        let cur = self.pools.load_full();
+        let mut new_map = AHashMap::new();
+        for (key, pool) in cur.iter() {
             if active_keys.contains(key) {
-                true
+                new_map.insert(key.clone(), pool.clone());
             } else {
                 pool.shutdown.store(true, Ordering::Relaxed);
                 APP_CTX.prometheus.reset_h1_pool(&key.endpoint_label());
-                false
             }
-        });
+        }
+        self.pools.store(Arc::new(new_map));
     }
 
     pub fn snapshot(&self) -> Vec<(PoolKey, usize, usize)> {
-        let pools = self.pools.lock();
-        pools
+        self.pools
+            .load()
             .iter()
-            .map(|(k, p)| (k.clone(), p.ready_slots(), p.slots.len()))
+            .map(|(k, p)| (k.clone(), p.alive_count(), p.total_count()))
             .collect()
     }
 }
