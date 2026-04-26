@@ -51,11 +51,12 @@ where
     }
 }
 
+// UDS-specific impl: `:authority` for Unix sockets must be a placeholder, not the
+// filesystem path. Routed via `do_extended_connect_unix` on the inner client.
 #[async_trait::async_trait]
-impl<TStream, TConnector> H2Sender for Arc<MyHttp2Client<TStream, TConnector>>
+impl<TConnector> H2Sender for Arc<MyHttp2Client<tokio::net::UnixStream, TConnector>>
 where
-    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
-    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<tokio::net::UnixStream> + Send + Sync + 'static,
 {
     async fn do_request(
         &self,
@@ -71,7 +72,8 @@ where
         headers: hyper::HeaderMap,
         request_timeout: Duration,
     ) -> Result<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>, MyHttpClientError> {
-        MyHttp2Client::do_extended_connect(self.as_ref(), path, headers, request_timeout).await
+        MyHttp2Client::do_extended_connect_unix(self.as_ref(), path, headers, request_timeout)
+            .await
     }
 }
 
