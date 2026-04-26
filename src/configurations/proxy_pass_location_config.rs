@@ -342,7 +342,9 @@ impl ProxyPassLocationConfig {
     pub fn is_remote_content_http1(&self) -> Option<bool> {
         match &self.proxy_pass_to {
             ProxyPassToConfig::Http1(_) => Some(true),
+            ProxyPassToConfig::UnixHttp1(_) => Some(true),
             ProxyPassToConfig::Http2(_) => Some(false),
+            ProxyPassToConfig::UnixHttp2(_) => Some(false),
             _ => None,
         }
     }
