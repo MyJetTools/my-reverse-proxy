@@ -6,6 +6,8 @@ use std::{
 use my_http_client::MyHttpClientConnector;
 use parking_lot::Mutex;
 
+use crate::app::APP_CTX;
+
 use super::{spawn_supervisor, ConnectorFactory, H2Pool, PoolKey, PoolParams};
 
 pub struct H2PoolRegistry<TStream, TConnector>
@@ -38,9 +40,12 @@ where
             return existing.clone();
         }
 
-        let pool = Arc::new(H2Pool::new(key.clone(), params));
+        let label = key.endpoint_label();
+        let pool_size = params.pool_size as i64;
+        let pool = Arc::new(H2Pool::new(key.clone(), params, factory));
         pools.insert(key, pool.clone());
-        spawn_supervisor(pool.clone(), factory);
+        APP_CTX.prometheus.set_h2_pool_size(&label, pool_size);
+        spawn_supervisor(pool.clone());
         pool
     }
 
@@ -58,6 +63,7 @@ where
                 true
             } else {
                 pool.shutdown.store(true, Ordering::Relaxed);
+                APP_CTX.prometheus.reset_h2_pool(&key.endpoint_label());
                 false
             }
         });

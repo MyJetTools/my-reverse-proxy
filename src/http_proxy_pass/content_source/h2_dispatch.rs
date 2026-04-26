@@ -139,7 +139,59 @@ impl MyHttpClientDisconnect for H2NoopDisconnect {
     }
 }
 
-fn is_h2_extended_connect(req: &hyper::Request<Full<Bytes>>) -> bool {
+/// RAII guard for an on-demand h2 WS upstream connection. Holds the client Arc
+/// alive for the duration of the WS session and increments/decrements the
+/// `h2_ws_active{endpoint}` Prometheus gauge.
+pub struct H2WsActiveGuard<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    endpoint_label: String,
+    _client: Arc<MyHttp2Client<TStream, TConnector>>,
+}
+
+impl<TStream, TConnector> H2WsActiveGuard<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    pub fn new(endpoint_label: String, client: Arc<MyHttp2Client<TStream, TConnector>>) -> Self {
+        crate::app::APP_CTX
+            .prometheus
+            .inc_h2_ws_active(&endpoint_label);
+        Self {
+            endpoint_label,
+            _client: client,
+        }
+    }
+}
+
+impl<TStream, TConnector> MyHttpClientDisconnect for H2WsActiveGuard<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    fn disconnect(&self) {}
+    fn web_socket_disconnect(&self) {}
+    fn get_connection_id(&self) -> u64 {
+        0
+    }
+}
+
+impl<TStream, TConnector> Drop for H2WsActiveGuard<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    fn drop(&mut self) {
+        crate::app::APP_CTX
+            .prometheus
+            .dec_h2_ws_active(&self.endpoint_label);
+    }
+}
+
+pub fn is_h2_extended_connect(req: &hyper::Request<Full<Bytes>>) -> bool {
     if req.method() != hyper::Method::CONNECT {
         return false;
     }

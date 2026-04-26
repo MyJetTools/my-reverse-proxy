@@ -38,4 +38,12 @@ impl PoolKey {
             H2Scheme::Https2 => Self::new_tcp(scheme, ep.get_host(), ep.get_port().unwrap_or(443)),
         }
     }
+
+    pub fn endpoint_label(&self) -> String {
+        match self.scheme {
+            H2Scheme::Http2 => format!("h2://{}:{}", self.host, self.port),
+            H2Scheme::Https2 => format!("h2s://{}:{}", self.host, self.port),
+            H2Scheme::UnixHttp2 => format!("uds-h2://{}", self.host),
+        }
+    }
 }

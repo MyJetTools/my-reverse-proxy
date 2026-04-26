@@ -12,6 +12,10 @@ pub struct Prometheus {
 
     pub http1_server_connections: IntGaugeVec,
     pub http2_server_connections: IntGaugeVec,
+
+    pub h2_pool_size: IntGaugeVec,
+    pub h2_pool_alive: IntGaugeVec,
+    pub h2_ws_active: IntGaugeVec,
     registry: Registry,
 }
 
@@ -72,6 +76,24 @@ impl Prometheus {
             "Http2 Server Connections",
         );
 
+        let h2_pool_size = create_endpoint_gauge_vec(
+            &registry,
+            "h2_pool_size",
+            "Configured slot count for the per-endpoint h2 upstream pool",
+        );
+
+        let h2_pool_alive = create_endpoint_gauge_vec(
+            &registry,
+            "h2_pool_alive",
+            "Currently connected slots in the per-endpoint h2 upstream pool",
+        );
+
+        let h2_ws_active = create_endpoint_gauge_vec(
+            &registry,
+            "h2_ws_active",
+            "Active on-demand h2 WebSocket connections to upstream",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -82,10 +104,38 @@ impl Prometheus {
             http2_client_tcp_connects,
             http1_server_connections,
             http2_server_connections,
+            h2_pool_size,
+            h2_pool_alive,
+            h2_ws_active,
             registry,
         };
 
         result
+    }
+
+    pub fn set_h2_pool_size(&self, endpoint: &str, n: i64) {
+        self.h2_pool_size.with_label_values(&[endpoint]).set(n);
+    }
+
+    pub fn inc_h2_pool_alive(&self, endpoint: &str) {
+        self.h2_pool_alive.with_label_values(&[endpoint]).inc();
+    }
+
+    pub fn dec_h2_pool_alive(&self, endpoint: &str) {
+        self.h2_pool_alive.with_label_values(&[endpoint]).dec();
+    }
+
+    pub fn inc_h2_ws_active(&self, endpoint: &str) {
+        self.h2_ws_active.with_label_values(&[endpoint]).inc();
+    }
+
+    pub fn dec_h2_ws_active(&self, endpoint: &str) {
+        self.h2_ws_active.with_label_values(&[endpoint]).dec();
+    }
+
+    pub fn reset_h2_pool(&self, endpoint: &str) {
+        self.h2_pool_size.with_label_values(&[endpoint]).set(0);
+        self.h2_pool_alive.with_label_values(&[endpoint]).set(0);
     }
 
     pub fn inc_http1_server_connections(&self, endpoint: &str) {
@@ -133,6 +183,16 @@ fn create_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGa
 }
 
 fn create_server_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description);
+    let labels = &["endpoint"];
+    let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
+
+    registry.register(Box::new(result.clone())).unwrap();
+
+    result
+}
+
+fn create_endpoint_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description);
     let labels = &["endpoint"];
     let result = IntGaugeVec::new(gauge_opts, labels).unwrap();

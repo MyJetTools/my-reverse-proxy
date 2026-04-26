@@ -7,6 +7,8 @@ use my_http_client::{
     http2::MyHttp2Client, hyper::MyHttpHyperClientMetrics, MyHttpClientConnector,
 };
 
+use crate::app::APP_CTX;
+
 use super::{H2Pool, H2Scheme, H2Slot, PoolKey};
 
 const PING_TIMEOUT: Duration = Duration::from_secs(1);
@@ -21,24 +23,21 @@ pub type ConnectorFactory<TConnector> = Arc<
         + 'static,
 >;
 
-pub fn spawn_supervisor<TStream, TConnector>(
-    pool: Arc<H2Pool<TStream, TConnector>>,
-    factory: ConnectorFactory<TConnector>,
-) where
+pub fn spawn_supervisor<TStream, TConnector>(pool: Arc<H2Pool<TStream, TConnector>>)
+where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    tokio::spawn(supervisor_loop(pool, factory));
+    tokio::spawn(supervisor_loop(pool));
 }
 
-async fn supervisor_loop<TStream, TConnector>(
-    pool: Arc<H2Pool<TStream, TConnector>>,
-    factory: ConnectorFactory<TConnector>,
-) where
+async fn supervisor_loop<TStream, TConnector>(pool: Arc<H2Pool<TStream, TConnector>>)
+where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     let interval = pool.params.health_check_interval;
+    let label = pool.key.endpoint_label();
 
     loop {
         if pool.shutdown.load(Ordering::Relaxed) {
@@ -53,18 +52,19 @@ async fn supervisor_loop<TStream, TConnector>(
             let current = slot.client.load_full();
             match current {
                 None => {
-                    let (connector, metrics) = factory();
+                    let (connector, metrics) = (pool.factory)();
                     let mut client = MyHttp2Client::new_with_metrics(connector, metrics);
                     client.set_connect_timeout(pool.params.connect_timeout);
                     let client_arc = Arc::new(client);
                     if client_arc.connect().await.is_ok() {
                         slot.client.store(Some(client_arc));
                         slot.fail_count.store(0, Ordering::Relaxed);
+                        APP_CTX.prometheus.inc_h2_pool_alive(&label);
                     }
                 }
                 Some(client) => {
                     if let Some(path) = pool.params.health_check_path.as_deref() {
-                        ping_slot(slot, &client, path, &pool.key).await;
+                        ping_slot(slot, &client, path, &pool.key, &label).await;
                     }
                 }
             }
@@ -79,6 +79,7 @@ async fn ping_slot<TStream, TConnector>(
     client: &Arc<MyHttp2Client<TStream, TConnector>>,
     health_check_path: &str,
     key: &PoolKey,
+    label: &str,
 ) where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
@@ -116,7 +117,9 @@ async fn ping_slot<TStream, TConnector>(
     } else {
         let n = slot.fail_count.fetch_add(1, Ordering::Relaxed) + 1;
         if n >= FAIL_THRESHOLD {
-            slot.client.store(None);
+            if slot.client.swap(None).is_some() {
+                APP_CTX.prometheus.dec_h2_pool_alive(label);
+            }
             slot.fail_count.store(0, Ordering::Relaxed);
         }
     }
