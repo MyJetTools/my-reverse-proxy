@@ -205,23 +205,3 @@ impl<
         Err(NetworkError::Disconnected)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use my_settings_reader::flurl::FlUrl;
-
-    #[tokio::test]
-    async fn test() {
-        let result = FlUrl::new("https://settings.jetdev.eu/assets/my-settings-ui_bg-a0e24054a4c5ecb7.wasm?id=Y9LnLOadQ194cCzz").get().await.unwrap();
-
-        let mut stream = result.get_body_as_stream();
-
-        let mut total = 0;
-        while let Some(next) = stream.get_next_chunk().await.unwrap() {
-            println!("Len:{}", next.len());
-            total += next.len();
-        }
-
-        println!("Total: {}", total);
-    }
-}

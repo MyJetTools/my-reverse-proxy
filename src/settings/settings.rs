@@ -140,7 +140,7 @@ mod tests {
             "client_id".to_string(),
             GatewayClientSettings {
                 remote_host: "127.0.0.1:3000".to_string(),
-                encryption_key: String::new(),
+                ssh_credentials: String::new(),
                 debug: None,
                 compress: None,
                 allow_incoming_forward_connections: None,
