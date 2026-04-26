@@ -73,6 +73,12 @@ impl SettingsCompiled {
         self.gateway_server.as_ref()
     }
 
+    pub fn get_default_h2_livness_url(&self) -> Option<String> {
+        self.global_settings
+            .as_ref()
+            .and_then(|g| g.default_h2_livness_url.clone())
+    }
+
     pub fn get_show_error_description_on_error_page(&self) -> bool {
         if let Some(global_settings) = self.global_settings.as_ref() {
             if let Some(show_error_description_on_error_page) =

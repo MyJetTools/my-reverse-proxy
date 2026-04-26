@@ -9,6 +9,7 @@ global_settings:
     connect_to_remote_timeout: 5s # Timeout to connect to remote host
     session_key: # key to encrypt session data. Not having this field means that key is going to be randomly generated
     show_error_description_on_error_page: true # Show error description on error page
+  default_h2_livness_url: /health # Optional: HTTP path used by the h2 upstream pool supervisor as an active liveness probe (see "HTTP/2 upstream pool" section)
   
 hosts:
   localhost:8000:
@@ -880,6 +881,144 @@ stall after extended uptime under heavy traffic. From a configuration standpoint
 nothing changes; the improvement is purely internal.
 
 
+
+## HTTP/2 upstream pool
+
+All HTTP/2 upstreams (`http2`, `https2`, `unix+http2`) share a single named pool
+per endpoint instead of opening one connection per request or per incoming
+connection. This lets the proxy multiplex tens of thousands of concurrent
+requests over a fixed-size set of upstream h2 connections.
+
+### Behavior
+
+- **Pool key**: `(scheme, host, port)`. Two locations pointing to the same
+  endpoint share the same pool — opening a second `https2://api:443` location
+  does not double the upstream FD count.
+- **Pool size**: hardcoded to **5** connections per endpoint.
+- **Cold start**: the pool is created at config load / hot-reload, and a
+  background supervisor immediately starts filling the 5 slots. If a request
+  arrives before any slot is connected, the proxy returns **503**
+  `Upstream unavailable`.
+- **Reactive recovery**: a dead `MyHttp2Client` auto-reconnects on the next
+  `do_request` (transient drops self-heal). If the upstream stays down, slots
+  remain empty and the supervisor retries every 10s.
+
+### Active liveness check (optional)
+
+If `default_h2_livness_url` is set in `global_settings`, the supervisor
+periodically issues a `GET` to that path on each connected slot. Statuses in
+`200..=205` reset the failure counter; anything else (including timeouts or
+hyper errors) increments it, and after **3** consecutive failures the slot is
+torn down so the supervisor can reconnect on the next tick.
+
+```yaml
+global_settings:
+  default_h2_livness_url: /health
+```
+
+Hardcoded parameters (will be made per-upstream configurable later — tracked as
+tech debt):
+
+| Parameter           | Value     |
+|---------------------|-----------|
+| Pool size           | 5         |
+| Health-check tick   | 10s       |
+| Ping timeout        | 1s        |
+| Fail threshold      | 3 misses  |
+| Connect timeout     | 5s (or `connect_timeout` from the location) |
+
+If `default_h2_livness_url` is not set, the supervisor only refills empty slots
+and never actively probes — recovery is purely reactive on the next request.
+
+### Settings cases
+
+**1. Minimal — pool with reactive recovery only**
+
+```yaml
+hosts:
+  8005:
+    endpoint:
+      type: http2
+    locations:
+    - type: http2
+      proxy_pass_to: http://backend:5123
+```
+
+5 connections to `backend:5123` are opened at startup. No active probe; if the
+upstream dies, requests fail until the supervisor refills slots on the next
+10s tick.
+
+**2. With active liveness probe**
+
+```yaml
+global_settings:
+  default_h2_livness_url: /health
+
+hosts:
+  8005:
+    endpoint:
+      type: http2
+    locations:
+    - type: http2
+      proxy_pass_to: http://backend:5123
+```
+
+Same as above, plus every 10s the supervisor sends `GET /health` on each
+connected slot. After 3 consecutive non-`200..=205` responses the slot is
+recreated.
+
+**3. Two locations on the same upstream → one shared pool**
+
+```yaml
+hosts:
+  8005:
+    endpoint:
+      type: http2
+    locations:
+    - path: /api/v1
+      type: http2
+      proxy_pass_to: http://backend:5123
+    - path: /api/v2
+      type: http2
+      proxy_pass_to: http://backend:5123
+```
+
+`backend:5123` still gets only **5** upstream connections — both paths
+multiplex over the same pool.
+
+**4. Unix socket upstream**
+
+```yaml
+global_settings:
+  default_h2_livness_url: /health
+
+hosts:
+  8005:
+    endpoint:
+      type: http2
+    locations:
+    - type: unix+http2
+      proxy_pass_to: ~/sockets/myapp.sock
+```
+
+5 UDS connections to the socket; liveness probe uses `:authority = localhost`.
+
+### Authority handling
+
+For TCP/TLS upstreams the probe `:authority` is the canonical `host:port`. For
+`unix+http2` the supervisor uses `localhost` as a placeholder (the upstream
+must accept that authority — services built on `MyHttpServer >= 0.8.3` do).
+
+### Telemetry
+
+The `/configuration` admin endpoint exposes `remote_connections` with new keys
+for the h2 pools:
+
+- `h2://host:port`
+- `h2s://host:port`
+- `uds-h2://path`
+
+Each value is the number of currently connected (ready) slots out of 5.
 
 ## Include other files
 

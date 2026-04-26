@@ -84,6 +84,20 @@ pub fn generate_tech_page(
                 )
                 .unwrap();
         }
+        ProxyPassError::UpstreamUnavailable => {
+            return hyper::Response::builder()
+                .status(hyper::StatusCode::SERVICE_UNAVAILABLE)
+                .body(
+                    Full::from(crate::error_templates::generate_layout(
+                        503,
+                        "Upstream unavailable",
+                        second_line_error,
+                    ))
+                    .map_err(|e| crate::to_hyper_error(e))
+                    .boxed(),
+                )
+                .unwrap();
+        }
         _ => {
             return hyper::Response::builder()
                 .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)

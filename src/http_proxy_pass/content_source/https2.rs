@@ -1,17 +1,10 @@
-use std::sync::Arc;
-
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
-
-use crate::{http_client_connectors::HttpTlsConnector, http_proxy_pass::ProxyPassError};
+use crate::{http_proxy_pass::ProxyPassError, upstream_h2_pool::PoolKey};
 
 use super::*;
 
 pub struct Https2ContentSource {
-    pub remote_endpoint: Arc<RemoteEndpointOwned>,
-    pub debug: bool,
+    pub pool_key: PoolKey,
     pub request_timeout: std::time::Duration,
-    pub connect_timeout: std::time::Duration,
-    pub domain_name: Option<String>,
 }
 
 impl Https2ContentSource {
@@ -19,21 +12,13 @@ impl Https2ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let http_client = crate::app::APP_CTX.https2_clients_pool.get(
-            self.remote_endpoint.as_str().into(),
-            self.connect_timeout,
-            || {
-                (
-                    HttpTlsConnector {
-                        remote_endpoint: self.remote_endpoint.clone(),
-                        debug: self.debug,
-                        domain_name: self.domain_name.clone(),
-                    },
-                    crate::app::APP_CTX.prometheus.clone(),
-                )
-            },
-        );
+        let pool = crate::app::APP_CTX
+            .h2_tls_pools
+            .get(&self.pool_key)
+            .ok_or(ProxyPassError::UpstreamUnavailable)?;
 
-        execute_h2(&http_client, req, self.request_timeout).await
+        let client = pool.acquire().ok_or(ProxyPassError::UpstreamUnavailable)?;
+
+        execute_h2(&client, req, self.request_timeout).await
     }
 }

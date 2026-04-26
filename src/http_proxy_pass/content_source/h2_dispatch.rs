@@ -77,6 +77,58 @@ where
     }
 }
 
+#[async_trait::async_trait]
+impl<TConnector> H2Sender for Arc<MyHttp2Client<tokio::net::TcpStream, TConnector>>
+where
+    TConnector: MyHttpClientConnector<tokio::net::TcpStream> + Send + Sync + 'static,
+{
+    async fn do_request(
+        &self,
+        req: hyper::Request<Full<Bytes>>,
+        request_timeout: Duration,
+    ) -> Result<HyperResponse, MyHttpClientError> {
+        MyHttp2Client::do_request(self.as_ref(), req, request_timeout).await
+    }
+
+    async fn do_extended_connect(
+        &self,
+        path: &str,
+        headers: hyper::HeaderMap,
+        request_timeout: Duration,
+    ) -> Result<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>, MyHttpClientError> {
+        MyHttp2Client::do_extended_connect(self.as_ref(), path, headers, request_timeout).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<TConnector> H2Sender
+    for Arc<
+        MyHttp2Client<my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>, TConnector>,
+    >
+where
+    TConnector: MyHttpClientConnector<my_tls::tokio_rustls::client::TlsStream<tokio::net::TcpStream>>
+        + Send
+        + Sync
+        + 'static,
+{
+    async fn do_request(
+        &self,
+        req: hyper::Request<Full<Bytes>>,
+        request_timeout: Duration,
+    ) -> Result<HyperResponse, MyHttpClientError> {
+        MyHttp2Client::do_request(self.as_ref(), req, request_timeout).await
+    }
+
+    async fn do_extended_connect(
+        &self,
+        path: &str,
+        headers: hyper::HeaderMap,
+        request_timeout: Duration,
+    ) -> Result<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>, MyHttpClientError> {
+        MyHttp2Client::do_extended_connect(self.as_ref(), path, headers, request_timeout).await
+    }
+}
+
 struct H2NoopDisconnect;
 
 impl MyHttpClientDisconnect for H2NoopDisconnect {

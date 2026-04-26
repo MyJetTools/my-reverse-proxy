@@ -41,6 +41,7 @@ mod ssl;
 mod tcp_gateway;
 mod timers;
 mod types;
+mod upstream_h2_pool;
 mod utils;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {

@@ -191,22 +191,85 @@ impl ProxyPassLocationConfig {
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
+                            let pool_key =
+                                crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
+                                    crate::upstream_h2_pool::H2Scheme::Http2,
+                                    remote_host,
+                                );
+                            let endpoint_arc = remote_host.clone();
+                            let mut params =
+                                crate::upstream_h2_pool::PoolParams::default();
+                            params.connect_timeout = proxy_pass.connect_timeout;
+                            params.health_check_path =
+                                APP_CTX.default_h2_livness_url.clone();
+                            let factory: crate::upstream_h2_pool::ConnectorFactory<
+                                crate::http_client_connectors::HttpConnector,
+                            > = std::sync::Arc::new(move || {
+                                let metrics: std::sync::Arc<
+                                    dyn my_http_client::hyper::MyHttpHyperClientMetrics
+                                        + Send
+                                        + Sync
+                                        + 'static,
+                                > = APP_CTX.prometheus.clone();
+                                (
+                                    crate::http_client_connectors::HttpConnector {
+                                        remote_endpoint: endpoint_arc.clone(),
+                                        debug,
+                                    },
+                                    metrics,
+                                )
+                            });
+                            APP_CTX.h2_tcp_pools.ensure_pool(
+                                pool_key.clone(),
+                                params,
+                                factory,
+                            );
                             let model = Http2ContentSource {
-                                remote_endpoint: remote_host.to_owned(),
-                                debug,
+                                pool_key,
                                 request_timeout: proxy_pass.request_timeout,
-                                connect_timeout: proxy_pass.connect_timeout,
                             };
 
                             return HttpProxyPassContentSource::Http2(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
+                            let pool_key =
+                                crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
+                                    crate::upstream_h2_pool::H2Scheme::Https2,
+                                    remote_host,
+                                );
+                            let endpoint_arc = remote_host.clone();
+                            let domain_name = self.domain_name.clone();
+                            let mut params =
+                                crate::upstream_h2_pool::PoolParams::default();
+                            params.connect_timeout = proxy_pass.connect_timeout;
+                            params.health_check_path =
+                                APP_CTX.default_h2_livness_url.clone();
+                            let factory: crate::upstream_h2_pool::ConnectorFactory<
+                                crate::http_client_connectors::HttpTlsConnector,
+                            > = std::sync::Arc::new(move || {
+                                let metrics: std::sync::Arc<
+                                    dyn my_http_client::hyper::MyHttpHyperClientMetrics
+                                        + Send
+                                        + Sync
+                                        + 'static,
+                                > = APP_CTX.prometheus.clone();
+                                (
+                                    crate::http_client_connectors::HttpTlsConnector {
+                                        remote_endpoint: endpoint_arc.clone(),
+                                        domain_name: domain_name.clone(),
+                                        debug,
+                                    },
+                                    metrics,
+                                )
+                            });
+                            APP_CTX.h2_tls_pools.ensure_pool(
+                                pool_key.clone(),
+                                params,
+                                factory,
+                            );
                             let model = Https2ContentSource {
-                                remote_endpoint: remote_host.to_owned(),
-                                domain_name: self.domain_name.clone(),
-                                debug,
+                                pool_key,
                                 request_timeout: proxy_pass.request_timeout,
-                                connect_timeout: proxy_pass.connect_timeout,
                             };
                             return HttpProxyPassContentSource::Https2(model);
                         }
@@ -230,12 +293,14 @@ impl ProxyPassLocationConfig {
                             return HttpProxyPassContentSource::Https1(model);
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
-                            let model = UnixHttp2ContentSource {
-                                remote_endpoint: remote_host.to_owned(),
+                            let pool_key = ensure_uds_h2_pool(
+                                remote_host,
                                 debug,
+                                proxy_pass.connect_timeout,
+                            );
+                            let model = UnixHttp2ContentSource {
+                                pool_key,
                                 request_timeout: proxy_pass.request_timeout,
-                                connect_timeout: proxy_pass.connect_timeout,
-                                connection_id: self.id,
                             };
                             return HttpProxyPassContentSource::UnixHttp2(model);
                         }
@@ -324,12 +389,11 @@ impl ProxyPassLocationConfig {
                     );
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                    let pool_key =
+                        ensure_uds_h2_pool(remote_host, debug, proxy_pass.connect_timeout);
                     let model = UnixHttp2ContentSource {
-                        remote_endpoint: remote_host.to_owned(),
-                        debug,
+                        pool_key,
                         request_timeout: proxy_pass.request_timeout,
-                        connect_timeout: proxy_pass.connect_timeout,
-                        connection_id: self.id,
                     };
                     return HttpProxyPassContentSource::UnixHttp2(model);
                 }
@@ -348,4 +412,37 @@ impl ProxyPassLocationConfig {
             _ => None,
         }
     }
+}
+
+fn ensure_uds_h2_pool(
+    remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
+    debug: bool,
+    connect_timeout: Duration,
+) -> crate::upstream_h2_pool::PoolKey {
+    let pool_key = crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
+        crate::upstream_h2_pool::H2Scheme::UnixHttp2,
+        remote_host,
+    );
+    let endpoint_arc = remote_host.clone();
+    let mut params = crate::upstream_h2_pool::PoolParams::default();
+    params.connect_timeout = connect_timeout;
+    params.health_check_path = APP_CTX.default_h2_livness_url.clone();
+    let factory: crate::upstream_h2_pool::ConnectorFactory<
+        crate::http_client_connectors::UnixSocketHttpConnector,
+    > = std::sync::Arc::new(move || {
+        let metrics: std::sync::Arc<
+            dyn my_http_client::hyper::MyHttpHyperClientMetrics + Send + Sync + 'static,
+        > = APP_CTX.prometheus.clone();
+        (
+            crate::http_client_connectors::UnixSocketHttpConnector {
+                remote_endpoint: endpoint_arc.clone(),
+                debug,
+            },
+            metrics,
+        )
+    });
+    APP_CTX
+        .h2_uds_pools
+        .ensure_pool(pool_key.clone(), params, factory);
+    pool_key
 }

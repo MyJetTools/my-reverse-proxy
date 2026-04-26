@@ -25,6 +25,7 @@ pub enum ProxyPassError {
     Disposed,
     GatewayError,
     NoWebSocketUpgrade,
+    UpstreamUnavailable,
 }
 
 impl ProxyPassError {

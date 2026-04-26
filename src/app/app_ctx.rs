@@ -19,11 +19,12 @@ use crate::{
     http2_client_pool::Http2ClientPool,
     http_client_connectors::*,
     http_client_pool::HttpClientPool,
-    http_clients::{Http2Clients, HttpClients},
+    http_clients::HttpClients,
     settings::ConnectionsSettingsModel,
     settings_compiled::SettingsCompiled,
     ssl::CertificatesCache,
     tcp_gateway::{client::TcpGatewayClient, server::TcpGatewayServer, TcpGatewayConnection},
+    upstream_h2_pool::H2PoolRegistry,
 };
 
 use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
@@ -45,25 +46,17 @@ pub struct AppContext {
 
     pub unix_sockets_per_connection: HttpClients<tokio::net::UnixStream, UnixSocketHttpConnector>,
 
-    pub unix_socket_h2_socket_per_connection:
-        Http2Clients<tokio::net::UnixStream, UnixSocketHttpConnector>,
-
-    /*
-    pub unix_socket_http_clients_pool:
-        HttpClientPool<tokio::net::UnixStream, UnixSocketHttpConnector>,
-
-    pub unix_socket_http2_clients_pool:
-        Http2ClientPool<tokio::net::UnixStream, UnixSocketHttpConnector>,
-         */
     pub https_clients_pool: HttpClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
 
-    pub http2_clients_pool: Http2ClientPool<TcpStream, HttpConnector>,
-
     pub http2_over_ssh_clients_pool: Http2ClientPool<SshAsyncChannel, HttpOverSshConnector>,
-    pub https2_clients_pool: Http2ClientPool<TlsStream<TcpStream>, HttpTlsConnector>,
+
+    pub h2_tcp_pools: H2PoolRegistry<TcpStream, HttpConnector>,
+    pub h2_tls_pools: H2PoolRegistry<TlsStream<TcpStream>, HttpTlsConnector>,
+    pub h2_uds_pools: H2PoolRegistry<tokio::net::UnixStream, UnixSocketHttpConnector>,
 
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
+    pub default_h2_livness_url: Option<String>,
 
     pub token_secret_key: AesKey,
     pub current_configuration: AppConfiguration,
@@ -95,6 +88,7 @@ impl AppContext {
     pub fn new(settings_model: SettingsCompiled) -> Self {
         let http_control_port = settings_model.get_http_control_port();
         let connection_settings = settings_model.get_connections_settings();
+        let default_h2_livness_url = settings_model.get_default_h2_livness_url();
 
         let token_secret_key = if let Some(session_key) = settings_model.get_session_key() {
             AesKey::new(get_token_secret_key_from_settings(session_key.as_bytes()).as_slice())
@@ -139,6 +133,7 @@ impl AppContext {
         Self {
             id: AtomicI64::new(0),
             connection_settings,
+            default_h2_livness_url,
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
             current_configuration: AppConfiguration::new(),
@@ -157,15 +152,13 @@ impl AppContext {
             ssh_cert_pass_keys: CertPassKeys::new(),
             http_clients_pool: HttpClientPool::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
-            unix_socket_h2_socket_per_connection: Http2Clients::new(),
 
             https_clients_pool: HttpClientPool::new(),
-            http2_clients_pool: Http2ClientPool::new(),
-            https2_clients_pool: Http2ClientPool::new(),
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
+            h2_tcp_pools: H2PoolRegistry::new(),
+            h2_tls_pools: H2PoolRegistry::new(),
+            h2_uds_pools: H2PoolRegistry::new(),
             unix_sockets_per_connection: HttpClients::new(),
-            //unix_socket_http_clients_pool: HttpClientPool::new(),
-            //unix_socket_http2_clients_pool: Http2ClientPool::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,

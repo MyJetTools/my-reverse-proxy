@@ -1,17 +1,10 @@
-use std::sync::Arc;
-
-use rust_extensions::remote_endpoint::RemoteEndpointOwned;
-
-use crate::{app::APP_CTX, http_client_connectors::*, http_proxy_pass::ProxyPassError};
+use crate::{http_proxy_pass::ProxyPassError, upstream_h2_pool::PoolKey};
 
 use super::*;
 
 pub struct UnixHttp2ContentSource {
-    pub remote_endpoint: Arc<RemoteEndpointOwned>,
-    pub debug: bool,
+    pub pool_key: PoolKey,
     pub request_timeout: std::time::Duration,
-    pub connect_timeout: std::time::Duration,
-    pub connection_id: i64,
 }
 
 impl UnixHttp2ContentSource {
@@ -19,31 +12,13 @@ impl UnixHttp2ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let h2_client = crate::app::APP_CTX
-            .unix_socket_h2_socket_per_connection
-            .get_or_create(self.connection_id, || {
-                let mut result: my_http_client::http2::MyHttp2Client<
-                    tokio::net::UnixStream,
-                    UnixSocketHttpConnector,
-                > = UnixSocketHttpConnector {
-                    remote_endpoint: self.remote_endpoint.to_owned(),
-                    debug: self.debug,
-                }
-                .into();
+        let pool = crate::app::APP_CTX
+            .h2_uds_pools
+            .get(&self.pool_key)
+            .ok_or(ProxyPassError::UpstreamUnavailable)?;
 
-                result.set_connect_timeout(self.connect_timeout);
+        let client = pool.acquire().ok_or(ProxyPassError::UpstreamUnavailable)?;
 
-                result
-            });
-
-        execute_h2(&h2_client, req, self.request_timeout).await
-    }
-}
-
-impl Drop for UnixHttp2ContentSource {
-    fn drop(&mut self) {
-        APP_CTX
-            .unix_socket_h2_socket_per_connection
-            .remove(self.connection_id);
+        execute_h2(&client, req, self.request_timeout).await
     }
 }
