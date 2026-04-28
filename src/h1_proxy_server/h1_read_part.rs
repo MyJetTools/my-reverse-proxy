@@ -133,7 +133,6 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         let data = self.loop_buffer.get_data();
 
         if let Some(mcp_path) = mcp_path {
-            println!("Pushing mcp path {}", mcp_path);
             http_headers.push_first_line_with_other_path(
                 data,
                 mcp_path,

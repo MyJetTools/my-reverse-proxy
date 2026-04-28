@@ -116,7 +116,7 @@ impl PortConfigurationHttpModel {
                 endpoints.push(HttpEndpointInfoModel::from_tcp_config(config.as_ref()));
                 "tcp"
             }
-            ListenConfiguration::Mpc(config) => {
+            ListenConfiguration::Mcp(config) => {
                 for endpoint in &config.endpoints {
                     endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
                 }

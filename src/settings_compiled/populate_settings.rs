@@ -376,6 +376,7 @@ fn compile_locations(
             connect_timeout: location.connect_timeout,
             request_timeout: location.request_timeout,
             trace_payload: location.trace_payload,
+            auth_header: variables.apply_variables_opt(location.auth_header)?,
         });
     }
 

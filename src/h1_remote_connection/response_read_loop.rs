@@ -162,8 +162,8 @@ pub async fn response_read_loop<
                 .upgrade_web_socket()
                 .await;
 
-            match server_web_socket_data.remote_connection.inner {
-                RemoteConnectionInner::Http1Direct(inner) => {
+            match server_web_socket_data.upstream.inner {
+                UpstreamInner::Http1Direct(inner) => {
                     tokio::spawn(crate::tcp_utils::copy_streams(
                         remote_read_part,
                         server_write_part,
@@ -178,7 +178,7 @@ pub async fn response_read_loop<
                         None,
                     ));
                 }
-                RemoteConnectionInner::Http1UnixSocket(inner) => {
+                UpstreamInner::Http1UnixSocket(inner) => {
                     tokio::spawn(crate::tcp_utils::copy_streams(
                         remote_read_part,
                         server_write_part,
@@ -193,7 +193,7 @@ pub async fn response_read_loop<
                         None,
                     ));
                 }
-                RemoteConnectionInner::Https1Direct(inner) => {
+                UpstreamInner::Https1Direct(inner) => {
                     tokio::spawn(crate::tcp_utils::copy_streams(
                         remote_read_part,
                         server_write_part,
@@ -208,7 +208,7 @@ pub async fn response_read_loop<
                         None,
                     ));
                 }
-                RemoteConnectionInner::Http1OverSsh(inner) => {
+                UpstreamInner::Http1OverSsh(inner) => {
                     tokio::spawn(crate::tcp_utils::copy_streams(
                         remote_read_part,
                         server_write_part,
@@ -223,7 +223,7 @@ pub async fn response_read_loop<
                         None,
                     ));
                 }
-                RemoteConnectionInner::Http1OverGateway(inner) => {
+                UpstreamInner::Http1OverGateway(inner) => {
                     tokio::spawn(crate::tcp_utils::copy_streams(
                         remote_read_part,
                         server_write_part,
@@ -237,7 +237,7 @@ pub async fn response_read_loop<
                         None,
                     ));
                 }
-                RemoteConnectionInner::StaticContent { .. } => {
+                UpstreamInner::StaticContent { .. } => {
                     let _ = server_write_part
                         .write_to_socket(
                             crate::error_templates::ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET
@@ -246,7 +246,7 @@ pub async fn response_read_loop<
                         .await;
                     let _ = server_write_part.shutdown_socket().await;
                 }
-                RemoteConnectionInner::LocalFiles { .. } => {
+                UpstreamInner::LocalFiles { .. } => {
                     let _ = server_write_part
                         .write_to_socket(
                             crate::error_templates::ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET

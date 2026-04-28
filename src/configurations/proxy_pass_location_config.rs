@@ -19,6 +19,7 @@ pub struct ProxyPassLocationConfig {
     pub proxy_pass_to: ProxyPassToConfig,
     pub compress: bool,
     pub trace_payload: bool,
+    pub auth_header: Option<String>,
 }
 
 impl ProxyPassLocationConfig {
@@ -30,9 +31,8 @@ impl ProxyPassLocationConfig {
         domain_name: Option<String>,
         compress: bool,
         trace_payload: bool,
+        auth_header: Option<String>,
     ) -> Self {
-        //println!("Created location to {:?}", proxy_pass_to);
-
         let mut modify_request_headers = ModifyHeadersConfig::default();
         let mut modify_response_headers = ModifyHeadersConfig::default();
 
@@ -51,6 +51,7 @@ impl ProxyPassLocationConfig {
             domain_name,
             compress,
             trace_payload,
+            auth_header,
         }
     }
     pub fn get_proxy_pass_to_as_string(&self) -> String {
@@ -66,7 +67,7 @@ impl ProxyPassLocationConfig {
             ProxyPassToConfig::Static(config) => HttpProxyPassContentSource::Static(
                 crate::http_content_source::static_content::StaticContentSrc::new(config.clone()),
             ),
-            ProxyPassToConfig::Http1(proxy_pass) => match &proxy_pass.remote_host {
+            ProxyPassToConfig::Http1(proxy_pass) | ProxyPassToConfig::McpHttp1(proxy_pass) => match &proxy_pass.remote_host {
                 MyReverseProxyRemoteEndpoint::Gateway { .. } => {
                     todo!("Should not be here. Remove it");
                 }
@@ -361,6 +362,7 @@ impl ProxyPassLocationConfig {
     pub fn is_remote_content_http1(&self) -> Option<bool> {
         match &self.proxy_pass_to {
             ProxyPassToConfig::Http1(_) => Some(true),
+            ProxyPassToConfig::McpHttp1(_) => Some(true),
             ProxyPassToConfig::UnixHttp1(_) => Some(true),
             ProxyPassToConfig::Http2(_) => Some(false),
             ProxyPassToConfig::UnixHttp2(_) => Some(false),

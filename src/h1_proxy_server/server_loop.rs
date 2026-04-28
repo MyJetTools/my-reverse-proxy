@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::network_stream::*;
 
 use super::*;
@@ -30,7 +28,7 @@ pub async fn serve_reverse_proxy<
         .inc_http1_server_connections(&listen_addr);
     let _conn_gauge = Http1ConnectionGauge(listen_addr);
 
-    let mut remote_connections: HashMap<i64, RemoteConnection> = HashMap::new();
+    let mut upstream_state = UpstreamState::new();
 
     let (server_read_part, server_write_part) = server_stream.split();
 
@@ -49,7 +47,7 @@ pub async fn serve_reverse_proxy<
         let execute_request_result = execute_request(
             &mut http_connection_info,
             &mut h1_reader,
-            &mut remote_connections,
+            &mut upstream_state,
             &h1_server_write_part,
         )
         .await;
@@ -57,13 +55,13 @@ pub async fn serve_reverse_proxy<
         match execute_request_result {
             Ok(web_socket_upgrade) => {
                 if let Some(web_socket_upgrade) = web_socket_upgrade {
-                    if let Some(connection) =
-                        remote_connections.remove(&web_socket_upgrade.location_id)
+                    if let Some(upstream) =
+                        upstream_state.take_http(web_socket_upgrade.location_id)
                     {
                         let (server_read_part, loop_buffer) = h1_reader.into_read_part();
 
                         h1_server_write_part
-                            .add_web_socket_upgrade(connection, server_read_part, loop_buffer)
+                            .add_web_socket_upgrade(upstream, server_read_part, loop_buffer)
                             .await;
 
                         return;
@@ -146,7 +144,7 @@ async fn execute_request<
 >(
     http_connection_info: &mut HttpConnectionInfo,
     h1_reader: &mut H1Reader<ReadPart>,
-    remote_connections: &mut HashMap<i64, RemoteConnection>,
+    upstream_state: &mut UpstreamState,
     h1_server_write_part: &H1ServerWritePart<WritePart, ReadPart>,
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
     let request_headers = h1_reader.read_headers().await?;
@@ -161,7 +159,7 @@ async fn execute_request<
         .await?;
 
     let identity = h1_reader
-        .authorize(end_point_info, &http_connection_info, &request_headers)
+        .authorize(end_point_info, location, &http_connection_info, &request_headers)
         .await?;
 
     if !end_point_info.user_is_allowed(&identity).await {
@@ -174,26 +172,13 @@ async fn execute_request<
         end_point_info: end_point_info.clone(),
     };
 
-    let mut connection = match remote_connections.get_mut(&location.id) {
-        Some(connection) => connection,
-        None => {
-            let remote_connection =
-                RemoteConnection::connect(&location.proxy_pass_to, &http_connection_context).await;
-
-            match remote_connection {
-                Ok(remote_connection) => {
-                    remote_connections.insert(location.id, remote_connection);
-                    remote_connections.get_mut(&location.id).unwrap()
-                }
-                Err(err) => {
-                    return Err(ProxyServerError::CanNotConnectToRemoteResource {
-                        remote_resource: location.proxy_pass_to.to_string(),
-                        err,
-                    })
-                }
-            }
-        }
-    };
+    let access = upstream_state
+        .get_or_connect(&location.proxy_pass_to, location.id, &http_connection_context)
+        .await
+        .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
+            remote_resource: location.proxy_pass_to.to_string(),
+            err,
+        })?;
 
     let content_length = request_headers.content_length;
 
@@ -202,35 +187,31 @@ async fn execute_request<
         H1HeadersKind::Request(end_point_info),
         &http_connection_info,
         &identity,
-        connection.mcp_path.as_deref(),
+        access.mcp_path,
     )?;
 
-    let send_headers_result = connection
+    let send_headers_result = access
+        .upstream
         .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
         .await;
 
+    let mut upstream = access.upstream;
+
     if !send_headers_result {
-        remote_connections.remove(&location.id);
+        upstream_state.discard(&location.proxy_pass_to, location.id);
 
         println!("Doing reconnection to remote connection");
 
-        let remote_connection =
-            RemoteConnection::connect(&location.proxy_pass_to, &http_connection_context).await;
+        let access = upstream_state
+            .get_or_connect(&location.proxy_pass_to, location.id, &http_connection_context)
+            .await
+            .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
+                remote_resource: location.proxy_pass_to.to_string(),
+                err,
+            })?;
 
-        match remote_connection {
-            Ok(remote_connection) => {
-                remote_connections.insert(location.id, remote_connection);
-                connection = remote_connections.get_mut(&location.id).unwrap();
-            }
-            Err(err) => {
-                return Err(ProxyServerError::CanNotConnectToRemoteResource {
-                    remote_resource: location.proxy_pass_to.to_string(),
-                    err,
-                })
-            }
-        }
-
-        let send_headers_result = connection
+        let send_headers_result = access
+            .upstream
             .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
             .await;
 
@@ -239,6 +220,8 @@ async fn execute_request<
                 NetworkError::OtherStr("Remote resource is disconnected"),
             ));
         }
+
+        upstream = access.upstream;
     }
 
     if web_socket_upgrade {
@@ -248,19 +231,19 @@ async fn execute_request<
     }
 
     h1_server_write_part
-        .add_current_request(connection.connection_id)
+        .add_current_request(upstream.connection_id)
         .await;
 
     if let Err(err) = h1_reader
-        .transfer_body(connection.connection_id, connection, content_length)
+        .transfer_body(upstream.connection_id, upstream, content_length)
         .await
     {
-        // Remote may have received partial body — connection is desynced, drop from pool
-        remote_connections.remove(&location.id);
+        // Remote may have received partial body — connection is desynced
+        upstream_state.discard(&location.proxy_pass_to, location.id);
         return Err(err);
     }
 
-    let connected = connection.read_http_response(http_connection_context);
+    let connected = upstream.read_http_response(http_connection_context);
 
     if !connected {
         return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(

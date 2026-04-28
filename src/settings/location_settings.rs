@@ -74,6 +74,7 @@ pub struct LocationSettings {
     pub connect_timeout: Option<u64>,
     pub request_timeout: Option<u64>,
     pub trace_payload: Option<bool>,
+    pub auth_header: Option<String>,
 }
 
 impl LocationSettings {

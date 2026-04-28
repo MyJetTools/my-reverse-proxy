@@ -110,6 +110,7 @@ mod tests {
                     request_timeout: None,
                     connect_timeout: None,
                     trace_payload: None,
+                    auth_header: None,
                 }],
             },
         );

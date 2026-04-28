@@ -3,10 +3,10 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 use super::*;
-use crate::{h1_remote_connection::RemoteConnection, network_stream::*, tcp_utils::LoopBuffer};
+use crate::{h1_remote_connection::Upstream, network_stream::*, tcp_utils::LoopBuffer};
 
 pub struct WebSocketUpgradeHolder<ReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
-    pub remote_connection: RemoteConnection,
+    pub upstream: Upstream,
     pub read_part: ReadPart,
     pub loop_buffer: LoopBuffer,
 }
@@ -47,7 +47,7 @@ impl<
 
     pub async fn add_web_socket_upgrade(
         &self,
-        remote_connection: RemoteConnection,
+        upstream: Upstream,
         read_part: ReadPart,
         loop_buffer: LoopBuffer,
     ) {
@@ -55,7 +55,7 @@ impl<
         write_access.web_socket_upgrade = Some(WebSocketUpgradeHolder {
             read_part,
             loop_buffer,
-            remote_connection,
+            upstream,
         });
     }
 

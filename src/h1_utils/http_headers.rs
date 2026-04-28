@@ -97,10 +97,8 @@ impl Http1Headers {
                 out.push_space();
             }
             if no == 1 {
-                println!("Push fl item: {:?}", path);
                 out.push_raw_payload(path.as_bytes());
             } else {
-                println!("Push fl item: {:?}", std::str::from_utf8(itm));
                 out.push_raw_payload(itm);
             }
         }

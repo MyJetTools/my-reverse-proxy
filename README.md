@@ -566,6 +566,65 @@ ssh:
 
 
 
+## Per-location header authentication
+
+Any location can require an `Authorization` header on every incoming
+request. If the header is missing or its value does not match exactly,
+the proxy returns **401** with the standard `NOT_AUTHORIZED_PAGE` body
+and never opens an upstream connection.
+
+Configure with the `auth_header` field on a location. The value is the
+**full expected `Authorization` header value**, scheme included
+(`Bearer …`, `Basic …`, etc.):
+
+```yaml
+hosts:
+  mcp.domain.com:443:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert
+    locations:
+    - path: /mcp
+      type: mcp
+      proxy_pass_to: http://internal_mcp:8100/mcp
+      auth_header: "Bearer secret-token-123"
+```
+
+Behavior:
+
+- The header **name** is matched case-insensitively (`Authorization`,
+  `AUTHORIZATION`, `authorization` all work).
+- The header **value** is matched byte-for-byte exact, after stripping
+  surrounding ASCII whitespace from the request value.
+- If `auth_header` is absent or empty in the YAML, the check is a no-op
+  and the location accepts any (or no) `Authorization` header.
+- The header is **forwarded to the upstream as-is** — defense in depth,
+  the upstream may revalidate.
+- Missing-header and wrong-value cases both produce the same 401 — the
+  proxy does not leak which one is wrong.
+- The check runs **before** any endpoint-level auth (`google_auth`,
+  `client_certificate_ca`). Both can be combined: header auth gates
+  access, then endpoint auth attaches an identity.
+
+The expected value can be supplied via a variable to keep secrets out of
+config files:
+
+```yaml
+variables:
+  mcp_token: "Bearer ${env:MCP_TOKEN}"
+
+hosts:
+  mcp.domain.com:443:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert
+    locations:
+    - path: /mcp
+      type: mcp
+      proxy_pass_to: http://internal_mcp:8100/mcp
+      auth_header: ${mcp_token}
+```
+
 ## Google OAuth authentication
 
 It is possible to use Google OAuth authentication for the endpoints.

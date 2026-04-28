@@ -9,7 +9,7 @@ use super::*;
 pub enum ListenConfiguration {
     Http(Arc<HttpListenPortConfiguration>),
     Tcp(Arc<TcpEndpointHostConfig>),
-    Mpc(Arc<HttpListenPortConfiguration>),
+    Mcp(Arc<HttpListenPortConfiguration>),
 }
 
 impl ListenConfiguration {
@@ -17,7 +17,7 @@ impl ListenConfiguration {
         match self {
             ListenConfiguration::Http(_) => None,
             ListenConfiguration::Tcp(config) => config.ip_white_list_id.as_deref(),
-            ListenConfiguration::Mpc(_) => None,
+            ListenConfiguration::Mcp(_) => None,
         }
     }
 }

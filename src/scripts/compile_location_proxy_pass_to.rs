@@ -34,7 +34,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
 
@@ -53,7 +52,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
         LocationType::Http => {
@@ -71,7 +69,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
         LocationType::Mcp => {
@@ -81,7 +78,7 @@ pub async fn compile_location_proxy_pass_to(
 
             let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
 
-            ProxyPassToConfig::Http1(ProxyPassToModel {
+            ProxyPassToConfig::McpHttp1(ProxyPassToModel {
                 remote_host: MyReverseProxyRemoteEndpoint::try_parse(
                     proxy_pass_to.as_str(),
                     settings_model,
@@ -89,7 +86,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: true,
             })
         }
         LocationType::Http2 => {
@@ -107,7 +103,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
         LocationType::Https1 => {
@@ -125,7 +120,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
         LocationType::Https2 => {
@@ -143,7 +137,6 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
-                is_mcp: false,
             })
         }
         LocationType::Files => {
@@ -185,6 +178,7 @@ pub async fn compile_location_proxy_pass_to(
         location_settings.domain_name.clone(),
         location_settings.get_compress(),
         location_settings.get_trace_payload(),
+        location_settings.auth_header.clone(),
     );
 
     Ok(result)

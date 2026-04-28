@@ -164,7 +164,7 @@ async fn handle_accepted_connection(
             }
         },
 
-        ListenConfiguration::Mpc(_) => {
+        ListenConfiguration::Mcp(_) => {
             panic!(
                 "Mcp can not be listen as a part of Unix socket. Host: {}",
                 listen_host.as_str()
