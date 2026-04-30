@@ -20,6 +20,7 @@ http = "*"
 hyper-util = { version = "*", features = ["tokio", "server", "http2"] }
 
 tokio-stream = "*"
+futures-util = "*"
 
 hyper = { version = "*", features = ["full"] }
 

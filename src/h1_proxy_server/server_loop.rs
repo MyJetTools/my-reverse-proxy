@@ -79,10 +79,6 @@ pub async fn serve_reverse_proxy<
 
                 let content = match &err {
                     ProxyServerError::NetworkError(network_error) => {
-                        if !network_error.is_timeout() {
-                            println!("Http Server connections network error. {:?}", network_error);
-                        }
-
                         break;
                     }
                     ProxyServerError::ParsingPayloadError(_) => {

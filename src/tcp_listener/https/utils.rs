@@ -1,5 +1,6 @@
-use std::{sync::Arc, time::Duration};
+use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
 
+use futures::FutureExt;
 use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::{
@@ -47,17 +48,7 @@ async fn lazy_accept_tcp_stream_internal(
     ),
     String,
 > {
-    let result: Result<
-        Result<
-            (
-                my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-                Arc<HttpEndpointInfo>,
-                Option<Arc<ClientCertificateData>>,
-            ),
-            String,
-        >,
-        tokio::task::JoinError,
-    > = crate::app::spawn_named("https_tls_handshake", async move {
+    let handshake = async move {
         let lazy_acceptor = LazyConfigAcceptor::new(Acceptor::default(), tcp_stream);
 
         tokio::pin!(lazy_acceptor);
@@ -93,8 +84,6 @@ async fn lazy_accept_tcp_stream_internal(
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
 
-                //println!("Created config");
-
                 let tls_stream = start_handshake.into_stream(config.into()).await;
 
                 if let Err(err) = &tls_stream {
@@ -103,7 +92,6 @@ async fn lazy_accept_tcp_stream_internal(
 
                 let tls_stream = tls_stream.unwrap();
 
-                //println!("Applied config");
                 let client_certificate = if let Some(client_cert_cell) = client_cert_cell {
                     client_cert_cell.get()
                 } else {
@@ -118,14 +106,19 @@ async fn lazy_accept_tcp_stream_internal(
         };
 
         Ok((tls_stream, endpoint_info, client_certificate))
-    })
-    .await;
+    };
 
-    if let Err(err) = result {
-        return Err(format!("failed to perform tls handshake: {err:#}"));
+    match AssertUnwindSafe(handshake).catch_unwind().await {
+        Ok(result) => result,
+        Err(panic) => {
+            let msg = if let Some(s) = panic.downcast_ref::<&'static str>() {
+                (*s).to_string()
+            } else if let Some(s) = panic.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic payload".to_string()
+            };
+            Err(format!("tls handshake panicked: {msg}"))
+        }
     }
-
-    let result = result.unwrap();
-
-    result
 }

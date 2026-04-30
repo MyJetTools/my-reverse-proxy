@@ -1,8 +1,8 @@
-use std::{sync::Arc, time::Duration};
+use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
 
 use futures::{
     stream::{SplitSink, SplitStream},
-    SinkExt, StreamExt,
+    FutureExt, SinkExt, StreamExt,
 };
 use hyper_tungstenite::{
     tungstenite::Message, HyperWebsocket, HyperWebsocketStream, WebSocketStream,
@@ -20,10 +20,16 @@ pub async fn start_web_socket_loop<
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
 ) {
-    let _ = crate::app::spawn_named("ws_loop_main", async move {
+    let result = AssertUnwindSafe(async move {
         web_socket_loop(server_web_socket, to_remote_stream, debug, trace_payload).await;
     })
+    .catch_unwind()
     .await;
+
+    if result.is_err() && debug {
+        println!("ws_loop_main panicked");
+    }
+
     disconnect.web_socket_disconnect();
 }
 

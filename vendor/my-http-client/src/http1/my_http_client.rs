@@ -1,4 +1,7 @@
+use std::panic::AssertUnwindSafe;
 use std::sync::{atomic::AtomicU64, Arc};
+
+use futures_util::FutureExt;
 
 use crate::{MyHttpClientConnector, MyHttpClientError};
 
@@ -103,10 +106,11 @@ impl<
                     metrics.write_thread_start(&inner_cloned.name);
                 }
 
-                let _ = crate::spawn_named(
-                    "myhttp_h1_write_loop",
-                    super::write_loop::write_loop(inner_cloned.clone(), receiver),
-                )
+                let _ = AssertUnwindSafe(super::write_loop::write_loop(
+                    inner_cloned.clone(),
+                    receiver,
+                ))
+                .catch_unwind()
                 .await;
 
                 if let Some(metrics) = &inner_cloned.metrics {
@@ -135,7 +139,7 @@ impl<
             if let Some(metrics) = &inner_cloned.metrics {
                 metrics.read_thread_start(&inner.name);
             }
-            let err = crate::spawn_named("myhttp_h1_read_loop", async move {
+            let err = AssertUnwindSafe(async move {
                 let resp = super::read_loop::read_loop(
                     reader,
                     current_connection_id,
@@ -160,6 +164,7 @@ impl<
 
                 resp
             })
+            .catch_unwind()
             .await;
 
             match err {
@@ -170,7 +175,7 @@ impl<
                         }
                     }
                 }
-                Err(err) => {
+                Err(_panic) => {
                     if let Some(mut task) = inner.pop_request(current_connection_id, false) {
                         task.set_error(MyHttpClientError::CanNotExecuteRequest(
                             "Request is panicked".to_string(),
@@ -178,7 +183,7 @@ impl<
                     }
                     inner.disconnect(current_connection_id).await;
                     if debug {
-                        println!("Read loop exited with error: {:?}", err);
+                        println!("Read loop panicked");
                     }
                 }
             }
