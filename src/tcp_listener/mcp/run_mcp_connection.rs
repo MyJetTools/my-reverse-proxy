@@ -56,19 +56,25 @@ pub async fn run_mcp_connection(
 
     let (accepted_connection_read, accepted_connection_write) = tokio::io::split(tls_stream);
 
-    tokio::spawn(link_tcp_streams(
-        accepted_connection_read,
-        write_remote_host,
-        "->To MCP Server->",
-        connection_id,
-    ));
+    crate::app::spawn_named(
+        "mcp_link_to_server",
+        link_tcp_streams(
+            accepted_connection_read,
+            write_remote_host,
+            "->To MCP Server->",
+            connection_id,
+        ),
+    );
 
-    tokio::spawn(link_tcp_streams(
-        read_remote_host,
-        accepted_connection_write,
-        "<-From MCP Server<-",
-        connection_id,
-    ));
+    crate::app::spawn_named(
+        "mcp_link_from_server",
+        link_tcp_streams(
+            read_remote_host,
+            accepted_connection_write,
+            "<-From MCP Server<-",
+            connection_id,
+        ),
+    );
 
     /*
     let result = read_first_payload(&mut accepted_tcp_connection, configuration.as_ref())

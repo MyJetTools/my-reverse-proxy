@@ -94,13 +94,16 @@ impl Upstream {
                     )
                     .await?;
 
-                    let response_loop_handle = tokio::spawn(super::response_read_loop(
-                        connection_id,
-                        read_part,
-                        result.get_remote_disconnect_trigger(),
-                        http1_connection_ctx.clone(),
-                        ssh_handler,
-                    ));
+                    let response_loop_handle = crate::app::spawn_named(
+                        "h1_response_read_loop_gateway",
+                        super::response_read_loop(
+                            connection_id,
+                            read_part,
+                            result.get_remote_disconnect_trigger(),
+                            http1_connection_ctx.clone(),
+                            ssh_handler,
+                        ),
+                    );
 
                     return Ok(Self {
                         connection_id,
@@ -124,13 +127,16 @@ impl Upstream {
                     )
                     .await?;
 
-                    let response_loop_handle = tokio::spawn(super::response_read_loop(
-                        connection_id,
-                        read_part,
-                        result.get_remote_disconnect_trigger(),
-                        http1_connection_ctx.clone(),
-                        ssh_handler,
-                    ));
+                    let response_loop_handle = crate::app::spawn_named(
+                        "h1_response_read_loop_ssh",
+                        super::response_read_loop(
+                            connection_id,
+                            read_part,
+                            result.get_remote_disconnect_trigger(),
+                            http1_connection_ctx.clone(),
+                            ssh_handler,
+                        ),
+                    );
 
                     return Ok(Self {
                         connection_id,
@@ -154,13 +160,16 @@ impl Upstream {
                                 )
                                 .await?;
 
-                            let response_loop_handle = tokio::spawn(super::response_read_loop(
-                                connection_id,
-                                read_part,
-                                result.get_remote_disconnect_trigger(),
-                                http1_connection_ctx.clone(),
-                                ssh_handler,
-                            ));
+                            let response_loop_handle = crate::app::spawn_named(
+                                "h1_response_read_loop_https",
+                                super::response_read_loop(
+                                    connection_id,
+                                    read_part,
+                                    result.get_remote_disconnect_trigger(),
+                                    http1_connection_ctx.clone(),
+                                    ssh_handler,
+                                ),
+                            );
 
                             return Ok(Self {
                                 connection_id,
@@ -178,13 +187,16 @@ impl Upstream {
                         )
                         .await?;
 
-                    let response_loop_handle = tokio::spawn(super::response_read_loop(
-                        connection_id,
-                        read_part,
-                        result.get_remote_disconnect_trigger(),
-                        http1_connection_ctx.clone(),
-                        ssh_handler,
-                    ));
+                    let response_loop_handle = crate::app::spawn_named(
+                        "h1_response_read_loop_direct",
+                        super::response_read_loop(
+                            connection_id,
+                            read_part,
+                            result.get_remote_disconnect_trigger(),
+                            http1_connection_ctx.clone(),
+                            ssh_handler,
+                        ),
+                    );
 
                     return Ok(Self {
                         connection_id,
@@ -211,13 +223,16 @@ impl Upstream {
                         .await?;
 
                     println!("Starting response read loop");
-                    let response_loop_handle = tokio::spawn(super::response_read_loop(
-                        connection_id,
-                        read_part,
-                        result.get_remote_disconnect_trigger(),
-                        http1_connection_ctx.clone(),
-                        ssh_handler,
-                    ));
+                    let response_loop_handle = crate::app::spawn_named(
+                        "h1_response_read_loop_unix",
+                        super::response_read_loop(
+                            connection_id,
+                            read_part,
+                            result.get_remote_disconnect_trigger(),
+                            http1_connection_ctx.clone(),
+                            ssh_handler,
+                        ),
+                    );
 
                     return Ok(Self {
                         connection_id,
@@ -325,18 +340,24 @@ impl Upstream {
             UpstreamInner::Http1OverSsh(_) => {}
             UpstreamInner::Http1OverGateway(_) => {}
             UpstreamInner::StaticContent(static_content) => {
-                tokio::spawn(execute_static_content(
-                    http1_connection_ctx,
-                    static_content.clone(),
-                    self.connection_id,
-                ));
+                crate::app::spawn_named(
+                    "h1_execute_static_content",
+                    execute_static_content(
+                        http1_connection_ctx,
+                        static_content.clone(),
+                        self.connection_id,
+                    ),
+                );
             }
             UpstreamInner::LocalFiles(local_files) => {
-                tokio::spawn(execute_local_path(
-                    self.connection_id,
-                    http1_connection_ctx,
-                    local_files.clone(),
-                ));
+                crate::app::spawn_named(
+                    "h1_execute_local_path",
+                    execute_local_path(
+                        self.connection_id,
+                        http1_connection_ctx,
+                        local_files.clone(),
+                    ),
+                );
             }
         }
         true

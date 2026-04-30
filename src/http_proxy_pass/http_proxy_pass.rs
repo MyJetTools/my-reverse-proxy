@@ -248,25 +248,26 @@ where
             upgrade_response,
             server_web_socket,
         } => {
-            tokio::spawn(super::start_web_socket_loop(
-                server_web_socket,
-                upstream,
-                debug,
-                disconnection,
-                trace_payload,
-            ));
+            crate::app::spawn_named(
+                "ws_pump_h1_start",
+                super::start_web_socket_loop(
+                    server_web_socket,
+                    upstream,
+                    debug,
+                    disconnection,
+                    trace_payload,
+                ),
+            );
             into_full_body_response(upgrade_response)
         }
         WebSocketUpgrade::H2 {
             upgrade_response,
             on_upgrade,
         } => {
-            tokio::spawn(pump_h2_extended_connect(
-                on_upgrade,
-                upstream,
-                debug,
-                disconnection,
-            ));
+            crate::app::spawn_named(
+                "ws_pump_h2_extended_connect_h1",
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection),
+            );
             into_full_body_response(upgrade_response)
         }
     }
@@ -291,12 +292,10 @@ where
             upgrade_response,
             on_upgrade,
         } => {
-            tokio::spawn(pump_h2_extended_connect(
-                on_upgrade,
-                upstream,
-                debug,
-                disconnection,
-            ));
+            crate::app::spawn_named(
+                "ws_pump_h2_extended_connect_h2",
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection),
+            );
             into_full_body_response(upgrade_response)
         }
         WebSocketUpgrade::H1 { upgrade_response, .. } => {

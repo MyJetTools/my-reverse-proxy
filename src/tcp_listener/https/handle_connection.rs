@@ -121,7 +121,7 @@ async fn kick_off_https2(
         .metrics
         .update(|itm| itm.connection_by_port.inc(&endpoint_port));
 
-    tokio::spawn(async move {
+    crate::app::spawn_named("https_http2_handler", async move {
         let mut http_builder = Builder::new(TokioExecutor::new());
         http_builder.http2().enable_connect_protocol();
 
@@ -165,7 +165,7 @@ async fn kick_off_https2(
             .metrics
             .update(|itm| itm.connection_by_port.dec(&endpoint_port));
 
-        println!("Http2 connection is gone {:?}", connection_ip);
+        //println!("Http2 connection is gone {:?}", connection_ip);
 
         https_requests_handler_dispose.dispose().await;
     });

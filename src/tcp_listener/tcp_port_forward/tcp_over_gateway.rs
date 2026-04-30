@@ -69,11 +69,10 @@ pub async fn handle_connection(
         );
     }
 
-    tokio::spawn(super::handle_port_forward(
-        accepted_server_connection,
-        proxy_connection,
-        None,
-    ));
+    crate::app::spawn_named(
+        "tcp_forward_gateway",
+        super::handle_port_forward(accepted_server_connection, proxy_connection, None),
+    );
 }
 
 /*

@@ -6,10 +6,10 @@ use super::ListenServerHandler;
 
 pub fn start_listen_tcp_server(listening_addr: SocketAddr) -> Arc<ListenServerHandler> {
     let listen_server_handler = Arc::new(ListenServerHandler::new());
-    tokio::spawn(accept_connections_loop(
-        listening_addr,
-        listen_server_handler.clone(),
-    ));
+    crate::app::spawn_named(
+        "tcp_accept_loop",
+        accept_connections_loop(listening_addr, listen_server_handler.clone()),
+    );
 
     listen_server_handler
 }

@@ -19,6 +19,8 @@ pub struct Prometheus {
 
     pub h1_pool_size: IntGaugeVec,
     pub h1_pool_alive: IntGaugeVec,
+
+    pub tokio_tasks_spawned: IntGaugeVec,
     registry: Registry,
 }
 
@@ -109,6 +111,12 @@ impl Prometheus {
             "Currently connected reusable slots in the per-endpoint h1 upstream pool",
         );
 
+        let tokio_tasks_spawned = create_spawn_gauge_vec(
+            &registry,
+            "tokio_tasks_spawned",
+            "Active tokio tasks grouped by spawn site name",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -124,6 +132,7 @@ impl Prometheus {
             h2_ws_active,
             h1_pool_size,
             h1_pool_alive,
+            tokio_tasks_spawned,
             registry,
         };
 
@@ -208,6 +217,18 @@ impl Prometheus {
             .dec();
     }
 
+    pub fn inc_tokio_task_spawned(&self, spawn_name: &str) {
+        self.tokio_tasks_spawned
+            .with_label_values(&[spawn_name])
+            .inc();
+    }
+
+    pub fn dec_tokio_task_spawned(&self, spawn_name: &str) {
+        self.tokio_tasks_spawned
+            .with_label_values(&[spawn_name])
+            .dec();
+    }
+
     pub fn build(&self) -> Vec<u8> {
         let mut buffer = vec![];
         let encoder = TextEncoder::new();
@@ -241,6 +262,16 @@ fn create_server_gauge_vec(registry: &Registry, name: &str, description: &str) -
 fn create_endpoint_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description);
     let labels = &["endpoint"];
+    let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
+
+    registry.register(Box::new(result.clone())).unwrap();
+
+    result
+}
+
+fn create_spawn_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description);
+    let labels = &["spawn_name"];
     let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
 
     registry.register(Box::new(result.clone())).unwrap();

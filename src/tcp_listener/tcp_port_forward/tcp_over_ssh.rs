@@ -56,11 +56,10 @@ pub async fn handle_connection(
         }
     };
 
-    tokio::spawn(super::handle_port_forward(
-        accepted_server_connection,
-        ssh_channel,
-        None,
-    ));
+    crate::app::spawn_named(
+        "tcp_forward_ssh",
+        super::handle_port_forward(accepted_server_connection, ssh_channel, None),
+    );
 }
 
 /*

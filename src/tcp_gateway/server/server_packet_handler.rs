@@ -23,12 +23,15 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 let remote_addr = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
 
-                tokio::spawn(crate::tcp_gateway::scripts::handle_forward_connect(
-                    connection_id,
-                    remote_addr,
-                    timeout,
-                    gateway_connection,
-                ));
+                crate::app::spawn_named(
+                    "tcp_gateway_server_forward_connect",
+                    crate::tcp_gateway::scripts::handle_forward_connect(
+                        connection_id,
+                        remote_addr,
+                        timeout,
+                        gateway_connection,
+                    ),
+                );
             }
 
             TcpGatewayContract::ForwardPayload {
@@ -115,7 +118,7 @@ fn spawn_reply_sync_ssl_certificates(
     gateway_connection: Arc<TcpGatewayConnection>,
     requested_ids: Vec<String>,
 ) {
-    tokio::spawn(async move {
+    crate::app::spawn_named("tcp_gateway_server_ssl_cert_sync", async move {
         if requested_ids.is_empty() {
             return;
         }

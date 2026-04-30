@@ -39,12 +39,15 @@ impl TcpGatewayClientPacketHandler {
 
                 let remote_host = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
-                tokio::spawn(crate::tcp_gateway::scripts::handle_forward_connect(
-                    connection_id,
-                    remote_host,
-                    timeout,
-                    gateway_connection,
-                ));
+                crate::app::spawn_named(
+                    "tcp_gateway_client_forward_connect",
+                    crate::tcp_gateway::scripts::handle_forward_connect(
+                        connection_id,
+                        remote_host,
+                        timeout,
+                        gateway_connection,
+                    ),
+                );
             }
             TcpGatewayContract::Connected { connection_id } => {
                 if self.debug {

@@ -20,7 +20,7 @@ pub async fn start_web_socket_loop<
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
 ) {
-    let _ = tokio::spawn(async move {
+    let _ = crate::app::spawn_named("ws_loop_main", async move {
         web_socket_loop(server_web_socket, to_remote_stream, debug, trace_payload).await;
     })
     .await;
@@ -50,12 +50,10 @@ async fn web_socket_loop<
         Ok(ws_stream) => {
             let (mut ws_sender, ws_receiver) = ws_stream.split();
 
-            tokio::spawn(serve_from_server_to_client(
-                ws_receiver,
-                to_remote_write,
-                debug,
-                trace_payload,
-            ));
+            crate::app::spawn_named(
+                "ws_loop_server_to_client",
+                serve_from_server_to_client(ws_receiver, to_remote_write, debug, trace_payload),
+            );
 
             if trace_payload {
                 println!("WS is starting reading message from remote");

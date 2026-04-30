@@ -28,10 +28,10 @@ pub fn kick_h1_reverse_proxy_server(
         endpoint_info: Some(endpoint_info),
         listen_config,
     };
-    tokio::spawn(super::server_loop::serve_reverse_proxy(
-        server_stream,
-        http_connection_info,
-    ));
+    crate::app::spawn_named(
+        "h1_tls_server_connection",
+        super::server_loop::serve_reverse_proxy(server_stream, http_connection_info),
+    );
 }
 
 pub fn kick_h1_tcp_reverse_proxy_server_from_http(
@@ -46,10 +46,10 @@ pub fn kick_h1_tcp_reverse_proxy_server_from_http(
         listen_config,
     };
 
-    tokio::spawn(super::server_loop::serve_reverse_proxy(
-        accepted_connection,
-        http_connection_info,
-    ));
+    crate::app::spawn_named(
+        "h1_tcp_server_connection",
+        super::server_loop::serve_reverse_proxy(accepted_connection, http_connection_info),
+    );
 }
 
 pub fn kick_h1_unix_reverse_proxy_server_from_http(
@@ -62,8 +62,8 @@ pub fn kick_h1_unix_reverse_proxy_server_from_http(
         endpoint_info: None,
         listen_config,
     };
-    tokio::spawn(super::server_loop::serve_reverse_proxy(
-        accepted_connection,
-        http_connection_info,
-    ));
+    crate::app::spawn_named(
+        "h1_unix_server_connection",
+        super::server_loop::serve_reverse_proxy(accepted_connection, http_connection_info),
+    );
 }

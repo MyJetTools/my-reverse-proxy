@@ -40,7 +40,7 @@ pub async fn handle_connection(
         .inc_http2_server_connections(listening_addr_str.as_str());
 
     let connection_addr = accepted_connection.get_addr();
-    tokio::spawn(async move {
+    crate::app::spawn_named("http2_server_connection", async move {
         let io = match accepted_connection {
             AcceptedServerConnection::Tcp { network_stream, .. } => {
                 let io = TokioIo::new(network_stream);

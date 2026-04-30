@@ -386,7 +386,7 @@ impl Drop for TcpGatewayConnection {
             .values()
             .cloned()
             .collect();
-        tokio::spawn(async move {
+        crate::app::spawn_named("tcp_gateway_connection_cleanup", async move {
             {
                 let write_access = proxy_connections.lock().await;
                 for itm in write_access.values() {

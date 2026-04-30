@@ -164,78 +164,108 @@ pub async fn response_read_loop<
 
             match server_web_socket_data.upstream.inner {
                 UpstreamInner::Http1Direct(inner) => {
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        remote_read_part,
-                        server_write_part,
-                        remote_loop_buffer,
-                        ssh_session_handler,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_client_to_server_http1direct",
+                        crate::tcp_utils::copy_streams(
+                            remote_read_part,
+                            server_write_part,
+                            remote_loop_buffer,
+                            ssh_session_handler,
+                        ),
+                    );
 
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        server_web_socket_data.read_part,
-                        inner.remote_write_part,
-                        server_web_socket_data.loop_buffer,
-                        None,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_server_to_client_http1direct",
+                        crate::tcp_utils::copy_streams(
+                            server_web_socket_data.read_part,
+                            inner.remote_write_part,
+                            server_web_socket_data.loop_buffer,
+                            None,
+                        ),
+                    );
                 }
                 UpstreamInner::Http1UnixSocket(inner) => {
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        remote_read_part,
-                        server_write_part,
-                        remote_loop_buffer,
-                        ssh_session_handler,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_client_to_server_http1unix",
+                        crate::tcp_utils::copy_streams(
+                            remote_read_part,
+                            server_write_part,
+                            remote_loop_buffer,
+                            ssh_session_handler,
+                        ),
+                    );
 
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        server_web_socket_data.read_part,
-                        inner.remote_write_part,
-                        server_web_socket_data.loop_buffer,
-                        None,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_server_to_client_http1unix",
+                        crate::tcp_utils::copy_streams(
+                            server_web_socket_data.read_part,
+                            inner.remote_write_part,
+                            server_web_socket_data.loop_buffer,
+                            None,
+                        ),
+                    );
                 }
                 UpstreamInner::Https1Direct(inner) => {
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        remote_read_part,
-                        server_write_part,
-                        remote_loop_buffer,
-                        ssh_session_handler,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_client_to_server_https",
+                        crate::tcp_utils::copy_streams(
+                            remote_read_part,
+                            server_write_part,
+                            remote_loop_buffer,
+                            ssh_session_handler,
+                        ),
+                    );
 
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        server_web_socket_data.read_part,
-                        inner.remote_write_part,
-                        server_web_socket_data.loop_buffer,
-                        None,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_server_to_client_https",
+                        crate::tcp_utils::copy_streams(
+                            server_web_socket_data.read_part,
+                            inner.remote_write_part,
+                            server_web_socket_data.loop_buffer,
+                            None,
+                        ),
+                    );
                 }
                 UpstreamInner::Http1OverSsh(inner) => {
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        remote_read_part,
-                        server_write_part,
-                        remote_loop_buffer,
-                        ssh_session_handler,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_client_to_server_ssh",
+                        crate::tcp_utils::copy_streams(
+                            remote_read_part,
+                            server_write_part,
+                            remote_loop_buffer,
+                            ssh_session_handler,
+                        ),
+                    );
 
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        server_web_socket_data.read_part,
-                        inner.remote_write_part,
-                        server_web_socket_data.loop_buffer,
-                        None,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_server_to_client_ssh",
+                        crate::tcp_utils::copy_streams(
+                            server_web_socket_data.read_part,
+                            inner.remote_write_part,
+                            server_web_socket_data.loop_buffer,
+                            None,
+                        ),
+                    );
                 }
                 UpstreamInner::Http1OverGateway(inner) => {
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        remote_read_part,
-                        server_write_part,
-                        remote_loop_buffer,
-                        ssh_session_handler,
-                    ));
-                    tokio::spawn(crate::tcp_utils::copy_streams(
-                        server_web_socket_data.read_part,
-                        inner.remote_write_part,
-                        server_web_socket_data.loop_buffer,
-                        None,
-                    ));
+                    crate::app::spawn_named(
+                        "h1_ws_pump_client_to_server_gateway",
+                        crate::tcp_utils::copy_streams(
+                            remote_read_part,
+                            server_write_part,
+                            remote_loop_buffer,
+                            ssh_session_handler,
+                        ),
+                    );
+                    crate::app::spawn_named(
+                        "h1_ws_pump_server_to_client_gateway",
+                        crate::tcp_utils::copy_streams(
+                            server_web_socket_data.read_part,
+                            inner.remote_write_part,
+                            server_web_socket_data.loop_buffer,
+                            None,
+                        ),
+                    );
                 }
                 UpstreamInner::StaticContent { .. } => {
                     let _ = server_write_part

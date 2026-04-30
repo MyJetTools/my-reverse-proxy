@@ -9,7 +9,7 @@ pub async fn serve_file(
     path: String,
     gateway_connection: Arc<TcpGatewayConnection>,
 ) {
-    tokio::spawn(async move {
+    crate::app::spawn_named("tcp_gateway_serve_file", async move {
         let path = FilePath::from_str(path.as_str());
 
         let payload = match tokio::fs::read(path.as_str()).await {

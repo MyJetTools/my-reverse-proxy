@@ -39,7 +39,10 @@ impl TcpGatewayClient {
             next_connection_id: AtomicU32::new(0),
         };
 
-        tokio::spawn(connection_loop(inner.clone(), connect_timeout, debug));
+        crate::app::spawn_named(
+            "tcp_gateway_client_reconnect_loop",
+            connection_loop(inner.clone(), connect_timeout, debug),
+        );
 
         result
     }
@@ -160,13 +163,16 @@ async fn connection_loop(
         gateway_connection.set_gateway_id(inner.gateway_id.as_str());
         inner.set_gateway_connection(&inner.gateway_id, Some(gateway_connection.clone()));
 
-        tokio::spawn(crate::tcp_gateway::gateway_read_loop(
-            inner.clone(),
-            read,
-            gateway_connection.clone(),
-            TcpGatewayClientPacketHandler::new(debug),
-            debug,
-        ));
+        crate::app::spawn_named(
+            "tcp_gateway_client_read_loop",
+            crate::tcp_gateway::gateway_read_loop(
+                inner.clone(),
+                read,
+                gateway_connection.clone(),
+                TcpGatewayClientPacketHandler::new(debug),
+                debug,
+            ),
+        );
 
         let sync_ids: Vec<&str> = inner
             .sync_ssl_certificates

@@ -38,12 +38,15 @@ impl TcpConnectionInner {
             aes_key_opt: Some(aes_key.clone()),
         });
 
-        tokio::spawn(crate::tcp_gateway::session::gateway_write_loop(
-            write_half,
-            receiver,
-            aes_key,
-            compress_outbound,
-        ));
+        crate::app::spawn_named(
+            "tcp_gateway_write_loop_encrypted",
+            crate::tcp_gateway::session::gateway_write_loop(
+                write_half,
+                receiver,
+                aes_key,
+                compress_outbound,
+            ),
+        );
 
         result
     }
@@ -56,9 +59,10 @@ impl TcpConnectionInner {
             aes_key_opt: None,
         });
 
-        tokio::spawn(crate::tcp_gateway::session::raw_write_loop(
-            write_half, receiver,
-        ));
+        crate::app::spawn_named(
+            "tcp_gateway_write_loop_raw",
+            crate::tcp_gateway::session::raw_write_loop(write_half, receiver),
+        );
 
         result
     }

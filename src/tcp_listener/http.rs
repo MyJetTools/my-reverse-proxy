@@ -86,7 +86,7 @@ pub async fn handle_connection(
 
     let listening_addr_str = listening_addr_str.clone();
 
-    tokio::task::spawn(async move {
+    crate::app::spawn_named("http_tcp_handler", async move {
         match connection {
             TcpOrUnixSocket::Tcp(tcp) => {
                 if let Some(tcp) = tcp {

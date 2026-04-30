@@ -57,7 +57,7 @@ async fn lazy_accept_tcp_stream_internal(
             String,
         >,
         tokio::task::JoinError,
-    > = tokio::spawn(async move {
+    > = crate::app::spawn_named("https_tls_handshake", async move {
         let lazy_acceptor = LazyConfigAcceptor::new(Acceptor::default(), tcp_stream);
 
         tokio::pin!(lazy_acceptor);

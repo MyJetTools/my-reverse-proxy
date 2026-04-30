@@ -87,7 +87,7 @@ fn spawn_revive<TStream, TConnector>(
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    tokio::spawn(async move {
+    crate::app::spawn_named("h2_pool_revive", async move {
         if pool.shutdown.load(Ordering::Relaxed) {
             return;
         }
