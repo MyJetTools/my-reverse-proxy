@@ -299,19 +299,16 @@ impl HttpRequestBuilder {
 
         let uri: Uri = path_and_query.parse().unwrap();
 
-        let host_header = if let Some(port) = self.parts.uri.port() {
-            format!("{}:{}", self.parts.uri.host().unwrap(), port)
-        } else {
-            if let Some(host) = self.parts.uri.host() {
-                host.to_string()
+        let host_header = if let Some(host) = self.parts.headers.get("host") {
+            host.to_str().unwrap().to_string()
+        } else if let Some(host) = self.parts.uri.host() {
+            if let Some(port) = self.parts.uri.port() {
+                format!("{}:{}", host, port)
             } else {
-                if let Some(host) = self.parts.headers.get("host") {
-                    host.to_str().unwrap().to_string()
-                } else {
-                    println!("Parts: {:?}", self.parts);
-                    panic!("No host found in uri: {:?}", self.parts.uri);
-                }
+                host.to_string()
             }
+        } else {
+            return Err(ProxyPassError::NoHostHeader);
         };
 
         let mut builder = Request::builder()
@@ -320,6 +317,9 @@ impl HttpRequestBuilder {
             .header("host", host_header);
 
         for header in self.parts.headers.iter() {
+            if header.0.as_str().eq_ignore_ascii_case("host") {
+                continue;
+            }
             builder = builder.header(header.0, header.1);
         }
 
