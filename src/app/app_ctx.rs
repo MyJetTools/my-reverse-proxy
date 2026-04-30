@@ -136,7 +136,11 @@ impl AppContext {
             token_secret_key,
             current_configuration: AppConfiguration::new(),
             states: Arc::new(AppStates::create_initialized()),
-            prometheus: Arc::new(Prometheus::new()),
+            prometheus: {
+                let prom = Arc::new(Prometheus::new());
+                my_http_client::set_task_metrics_hook(prom.clone());
+                prom
+            },
             ssl_certificates_cache: CertificatesCache::new(),
             //local_port_allocator: LocalPortAllocator::new(),
             //ssh_to_http_port_forward_pool: SshToHttpPortForwardPool::new(),

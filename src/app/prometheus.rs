@@ -358,3 +358,13 @@ impl my_http_client::hyper::MyHttpHyperClientMetrics for Prometheus {
             .dec();
     }
 }
+
+impl my_http_client::TaskMetricsHook for Prometheus {
+    fn inc(&self, name: &'static str) {
+        self.inc_tokio_task_spawned(name);
+    }
+
+    fn dec(&self, name: &'static str) {
+        self.dec_tokio_task_spawned(name);
+    }
+}

@@ -1,0 +1,30 @@
+[package]
+name = "my-http-client"
+version = "0.1.2"
+edition = "2021"
+
+[features]
+default = []
+
+[dependencies]
+tokio = { version = "*" }
+bytes = "*"
+http-body-util = "*"
+async-trait = "*"
+
+lazy_static = "*"
+
+hyper-tungstenite = "*"
+http = "*"
+
+hyper-util = { version = "*", features = ["tokio", "server", "http2"] }
+
+tokio-stream = "*"
+
+hyper = { version = "*", features = ["full"] }
+
+rust-extensions = { tag = "0.1.5", git = "https://github.com/MyJetTools/rust-extensions.git", features = [
+    "with-tokio",
+] }
+
+parking_lot = "*"
