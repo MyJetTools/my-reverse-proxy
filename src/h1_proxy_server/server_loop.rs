@@ -78,16 +78,14 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                if err.can_be_printed_as_debug() {
-                    println!(
-                        "[{}] Response Err: {:?}",
-                        http_connection_info.listen_config.listen_host.to_string(),
-                        err
-                    );
-                }
+                let close_after = matches!(
+                    &err,
+                    ProxyServerError::LocationIsNotFound
+                        | ProxyServerError::HttpConfigurationIsNotFound
+                );
 
                 let content = match &err {
-                    ProxyServerError::NetworkError(network_error) => {
+                    ProxyServerError::NetworkError(_) => {
                         break;
                     }
                     ProxyServerError::ParsingPayloadError(_) => {
@@ -138,6 +136,10 @@ pub async fn serve_reverse_proxy<
                         crate::consts::WRITE_TIMEOUT,
                     )
                     .await;
+
+                if close_after {
+                    break;
+                }
             }
         }
     }

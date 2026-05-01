@@ -11,11 +11,11 @@ lazy_static::lazy_static! {
     };
 
     pub static ref LOCATION_IS_NOT_FOUND: Vec<u8> = {
-       generate_layout(503, "Server Error", Some("Remote location configuration is missing".into()))
+       generate_layout_with_close(503, "Server Error", Some("Remote location configuration is missing".into()))
     };
 
     pub static ref CONFIGURATION_IS_NOT_FOUND: Vec<u8> = {
-       generate_layout(503, "Server Error", Some("Endpoint configuration is missing".into()))
+       generate_layout_with_close(503, "Server Error", Some("Endpoint configuration is missing".into()))
     };
 
 
@@ -39,6 +39,23 @@ lazy_static::lazy_static! {
 }
 
 pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {
+    build_layout(status_code, text, second_line, false)
+}
+
+pub fn generate_layout_with_close(
+    status_code: u16,
+    text: &str,
+    second_line: Option<StrOrString>,
+) -> Vec<u8> {
+    build_layout(status_code, text, second_line, true)
+}
+
+fn build_layout(
+    status_code: u16,
+    text: &str,
+    second_line: Option<StrOrString>,
+    connection_close: bool,
+) -> Vec<u8> {
     use crate::app::APP_VERSION;
 
     let second_line = if let Some(second_line) = second_line {
@@ -64,6 +81,9 @@ pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrSt
     headers.push_response_first_line(200);
 
     headers.push_content_length(body.len());
+    if connection_close {
+        headers.push_header("Connection", "close");
+    }
     headers.push_cl_cr();
 
     let mut result = headers.into_bytes();
