@@ -15,6 +15,9 @@ pub use ssh_sessions_pool::*;
 mod spawn;
 pub use spawn::*;
 
+mod rps_accumulator;
+pub use rps_accumulator::*;
+
 //mod local_port_allocator;
 //pub use local_port_allocator::*;
 //mod app_ctx_wrapper;

@@ -25,6 +25,7 @@ pub struct EndpointSettings {
     pub whitelisted_ip: Option<String>,
     pub template_id: Option<String>,
     pub allowed_users: Option<String>,
+    pub keep_alive: Option<bool>,
 }
 
 impl EndpointSettings {

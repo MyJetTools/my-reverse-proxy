@@ -15,14 +15,14 @@ use crate::{
 
 pub enum H1HeadersKind<'a> {
     Request(&'a HttpEndpointInfo),
-    Response(&'a ModifyHeadersConfig),
+    Response(&'a HttpEndpointInfo),
 }
 
 impl<'a> H1HeadersKind<'a> {
     fn modify_headers(&self) -> &ModifyHeadersConfig {
         match self {
             H1HeadersKind::Request(info) => &info.modify_request_headers,
-            H1HeadersKind::Response(cfg) => cfg,
+            H1HeadersKind::Response(info) => &info.modify_response_headers,
         }
     }
 }
@@ -252,6 +252,12 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 "Strict-Transport-Security",
                 "max-age=31536000; includeSubDomains; preload",
             );
+        }
+
+        if let H1HeadersKind::Response(info) = &kind {
+            if !info.keep_alive {
+                self.h1_headers_builder.push_header("Connection", "close");
+            }
         }
 
         self.h1_headers_builder.push_cl_cr();

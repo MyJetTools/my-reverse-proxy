@@ -64,7 +64,7 @@ pub async fn response_read_loop<
 
         let web_socket_upgrade = match remote_h1_reader.compile_headers(
             resp_headers,
-            H1HeadersKind::Response(&server_write_part.end_point_info.modify_response_headers),
+            H1HeadersKind::Response(&server_write_part.end_point_info),
             &server_write_part.http_connection_info,
             &None,
             None,

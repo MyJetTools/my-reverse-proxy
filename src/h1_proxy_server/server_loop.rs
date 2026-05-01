@@ -66,6 +66,15 @@ pub async fn serve_reverse_proxy<
 
                         return;
                     }
+                } else {
+                    let close_connection = http_connection_info
+                        .endpoint_info
+                        .as_ref()
+                        .map(|e| !e.keep_alive)
+                        .unwrap_or(false);
+                    if close_connection {
+                        break;
+                    }
                 }
             }
             Err(err) => {
@@ -144,6 +153,20 @@ async fn execute_request<
     h1_server_write_part: &H1ServerWritePart<WritePart, ReadPart>,
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
     let request_headers = h1_reader.read_headers().await?;
+
+    if let Some(host_pos) = request_headers.host_value.as_ref() {
+        let buf = h1_reader.loop_buffer.get_data();
+        if host_pos.end <= buf.len() {
+            let host_bytes = &buf[host_pos.start..host_pos.end];
+            if let Ok(host_str) = std::str::from_utf8(host_bytes) {
+                let host_no_port = match host_str.find(':') {
+                    Some(idx) => &host_str[..idx],
+                    None => host_str,
+                };
+                crate::app::APP_CTX.rps.inc_domain(host_no_port.trim());
+            }
+        }
+    }
 
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =

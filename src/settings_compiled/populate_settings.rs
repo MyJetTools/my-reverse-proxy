@@ -117,6 +117,7 @@ impl SettingsCompiled {
                         .apply_variables_opt(host_settings.endpoint.template_id)?,
                     allowed_users: variables
                         .apply_variables_opt(host_settings.endpoint.allowed_users)?,
+                    keep_alive: host_settings.endpoint.keep_alive,
                 },
                 locations,
             };

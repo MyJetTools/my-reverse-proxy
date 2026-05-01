@@ -80,6 +80,8 @@ pub struct AppContext {
     pub ssh_sessions_pool: SshSessionsPool,
 
     pub self_signed_cert: Arc<CertifiedKey>,
+
+    pub rps: Arc<RpsAccumulator>,
 }
 
 impl AppContext {
@@ -171,6 +173,7 @@ impl AppContext {
                 )
                 .unwrap(),
             ),
+            rps: Arc::new(RpsAccumulator::new()),
         }
     }
 

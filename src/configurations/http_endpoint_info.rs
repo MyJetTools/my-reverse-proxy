@@ -22,6 +22,7 @@ pub struct HttpEndpointInfo {
     pub modify_request_headers: ModifyHeadersConfig,
     pub modify_response_headers: ModifyHeadersConfig,
     pub whitelisted_ip_list_id: Option<String>,
+    pub keep_alive: bool,
 }
 
 impl HttpEndpointInfo {
@@ -37,6 +38,7 @@ impl HttpEndpointInfo {
         locations: Vec<Arc<ProxyPassLocationConfig>>,
         allowed_user_list_id: Option<String>,
         mut modify_headers_settings: HttpEndpointModifyHeadersSettings,
+        keep_alive: bool,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -56,6 +58,7 @@ impl HttpEndpointInfo {
             ),
             ssl_certificate_id,
             whitelisted_ip_list_id,
+            keep_alive,
         }
     }
 

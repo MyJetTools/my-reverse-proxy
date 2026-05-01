@@ -56,6 +56,7 @@ pub async fn compile_http_configuration(
         locations,
         allowed_user_list,
         modify_endpoints_headers,
+        host_settings.endpoint.keep_alive.unwrap_or(true),
     );
 
     Ok(http_endpoint_info)

@@ -9,6 +9,23 @@ pub async fn handle_requests(
     proxy_pass: &HttpProxyPass,
     connection_ip: ConnectionIp,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
+    let host_for_rps: Option<String> = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| req.uri().host().map(|s| s.to_string()));
+
+    if let Some(host) = host_for_rps {
+        let host_no_port = match host.find(':') {
+            Some(idx) => &host[..idx],
+            None => host.as_str(),
+        };
+        crate::app::APP_CTX
+            .rps
+            .inc_domain(host_no_port.trim());
+    }
+
     let debug = if proxy_pass.endpoint_info.debug {
         let req_str: String = format!(
             "{}: [{}]{:?}",

@@ -21,6 +21,7 @@ pub struct Prometheus {
     pub h1_pool_alive: IntGaugeVec,
 
     pub tokio_tasks_spawned: IntGaugeVec,
+    pub domain_rps: IntGaugeVec,
     registry: Registry,
 }
 
@@ -117,6 +118,12 @@ impl Prometheus {
             "Active tokio tasks grouped by spawn site name",
         );
 
+        let domain_rps = create_domain_gauge_vec(
+            &registry,
+            "domain_rps",
+            "Requests per second per inbound domain (Host header)",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -133,6 +140,7 @@ impl Prometheus {
             h1_pool_size,
             h1_pool_alive,
             tokio_tasks_spawned,
+            domain_rps,
             registry,
         };
 
@@ -229,6 +237,10 @@ impl Prometheus {
             .dec();
     }
 
+    pub fn set_domain_rps(&self, domain: &str, n: i64) {
+        self.domain_rps.with_label_values(&[domain]).set(n);
+    }
+
     pub fn build(&self) -> Vec<u8> {
         let mut buffer = vec![];
         let encoder = TextEncoder::new();
@@ -272,6 +284,16 @@ fn create_endpoint_gauge_vec(registry: &Registry, name: &str, description: &str)
 fn create_spawn_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
     let gauge_opts = Opts::new(name, description);
     let labels = &["spawn_name"];
+    let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
+
+    registry.register(Box::new(result.clone())).unwrap();
+
+    result
+}
+
+fn create_domain_gauge_vec(registry: &Registry, name: &str, description: &str) -> IntGaugeVec {
+    let gauge_opts = Opts::new(name, description);
+    let labels = &["domain"];
     let result = IntGaugeVec::new(gauge_opts, labels).unwrap();
 
     registry.register(Box::new(result.clone())).unwrap();

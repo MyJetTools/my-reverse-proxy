@@ -94,6 +94,7 @@ mod tests {
                     whitelisted_ip: None,
                     template_id: None,
                     allowed_users: None,
+                    keep_alive: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),

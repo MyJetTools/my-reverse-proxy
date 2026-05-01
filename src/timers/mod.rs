@@ -12,3 +12,5 @@ mod pool_supervisor_timer;
 pub use pool_supervisor_timer::*;
 mod gc_pools_timer;
 pub use gc_pools_timer::*;
+mod endpoint_rps_timer;
+pub use endpoint_rps_timer::*;
