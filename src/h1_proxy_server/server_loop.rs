@@ -84,27 +84,18 @@ pub async fn serve_reverse_proxy<
                     ProxyServerError::NetworkError(_) => {
                         break;
                     }
-                    ProxyServerError::HttpConfigurationIsNotFound => {
+                    ProxyServerError::HttpConfigurationIsNotFound
+                    | ProxyServerError::ParsingPayloadError(_)
+                    | ProxyServerError::ChunkHeaderParseError
+                    | ProxyServerError::HeadersParseError(_) => {
                         if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
                             crate::app::APP_CTX.ip_blocklist.register_failure(ip);
                         }
                         break;
                     }
-                    ProxyServerError::ParsingPayloadError(_) => {
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice()
-                    }
                     ProxyServerError::BufferAllocationFail => {
                         println!("Buffer allocation fail - server loop");
                         crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()
-                    }
-                    ProxyServerError::ChunkHeaderParseError => {
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice()
-                    }
-                    ProxyServerError::HeadersParseError(_) => {
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice()
                     }
                     ProxyServerError::CanNotConnectToRemoteResource {
                         remote_resource: _,
