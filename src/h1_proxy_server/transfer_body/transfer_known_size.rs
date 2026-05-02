@@ -9,7 +9,8 @@ pub async fn transfer_known_size<
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
-) -> Result<(), ProxyServerError> {
+) -> Result<usize, ProxyServerError> {
+    let total = remaining_size;
     loop {
         {
             let read_buf = loop_buffer.get_data();
@@ -54,5 +55,5 @@ pub async fn transfer_known_size<
         loop_buffer.advance(read_size);
     }
 
-    Ok(())
+    Ok(total)
 }

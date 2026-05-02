@@ -16,3 +16,5 @@ mod endpoint_rps_timer;
 pub use endpoint_rps_timer::*;
 mod ip_blocklist_gc_timer;
 pub use ip_blocklist_gc_timer::*;
+mod traffic_timer;
+pub use traffic_timer::*;

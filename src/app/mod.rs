@@ -21,6 +21,9 @@ pub use rps_accumulator::*;
 mod ip_blocklist;
 pub use ip_blocklist::*;
 
+mod traffic_accumulator;
+pub use traffic_accumulator::*;
+
 //mod local_port_allocator;
 //pub use local_port_allocator::*;
 //mod app_ctx_wrapper;

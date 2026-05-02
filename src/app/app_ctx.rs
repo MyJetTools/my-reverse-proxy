@@ -84,6 +84,8 @@ pub struct AppContext {
     pub rps: Arc<RpsAccumulator>,
 
     pub ip_blocklist: IpBlocklist,
+
+    pub traffic: TrafficAccumulator,
 }
 
 impl AppContext {
@@ -177,6 +179,7 @@ impl AppContext {
             ),
             rps: Arc::new(RpsAccumulator::new()),
             ip_blocklist: IpBlocklist::new(),
+            traffic: TrafficAccumulator::new(),
         }
     }
 

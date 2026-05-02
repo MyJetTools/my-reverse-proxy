@@ -121,7 +121,7 @@ pub async fn response_read_loop<
             return;
         }
 
-        if let Err(err) = remote_h1_reader
+        let bytes_to_client = match remote_h1_reader
             .transfer_body(
                 connection_id,
                 &mut server_write_part.h1_server_write_part,
@@ -129,25 +129,34 @@ pub async fn response_read_loop<
             )
             .await
         {
-            println!("Sending body from remote to server: {:?}", err);
+            Ok(bytes) => bytes,
+            Err(err) => {
+                println!("Sending body from remote to server: {:?}", err);
 
-            remote_disconnected.set_value(true);
+                remote_disconnected.set_value(true);
 
-            let _ = server_write_part
-                .h1_server_write_part
-                .write_http_payload(
-                    connection_id,
-                    crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
-                    crate::consts::WRITE_TIMEOUT,
-                )
-                .await;
+                let _ = server_write_part
+                    .h1_server_write_part
+                    .write_http_payload(
+                        connection_id,
+                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
+                            .as_slice(),
+                        crate::consts::WRITE_TIMEOUT,
+                    )
+                    .await;
 
-            server_write_part
-                .h1_server_write_part
-                .request_is_done(connection_id)
-                .await;
-            return;
-        }
+                server_write_part
+                    .h1_server_write_part
+                    .request_is_done(connection_id)
+                    .await;
+                return;
+            }
+        };
+
+        crate::app::APP_CTX.traffic.record_s2c(
+            server_write_part.end_point_info.host_endpoint.as_str(),
+            bytes_to_client as u64,
+        );
 
         server_write_part
             .h1_server_write_part

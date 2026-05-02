@@ -12,14 +12,15 @@ pub async fn transfer_chunked_body<
     read_stream: &mut ReadPart,
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
-) -> Result<(), ProxyServerError> {
+) -> Result<usize, ProxyServerError> {
+    let mut total = 0usize;
     loop {
         // Read chunk header line
         let chunk_header = read_chunk_header(read_stream, loop_buffer).await?;
 
         let chunk_size = chunk_header.chunk_size;
 
-        transfer_chunk_data(
+        let transferred = transfer_chunk_data(
             connection_id,
             read_stream,
             write_stream,
@@ -27,9 +28,10 @@ pub async fn transfer_chunked_body<
             chunk_header,
         )
         .await?;
+        total += transferred;
 
         if chunk_size == 0 {
-            return Ok(());
+            return Ok(total);
         }
     }
 }
@@ -72,9 +74,10 @@ async fn transfer_chunk_data<
     remote_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
     chunk_header: ChunkHeader,
-) -> Result<(), ProxyServerError> {
-    let mut remain_to_send =
+) -> Result<usize, ProxyServerError> {
+    let total =
         chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
+    let mut remain_to_send = total;
 
     while remain_to_send > 0 {
         {
@@ -123,5 +126,5 @@ async fn transfer_chunk_data<
         loop_buffer.advance(read_size);
     }
 
-    Ok(())
+    Ok(total)
 }

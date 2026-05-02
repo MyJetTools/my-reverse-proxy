@@ -23,6 +23,10 @@ pub struct Prometheus {
     pub tokio_tasks_spawned: IntGaugeVec,
     pub domain_rps: IntGaugeVec,
     pub ip_blocklist_size: IntGauge,
+    pub client_to_server_events: IntGaugeVec,
+    pub client_to_server_bytes: IntGaugeVec,
+    pub server_to_client_events: IntGaugeVec,
+    pub server_to_client_bytes: IntGaugeVec,
     registry: Registry,
 }
 
@@ -134,6 +138,27 @@ impl Prometheus {
             .register(Box::new(ip_blocklist_size.clone()))
             .unwrap();
 
+        let client_to_server_events = create_domain_gauge_vec(
+            &registry,
+            "client_to_server_events",
+            "HTTP payloads per second from client to upstream, per inbound domain",
+        );
+        let client_to_server_bytes = create_domain_gauge_vec(
+            &registry,
+            "client_to_server_bytes",
+            "Bytes per second of client-to-upstream body traffic, per inbound domain",
+        );
+        let server_to_client_events = create_domain_gauge_vec(
+            &registry,
+            "server_to_client_events",
+            "HTTP payloads per second from upstream to client, per inbound domain",
+        );
+        let server_to_client_bytes = create_domain_gauge_vec(
+            &registry,
+            "server_to_client_bytes",
+            "Bytes per second of upstream-to-client body traffic, per inbound domain",
+        );
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -152,6 +177,10 @@ impl Prometheus {
             tokio_tasks_spawned,
             domain_rps,
             ip_blocklist_size,
+            client_to_server_events,
+            client_to_server_bytes,
+            server_to_client_events,
+            server_to_client_bytes,
             registry,
         };
 
@@ -254,6 +283,28 @@ impl Prometheus {
 
     pub fn set_ip_blocklist_size(&self, n: i64) {
         self.ip_blocklist_size.set(n);
+    }
+
+    pub fn set_traffic(
+        &self,
+        domain: &str,
+        c2s_events: i64,
+        c2s_bytes: i64,
+        s2c_events: i64,
+        s2c_bytes: i64,
+    ) {
+        self.client_to_server_events
+            .with_label_values(&[domain])
+            .set(c2s_events);
+        self.client_to_server_bytes
+            .with_label_values(&[domain])
+            .set(c2s_bytes);
+        self.server_to_client_events
+            .with_label_values(&[domain])
+            .set(s2c_events);
+        self.server_to_client_bytes
+            .with_label_values(&[domain])
+            .set(s2c_bytes);
     }
 
     pub fn build(&self) -> Vec<u8> {

@@ -254,14 +254,21 @@ async fn execute_request<
         .add_current_request(upstream.connection_id)
         .await;
 
-    if let Err(err) = h1_reader
+    let bytes_to_upstream = match h1_reader
         .transfer_body(upstream.connection_id, upstream, content_length)
         .await
     {
-        // Remote may have received partial body — connection is desynced
-        upstream_state.discard(&location.proxy_pass_to, location.id);
-        return Err(err);
-    }
+        Ok(bytes) => bytes,
+        Err(err) => {
+            // Remote may have received partial body — connection is desynced
+            upstream_state.discard(&location.proxy_pass_to, location.id);
+            return Err(err);
+        }
+    };
+
+    crate::app::APP_CTX
+        .traffic
+        .record_c2s(end_point_info.host_endpoint.as_str(), bytes_to_upstream as u64);
 
     let connected = upstream.read_http_response(http_connection_context);
 

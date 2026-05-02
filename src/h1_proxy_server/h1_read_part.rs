@@ -281,34 +281,31 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         connection_id: u64,
         write_stream: &mut WritePart,
         content_length: HttpContentLength,
-    ) -> Result<(), ProxyServerError> {
+    ) -> Result<usize, ProxyServerError> {
         match content_length {
-            HttpContentLength::None => return Ok(()),
+            HttpContentLength::None => Ok(0),
             HttpContentLength::Known(size) => {
                 if size == 0 {
-                    return Ok(());
+                    return Ok(0);
                 }
 
-                let result = super::transfer_body::transfer_known_size(
+                super::transfer_body::transfer_known_size(
                     connection_id,
                     &mut self.read_part,
                     write_stream,
                     &mut self.loop_buffer,
                     size,
                 )
-                .await;
-
-                result
+                .await
             }
             HttpContentLength::Chunked => {
-                let result = super::transfer_body::transfer_chunked_body(
+                super::transfer_body::transfer_chunked_body(
                     connection_id,
                     &mut self.read_part,
                     write_stream,
                     &mut self.loop_buffer,
                 )
-                .await;
-                result
+                .await
             }
         }
     }
