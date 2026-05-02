@@ -11,7 +11,7 @@ pub struct WsTrafficRecorder {
 }
 
 impl WsTrafficRecorder {
-    fn record(&self, bytes: u64) {
+    pub fn record(&self, bytes: u64) {
         match self.direction {
             WsDirection::ClientToServer => crate::app::APP_CTX
                 .traffic

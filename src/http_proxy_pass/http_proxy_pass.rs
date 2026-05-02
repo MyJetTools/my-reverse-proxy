@@ -152,6 +152,7 @@ impl HttpProxyPass {
                         response.headers()
                     );
                 }
+                let domain = self.endpoint_info.host_endpoint.as_str().to_string();
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
                         spawn_websocket_pump(
@@ -161,6 +162,7 @@ impl HttpProxyPass {
                             self.endpoint_info.debug,
                             disconnection,
                             trace_payload,
+                            domain,
                         )
                     }
 
@@ -172,6 +174,7 @@ impl HttpProxyPass {
                             self.endpoint_info.debug,
                             disconnection,
                             trace_payload,
+                            domain,
                         )
                     }
 
@@ -183,6 +186,7 @@ impl HttpProxyPass {
                             self.endpoint_info.debug,
                             disconnection,
                             trace_payload,
+                            domain,
                         )
                     }
                     super::content_source::WebSocketUpgradeStream::SshChannel(async_channel) => {
@@ -193,6 +197,7 @@ impl HttpProxyPass {
                             self.endpoint_info.debug,
                             disconnection,
                             trace_payload,
+                            domain,
                         )
                     }
                     super::content_source::WebSocketUpgradeStream::H2Upgraded(h2_upgraded) => {
@@ -202,6 +207,7 @@ impl HttpProxyPass {
                             response,
                             self.endpoint_info.debug,
                             disconnection,
+                            domain,
                         )
                     }
                 }
@@ -235,6 +241,7 @@ fn spawn_websocket_pump<S>(
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
+    domain: String,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
@@ -256,6 +263,7 @@ where
                     debug,
                     disconnection,
                     trace_payload,
+                    domain.clone(),
                 ),
             );
             into_full_body_response(upgrade_response)
@@ -266,7 +274,7 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h1",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection),
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain),
             );
             into_full_body_response(upgrade_response)
         }
@@ -279,6 +287,7 @@ fn spawn_h2_websocket_pump<S>(
     fallback_response: hyper::Response<BoxBody<Bytes, String>>,
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+    domain: String,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -294,7 +303,7 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h2",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection),
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain),
             );
             into_full_body_response(upgrade_response)
         }
@@ -311,9 +320,10 @@ where
 
 async fn pump_h2_extended_connect<S>(
     on_upgrade: hyper::upgrade::OnUpgrade,
-    mut upstream: S,
+    upstream: S,
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
+    domain: String,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -328,8 +338,28 @@ async fn pump_h2_extended_connect<S>(
         }
     };
 
-    let mut upgraded = TokioIo::new(upgraded);
-    let copy_result = tokio::io::copy_bidirectional(&mut upgraded, &mut upstream).await;
+    let upgraded = TokioIo::new(upgraded);
+
+    // Wrap both ends with metering. Reads on `client_side` are bytes coming
+    // FROM the client → upstream (c2s). Reads on `upstream_side` are bytes
+    // coming FROM the upstream → client (s2c).
+    let mut client_side = crate::tcp_utils::MeteredStream::new(
+        upgraded,
+        crate::tcp_utils::WsTrafficRecorder {
+            domain: domain.clone(),
+            direction: crate::tcp_utils::WsDirection::ClientToServer,
+        },
+    );
+    let mut upstream_side = crate::tcp_utils::MeteredStream::new(
+        upstream,
+        crate::tcp_utils::WsTrafficRecorder {
+            domain,
+            direction: crate::tcp_utils::WsDirection::ServerToClient,
+        },
+    );
+
+    let copy_result =
+        tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await;
 
     if debug {
         match copy_result {
