@@ -129,8 +129,7 @@ async fn handle_accepted_connection(
                     listening_host,
                     configuration,
                     connection_id,
-                )
-                .await;
+                );
             }
             crate::configurations::ListenHttpEndpointType::Https2 => {
                 super::https::handle_connection(
@@ -139,8 +138,7 @@ async fn handle_accepted_connection(
                     listening_host,
                     configuration,
                     connection_id,
-                )
-                .await;
+                );
             }
             crate::configurations::ListenHttpEndpointType::Mcp => {
                 super::https::handle_connection(
@@ -149,8 +147,7 @@ async fn handle_accepted_connection(
                     listening_host,
                     configuration,
                     connection_id,
-                )
-                .await;
+                );
             }
         },
 
@@ -193,8 +190,7 @@ async fn handle_accepted_connection(
                 listening_host,
                 configuration,
                 connection_id,
-            )
-            .await;
+            );
         }
     }
 }

@@ -14,24 +14,20 @@ pub struct HttpConnectionInfo {
     pub listen_config: Arc<HttpListenPortConfiguration>,
 }
 
-pub fn kick_h1_reverse_proxy_server(
+pub async fn kick_h1_reverse_proxy_server(
     connection_ip: ConnectionIp,
     endpoint_info: Arc<HttpEndpointInfo>,
     server_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     cn_user_name: Option<Arc<ClientCertificateData>>,
     listen_config: Arc<HttpListenPortConfiguration>,
 ) {
-    let _ = connection_ip;
     let http_connection_info = HttpConnectionInfo {
         connection_ip,
         cn_user_name,
         endpoint_info: Some(endpoint_info),
         listen_config,
     };
-    crate::app::spawn_named(
-        "h1_tls_server_connection",
-        super::server_loop::serve_reverse_proxy(server_stream, http_connection_info),
-    );
+    super::server_loop::serve_reverse_proxy(server_stream, http_connection_info).await;
 }
 
 pub fn kick_h1_tcp_reverse_proxy_server_from_http(

@@ -10,95 +10,100 @@ use crate::types::ConnectionIp;
 
 use super::ClientCertificateData;
 
-pub async fn handle_connection(
+pub fn handle_connection(
     accepted_tcp_stream: tokio::net::TcpStream,
     connection_ip: impl Into<ConnectionIp>,
     listening_addr: SocketAddr,
     configuration: Arc<HttpListenPortConfiguration>,
     connection_id: u64,
 ) {
-    let endpoint_port = listening_addr.port();
-
     let connection_ip = connection_ip.into();
 
-    let result = super::utils::lazy_accept_tcp_stream(
-        endpoint_port,
-        accepted_tcp_stream,
-        configuration.clone(),
-    )
-    .await;
+    crate::app::spawn_named("https_connection", async move {
+        let endpoint_port = listening_addr.port();
 
-    let Ok(result) = result else {
-        return;
-    };
+        let result = super::utils::lazy_accept_tcp_stream(
+            endpoint_port,
+            accepted_tcp_stream,
+            configuration.clone(),
+        )
+        .await;
 
-    let (mut tls_stream, endpoint_info, cn_user_name) = result;
-
-    if let Some(ip_list_id) = endpoint_info.whitelisted_ip_list_id.as_ref() {
-        let is_whitelisted = crate::app::APP_CTX
-            .current_configuration
-            .get(|config| {
-                config
-                    .white_list_ip_list
-                    .is_white_listed(ip_list_id, &listening_addr.ip())
-            })
-            .await;
-
-        if !is_whitelisted {
-            let _ = tls_stream.shutdown().await;
+        let Ok(result) = result else {
             return;
-        }
-    }
+        };
 
-    match endpoint_info.listen_endpoint_type {
-        ListenHttpEndpointType::Http1 => {
-            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
-                connection_ip,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                configuration,
-            );
+        let (mut tls_stream, endpoint_info, cn_user_name) = result;
+
+        if let Some(ip_list_id) = endpoint_info.whitelisted_ip_list_id.as_ref() {
+            let is_whitelisted = crate::app::APP_CTX
+                .current_configuration
+                .get(|config| {
+                    config
+                        .white_list_ip_list
+                        .is_white_listed(ip_list_id, &listening_addr.ip())
+                })
+                .await;
+
+            if !is_whitelisted {
+                let _ = tls_stream.shutdown().await;
+                return;
+            }
         }
-        ListenHttpEndpointType::Http2 => {
-            kick_off_https2(
-                listening_addr,
-                connection_ip,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                endpoint_port,
-            )
-            .await;
+
+        match endpoint_info.listen_endpoint_type {
+            ListenHttpEndpointType::Http1 => {
+                crate::h1_proxy_server::kick_h1_reverse_proxy_server(
+                    connection_ip,
+                    endpoint_info,
+                    tls_stream,
+                    cn_user_name,
+                    configuration,
+                )
+                .await;
+            }
+            ListenHttpEndpointType::Http2 => {
+                serve_https2(
+                    listening_addr,
+                    connection_ip,
+                    endpoint_info,
+                    tls_stream,
+                    cn_user_name,
+                    endpoint_port,
+                )
+                .await;
+            }
+            ListenHttpEndpointType::Https1 => {
+                crate::h1_proxy_server::kick_h1_reverse_proxy_server(
+                    connection_ip,
+                    endpoint_info,
+                    tls_stream,
+                    cn_user_name,
+                    configuration.clone(),
+                )
+                .await;
+            }
+            ListenHttpEndpointType::Https2 => {
+                serve_https2(
+                    listening_addr,
+                    connection_ip,
+                    endpoint_info,
+                    tls_stream,
+                    cn_user_name,
+                    endpoint_port,
+                )
+                .await;
+            }
+            ListenHttpEndpointType::Mcp => {
+                println!("New mcp connection {}", connection_id);
+                super::super::mcp::run_mcp_connection(tls_stream, &endpoint_info, connection_id)
+                    .await;
+            }
         }
-        ListenHttpEndpointType::Https1 => {
-            crate::h1_proxy_server::kick_h1_reverse_proxy_server(
-                connection_ip,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                configuration.clone(),
-            );
-        }
-        ListenHttpEndpointType::Https2 => {
-            kick_off_https2(
-                listening_addr,
-                connection_ip,
-                endpoint_info,
-                tls_stream,
-                cn_user_name,
-                endpoint_port,
-            )
-            .await;
-        }
-        ListenHttpEndpointType::Mcp => {
-            println!("New mcp connection {}", connection_id);
-            super::super::mcp::run_mcp_connection(tls_stream, &endpoint_info, connection_id).await;
-        }
-    }
+    });
 }
 
-async fn kick_off_https2(
+async fn serve_https2(
     listening_addr: SocketAddr,
     connection_ip: ConnectionIp,
     endpoint_info: Arc<HttpEndpointInfo>,
@@ -121,52 +126,48 @@ async fn kick_off_https2(
         .metrics
         .update(|itm| itm.connection_by_port.inc(&endpoint_port));
 
-    crate::app::spawn_named("https_http2_handler", async move {
-        let mut http_builder = Builder::new(TokioExecutor::new());
-        http_builder.http2().enable_connect_protocol();
+    let mut http_builder = Builder::new(TokioExecutor::new());
+    http_builder.http2().enable_connect_protocol();
 
-        let listening_port_info = HttpListenPortInfo {
-            endpoint_type: endpoint_info.listen_endpoint_type,
-            listen_host: listening_addr.into(),
-        };
+    let listening_port_info = HttpListenPortInfo {
+        endpoint_type: endpoint_info.listen_endpoint_type,
+        listen_host: listening_addr.into(),
+    };
 
-        let http_proxy_pass = HttpProxyPass::new(
-            connection_ip,
-            endpoint_info.clone(),
-            listening_port_info,
-            client_certificate,
+    let http_proxy_pass = HttpProxyPass::new(
+        connection_ip,
+        endpoint_info.clone(),
+        listening_port_info,
+        client_certificate,
+    )
+    .await;
+
+    let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, connection_ip);
+
+    let https_requests_handler = Arc::new(https_requests_handler);
+
+    let https_requests_handler_dispose = https_requests_handler.clone();
+
+    let _ = http_builder
+        .clone()
+        .serve_connection(
+            TokioIo::new(tls_stream),
+            service_fn(move |req| {
+                super::super::http_request_handler::https::handle_request(
+                    https_requests_handler.clone(),
+                    req,
+                )
+            }),
         )
         .await;
 
-        let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, connection_ip);
+    crate::app::APP_CTX
+        .prometheus
+        .dec_http2_server_connections(endpoint_name.as_str());
 
-        let https_requests_handler = Arc::new(https_requests_handler);
+    crate::app::APP_CTX
+        .metrics
+        .update(|itm| itm.connection_by_port.dec(&endpoint_port));
 
-        let https_requests_handler_dispose = https_requests_handler.clone();
-
-        let _ = http_builder
-            .clone()
-            .serve_connection(
-                TokioIo::new(tls_stream),
-                service_fn(move |req| {
-                    super::super::http_request_handler::https::handle_request(
-                        https_requests_handler.clone(),
-                        req,
-                    )
-                }),
-            )
-            .await;
-
-        crate::app::APP_CTX
-            .prometheus
-            .dec_http2_server_connections(endpoint_name.as_str());
-
-        crate::app::APP_CTX
-            .metrics
-            .update(|itm| itm.connection_by_port.dec(&endpoint_port));
-
-        //println!("Http2 connection is gone {:?}", connection_ip);
-
-        https_requests_handler_dispose.dispose().await;
-    });
+    https_requests_handler_dispose.dispose().await;
 }

@@ -78,14 +78,13 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                let close_after = matches!(
-                    &err,
-                    ProxyServerError::LocationIsNotFound
-                        | ProxyServerError::HttpConfigurationIsNotFound
-                );
+                let close_after = matches!(&err, ProxyServerError::LocationIsNotFound);
 
                 let content = match &err {
                     ProxyServerError::NetworkError(_) => {
+                        break;
+                    }
+                    ProxyServerError::HttpConfigurationIsNotFound => {
                         break;
                     }
                     ProxyServerError::ParsingPayloadError(_) => {
@@ -116,9 +115,6 @@ pub async fn serve_reverse_proxy<
                     }
                     ProxyServerError::LocationIsNotFound => {
                         crate::error_templates::LOCATION_IS_NOT_FOUND.as_slice()
-                    }
-                    ProxyServerError::HttpConfigurationIsNotFound => {
-                        crate::error_templates::CONFIGURATION_IS_NOT_FOUND.as_slice()
                     }
                     ProxyServerError::CanNotWriteContentToRemoteConnection(err) => {
                         println!("Can not write to remote resource. Err: {:?}", err);
@@ -156,19 +152,18 @@ async fn execute_request<
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
     let request_headers = h1_reader.read_headers().await?;
 
-    if let Some(host_pos) = request_headers.host_value.as_ref() {
+    let host_for_metric: Option<String> = request_headers.host_value.as_ref().and_then(|host_pos| {
         let buf = h1_reader.loop_buffer.get_data();
-        if host_pos.end <= buf.len() {
-            let host_bytes = &buf[host_pos.start..host_pos.end];
-            if let Ok(host_str) = std::str::from_utf8(host_bytes) {
-                let host_no_port = match host_str.find(':') {
-                    Some(idx) => &host_str[..idx],
-                    None => host_str,
-                };
-                crate::app::APP_CTX.rps.inc_domain(host_no_port.trim());
-            }
+        if host_pos.end > buf.len() {
+            return None;
         }
-    }
+        let host_str = std::str::from_utf8(&buf[host_pos.start..host_pos.end]).ok()?;
+        let host_no_port = match host_str.find(':') {
+            Some(idx) => &host_str[..idx],
+            None => host_str,
+        };
+        Some(host_no_port.trim().to_string())
+    });
 
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
@@ -178,6 +173,10 @@ async fn execute_request<
     let (location, end_point_info) = h1_reader
         .find_location(&request_headers, &http_connection_info)
         .await?;
+
+    if let Some(host) = host_for_metric {
+        crate::app::APP_CTX.rps.inc_domain(&host);
+    }
 
     let identity = h1_reader
         .authorize(end_point_info, location, &http_connection_info, &request_headers)
