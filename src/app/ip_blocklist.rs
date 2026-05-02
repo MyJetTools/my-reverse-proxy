@@ -42,6 +42,11 @@ impl IpBlocklist {
         map.remove(ip);
     }
 
+    pub fn unblock(&self, ip: &IpAddr) -> bool {
+        let mut map = self.map.lock();
+        map.remove(ip).is_some()
+    }
+
     pub fn register_failure(&self, ip: IpAddr) {
         let now = DateTimeAsMicroseconds::now();
         let mut map = self.map.lock();

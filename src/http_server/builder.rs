@@ -50,6 +50,12 @@ pub fn build_controllers() -> ControllersMiddleware {
     result.register_get_action(Arc::new(super::controllers::prometheus::GetMetricsAction));
 
     result.register_get_action(Arc::new(
+        super::controllers::ip_blocklist::CheckIpBlocklistAction,
+    ));
+
+    result.register_post_action(Arc::new(super::controllers::ip_blocklist::UnblockIpAction));
+
+    result.register_get_action(Arc::new(
         super::controllers::ssl_certificates::GetCurrentSslCertificatesAction,
     ));
 
