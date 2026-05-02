@@ -14,3 +14,5 @@ mod gc_pools_timer;
 pub use gc_pools_timer::*;
 mod endpoint_rps_timer;
 pub use endpoint_rps_timer::*;
+mod ip_blocklist_gc_timer;
+pub use ip_blocklist_gc_timer::*;

@@ -82,6 +82,8 @@ pub struct AppContext {
     pub self_signed_cert: Arc<CertifiedKey>,
 
     pub rps: Arc<RpsAccumulator>,
+
+    pub ip_blocklist: IpBlocklist,
 }
 
 impl AppContext {
@@ -174,6 +176,7 @@ impl AppContext {
                 .unwrap(),
             ),
             rps: Arc::new(RpsAccumulator::new()),
+            ip_blocklist: IpBlocklist::new(),
         }
     }
 

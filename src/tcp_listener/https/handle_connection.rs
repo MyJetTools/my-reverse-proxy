@@ -30,8 +30,15 @@ pub fn handle_connection(
         .await;
 
         let Ok(result) = result else {
+            if let Some(ip) = connection_ip.get_ip_addr() {
+                crate::app::APP_CTX.ip_blocklist.register_failure(ip);
+            }
             return;
         };
+
+        if let Some(ip) = connection_ip.get_ip_addr() {
+            crate::app::APP_CTX.ip_blocklist.register_success(&ip);
+        }
 
         let (mut tls_stream, endpoint_info, cn_user_name) = result;
 

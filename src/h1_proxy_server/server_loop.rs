@@ -85,6 +85,9 @@ pub async fn serve_reverse_proxy<
                         break;
                     }
                     ProxyServerError::HttpConfigurationIsNotFound => {
+                        if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
+                            crate::app::APP_CTX.ip_blocklist.register_failure(ip);
+                        }
                         break;
                     }
                     ProxyServerError::ParsingPayloadError(_) => {
@@ -168,6 +171,12 @@ async fn execute_request<
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
             h1_reader.try_find_endpoint_info(&request_headers, &http_connection_info.listen_config);
+
+        if http_connection_info.endpoint_info.is_some() {
+            if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
+                crate::app::APP_CTX.ip_blocklist.register_success(&ip);
+            }
+        }
     }
 
     let (location, end_point_info) = h1_reader

@@ -50,7 +50,10 @@ async fn accept_connections_loop(
 
                 let (tcp_stream, addr) = accepted_connection.unwrap();
 
-
+                if crate::app::APP_CTX.ip_blocklist.is_blocked(&addr.ip()) {
+                    drop(tcp_stream);
+                    continue;
+                }
 
                 connection_id += 1;
                 handle_accepted_connection(tcp_stream, addr, listening_addr, connection_id).await;

@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::MyTimer;
 use timers::{
     CrlRefresherTimer, EndpointRpsTimer, GatewaySyncCertsTimer, GcConnectionsTimer, GcPoolsTimer,
-    MetricsTimer, PoolSupervisorTimer, SslCertsRefreshTimer,
+    IpBlocklistGcTimer, MetricsTimer, PoolSupervisorTimer, SslCertsRefreshTimer,
 };
 
 mod app;
@@ -80,6 +80,7 @@ async fn main() {
 
     gc_connections_time.register_timer("GcConnections", Arc::new(GcConnectionsTimer));
     gc_connections_time.register_timer("GatewaySyncCerts", Arc::new(GatewaySyncCertsTimer));
+    gc_connections_time.register_timer("IpBlocklistGc", Arc::new(IpBlocklistGcTimer));
 
     gc_connections_time.start(
         crate::app::APP_CTX.states.clone(),

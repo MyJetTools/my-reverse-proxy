@@ -1,4 +1,4 @@
-use prometheus::{Encoder, IntGaugeVec, Opts, Registry, TextEncoder};
+use prometheus::{Encoder, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder};
 
 pub struct Prometheus {
     pub http1_client_tcp_connects: IntGaugeVec,
@@ -22,6 +22,7 @@ pub struct Prometheus {
 
     pub tokio_tasks_spawned: IntGaugeVec,
     pub domain_rps: IntGaugeVec,
+    pub ip_blocklist_size: IntGauge,
     registry: Registry,
 }
 
@@ -124,6 +125,15 @@ impl Prometheus {
             "Requests per second per inbound domain (Host header)",
         );
 
+        let ip_blocklist_size = IntGauge::with_opts(Opts::new(
+            "ip_blocklist_size",
+            "Currently blocked source IP addresses",
+        ))
+        .unwrap();
+        registry
+            .register(Box::new(ip_blocklist_size.clone()))
+            .unwrap();
+
         let result = Self {
             http1_client_tcp_connects,
             http1_client_tcp_read_threads,
@@ -141,6 +151,7 @@ impl Prometheus {
             h1_pool_alive,
             tokio_tasks_spawned,
             domain_rps,
+            ip_blocklist_size,
             registry,
         };
 
@@ -239,6 +250,10 @@ impl Prometheus {
 
     pub fn set_domain_rps(&self, domain: &str, n: i64) {
         self.domain_rps.with_label_values(&[domain]).set(n);
+    }
+
+    pub fn set_ip_blocklist_size(&self, n: i64) {
+        self.ip_blocklist_size.set(n);
     }
 
     pub fn build(&self) -> Vec<u8> {
