@@ -19,6 +19,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_writer,
                     LoopBuffer::new(),
                     ssh_session_handler,
+                    None,
                 ),
             );
             crate::app::spawn_named(
@@ -27,6 +28,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),
+                    None,
                     None,
                 ),
             );
@@ -40,6 +42,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_writer,
                     LoopBuffer::new(),
                     ssh_session_handler,
+                    None,
                 ),
             );
             crate::app::spawn_named(
@@ -48,6 +51,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),
+                    None,
                     None,
                 ),
             );

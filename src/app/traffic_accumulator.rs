@@ -7,6 +7,10 @@ pub struct TrafficStats {
     pub c2s_bytes: u64,
     pub s2c_events: u64,
     pub s2c_bytes: u64,
+    pub ws_c2s_events: u64,
+    pub ws_c2s_bytes: u64,
+    pub ws_s2c_events: u64,
+    pub ws_s2c_bytes: u64,
 }
 
 pub struct TrafficAccumulator {
@@ -48,6 +52,40 @@ impl TrafficAccumulator {
                 TrafficStats {
                     s2c_events: 1,
                     s2c_bytes: bytes,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    pub fn record_ws_c2s(&self, domain: &str, bytes: u64) {
+        let mut m = self.by_domain.lock();
+        if let Some(entry) = m.get_mut(domain) {
+            entry.ws_c2s_events = entry.ws_c2s_events.saturating_add(1);
+            entry.ws_c2s_bytes = entry.ws_c2s_bytes.saturating_add(bytes);
+        } else {
+            m.insert(
+                domain.to_string(),
+                TrafficStats {
+                    ws_c2s_events: 1,
+                    ws_c2s_bytes: bytes,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    pub fn record_ws_s2c(&self, domain: &str, bytes: u64) {
+        let mut m = self.by_domain.lock();
+        if let Some(entry) = m.get_mut(domain) {
+            entry.ws_s2c_events = entry.ws_s2c_events.saturating_add(1);
+            entry.ws_s2c_bytes = entry.ws_s2c_bytes.saturating_add(bytes);
+        } else {
+            m.insert(
+                domain.to_string(),
+                TrafficStats {
+                    ws_s2c_events: 1,
+                    ws_s2c_bytes: bytes,
                     ..Default::default()
                 },
             );

@@ -27,6 +27,10 @@ pub struct Prometheus {
     pub client_to_server_bytes: IntGaugeVec,
     pub server_to_client_events: IntGaugeVec,
     pub server_to_client_bytes: IntGaugeVec,
+    pub ws_client_to_server_events: IntGaugeVec,
+    pub ws_client_to_server_bytes: IntGaugeVec,
+    pub ws_server_to_client_events: IntGaugeVec,
+    pub ws_server_to_client_bytes: IntGaugeVec,
     registry: Registry,
 }
 
@@ -158,6 +162,26 @@ impl Prometheus {
             "server_to_client_bytes",
             "Bytes per second of upstream-to-client body traffic, per inbound domain",
         );
+        let ws_client_to_server_events = create_domain_gauge_vec(
+            &registry,
+            "ws_client_to_server_events",
+            "WebSocket frames per second from client to upstream, per inbound domain",
+        );
+        let ws_client_to_server_bytes = create_domain_gauge_vec(
+            &registry,
+            "ws_client_to_server_bytes",
+            "WebSocket bytes per second from client to upstream, per inbound domain",
+        );
+        let ws_server_to_client_events = create_domain_gauge_vec(
+            &registry,
+            "ws_server_to_client_events",
+            "WebSocket frames per second from upstream to client, per inbound domain",
+        );
+        let ws_server_to_client_bytes = create_domain_gauge_vec(
+            &registry,
+            "ws_server_to_client_bytes",
+            "WebSocket bytes per second from upstream to client, per inbound domain",
+        );
 
         let result = Self {
             http1_client_tcp_connects,
@@ -181,6 +205,10 @@ impl Prometheus {
             client_to_server_bytes,
             server_to_client_events,
             server_to_client_bytes,
+            ws_client_to_server_events,
+            ws_client_to_server_bytes,
+            ws_server_to_client_events,
+            ws_server_to_client_bytes,
             registry,
         };
 
@@ -292,6 +320,10 @@ impl Prometheus {
         c2s_bytes: i64,
         s2c_events: i64,
         s2c_bytes: i64,
+        ws_c2s_events: i64,
+        ws_c2s_bytes: i64,
+        ws_s2c_events: i64,
+        ws_s2c_bytes: i64,
     ) {
         self.client_to_server_events
             .with_label_values(&[domain])
@@ -305,6 +337,18 @@ impl Prometheus {
         self.server_to_client_bytes
             .with_label_values(&[domain])
             .set(s2c_bytes);
+        self.ws_client_to_server_events
+            .with_label_values(&[domain])
+            .set(ws_c2s_events);
+        self.ws_client_to_server_bytes
+            .with_label_values(&[domain])
+            .set(ws_c2s_bytes);
+        self.ws_server_to_client_events
+            .with_label_values(&[domain])
+            .set(ws_s2c_events);
+        self.ws_server_to_client_bytes
+            .with_label_values(&[domain])
+            .set(ws_s2c_bytes);
     }
 
     pub fn build(&self) -> Vec<u8> {

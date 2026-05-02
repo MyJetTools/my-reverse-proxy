@@ -166,10 +166,29 @@ pub async fn response_read_loop<
         if web_socket_upgrade {
             let (remote_read_part, remote_loop_buffer) = remote_h1_reader.into_read_part();
 
+            let ws_domain = server_write_part
+                .end_point_info
+                .host_endpoint
+                .as_str()
+                .to_string();
+
             let (mut server_write_part, server_web_socket_data) = server_write_part
                 .h1_server_write_part
                 .upgrade_web_socket()
                 .await;
+
+            let make_s2c_recorder = || {
+                Some(crate::tcp_utils::WsTrafficRecorder {
+                    domain: ws_domain.clone(),
+                    direction: crate::tcp_utils::WsDirection::ServerToClient,
+                })
+            };
+            let make_c2s_recorder = || {
+                Some(crate::tcp_utils::WsTrafficRecorder {
+                    domain: ws_domain.clone(),
+                    direction: crate::tcp_utils::WsDirection::ClientToServer,
+                })
+            };
 
             match server_web_socket_data.upstream.inner {
                 UpstreamInner::Http1Direct(inner) => {
@@ -180,6 +199,7 @@ pub async fn response_read_loop<
                             server_write_part,
                             remote_loop_buffer,
                             ssh_session_handler,
+                            make_s2c_recorder(),
                         ),
                     );
 
@@ -190,6 +210,7 @@ pub async fn response_read_loop<
                             inner.remote_write_part,
                             server_web_socket_data.loop_buffer,
                             None,
+                            make_c2s_recorder(),
                         ),
                     );
                 }
@@ -201,6 +222,7 @@ pub async fn response_read_loop<
                             server_write_part,
                             remote_loop_buffer,
                             ssh_session_handler,
+                            make_s2c_recorder(),
                         ),
                     );
 
@@ -211,6 +233,7 @@ pub async fn response_read_loop<
                             inner.remote_write_part,
                             server_web_socket_data.loop_buffer,
                             None,
+                            make_c2s_recorder(),
                         ),
                     );
                 }
@@ -222,6 +245,7 @@ pub async fn response_read_loop<
                             server_write_part,
                             remote_loop_buffer,
                             ssh_session_handler,
+                            make_s2c_recorder(),
                         ),
                     );
 
@@ -232,6 +256,7 @@ pub async fn response_read_loop<
                             inner.remote_write_part,
                             server_web_socket_data.loop_buffer,
                             None,
+                            make_c2s_recorder(),
                         ),
                     );
                 }
@@ -243,6 +268,7 @@ pub async fn response_read_loop<
                             server_write_part,
                             remote_loop_buffer,
                             ssh_session_handler,
+                            make_s2c_recorder(),
                         ),
                     );
 
@@ -253,6 +279,7 @@ pub async fn response_read_loop<
                             inner.remote_write_part,
                             server_web_socket_data.loop_buffer,
                             None,
+                            make_c2s_recorder(),
                         ),
                     );
                 }
@@ -264,6 +291,7 @@ pub async fn response_read_loop<
                             server_write_part,
                             remote_loop_buffer,
                             ssh_session_handler,
+                            make_s2c_recorder(),
                         ),
                     );
                     crate::app::spawn_named(
@@ -273,6 +301,7 @@ pub async fn response_read_loop<
                             inner.remote_write_part,
                             server_web_socket_data.loop_buffer,
                             None,
+                            make_c2s_recorder(),
                         ),
                     );
                 }

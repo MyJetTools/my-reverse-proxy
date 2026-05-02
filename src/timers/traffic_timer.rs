@@ -15,6 +15,10 @@ impl MyTimerTick for TrafficTimer {
                 stats.c2s_bytes as i64,
                 stats.s2c_events as i64,
                 stats.s2c_bytes as i64,
+                stats.ws_c2s_events as i64,
+                stats.ws_c2s_bytes as i64,
+                stats.ws_s2c_events as i64,
+                stats.ws_s2c_bytes as i64,
             );
         }
     }
