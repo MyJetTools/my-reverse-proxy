@@ -47,6 +47,7 @@ pub enum ProxyPassToConfig {
     UnixHttp2(ProxyPassToModel),
     FilesPath(ProxyPassFilesPathModel),
     Static(Arc<StaticContentConfig>),
+    Drop,
 }
 
 impl ProxyPassToConfig {
@@ -60,6 +61,7 @@ impl ProxyPassToConfig {
 
             ProxyPassToConfig::FilesPath(model) => model.to_string(),
             ProxyPassToConfig::Static(model) => model.to_string(),
+            ProxyPassToConfig::Drop => "drop".to_string(),
         }
     }
 
@@ -72,6 +74,11 @@ impl ProxyPassToConfig {
             Self::Http2(_) => "http2",
             Self::FilesPath(_) => "files_path",
             Self::Static(_) => crate::consts::location_type::STATIC,
+            Self::Drop => "drop",
         }
+    }
+
+    pub fn is_drop(&self) -> bool {
+        matches!(self, Self::Drop)
     }
 }

@@ -1,8 +1,13 @@
 use bytes::Bytes;
 use http_body_util::combinators::BoxBody;
+use http_body_util::BodyExt;
+use http_body_util::Full;
 use rust_extensions::StopWatch;
 
-use crate::{http_proxy_pass::HttpProxyPass, types::ConnectionIp};
+use crate::{
+    http_proxy_pass::{HttpProxyPass, ProxyPassError},
+    types::ConnectionIp,
+};
 
 pub async fn handle_requests(
     req: hyper::Request<hyper::body::Incoming>,
@@ -83,6 +88,17 @@ pub async fn handle_requests(
                     err,
                     sw.duration_as_string()
                 );
+            }
+            if matches!(err, ProxyPassError::DropConnection) {
+                let body: BoxBody<Bytes, String> = Full::new(Bytes::new())
+                    .map_err(|never| match never {})
+                    .boxed();
+                let response = hyper::Response::builder()
+                    .status(hyper::StatusCode::FORBIDDEN)
+                    .header(hyper::header::CONNECTION, "close")
+                    .body(body)
+                    .unwrap();
+                return Ok(response);
             }
             return Ok(super::utils::generate_tech_page(
                 err,

@@ -18,6 +18,7 @@ pub enum ProxyServerError {
     HttpConfigurationIsNotFound,
     LocationIsNotFound,
     NotAuthorized,
+    DropConnection,
     HttpResponse(Vec<u8>),
 }
 

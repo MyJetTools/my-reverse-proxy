@@ -14,6 +14,7 @@ pub enum LocationType {
     UnixSocketHttp,
     UnixSocketHttp2,
     Mcp,
+    Drop,
 }
 
 impl LocationType {
@@ -24,6 +25,10 @@ impl LocationType {
             Some(src) => {
                 if src.eq_ignore_ascii_case("static") {
                     return Ok(Self::StaticContent);
+                }
+
+                if src.eq_ignore_ascii_case("drop") {
+                    return Ok(Self::Drop);
                 }
 
                 let mut splitted = src.split("->");
@@ -91,6 +96,7 @@ impl LocationSettings {
                 "https2" => return Ok(LocationType::Https2.into()),
                 STATIC => return Ok(LocationType::StaticContent.into()),
                 MCP => return Ok(LocationType::Mcp.into()),
+                "drop" => return Ok(LocationType::Drop.into()),
                 _ => return Err(format!("Unknown remote location type {}", location_type)),
             }
         } else {

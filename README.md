@@ -498,6 +498,62 @@ localhost:8001:
       proxy_pass_to: ~/sockets/myapp.sock
 ```
 
+### Drop
+
+Silently drops the connection for any request matching this location. No
+upstream connection is opened, no response template is written — on HTTP/1.1
+the proxy just sends `FIN` and closes the TCP socket.
+
+Use it on wildcard or catch-all hosts to refuse bot traffic, IP-literal
+scanners, or any request that targets an unknown path you do not want to
+respond to. Combine with `path:` to selectively drop a subtree.
+
+```yaml
+hosts:
+  80:
+    endpoint:
+      type: http
+    locations:
+    - path: /.env
+      proxy_pass_to: drop
+
+    - path: /wp-admin
+      proxy_pass_to: drop
+
+    - proxy_pass_to: static
+      status_code: 302
+      modify_http_headers:
+        add:
+          response:
+          - name: Location
+            value: https://${HOST_PORT}${PATH_AND_QUERY}
+```
+
+Equivalent shorthand using the `type` field:
+
+```yaml
+locations:
+- path: /.env
+  type: drop
+```
+
+Behavior per protocol:
+
+- **HTTP/1.1** — the request is parsed, the location is matched, then the TCP
+  connection is closed without writing anything back to the client. The
+  client sees a connection reset / EOF.
+- **HTTP/2** — hyper does not allow forcing a TCP shutdown from inside a
+  request handler, so the proxy returns an empty `403 Forbidden` body with
+  `Connection: close`. Well-behaved h2 clients close the socket after that;
+  the connection itself is not torn down by the proxy.
+
+Drop locations:
+- never resolve an upstream — there is no `proxy_pass_to: drop://...` form.
+- bypass `auth_header`, `google_auth`, and `client_certificate_ca` checks —
+  the request is rejected before any of them runs.
+- bypass per-domain metrics (`domain_rps`, `*_traffic_*`, `ws_*_*`) when the
+  endpoint also satisfies the default strict mode (`track_metrics_by_all_domains`
+  unset / false on a wildcard endpoint).
 
 
 

@@ -84,6 +84,9 @@ pub async fn serve_reverse_proxy<
                     ProxyServerError::NetworkError(_) => {
                         break;
                     }
+                    ProxyServerError::DropConnection => {
+                        break;
+                    }
                     ProxyServerError::HttpConfigurationIsNotFound
                     | ProxyServerError::ParsingPayloadError(_)
                     | ProxyServerError::ChunkHeaderParseError
@@ -177,6 +180,10 @@ async fn execute_request<
 
     if let Some(domain) = end_point_info.tracked_domain(request_host_for_metric.as_deref()) {
         crate::app::APP_CTX.rps.inc_domain(domain);
+    }
+
+    if location.proxy_pass_to.is_drop() {
+        return Err(ProxyServerError::DropConnection);
     }
 
     let identity = h1_reader

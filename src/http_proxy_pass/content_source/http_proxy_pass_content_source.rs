@@ -23,6 +23,7 @@ pub enum HttpProxyPassContentSource {
     PathOverSsh(PathOverSshContentSource),
     PathOverGateway(PathOverGatewayContentSource),
     Static(StaticContentSrc),
+    Drop,
 }
 
 impl HttpProxyPassContentSource {
@@ -45,6 +46,7 @@ impl HttpProxyPassContentSource {
             //Self::Http2OverGateway(model) => model.execute(req).await,
             Self::PathOverGateway(model) => model.execute(req).await,
             Self::Static(model) => model.execute(req).await,
+            Self::Drop => Err(ProxyPassError::DropConnection),
         }
     }
 }

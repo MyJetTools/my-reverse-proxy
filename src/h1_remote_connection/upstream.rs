@@ -261,6 +261,11 @@ impl Upstream {
                     response_loop_handle: None,
                 });
             }
+            ProxyPassToConfig::Drop => {
+                unreachable!(
+                    "Upstream::connect must not be called for Drop proxy_pass — caller should short-circuit before reaching upstream connect"
+                );
+            }
         }
     }
 

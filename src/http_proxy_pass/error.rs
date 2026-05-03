@@ -27,6 +27,7 @@ pub enum ProxyPassError {
     NoWebSocketUpgrade,
     UpstreamUnavailable,
     NoHostHeader,
+    DropConnection,
 }
 
 impl ProxyPassError {

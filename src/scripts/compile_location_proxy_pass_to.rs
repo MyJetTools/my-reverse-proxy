@@ -168,6 +168,7 @@ pub async fn compile_location_proxy_pass_to(
 
             ProxyPassToConfig::Static(model.into())
         }
+        LocationType::Drop => ProxyPassToConfig::Drop,
     };
 
     let result = ProxyPassLocationConfig::new(

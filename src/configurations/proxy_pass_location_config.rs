@@ -354,6 +354,7 @@ impl ProxyPassLocationConfig {
                     });
                 }
             },
+            ProxyPassToConfig::Drop => HttpProxyPassContentSource::Drop,
         };
 
         result
