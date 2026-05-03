@@ -9,21 +9,25 @@ pub async fn handle_requests(
     proxy_pass: &HttpProxyPass,
     connection_ip: ConnectionIp,
 ) -> hyper::Result<hyper::Response<BoxBody<Bytes, String>>> {
-    let host_for_rps: Option<String> = req
+    let request_host_for_metric: Option<String> = req
         .headers()
         .get("host")
         .and_then(|v| v.to_str().ok())
         .map(|s| s.to_string())
-        .or_else(|| req.uri().host().map(|s| s.to_string()));
+        .or_else(|| req.uri().host().map(|s| s.to_string()))
+        .map(|s| {
+            let host_no_port = match s.find(':') {
+                Some(idx) => &s[..idx],
+                None => s.as_str(),
+            };
+            host_no_port.trim().to_string()
+        });
 
-    if let Some(host) = host_for_rps {
-        let host_no_port = match host.find(':') {
-            Some(idx) => &host[..idx],
-            None => host.as_str(),
-        };
-        crate::app::APP_CTX
-            .rps
-            .inc_domain(host_no_port.trim());
+    if let Some(domain) = proxy_pass
+        .endpoint_info
+        .tracked_domain(request_host_for_metric.as_deref())
+    {
+        crate::app::APP_CTX.rps.inc_domain(domain);
     }
 
     let debug = if proxy_pass.endpoint_info.debug {

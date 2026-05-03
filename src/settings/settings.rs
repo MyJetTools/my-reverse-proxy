@@ -95,6 +95,7 @@ mod tests {
                     template_id: None,
                     allowed_users: None,
                     keep_alive: None,
+                    track_metrics_by_all_domains: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),

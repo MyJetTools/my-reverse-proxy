@@ -29,7 +29,7 @@ pub async fn start_web_socket_loop<
     debug: bool,
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
-    domain: String,
+    domain: Option<String>,
 ) {
     let result = AssertUnwindSafe(async move {
         web_socket_loop(
@@ -58,7 +58,7 @@ async fn web_socket_loop<
     to_remote_stream: TStream,
     debug: bool,
     trace_payload: bool,
-    domain: String,
+    domain: Option<String>,
 ) {
     let ws_stream = server_web_socket.await;
 
@@ -128,8 +128,10 @@ async fn web_socket_loop<
                     }
                 }
 
-                let bytes = ws_message_payload_len(&message);
-                crate::app::APP_CTX.traffic.record_ws_s2c(&domain, bytes);
+                if let Some(d) = domain.as_deref() {
+                    let bytes = ws_message_payload_len(&message);
+                    crate::app::APP_CTX.traffic.record_ws_s2c(d, bytes);
+                }
 
                 if let Err(err) = ws_sender.send(message).await {
                     if debug {
@@ -155,7 +157,7 @@ async fn serve_from_server_to_client<
     mut to_remote_write: SplitSink<WebSocketStream<TStream>, Message>,
     debug: bool,
     trace_payload: bool,
-    domain: String,
+    domain: Option<String>,
 ) -> Result<(), Error> {
     if trace_payload {
         println!("WS is starting reading message to remote");
@@ -190,8 +192,10 @@ async fn serve_from_server_to_client<
             }
         }
 
-        let bytes = ws_message_payload_len(&msg);
-        crate::app::APP_CTX.traffic.record_ws_c2s(&domain, bytes);
+        if let Some(d) = domain.as_deref() {
+            let bytes = ws_message_payload_len(&msg);
+            crate::app::APP_CTX.traffic.record_ws_c2s(d, bytes);
+        }
 
         let err = to_remote_write.send(msg).await;
         if let Err(err) = err {

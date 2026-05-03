@@ -152,7 +152,24 @@ impl HttpProxyPass {
                         response.headers()
                     );
                 }
-                let domain = self.endpoint_info.host_endpoint.as_str().to_string();
+                let request_host_for_metric: Option<String> = request
+                    .req_parts
+                    .headers
+                    .get("host")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string())
+                    .or_else(|| request.req_parts.uri.host().map(|s| s.to_string()))
+                    .map(|s| {
+                        let host_no_port = match s.find(':') {
+                            Some(idx) => &s[..idx],
+                            None => s.as_str(),
+                        };
+                        host_no_port.trim().to_string()
+                    });
+                let domain: Option<String> = self
+                    .endpoint_info
+                    .tracked_domain(request_host_for_metric.as_deref())
+                    .map(str::to_owned);
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
                         spawn_websocket_pump(
@@ -241,7 +258,7 @@ fn spawn_websocket_pump<S>(
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
-    domain: String,
+    domain: Option<String>,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
@@ -287,7 +304,7 @@ fn spawn_h2_websocket_pump<S>(
     fallback_response: hyper::Response<BoxBody<Bytes, String>>,
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
-    domain: String,
+    domain: Option<String>,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -323,7 +340,7 @@ async fn pump_h2_extended_connect<S>(
     upstream: S,
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
-    domain: String,
+    domain: Option<String>,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -340,26 +357,32 @@ async fn pump_h2_extended_connect<S>(
 
     let upgraded = TokioIo::new(upgraded);
 
-    // Wrap both ends with metering. Reads on `client_side` are bytes coming
-    // FROM the client → upstream (c2s). Reads on `upstream_side` are bytes
-    // coming FROM the upstream → client (s2c).
-    let mut client_side = crate::tcp_utils::MeteredStream::new(
-        upgraded,
-        crate::tcp_utils::WsTrafficRecorder {
-            domain: domain.clone(),
-            direction: crate::tcp_utils::WsDirection::ClientToServer,
-        },
-    );
-    let mut upstream_side = crate::tcp_utils::MeteredStream::new(
-        upstream,
-        crate::tcp_utils::WsTrafficRecorder {
-            domain,
-            direction: crate::tcp_utils::WsDirection::ServerToClient,
-        },
-    );
-
-    let copy_result =
-        tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await;
+    // Reads on `client_side` are bytes coming FROM the client → upstream (c2s).
+    // Reads on `upstream_side` are bytes coming FROM the upstream → client (s2c).
+    let copy_result = match domain {
+        Some(domain) => {
+            let mut client_side = crate::tcp_utils::MeteredStream::new(
+                upgraded,
+                crate::tcp_utils::WsTrafficRecorder {
+                    domain: domain.clone(),
+                    direction: crate::tcp_utils::WsDirection::ClientToServer,
+                },
+            );
+            let mut upstream_side = crate::tcp_utils::MeteredStream::new(
+                upstream,
+                crate::tcp_utils::WsTrafficRecorder {
+                    domain,
+                    direction: crate::tcp_utils::WsDirection::ServerToClient,
+                },
+            );
+            tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await
+        }
+        None => {
+            let mut client_side = upgraded;
+            let mut upstream_side = upstream;
+            tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await
+        }
+    };
 
     if debug {
         match copy_result {

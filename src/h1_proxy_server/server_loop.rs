@@ -146,18 +146,19 @@ async fn execute_request<
 ) -> Result<Option<WebSocketUpgradeResult>, ProxyServerError> {
     let request_headers = h1_reader.read_headers().await?;
 
-    let host_for_metric: Option<String> = request_headers.host_value.as_ref().and_then(|host_pos| {
-        let buf = h1_reader.loop_buffer.get_data();
-        if host_pos.end > buf.len() {
-            return None;
-        }
-        let host_str = std::str::from_utf8(&buf[host_pos.start..host_pos.end]).ok()?;
-        let host_no_port = match host_str.find(':') {
-            Some(idx) => &host_str[..idx],
-            None => host_str,
-        };
-        Some(host_no_port.trim().to_string())
-    });
+    let request_host_for_metric: Option<String> =
+        request_headers.host_value.as_ref().and_then(|host_pos| {
+            let buf = h1_reader.loop_buffer.get_data();
+            if host_pos.end > buf.len() {
+                return None;
+            }
+            let host_str = std::str::from_utf8(&buf[host_pos.start..host_pos.end]).ok()?;
+            let host_no_port = match host_str.find(':') {
+                Some(idx) => &host_str[..idx],
+                None => host_str,
+            };
+            Some(host_no_port.trim().to_string())
+        });
 
     if http_connection_info.endpoint_info.is_none() {
         http_connection_info.endpoint_info =
@@ -174,8 +175,8 @@ async fn execute_request<
         .find_location(&request_headers, &http_connection_info)
         .await?;
 
-    if let Some(host) = host_for_metric {
-        crate::app::APP_CTX.rps.inc_domain(&host);
+    if let Some(domain) = end_point_info.tracked_domain(request_host_for_metric.as_deref()) {
+        crate::app::APP_CTX.rps.inc_domain(domain);
     }
 
     let identity = h1_reader

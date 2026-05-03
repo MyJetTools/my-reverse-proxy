@@ -23,6 +23,7 @@ pub struct HttpEndpointInfo {
     pub modify_response_headers: ModifyHeadersConfig,
     pub whitelisted_ip_list_id: Option<String>,
     pub keep_alive: bool,
+    pub track_metrics_by_all_domains: bool,
 }
 
 impl HttpEndpointInfo {
@@ -39,6 +40,7 @@ impl HttpEndpointInfo {
         allowed_user_list_id: Option<String>,
         mut modify_headers_settings: HttpEndpointModifyHeadersSettings,
         keep_alive: bool,
+        track_metrics_by_all_domains: bool,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -59,6 +61,18 @@ impl HttpEndpointInfo {
             ssl_certificate_id,
             whitelisted_ip_list_id,
             keep_alive,
+            track_metrics_by_all_domains,
+        }
+    }
+
+    /// Returns `Some(domain)` if this request should emit per-domain metrics,
+    /// `None` otherwise. `request_host` is the value parsed from the inbound
+    /// `Host:` header (or h2 `:authority`), already stripped of port.
+    pub fn tracked_domain<'a>(&'a self, request_host: Option<&'a str>) -> Option<&'a str> {
+        if self.track_metrics_by_all_domains {
+            request_host
+        } else {
+            self.host_endpoint.get_server_name()
         }
     }
 

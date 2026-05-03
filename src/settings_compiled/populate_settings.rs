@@ -118,6 +118,9 @@ impl SettingsCompiled {
                     allowed_users: variables
                         .apply_variables_opt(host_settings.endpoint.allowed_users)?,
                     keep_alive: host_settings.endpoint.keep_alive,
+                    track_metrics_by_all_domains: host_settings
+                        .endpoint
+                        .track_metrics_by_all_domains,
                 },
                 locations,
             };
