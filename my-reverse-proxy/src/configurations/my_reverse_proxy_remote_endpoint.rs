@@ -1,0 +1,156 @@
+use std::sync::Arc;
+
+use my_ssh::{ssh_settings::OverSshConnectionSettings, SshCredentials};
+use rust_extensions::remote_endpoint::RemoteEndpointOwned;
+
+use crate::settings_compiled::SettingsCompiled;
+
+pub const GATEWAY_PREFIX: &str = "gateway:";
+
+#[derive(Debug)]
+pub enum MyReverseProxyRemoteEndpoint {
+    Gateway {
+        id: Arc<String>,
+        remote_host: Arc<RemoteEndpointOwned>,
+    },
+    OverSsh {
+        ssh_credentials: Arc<SshCredentials>,
+        remote_host: Arc<RemoteEndpointOwned>,
+    },
+    Direct {
+        remote_host: Arc<RemoteEndpointOwned>,
+    },
+}
+
+impl MyReverseProxyRemoteEndpoint {
+    pub fn kind_as_str(&self) -> &'static str {
+        match self {
+            MyReverseProxyRemoteEndpoint::Direct { .. } => "direct",
+            MyReverseProxyRemoteEndpoint::OverSsh { .. } => "ssh",
+            MyReverseProxyRemoteEndpoint::Gateway { .. } => "gateway",
+        }
+    }
+
+    pub fn get_host(&self) -> Option<&str> {
+        match self {
+            MyReverseProxyRemoteEndpoint::Gateway { id: _, remote_host } => {
+                Some(remote_host.get_host())
+            }
+            MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials: _,
+                remote_host,
+            } => Some(remote_host.get_host()),
+            MyReverseProxyRemoteEndpoint::Direct { remote_host } => Some(remote_host.get_host()),
+        }
+    }
+
+    pub fn get_path_and_query(&self) -> &str {
+        match self {
+            MyReverseProxyRemoteEndpoint::Gateway { id: _, remote_host } => {
+                remote_host.get_http_path_and_query().unwrap_or("/")
+            }
+            MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials: _,
+                remote_host,
+            } => remote_host.get_http_path_and_query().unwrap_or("/"),
+            MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                remote_host.get_http_path_and_query().unwrap_or("/")
+            }
+        }
+    }
+    pub async fn try_parse(
+        remote_host: &str,
+        settings_model: &SettingsCompiled,
+    ) -> Result<Self, String> {
+        if remote_host.starts_with(GATEWAY_PREFIX) {
+            MyReverseProxyRemoteEndpoint::try_parse_gateway_source(remote_host)
+        } else {
+            let over_ssh_connection = OverSshConnectionSettings::try_parse(remote_host);
+
+            if over_ssh_connection.is_none() {
+                return Err(format!("Invalid remote host {}", remote_host));
+            }
+
+            let over_ssh_connection = crate::scripts::ssh::enrich_with_private_key_or_password(
+                over_ssh_connection.unwrap(),
+                settings_model,
+            )
+            .await?;
+
+            over_ssh_connection.try_into()
+        }
+    }
+
+    pub fn try_parse_gateway_source(src: &str) -> Result<Self, String> {
+        let mut src_split = src.split("->");
+
+        let left = src_split.next().unwrap();
+
+        let right = src_split.next();
+
+        if right.is_none() {
+            return Err(format!("Invalid gateway source: {}", src));
+        }
+
+        let right = right.unwrap();
+
+        let gateway_id = get_gateway_id(left)?;
+
+        let remote_host = RemoteEndpointOwned::try_parse(right.to_string())?;
+
+        Ok(Self::Gateway {
+            id: gateway_id.to_string().into(),
+            remote_host: remote_host.into(),
+        })
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
+                format!("{GATEWAY_PREFIX}{}->{}", id, remote_host.as_str())
+            }
+            MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials,
+                remote_host,
+            } => {
+                format!(
+                    "ssh:{}->{}",
+                    ssh_credentials.to_string().as_str(),
+                    remote_host.as_str()
+                )
+            }
+            MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
+                remote_host.as_str().to_string()
+            }
+        }
+    }
+}
+
+impl TryInto<MyReverseProxyRemoteEndpoint> for OverSshConnectionSettings {
+    type Error = String;
+
+    fn try_into(self) -> Result<MyReverseProxyRemoteEndpoint, Self::Error> {
+        match self.ssh_credentials {
+            Some(ssh_credentials) => Ok(MyReverseProxyRemoteEndpoint::OverSsh {
+                ssh_credentials,
+                remote_host: RemoteEndpointOwned::try_parse(self.remote_resource_string)?.into(),
+            }),
+            None => Ok(MyReverseProxyRemoteEndpoint::Direct {
+                remote_host: RemoteEndpointOwned::try_parse(self.remote_resource_string)?.into(),
+            }),
+        }
+    }
+}
+
+fn get_gateway_id(src: &str) -> Result<&str, String> {
+    let index = src.find(":");
+    if index.is_none() {
+        return Err(format!("Can not extract id from gateway prefix: '{}'", src));
+    }
+
+    let index = index.unwrap();
+
+    let result = &src[index + 1..];
+
+    Ok(result)
+}

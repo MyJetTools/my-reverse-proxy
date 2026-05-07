@@ -1,0 +1,92 @@
+use rust_extensions::StrOrString;
+use x509_parser::nom::AsBytes;
+
+lazy_static::lazy_static! {
+    pub static ref NOT_FOUND: Vec<u8> = {
+       generate_layout(404, "Resource not found", None)
+    };
+
+    pub static ref REMOTE_RESOURCE_IS_NOT_AVAILABLE: Vec<u8> = {
+       generate_layout(503, "Server Error", Some("Remote resource is not available".into()))
+    };
+
+    pub static ref LOCATION_IS_NOT_FOUND: Vec<u8> = {
+       generate_layout_with_close(503, "Server Error", Some("Remote location configuration is missing".into()))
+    };
+
+    pub static ref CONFIGURATION_IS_NOT_FOUND: Vec<u8> = {
+       generate_layout_with_close(503, "Server Error", Some("Endpoint configuration is missing".into()))
+    };
+
+
+ pub static ref ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: Vec<u8> = {
+       generate_layout(405, "Forbidden", Some("Endpoint can not be upgraded to websocket".into()))
+    };
+
+
+    pub static ref ERROR_TIMEOUT: Vec<u8> = {
+       generate_layout(503, "Server Error", Some("Timeout".into()))
+    };
+
+     pub static ref ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: Vec<u8> = {
+       generate_layout(502, "Server Error", Some("Bad gateway".into()))
+    };
+
+    pub static ref NOT_AUTHORIZED_PAGE: Vec<u8> = {
+       generate_layout(401, "Not authorized request", None)
+    };
+
+}
+
+pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {
+    build_layout(status_code, text, second_line, false)
+}
+
+pub fn generate_layout_with_close(
+    status_code: u16,
+    text: &str,
+    second_line: Option<StrOrString>,
+) -> Vec<u8> {
+    build_layout(status_code, text, second_line, true)
+}
+
+fn build_layout(
+    status_code: u16,
+    text: &str,
+    second_line: Option<StrOrString>,
+    connection_close: bool,
+) -> Vec<u8> {
+    use crate::app::APP_VERSION;
+
+    let second_line = if let Some(second_line) = second_line {
+        format!("<h4>{}</h4>", second_line.as_str())
+    } else {
+        "".to_string()
+    };
+
+    let body = format!(
+        r#"
+        <div style="text-align: center;">
+        <h2>{text}</h2>
+      {second_line}
+        <p>{status_code}</p>
+        <hr/>
+        <div>MyReverseProxy {APP_VERSION}</div>
+        </div>
+        "#
+    )
+    .into_bytes();
+
+    let mut headers = crate::h1_utils::Http1HeadersBuilder::new();
+    headers.push_response_first_line(200);
+
+    headers.push_content_length(body.len());
+    if connection_close {
+        headers.push_header("Connection", "close");
+    }
+    headers.push_cl_cr();
+
+    let mut result = headers.into_bytes();
+    result.extend_from_slice(body.as_bytes());
+    result
+}

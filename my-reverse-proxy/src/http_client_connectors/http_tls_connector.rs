@@ -1,0 +1,102 @@
+use std::sync::Arc;
+
+use my_http_client::MyHttpClientConnector;
+use my_tls::tokio_rustls::client::TlsStream;
+use rust_extensions::remote_endpoint::*;
+use tokio::{
+    io::{ReadHalf, WriteHalf},
+    net::TcpStream,
+};
+
+pub struct HttpTlsConnector {
+    pub remote_endpoint: Arc<RemoteEndpointOwned>,
+    pub domain_name: Option<String>,
+    pub debug: bool,
+}
+
+#[async_trait::async_trait]
+impl MyHttpClientConnector<TlsStream<TcpStream>> for HttpTlsConnector {
+    fn get_remote_endpoint<'s>(&'s self) -> RemoteEndpoint<'s> {
+        self.remote_endpoint.to_ref()
+    }
+
+    fn is_debug(&self) -> bool {
+        self.debug
+    }
+
+    async fn connect(&self) -> Result<TlsStream<TcpStream>, my_http_client::MyHttpClientError> {
+        connect_tls(
+            &self.remote_endpoint,
+            self.domain_name.as_deref(),
+            self.debug,
+        )
+        .await
+    }
+
+    fn reunite(
+        read: ReadHalf<TlsStream<TcpStream>>,
+        write: WriteHalf<TlsStream<TcpStream>>,
+    ) -> TlsStream<TcpStream> {
+        read.unsplit(write)
+    }
+}
+
+pub async fn connect_tls(
+    remote_endpoint: &Arc<RemoteEndpointOwned>,
+    domain_name: Option<&str>,
+    debug: bool,
+) -> Result<TlsStream<TcpStream>, my_http_client::MyHttpClientError> {
+    use my_tls::tokio_rustls::rustls::pki_types::ServerName;
+
+    let host_port = remote_endpoint.get_host_port();
+
+    let tcp_stream = match TcpStream::connect(host_port.as_str()).await {
+        Ok(tcp_stream) => tcp_stream,
+        Err(err) => {
+            return Err(
+                my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!("{}", err)),
+            )
+        }
+    };
+
+    if debug {
+        println!(
+            "Connecting to TLS remote host: {}",
+            remote_endpoint.as_str(),
+        );
+    }
+
+    let config = my_tls::tokio_rustls::rustls::ClientConfig::builder()
+        .with_root_certificates(my_tls::ROOT_CERT_STORE.clone())
+        .with_no_client_auth();
+
+    let connector = my_tls::tokio_rustls::TlsConnector::from(Arc::new(config));
+    let domain = if let Some(domain_name) = domain_name.as_ref() {
+        ServerName::try_from(domain_name.to_string()).unwrap()
+    } else {
+        ServerName::try_from(remote_endpoint.get_host().to_string()).unwrap()
+    };
+
+    if debug {
+        println!("TLS Domain Name: {:?}", domain);
+    }
+
+    let tls_stream = connector
+        .connect_with(domain, tcp_stream, |itm| {
+            if debug {
+                println!("Debugging: {:?}", itm.alpn_protocol());
+            }
+        })
+        .await;
+
+    let tls_stream = match tls_stream {
+        Ok(tls_stream) => tls_stream,
+        Err(err) => {
+            return Err(
+                my_http_client::MyHttpClientError::CanNotConnectToRemoteHost(format!("{}", err)),
+            )
+        }
+    };
+
+    return Ok(tls_stream);
+}

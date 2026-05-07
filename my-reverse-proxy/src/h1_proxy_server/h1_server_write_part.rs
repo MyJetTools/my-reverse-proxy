@@ -1,0 +1,207 @@
+use std::{sync::Arc, time::Duration};
+
+use tokio::sync::Mutex;
+
+use super::*;
+use crate::{h1_remote_connection::Upstream, network_stream::*, tcp_utils::LoopBuffer};
+
+pub struct WebSocketUpgradeHolder<ReadPart: NetworkStreamReadPart + Send + Sync + 'static> {
+    pub upstream: Upstream,
+    pub read_part: ReadPart,
+    pub loop_buffer: LoopBuffer,
+}
+
+pub struct H1ServerWritePartInner<
+    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+> {
+    pub server_write_part: Option<WritePart>,
+    pub current_requests: Vec<H1CurrentRequest>,
+    pub web_socket_upgrade: Option<WebSocketUpgradeHolder<ReadPart>>,
+}
+
+#[derive(Clone)]
+pub struct H1ServerWritePart<
+    WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+> {
+    inner: Arc<Mutex<H1ServerWritePartInner<WritePart, ReadPart>>>,
+}
+
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > H1ServerWritePart<WritePart, ReadPart>
+{
+    pub fn new(server_write_part: WritePart) -> Self {
+        let inner = H1ServerWritePartInner {
+            server_write_part: Some(server_write_part),
+            current_requests: vec![],
+            web_socket_upgrade: Default::default(),
+        };
+
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
+    }
+
+    pub async fn add_web_socket_upgrade(
+        &self,
+        upstream: Upstream,
+        read_part: ReadPart,
+        loop_buffer: LoopBuffer,
+    ) {
+        let mut write_access = self.inner.lock().await;
+        write_access.web_socket_upgrade = Some(WebSocketUpgradeHolder {
+            read_part,
+            loop_buffer,
+            upstream,
+        });
+    }
+
+    pub fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+    pub async fn upgrade_web_socket(self) -> (WritePart, WebSocketUpgradeHolder<ReadPart>) {
+        let mut write_access = self.inner.lock().await;
+        let write_part = write_access.server_write_part.take().unwrap();
+
+        let web_socket_upgrade = write_access.web_socket_upgrade.take().unwrap();
+
+        (write_part, web_socket_upgrade)
+    }
+
+    pub async fn add_current_request(&self, connection_id: u64) {
+        let mut write_access = self.inner.lock().await;
+        write_access
+            .current_requests
+            .push(H1CurrentRequest::new(connection_id));
+    }
+
+    pub async fn request_is_done(&self, connection_id: u64) {
+        let mut write_access = self.inner.lock().await;
+
+        for itm in write_access.current_requests.iter_mut() {
+            if itm.connection_id == connection_id {
+                itm.done = true;
+                break;
+            }
+        }
+
+        loop {
+            let done = match write_access.current_requests.get(0) {
+                Some(itm) => itm.done,
+                None => {
+                    break;
+                }
+            };
+
+            if done {
+                let done_item = write_access.current_requests.remove(0);
+
+                if done_item.buffer.len() > 0 {
+                    write_access
+                        .server_write_part
+                        .as_mut()
+                        .unwrap()
+                        .write_all_with_timeout(&done_item.buffer, crate::consts::WRITE_TIMEOUT)
+                        .await
+                        .unwrap();
+                }
+            } else {
+                break;
+            }
+        }
+
+        //println!("Requests: {}", write_access.current_requests.len());
+    }
+
+    pub async fn write_http_payload_with_timeout(
+        &self,
+        connection_id: u64,
+        buffer: &[u8],
+        timeout: Duration,
+    ) -> Result<(), NetworkError> {
+        let mut write_access = self.inner.lock().await;
+
+        let Some(mut write_part) = write_access.server_write_part.take() else {
+            return Err(NetworkError::Disconnected);
+        };
+
+        if write_access.current_requests.len() == 0 {
+            write_part.write_all_with_timeout(buffer, timeout).await?;
+            write_access.server_write_part = Some(write_part);
+
+            return Ok(());
+        }
+
+        for (pos, itm) in write_access.current_requests.iter_mut().enumerate() {
+            if itm.connection_id == connection_id {
+                if pos > 0 {
+                    itm.buffer.extend_from_slice(buffer);
+                } else {
+                    if itm.buffer.len() > 0 {
+                        write_part
+                            .write_all_with_timeout(itm.buffer.as_slice(), timeout)
+                            .await?;
+                        itm.buffer.clear();
+                    }
+
+                    write_part.write_all_with_timeout(buffer, timeout).await?;
+                }
+
+                break;
+            }
+        }
+
+        write_access.server_write_part = Some(write_part);
+
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > H1Writer for H1ServerWritePart<WritePart, ReadPart>
+{
+    async fn write_http_payload(
+        &mut self,
+        request_id: u64,
+        buffer: &[u8],
+        timeout: Duration,
+    ) -> Result<(), NetworkError> {
+        self.write_http_payload_with_timeout(request_id, buffer, timeout)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl<
+        WritePart: NetworkStreamWritePart + Send + Sync + 'static,
+        ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+    > NetworkStreamWritePart for H1ServerWritePart<WritePart, ReadPart>
+{
+    async fn shutdown_socket(&mut self) {
+        let mut write_access = self.inner.lock().await;
+        if let Some(inner) = write_access.server_write_part.as_mut() {
+            inner.shutdown_socket().await;
+        }
+    }
+
+    async fn write_to_socket(&mut self, _buffer: &[u8]) -> Result<(), std::io::Error> {
+        panic!("Should not be used. Instead  write_http_payload should be used");
+    }
+    async fn flush_it(&mut self) -> Result<(), NetworkError> {
+        let mut write_access = self.inner.lock().await;
+        if let Some(inner) = write_access.server_write_part.as_mut() {
+            inner.flush_it().await?;
+            return Ok(());
+        }
+
+        Err(NetworkError::Disconnected)
+    }
+}

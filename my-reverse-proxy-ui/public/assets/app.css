@@ -1,0 +1,43 @@
+body {
+    --app-width: 100vw;
+    --app-height: 100vh;
+    --shadow-color: #d3d3d359;
+    --left-panel-width: 200px;
+}
+
+#main {
+    width: var(--app-width);
+    height: var(--app-height);
+    overflow: auto;
+    background-color: #f9fafd;
+    padding-left: var(--left-panel-width);
+}
+
+
+#left-panel {
+    position: absolute;
+    top: 0;
+    width: var(--left-panel-width);
+    height: var(--app-height);
+    left: 0;
+    background-color: rgb(40, 42, 66);
+    box-shadow: 0 0 5px black;
+    z-index: 10;
+}
+
+
+
+.menu-item {
+    color: white !important;
+    padding-left: 20px;
+    margin-top: 10px;
+    cursor: pointer;
+    display: block;
+}
+
+.menu-active {
+    border: 1px solid white;
+    padding: 10px;
+    border-radius: 5px;
+    padding-left: 18px;
+}

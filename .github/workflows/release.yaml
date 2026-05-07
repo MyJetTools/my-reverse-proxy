@@ -6,37 +6,63 @@ on:
 env:
   IMAGE_NAME: myjettools/my-reverse-proxy
 
-
 jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Cache cargo registry / build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            my-reverse-proxy/target
+            my-reverse-proxy-ui/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', 'my-reverse-proxy/Cargo.toml', 'my-reverse-proxy-ui/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install dioxus-cli
+        run: |
+          if ! command -v dx >/dev/null; then
+            cargo install dioxus-cli --locked --version 0.7.7
+          fi
 
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::$(echo ${GITHUB_REF_NAME})
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Updating version
-        run: sed -i -e 's/^version = .*/version = "${{ steps.get_version.outputs.VERSION }}"/' Cargo.toml
+        run: |
+          sed -i -e 's/^version = .*/version = "${{ steps.get_version.outputs.VERSION }}"/' my-reverse-proxy/Cargo.toml
+          sed -i -e 's/^version = .*/version = "${{ steps.get_version.outputs.VERSION }}"/' my-reverse-proxy-ui/Cargo.toml
 
-#      - name: Install Protoc
-#        uses: arduino/setup-protoc@v1      
-              
-      - run: cargo build --release
+      - name: Build UI (wasm) and copy into server's wwwroot
+        run: ./build.sh
+        working-directory: my-reverse-proxy-ui
+
+      - name: Build server (release)
+        run: cargo build --release
+        working-directory: my-reverse-proxy
 
       - name: Docker login
         env:
           DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_PASS: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          echo "$DOCKER_PASS" | docker login --username "$DOCKER_USER" --password-stdin   
+        run: echo "$DOCKER_PASS" | docker login --username "$DOCKER_USER" --password-stdin
+
       - name: Docker Build and Publish
+        working-directory: my-reverse-proxy
         run: |
-          ver=$(cat Cargo.toml | grep -m1 version | grep  -Eo '["\047].*["\047]' | tr -d '"')
-          echo $ver
           docker build -t ${IMAGE_NAME}:${{ steps.get_version.outputs.VERSION }} .
           docker push ${IMAGE_NAME}:${{ steps.get_version.outputs.VERSION }}
