@@ -1,6 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use mcp_server_middleware::McpMiddleware;
 use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer, StaticFilesMiddleware};
+
+use crate::mcp::{GetProxyStateSnapshotHandler, LookupPoolHandler};
 
 const DEFAULT_PORT: u16 = 8000;
 
@@ -22,6 +25,17 @@ pub fn start() {
     );
 
     http_server.add_middleware(Arc::new(swagger_middleware));
+
+    let mut mcp = McpMiddleware::new(
+        "/mcp",
+        crate::app::APP_NAME,
+        crate::app::APP_VERSION,
+        "my-reverse-proxy diagnostic snapshots — pools, locations, and their correlation",
+    );
+    mcp.register_tool_call(Arc::new(GetProxyStateSnapshotHandler));
+    mcp.register_tool_call(Arc::new(LookupPoolHandler));
+
+    http_server.add_middleware(Arc::new(mcp));
 
     http_server.add_middleware(controllers);
 

@@ -34,6 +34,7 @@ mod http2_client_pool;
 mod http_client_pool;
 
 mod h1_remote_connection;
+mod mcp;
 mod metrics;
 mod network_stream;
 mod ssl;
