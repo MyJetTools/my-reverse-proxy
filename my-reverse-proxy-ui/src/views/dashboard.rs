@@ -11,7 +11,7 @@ use crate::{
     },
 };
 
-const REFRESH_INTERVAL: Duration = Duration::from_secs(3);
+const REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
 #[component]
 pub fn Dashboard() -> Element {
