@@ -121,6 +121,33 @@ body {
     font-variant-numeric: tabular-nums;
 }
 
+.endpoint-header .endpoint-conn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 4px;
+    overflow: hidden;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.endpoint-header .endpoint-conn .label {
+    padding: 3px 7px;
+    background: #4a5568;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 10px;
+}
+
+.endpoint-header .endpoint-conn .value {
+    padding: 3px 8px;
+    background: #2d3748;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Endpoint (level 2, nested under port) ---------- */
 .endpoints {
     padding: 8px 0 12px 0;

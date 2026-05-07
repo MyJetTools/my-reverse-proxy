@@ -129,9 +129,11 @@ async fn serve_https2(
         .prometheus
         .inc_http2_server_connections(endpoint_name.as_str());
 
-    crate::app::APP_CTX
-        .metrics
-        .update(|itm| itm.connection_by_port.inc(&endpoint_port));
+    let endpoint_host_key = endpoint_info.host_endpoint.as_str().to_string();
+    crate::app::APP_CTX.metrics.update(|itm| {
+        itm.connection_by_port.inc(&endpoint_port);
+        itm.connection_by_endpoint.inc(&endpoint_host_key);
+    });
 
     let mut http_builder = Builder::new(TokioExecutor::new());
     http_builder.http2().enable_connect_protocol();
@@ -172,9 +174,10 @@ async fn serve_https2(
         .prometheus
         .dec_http2_server_connections(endpoint_name.as_str());
 
-    crate::app::APP_CTX
-        .metrics
-        .update(|itm| itm.connection_by_port.dec(&endpoint_port));
+    crate::app::APP_CTX.metrics.update(|itm| {
+        itm.connection_by_port.dec(&endpoint_port);
+        itm.connection_by_endpoint.dec(&endpoint_host_key);
+    });
 
     https_requests_handler_dispose.dispose().await;
 }

@@ -42,12 +42,19 @@ impl<TKey: Clone + std::cmp::Eq + std::hash::Hash> MetricsValues<TKey> {
 
 pub struct MetricsInner {
     pub connection_by_port: MetricsValues<u16>,
+    /// Live inbound TCP connections attributed to a specific configured
+    /// endpoint (host_endpoint string, e.g. `"myapp.com:443"`). For HTTPS
+    /// the attribution happens after the TLS handshake (we know SNI →
+    /// endpoint). For plain HTTP we attribute on first request once the
+    /// endpoint is resolved from the Host header.
+    pub connection_by_endpoint: MetricsValues<String>,
 }
 
 impl MetricsInner {
     pub fn new() -> Self {
         Self {
             connection_by_port: MetricsValues::new(),
+            connection_by_endpoint: MetricsValues::new(),
         }
     }
 }

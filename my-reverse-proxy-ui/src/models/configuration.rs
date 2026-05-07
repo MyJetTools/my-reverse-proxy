@@ -34,6 +34,8 @@ pub struct HttpEndpointInfoModel {
     pub r#type: String,
     pub locations: Vec<HttpProxyPassLocationModel>,
     pub debug: bool,
+    #[serde(default)]
+    pub inbound_connections: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip_list: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

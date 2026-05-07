@@ -145,6 +145,10 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
                 if endpoint.debug {
                     span { class: "debug-badge", "debug" }
                 }
+                span { class: "conn-count endpoint-conn",
+                    span { class: "label", "TCP" }
+                    span { class: "value", "{endpoint.inbound_connections}" }
+                }
             }
             if has_meta {
                 div { class: "endpoint-meta",

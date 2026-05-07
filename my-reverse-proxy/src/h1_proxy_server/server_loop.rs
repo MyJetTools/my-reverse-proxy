@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use crate::network_stream::*;
 
 use super::*;
@@ -7,6 +9,25 @@ use crate::h1_remote_connection::*;
 struct Http1ConnectionGauge {
     listen_addr: String,
     port: Option<u16>,
+    /// The configured endpoint host string (e.g. `"myapp.com:443"`) once it's
+    /// known. For HTTPS this is set right after the TLS handshake; for plain
+    /// HTTP it's set lazily after the first request resolves the Host header.
+    /// `RefCell` because the gauge value moves with the connection but we
+    /// learn the endpoint inside the request loop.
+    endpoint: RefCell<Option<String>>,
+}
+
+impl Http1ConnectionGauge {
+    fn attribute_to_endpoint(&self, host: &str) {
+        let mut slot = self.endpoint.borrow_mut();
+        if slot.is_some() {
+            return;
+        }
+        crate::app::APP_CTX
+            .metrics
+            .update(|m| m.connection_by_endpoint.inc(&host.to_string()));
+        *slot = Some(host.to_string());
+    }
 }
 
 impl Drop for Http1ConnectionGauge {
@@ -18,6 +39,11 @@ impl Drop for Http1ConnectionGauge {
             crate::app::APP_CTX
                 .metrics
                 .update(|m| m.connection_by_port.dec(&port));
+        }
+        if let Some(endpoint) = self.endpoint.borrow().as_ref() {
+            crate::app::APP_CTX
+                .metrics
+                .update(|m| m.connection_by_endpoint.dec(endpoint));
         }
     }
 }
@@ -40,7 +66,16 @@ pub async fn serve_reverse_proxy<
             .metrics
             .update(|m| m.connection_by_port.inc(&port));
     }
-    let _conn_gauge = Http1ConnectionGauge { listen_addr, port };
+    let conn_gauge = Http1ConnectionGauge {
+        listen_addr,
+        port,
+        endpoint: RefCell::new(None),
+    };
+    // For HTTPS / TLS-h1, the endpoint is already resolved by SNI at the
+    // handshake — record it now so we don't depend on the first request.
+    if let Some(endpoint_info) = http_connection_info.endpoint_info.as_ref() {
+        conn_gauge.attribute_to_endpoint(endpoint_info.host_endpoint.as_str());
+    }
 
     let mut upstream_state = UpstreamState::new();
 
@@ -58,6 +93,11 @@ pub async fn serve_reverse_proxy<
 
     loop {
         request_id += 1;
+        // After the first request resolves the endpoint via Host header on
+        // plain HTTP, attribute the connection so per-domain counters tick.
+        if let Some(endpoint_info) = http_connection_info.endpoint_info.as_ref() {
+            conn_gauge.attribute_to_endpoint(endpoint_info.host_endpoint.as_str());
+        }
         let execute_request_result = execute_request(
             &mut http_connection_info,
             &mut h1_reader,

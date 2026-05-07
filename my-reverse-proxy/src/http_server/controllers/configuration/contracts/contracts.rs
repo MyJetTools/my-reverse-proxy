@@ -147,6 +147,7 @@ pub struct HttpEndpointInfoModel {
     pub r#type: String,
     pub locations: Vec<HttpProxyPassLocationModel>,
     pub debug: bool,
+    pub inbound_connections: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_list: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,8 +162,14 @@ pub struct HttpEndpointInfoModel {
 
 impl HttpEndpointInfoModel {
     pub fn from_http_endpoint(endpoint: &HttpEndpointInfo) -> Self {
+        let host_key = endpoint.host_endpoint.as_str().to_string();
+        let inbound_connections = crate::app::APP_CTX
+            .metrics
+            .get(|m| m.connection_by_endpoint.get(&host_key))
+            as i64;
+
         Self {
-            host: endpoint.host_endpoint.as_str().to_string(),
+            host: host_key,
             r#type: endpoint.listen_endpoint_type.as_str().to_string(),
             debug: endpoint.debug,
             allowed_user_list_id: endpoint.allowed_user_list_id.clone(),
@@ -176,6 +183,7 @@ impl HttpEndpointInfoModel {
                 .as_ref()
                 .map(|itm| itm.as_str().to_string()),
             g_auth: endpoint.g_auth.clone(),
+            inbound_connections,
             locations: endpoint
                 .locations
                 .iter()
@@ -190,6 +198,7 @@ impl HttpEndpointInfoModel {
             r#type: "tcp".to_string(),
             debug: config.debug,
             ip_list: config.ip_white_list_id.clone(),
+            inbound_connections: 0,
             locations: vec![HttpProxyPassLocationModel {
                 path: "".to_string(),
                 to: config.remote_host.to_string(),
