@@ -68,11 +68,27 @@ fn collect_desired_keys(cfg: &crate::configurations::AppConfigurationInner) -> D
 }
 
 fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
+    let location_id = location.id;
+
+    // Unix socket variants short-circuit: their `remote_host` is a filesystem
+    // path with no URL scheme, so `get_scheme()` would return None below and
+    // we'd skip the location — leaving the pool orphaned and drained on the
+    // next tick.
+    match &location.proxy_pass_to {
+        ProxyPassToConfig::UnixHttp1(_) => {
+            out.h1_uds.insert(location_id);
+            return;
+        }
+        ProxyPassToConfig::UnixHttp2(_) => {
+            out.h2_uds.insert(location_id);
+            return;
+        }
+        _ => {}
+    }
+
     let model = match &location.proxy_pass_to {
         ProxyPassToConfig::Http1(m) => m,
         ProxyPassToConfig::Http2(m) => m,
-        ProxyPassToConfig::UnixHttp1(m) => m,
-        ProxyPassToConfig::UnixHttp2(m) => m,
         _ => return,
     };
 
@@ -84,8 +100,6 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
     let Some(scheme) = remote_host.get_scheme() else {
         return;
     };
-
-    let location_id = location.id;
 
     use rust_extensions::remote_endpoint::Scheme;
     match &location.proxy_pass_to {
@@ -117,12 +131,6 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
                 out.h2_uds.insert(location_id);
             }
         },
-        ProxyPassToConfig::UnixHttp1(_) => {
-            out.h1_uds.insert(location_id);
-        }
-        ProxyPassToConfig::UnixHttp2(_) => {
-            out.h2_uds.insert(location_id);
-        }
         _ => {}
     }
 }
