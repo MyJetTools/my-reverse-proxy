@@ -7,7 +7,7 @@ use crate::{
     api,
     models::{
         CurrentConfigurationModel, HttpEndpointInfoModel, HttpProxyPassLocationModel,
-        PortConfigurationModel,
+        PortConfigurationModel, SslCertificateInfoModel,
     },
 };
 
@@ -57,6 +57,9 @@ fn render_dashboard(cfg: &CurrentConfigurationModel) -> Element {
             if !cfg.ip_lists.is_empty() {
                 {render_ip_lists(cfg)}
             }
+            if !cfg.ssl_certs.is_empty() {
+                {render_ssl_certs(&cfg.ssl_certs)}
+            }
             if !cfg.errors.is_empty() {
                 section { class: "port",
                     div { class: "port-header",
@@ -71,6 +74,53 @@ fn render_dashboard(cfg: &CurrentConfigurationModel) -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+fn render_ssl_certs(certs: &[SslCertificateInfoModel]) -> Element {
+    rsx! {
+        section { class: "port",
+            div { class: "port-header",
+                span { class: "label", "SSL certificates" }
+                span { class: "number", "{certs.len()}" }
+            }
+            div { class: "locations-wrap ssl-table-wrap",
+                table { class: "locations",
+                    thead {
+                        tr {
+                            th { "Cert ID" }
+                            th { "Days left" }
+                            th { "Expires at" }
+                        }
+                    }
+                    tbody {
+                        for c in certs {
+                            {render_ssl_cert(c)}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_ssl_cert(c: &SslCertificateInfoModel) -> Element {
+    let pill_class = if c.days_left < 7 {
+        "days-left critical"
+    } else if c.days_left < 30 {
+        "days-left warn"
+    } else {
+        "days-left ok"
+    };
+
+    rsx! {
+        tr {
+            td { class: "id-string", "{c.id}" }
+            td {
+                span { class: "{pill_class}", "{c.days_left}" }
+            }
+            td { class: "id-string", "{c.expires_at}" }
         }
     }
 }
@@ -108,13 +158,19 @@ fn render_ip_lists(cfg: &CurrentConfigurationModel) -> Element {
 fn render_port(port: &PortConfigurationModel) -> Element {
     let port_type_class = format!("type-pill listen-{}", normalize_type(port.r#type.as_str()));
 
+    let port_conn_class = if port.inbound_connections > 0 {
+        "conn-count active"
+    } else {
+        "conn-count"
+    };
+
     rsx! {
         section { class: "port",
             div { class: "port-header",
                 span { class: "label", "Port" }
                 span { class: "number", "{port.port}" }
                 span { class: "{port_type_class}", "{port.r#type}" }
-                span { class: "conn-count",
+                span { class: "{port_conn_class}",
                     span { class: "label", "TCP" }
                     span { class: "value", "{port.inbound_connections}" }
                 }
@@ -145,9 +201,18 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
                 if endpoint.debug {
                     span { class: "debug-badge", "debug" }
                 }
-                span { class: "conn-count endpoint-conn",
-                    span { class: "label", "TCP" }
-                    span { class: "value", "{endpoint.inbound_connections}" }
+                {
+                    let endpoint_conn_class = if endpoint.inbound_connections > 0 {
+                        "conn-count endpoint-conn active"
+                    } else {
+                        "conn-count endpoint-conn"
+                    };
+                    rsx! {
+                        span { class: "{endpoint_conn_class}",
+                            span { class: "label", "TCP" }
+                            span { class: "value", "{endpoint.inbound_connections}" }
+                        }
+                    }
                 }
             }
             if has_meta {

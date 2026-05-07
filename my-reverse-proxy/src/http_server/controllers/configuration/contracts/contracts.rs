@@ -17,8 +17,16 @@ pub struct CurrentConfigurationHttpModel {
     pub ip_lists: BTreeMap<String, Vec<String>>,
     pub errors: BTreeMap<String, String>,
     pub remote_connections: HashMap<String, usize>,
+    pub ssl_certs: Vec<SslCertificateInfoModel>,
     pub gateway_server: Option<GatewayServerStatus>,
     pub gateway_clients: Vec<GatewayClientStatus>,
+}
+
+#[derive(MyHttpObjectStructure, Serialize)]
+pub struct SslCertificateInfoModel {
+    pub id: String,
+    pub expires_at: String,
+    pub days_left: i64,
 }
 
 impl CurrentConfigurationHttpModel {
@@ -52,6 +60,8 @@ impl CurrentConfigurationHttpModel {
         }
 
         ports.sort_by(|a, b| a.port.cmp(&b.port));
+
+        let ssl_certs = collect_ssl_certs().await;
 
         let mut remote_connections = HashMap::new();
 
@@ -88,10 +98,36 @@ impl CurrentConfigurationHttpModel {
             ip_lists,
             errors,
             remote_connections,
+            ssl_certs,
             gateway_server: GatewayServerStatus::new().await,
             gateway_clients: GatewayClientStatus::new().await,
         }
     }
+}
+
+async fn collect_ssl_certs() -> Vec<SslCertificateInfoModel> {
+    use rust_extensions::date_time::DateTimeAsMicroseconds;
+
+    let now = DateTimeAsMicroseconds::now();
+    crate::app::APP_CTX
+        .ssl_certificates_cache
+        .read(|cache| {
+            cache
+                .ssl_certs
+                .get_list()
+                .into_iter()
+                .map(|(id, holder)| {
+                    let expires = holder.ssl_cert.get_cert_info().expires;
+                    let days_left = expires.duration_since(now).get_full_seconds() / 86_400;
+                    SslCertificateInfoModel {
+                        id,
+                        expires_at: expires.to_rfc3339(),
+                        days_left,
+                    }
+                })
+                .collect()
+        })
+        .await
 }
 
 #[derive(MyHttpObjectStructure, Serialize)]

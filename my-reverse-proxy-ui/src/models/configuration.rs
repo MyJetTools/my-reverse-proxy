@@ -15,6 +15,15 @@ pub struct CurrentConfigurationModel {
     pub gateway_server: Option<GatewayServerStatusModel>,
     #[serde(default)]
     pub gateway_clients: Vec<GatewayClientStatusModel>,
+    #[serde(default)]
+    pub ssl_certs: Vec<SslCertificateInfoModel>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SslCertificateInfoModel {
+    pub id: String,
+    pub expires_at: String,
+    pub days_left: i64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
