@@ -5,6 +5,7 @@ use crate::{configurations::*, settings::*, settings_compiled::SettingsCompiled}
 pub async fn compile_location_proxy_pass_to(
     settings_model: &SettingsCompiled,
     location_settings: &LocationSettings,
+    listen_host: &str,
 ) -> Result<ProxyPassLocationConfig, String> {
     let path = location_settings
         .path
@@ -180,6 +181,7 @@ pub async fn compile_location_proxy_pass_to(
         location_settings.get_compress(),
         location_settings.get_trace_payload(),
         location_settings.auth_header.clone(),
+        listen_host,
     );
 
     Ok(result)

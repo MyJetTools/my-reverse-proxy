@@ -9,7 +9,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::app::APP_CTX;
 
-use super::{H1Entry, H1Pool, H1Scheme, PoolKey};
+use super::{H1Entry, H1Pool};
 
 const PING_TIMEOUT: Duration = Duration::from_secs(1);
 const HOT_WINDOW_SECS: i64 = 3;
@@ -42,7 +42,7 @@ where
             return;
         }
 
-        let label = self.key.endpoint_label();
+        let label = self.desc.name.clone();
         let snap = self.clients.load_full();
         let now = DateTimeAsMicroseconds::now();
 
@@ -68,7 +68,7 @@ where
                 continue;
             };
 
-            let alive = ping_entry(entry, path, &self.key).await;
+            let alive = ping_entry(entry, path).await;
             if alive {
                 entry.last_success.update(DateTimeAsMicroseconds::now());
             } else {
@@ -97,7 +97,7 @@ fn spawn_revive<TStream, TConnector>(
         if pool.revive_entry(&dead_entry).await.is_ok() {
             APP_CTX
                 .prometheus
-                .set_h1_pool_alive(&pool.key.endpoint_label(), pool.alive_count() as i64);
+                .set_h1_pool_alive(&pool.desc.name, pool.alive_count() as i64);
         }
         // Err → dead stays; next tick will spawn another revive task.
     });
@@ -106,7 +106,6 @@ fn spawn_revive<TStream, TConnector>(
 async fn ping_entry<TStream, TConnector>(
     entry: &Arc<H1Entry<TStream, TConnector>>,
     health_check_path: &str,
-    _key: &PoolKey,
 ) -> bool
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
@@ -141,6 +140,3 @@ where
     }
 }
 
-// Suppress unused warning for H1Scheme — used by other modules but not by this file.
-#[allow(dead_code)]
-fn _scheme_marker(_: H1Scheme) {}

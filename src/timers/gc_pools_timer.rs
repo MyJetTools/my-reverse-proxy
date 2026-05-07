@@ -7,20 +7,17 @@ use crate::{
         ListenConfiguration, MyReverseProxyRemoteEndpoint, ProxyPassLocationConfig,
         ProxyPassToConfig,
     },
-    upstream_h1_pool::{H1Scheme, PoolKey as H1PoolKey},
-    upstream_h2_pool::{H2Scheme, PoolKey as H2PoolKey},
 };
 
-/// Periodic GC for the per-endpoint upstream pools. Removes pools whose endpoint
-/// is no longer referenced by any location in the current configuration. Pools
-/// are created lazily on first request — this timer is the only mechanism that
-/// removes them.
+/// Periodic GC for the per-location upstream pools. Removes pools whose
+/// location is no longer referenced by any location in the current
+/// configuration. Pools are created lazily on first request — this timer is
+/// the only mechanism that removes them.
 pub struct GcPoolsTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for GcPoolsTimer {
     async fn tick(&self) {
-        // Collect desired pool keys per registry from the current configuration.
         let desired = APP_CTX
             .current_configuration
             .get(|cfg| collect_desired_keys(cfg))
@@ -37,12 +34,12 @@ impl MyTimerTick for GcPoolsTimer {
 
 #[derive(Default)]
 struct DesiredKeys {
-    h1_tcp: AHashSet<H1PoolKey>,
-    h1_tls: AHashSet<H1PoolKey>,
-    h1_uds: AHashSet<H1PoolKey>,
-    h2_tcp: AHashSet<H2PoolKey>,
-    h2_tls: AHashSet<H2PoolKey>,
-    h2_uds: AHashSet<H2PoolKey>,
+    h1_tcp: AHashSet<i64>,
+    h1_tls: AHashSet<i64>,
+    h1_uds: AHashSet<i64>,
+    h2_tcp: AHashSet<i64>,
+    h2_tls: AHashSet<i64>,
+    h2_uds: AHashSet<i64>,
 }
 
 fn collect_desired_keys(cfg: &crate::configurations::AppConfigurationInner) -> DesiredKeys {
@@ -88,59 +85,43 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
         return;
     };
 
+    let location_id = location.id;
+
     use rust_extensions::remote_endpoint::Scheme;
     match &location.proxy_pass_to {
         ProxyPassToConfig::Http1(_) => match scheme {
             Scheme::Http | Scheme::Ws => {
-                out.h1_tcp
-                    .insert(H1PoolKey::from_remote_endpoint(H1Scheme::Http1, remote_host));
+                out.h1_tcp.insert(location_id);
             }
             Scheme::Https | Scheme::Wss => {
-                out.h1_tls
-                    .insert(H1PoolKey::from_remote_endpoint(H1Scheme::Https1, remote_host));
+                out.h1_tls.insert(location_id);
             }
             Scheme::UnixSocket => {
-                out.h1_uds.insert(H1PoolKey::from_remote_endpoint(
-                    H1Scheme::UnixHttp1,
-                    remote_host,
-                ));
+                out.h1_uds.insert(location_id);
             }
         },
         ProxyPassToConfig::Http2(_) => match scheme {
             Scheme::Http => {
-                out.h2_tcp
-                    .insert(H2PoolKey::from_remote_endpoint(H2Scheme::Http2, remote_host));
+                out.h2_tcp.insert(location_id);
             }
             Scheme::Https => {
-                out.h2_tls
-                    .insert(H2PoolKey::from_remote_endpoint(H2Scheme::Https2, remote_host));
+                out.h2_tls.insert(location_id);
             }
             Scheme::Ws => {
-                out.h1_tcp
-                    .insert(H1PoolKey::from_remote_endpoint(H1Scheme::Http1, remote_host));
+                out.h1_tcp.insert(location_id);
             }
             Scheme::Wss => {
-                out.h1_tls
-                    .insert(H1PoolKey::from_remote_endpoint(H1Scheme::Https1, remote_host));
+                out.h1_tls.insert(location_id);
             }
             Scheme::UnixSocket => {
-                out.h2_uds.insert(H2PoolKey::from_remote_endpoint(
-                    H2Scheme::UnixHttp2,
-                    remote_host,
-                ));
+                out.h2_uds.insert(location_id);
             }
         },
         ProxyPassToConfig::UnixHttp1(_) => {
-            out.h1_uds.insert(H1PoolKey::from_remote_endpoint(
-                H1Scheme::UnixHttp1,
-                remote_host,
-            ));
+            out.h1_uds.insert(location_id);
         }
         ProxyPassToConfig::UnixHttp2(_) => {
-            out.h2_uds.insert(H2PoolKey::from_remote_endpoint(
-                H2Scheme::UnixHttp2,
-                remote_host,
-            ));
+            out.h2_uds.insert(location_id);
         }
         _ => {}
     }

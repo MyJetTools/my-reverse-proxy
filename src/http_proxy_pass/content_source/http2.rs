@@ -5,13 +5,13 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 use crate::{
     http_client_connectors::HttpConnector,
     http_proxy_pass::ProxyPassError,
-    upstream_h2_pool::{ConnectorFactory, PoolKey, PoolParams},
+    upstream_h2_pool::{ConnectorFactory, PoolDesc, PoolParams},
 };
 
 use super::*;
 
 pub struct Http2ContentSource {
-    pub pool_key: PoolKey,
+    pub pool_desc: PoolDesc,
     pub pool_params: PoolParams,
     pub factory: ConnectorFactory<HttpConnector>,
     pub request_timeout: std::time::Duration,
@@ -22,10 +22,10 @@ impl Http2ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let pool = match crate::app::APP_CTX.h2_tcp_pools.get(&self.pool_key) {
+        let pool = match crate::app::APP_CTX.h2_tcp_pools.get(self.pool_desc.location_id) {
             Some(p) => p,
             None => crate::app::APP_CTX.h2_tcp_pools.ensure_pool(
-                self.pool_key.clone(),
+                self.pool_desc.clone(),
                 self.pool_params.clone(),
                 self.factory.clone(),
             ),
@@ -41,7 +41,7 @@ impl Http2ContentSource {
             let mut response = execute_h2(&client, req, self.request_timeout).await?;
             if let HttpResponse::WebSocketUpgrade { disconnection, .. } = &mut response {
                 *disconnection = Arc::new(H2WsActiveGuard::new(
-                    self.pool_key.endpoint_label(),
+                    self.pool_desc.name.clone(),
                     client,
                 ));
             }

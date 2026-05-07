@@ -10,7 +10,7 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::app::APP_CTX;
 
-use super::{H2Entry, H2Pool, H2Scheme, PoolKey};
+use super::{H2Entry, H2Pool};
 
 const PING_TIMEOUT: Duration = Duration::from_secs(1);
 const HOT_WINDOW_SECS: i64 = 3;
@@ -39,7 +39,7 @@ where
             return;
         }
 
-        let label = self.key.endpoint_label();
+        let label = self.desc.name.clone();
         let snap = self.clients.load_full();
         let now = DateTimeAsMicroseconds::now();
 
@@ -65,7 +65,7 @@ where
                 continue;
             };
 
-            let alive = ping_entry(entry, path, &self.key).await;
+            let alive = ping_entry(entry, path, &self.desc.authority).await;
             if alive {
                 entry.last_success.update(DateTimeAsMicroseconds::now());
             } else {
@@ -94,7 +94,7 @@ fn spawn_revive<TStream, TConnector>(
         if pool.revive_entry(&dead_entry).await.is_ok() {
             APP_CTX
                 .prometheus
-                .set_h2_pool_alive(&pool.key.endpoint_label(), pool.alive_count() as i64);
+                .set_h2_pool_alive(&pool.desc.name, pool.alive_count() as i64);
         }
         // Err → dead stays; next tick will spawn another revive task.
     });
@@ -103,16 +103,12 @@ fn spawn_revive<TStream, TConnector>(
 async fn ping_entry<TStream, TConnector>(
     entry: &Arc<H2Entry<TStream, TConnector>>,
     health_check_path: &str,
-    key: &PoolKey,
+    authority: &str,
 ) -> bool
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    let authority = match key.scheme {
-        H2Scheme::UnixHttp2 => "localhost".to_string(),
-        H2Scheme::Http2 | H2Scheme::Https2 => format!("{}:{}", key.host, key.port),
-    };
     let path = if health_check_path.starts_with('/') {
         health_check_path.to_string()
     } else {

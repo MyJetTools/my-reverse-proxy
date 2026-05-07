@@ -12,6 +12,12 @@ use super::*;
 pub struct ProxyPassLocationConfig {
     pub path: String,
     pub id: i64,
+    /// Logical identity of the (listen → upstream) pair, formatted as
+    /// `"{listen_host}|{path}->{scheme}://{host}:{port}"`. On config apply
+    /// we scan existing pools for a matching `id_string` and reuse the
+    /// pool's `location_id` instead of allocating a fresh one — this keeps
+    /// upstream pools warm across reloads.
+    pub id_string: String,
     pub modify_request_headers: ModifyHeadersConfig,
     pub modify_response_headers: ModifyHeadersConfig,
     pub ip_white_list_id: Option<String>,
@@ -32,6 +38,7 @@ impl ProxyPassLocationConfig {
         compress: bool,
         trace_payload: bool,
         auth_header: Option<String>,
+        listen_host: &str,
     ) -> Self {
         let mut modify_request_headers = ModifyHeadersConfig::default();
         let mut modify_response_headers = ModifyHeadersConfig::default();
@@ -41,9 +48,14 @@ impl ProxyPassLocationConfig {
             modify_response_headers.populate_response(&mut modify_headers);
         }
 
+        let id_string = build_location_id_string(listen_host, &path, &proxy_pass_to);
+        let id = crate::scripts::find_location_id_by_id_string(&id_string)
+            .unwrap_or_else(|| APP_CTX.get_next_id());
+
         Self {
             path,
-            id: APP_CTX.get_next_id(),
+            id,
+            id_string,
             modify_request_headers,
             modify_response_headers,
             ip_white_list_id,
@@ -104,58 +116,62 @@ impl ProxyPassLocationConfig {
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            let (pool_key, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            let (pool_key, pool_params, factory) = make_tls_h1_pool_factory(
+                            let (pool_desc, pool_params, factory) = make_tls_h1_pool_factory(
                                 remote_host,
                                 debug,
                                 self.domain_name.clone(),
                                 proxy_pass.connect_timeout,
+                                self.id,
+                                self.id_string.clone(),
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            let (pool_key, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            let (pool_key, pool_params, factory) = make_tls_h1_pool_factory(
+                            let (pool_desc, pool_params, factory) = make_tls_h1_pool_factory(
                                 remote_host,
                                 debug,
                                 self.domain_name.clone(),
                                 proxy_pass.connect_timeout,
+                                self.id,
+                                self.id_string.clone(),
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
-                            let (pool_key, pool_params, factory) =
-                                make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::UnixHttp1(UnixHttp1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
@@ -202,58 +218,62 @@ impl ProxyPassLocationConfig {
 
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
-                            let (pool_key, pool_params, factory) =
-                                make_tcp_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_tcp_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::Http2(Http2ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
-                            let (pool_key, pool_params, factory) = make_tls_h2_pool_factory(
+                            let (pool_desc, pool_params, factory) = make_tls_h2_pool_factory(
                                 remote_host,
                                 debug,
                                 self.domain_name.clone(),
                                 proxy_pass.connect_timeout,
+                                self.id,
+                                self.id_string.clone(),
                             );
                             return HttpProxyPassContentSource::Https2(Https2ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
-                            let (pool_key, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
-                            let (pool_key, pool_params, factory) = make_tls_h1_pool_factory(
+                            let (pool_desc, pool_params, factory) = make_tls_h1_pool_factory(
                                 remote_host,
                                 debug,
                                 self.domain_name.clone(),
                                 proxy_pass.connect_timeout,
+                                self.id,
+                                self.id_string.clone(),
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
-                            let (pool_key, pool_params, factory) =
-                                make_uds_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                            let (pool_desc, pool_params, factory) =
+                                make_uds_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                             return HttpProxyPassContentSource::UnixHttp2(UnixHttp2ContentSource {
-                                pool_key,
+                                pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
@@ -315,10 +335,10 @@ impl ProxyPassLocationConfig {
                     );
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                    let (pool_key, pool_params, factory) =
-                        make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                    let (pool_desc, pool_params, factory) =
+                        make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                     return HttpProxyPassContentSource::UnixHttp1(UnixHttp1ContentSource {
-                        pool_key,
+                        pool_desc,
                         pool_params,
                         factory,
                         request_timeout: proxy_pass.request_timeout,
@@ -344,10 +364,10 @@ impl ProxyPassLocationConfig {
                     );
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                    let (pool_key, pool_params, factory) =
-                        make_uds_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout);
+                    let (pool_desc, pool_params, factory) =
+                        make_uds_h2_pool_factory(remote_host, debug, proxy_pass.connect_timeout, self.id, self.id_string.clone());
                     return HttpProxyPassContentSource::UnixHttp2(UnixHttp2ContentSource {
-                        pool_key,
+                        pool_desc,
                         pool_params,
                         factory,
                         request_timeout: proxy_pass.request_timeout,
@@ -372,19 +392,61 @@ impl ProxyPassLocationConfig {
     }
 }
 
+fn build_location_id_string(
+    listen_host: &str,
+    path: &str,
+    proxy_pass_to: &ProxyPassToConfig,
+) -> String {
+    format!(
+        "{}|{}->{}|{}",
+        listen_host,
+        path,
+        proxy_pass_to.get_type_as_str(),
+        proxy_pass_to.to_string(),
+    )
+}
+
+fn h1_tcp_pool_name(host: &str, port: u16, location_id: i64) -> String {
+    format!("h1://{}:{}#{}", host, port, location_id)
+}
+
+fn h1_tls_pool_name(host: &str, port: u16, location_id: i64) -> String {
+    format!("h1s://{}:{}#{}", host, port, location_id)
+}
+
+fn h1_uds_pool_name(socket_path: &str, location_id: i64) -> String {
+    format!("uds-h1://{}#{}", socket_path, location_id)
+}
+
+fn h2_tcp_pool_name(host: &str, port: u16, location_id: i64) -> String {
+    format!("h2://{}:{}#{}", host, port, location_id)
+}
+
+fn h2_tls_pool_name(host: &str, port: u16, location_id: i64) -> String {
+    format!("h2s://{}:{}#{}", host, port, location_id)
+}
+
+fn h2_uds_pool_name(socket_path: &str, location_id: i64) -> String {
+    format!("uds-h2://{}#{}", socket_path, location_id)
+}
+
 pub(crate) fn make_tcp_h1_pool_factory(
     remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
     debug: bool,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h1_pool::PoolKey,
+    crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
     crate::upstream_h1_pool::ConnectorFactory<crate::http_client_connectors::HttpConnector>,
 ) {
-    let pool_key = crate::upstream_h1_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h1_pool::H1Scheme::Http1,
-        remote_host,
-    );
+    let port = remote_host.get_port().unwrap_or(80);
+    let desc = crate::upstream_h1_pool::PoolDesc {
+        location_id,
+        name: h1_tcp_pool_name(remote_host.get_host(), port, location_id),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h1_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -402,7 +464,7 @@ pub(crate) fn make_tcp_h1_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }
 
 pub(crate) fn make_tls_h1_pool_factory(
@@ -410,15 +472,19 @@ pub(crate) fn make_tls_h1_pool_factory(
     debug: bool,
     domain_name: Option<String>,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h1_pool::PoolKey,
+    crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
     crate::upstream_h1_pool::ConnectorFactory<crate::http_client_connectors::HttpTlsConnector>,
 ) {
-    let pool_key = crate::upstream_h1_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h1_pool::H1Scheme::Https1,
-        remote_host,
-    );
+    let port = remote_host.get_port().unwrap_or(443);
+    let desc = crate::upstream_h1_pool::PoolDesc {
+        location_id,
+        name: h1_tls_pool_name(remote_host.get_host(), port, location_id),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h1_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -437,22 +503,25 @@ pub(crate) fn make_tls_h1_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }
 
 pub(crate) fn make_uds_h1_pool_factory(
     remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
     debug: bool,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h1_pool::PoolKey,
+    crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
     crate::upstream_h1_pool::ConnectorFactory<crate::http_client_connectors::UnixSocketHttpConnector>,
 ) {
-    let pool_key = crate::upstream_h1_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h1_pool::H1Scheme::UnixHttp1,
-        remote_host,
-    );
+    let desc = crate::upstream_h1_pool::PoolDesc {
+        location_id,
+        name: h1_uds_pool_name(remote_host.get_host_port().as_str(), location_id),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h1_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -470,22 +539,28 @@ pub(crate) fn make_uds_h1_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }
 
 pub(crate) fn make_tcp_h2_pool_factory(
     remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
     debug: bool,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h2_pool::PoolKey,
+    crate::upstream_h2_pool::PoolDesc,
     crate::upstream_h2_pool::PoolParams,
     crate::upstream_h2_pool::ConnectorFactory<crate::http_client_connectors::HttpConnector>,
 ) {
-    let pool_key = crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h2_pool::H2Scheme::Http2,
-        remote_host,
-    );
+    let port = remote_host.get_port().unwrap_or(80);
+    let host = remote_host.get_host();
+    let desc = crate::upstream_h2_pool::PoolDesc {
+        location_id,
+        name: h2_tcp_pool_name(host, port, location_id),
+        authority: format!("{}:{}", host, port),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h2_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -504,7 +579,7 @@ pub(crate) fn make_tcp_h2_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }
 
 pub(crate) fn make_tls_h2_pool_factory(
@@ -512,15 +587,21 @@ pub(crate) fn make_tls_h2_pool_factory(
     debug: bool,
     domain_name: Option<String>,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h2_pool::PoolKey,
+    crate::upstream_h2_pool::PoolDesc,
     crate::upstream_h2_pool::PoolParams,
     crate::upstream_h2_pool::ConnectorFactory<crate::http_client_connectors::HttpTlsConnector>,
 ) {
-    let pool_key = crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h2_pool::H2Scheme::Https2,
-        remote_host,
-    );
+    let port = remote_host.get_port().unwrap_or(443);
+    let host = remote_host.get_host();
+    let desc = crate::upstream_h2_pool::PoolDesc {
+        location_id,
+        name: h2_tls_pool_name(host, port, location_id),
+        authority: format!("{}:{}", host, port),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h2_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -540,22 +621,26 @@ pub(crate) fn make_tls_h2_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }
 
 pub(crate) fn make_uds_h2_pool_factory(
     remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
     debug: bool,
     connect_timeout: Duration,
+    location_id: i64,
+    id_string: String,
 ) -> (
-    crate::upstream_h2_pool::PoolKey,
+    crate::upstream_h2_pool::PoolDesc,
     crate::upstream_h2_pool::PoolParams,
     crate::upstream_h2_pool::ConnectorFactory<crate::http_client_connectors::UnixSocketHttpConnector>,
 ) {
-    let pool_key = crate::upstream_h2_pool::PoolKey::from_remote_endpoint(
-        crate::upstream_h2_pool::H2Scheme::UnixHttp2,
-        remote_host,
-    );
+    let desc = crate::upstream_h2_pool::PoolDesc {
+        location_id,
+        name: h2_uds_pool_name(remote_host.get_host_port().as_str(), location_id),
+        authority: "localhost".to_string(),
+        id_string,
+    };
     let endpoint_arc = remote_host.clone();
     let mut params = crate::upstream_h2_pool::PoolParams::default();
     params.connect_timeout = connect_timeout;
@@ -574,5 +659,5 @@ pub(crate) fn make_uds_h2_pool_factory(
             metrics,
         )
     });
-    (pool_key, params, factory)
+    (desc, params, factory)
 }

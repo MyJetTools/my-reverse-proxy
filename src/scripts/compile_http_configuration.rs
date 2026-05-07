@@ -36,9 +36,14 @@ pub async fn compile_http_configuration(
         (None, None, None)
     };
 
+    let listen_host = host_endpoint.as_str().to_string();
     for location_settings in &host_settings.locations {
-        let proxy_pass_to =
-            super::compile_location_proxy_pass_to(settings_model, location_settings).await?;
+        let proxy_pass_to = super::compile_location_proxy_pass_to(
+            settings_model,
+            location_settings,
+            &listen_host,
+        )
+        .await?;
         {
             locations.push(Arc::new(proxy_pass_to));
         }

@@ -2,6 +2,8 @@
 //pub use apply_variables::*;
 mod compile_location_proxy_pass_to;
 pub use compile_location_proxy_pass_to::*;
+mod find_location_id_by_id_string;
+pub use find_location_id_by_id_string::*;
 mod get_endpoint_users_list;
 pub use get_endpoint_users_list::*;
 

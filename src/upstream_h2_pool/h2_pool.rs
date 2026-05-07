@@ -8,14 +8,16 @@ use my_http_client::{http2::MyHttp2Client, MyHttpClientConnector, MyHttpClientEr
 use parking_lot::Mutex;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use super::{ConnectorFactory, H2Entry, PoolKey, PoolParams};
+use rust_extensions::sorted_vec::EntityWithKey;
+
+use super::{ConnectorFactory, H2Entry, PoolDesc, PoolParams};
 
 pub struct H2Pool<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pub key: PoolKey,
+    pub desc: PoolDesc,
     pub params: PoolParams,
     pub clients: ArcSwap<Vec<Arc<H2Entry<TStream, TConnector>>>>,
     /// Held briefly (no await) while pushing a new entry into the vec.
@@ -32,12 +34,12 @@ where
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     pub fn new(
-        key: PoolKey,
+        desc: PoolDesc,
         params: PoolParams,
         factory: ConnectorFactory<TConnector>,
     ) -> Self {
         Self {
-            key,
+            desc,
             params,
             clients: ArcSwap::from_pointee(Vec::new()),
             grow_lock: Mutex::new(()),
@@ -142,5 +144,15 @@ where
 
     pub fn total_count(&self) -> usize {
         self.clients.load().len()
+    }
+}
+
+impl<TStream, TConnector> EntityWithKey<i64> for H2Pool<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    fn get_key(&self) -> &i64 {
+        &self.desc.location_id
     }
 }

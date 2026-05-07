@@ -63,23 +63,23 @@ impl CurrentConfigurationHttpModel {
             .http2_over_ssh_clients_pool
             .fill_connections_amount(&mut remote_connections);
 
-        for (key, ready, _total) in crate::app::APP_CTX.h1_tcp_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h1_tcp_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
-        for (key, ready, _total) in crate::app::APP_CTX.h1_tls_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h1_tls_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
-        for (key, ready, _total) in crate::app::APP_CTX.h1_uds_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h1_uds_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
-        for (key, ready, _total) in crate::app::APP_CTX.h2_tcp_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h2_tcp_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
-        for (key, ready, _total) in crate::app::APP_CTX.h2_tls_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h2_tls_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
-        for (key, ready, _total) in crate::app::APP_CTX.h2_uds_pools.snapshot() {
-            remote_connections.insert(key.endpoint_label(), ready);
+        for (name, ready, _total) in crate::app::APP_CTX.h2_uds_pools.snapshot() {
+            remote_connections.insert(name, ready);
         }
 
         Self {

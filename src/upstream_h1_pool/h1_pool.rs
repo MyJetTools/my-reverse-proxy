@@ -9,7 +9,9 @@ use my_http_client::{http1::MyHttpClient, MyHttpClientConnector, MyHttpClientErr
 use parking_lot::Mutex;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use super::{ConnectorFactory, H1ClientHandle, H1Entry, PoolKey, PoolParams, DISPOSABLE_COUNTER, MAX_DISPOSABLE};
+use rust_extensions::sorted_vec::EntityWithKey;
+
+use super::{ConnectorFactory, H1ClientHandle, H1Entry, PoolDesc, PoolParams, DISPOSABLE_COUNTER, MAX_DISPOSABLE};
 
 const OVERFLOW_RETRY_SLEEP: Duration = Duration::from_millis(10);
 
@@ -18,7 +20,7 @@ where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pub key: PoolKey,
+    pub desc: PoolDesc,
     pub params: PoolParams,
     pub clients: ArcSwap<Vec<Arc<H1Entry<TStream, TConnector>>>>,
     /// Held briefly (no await) only during a Path 0 push. Connect happens
@@ -35,12 +37,12 @@ where
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     pub fn new(
-        key: PoolKey,
+        desc: PoolDesc,
         params: PoolParams,
         factory: ConnectorFactory<TConnector>,
     ) -> Self {
         Self {
-            key,
+            desc,
             params,
             clients: ArcSwap::from_pointee(Vec::new()),
             grow_lock: Mutex::new(()),
@@ -188,5 +190,15 @@ where
 
     pub fn total_count(&self) -> usize {
         self.clients.load().len()
+    }
+}
+
+impl<TStream, TConnector> EntityWithKey<i64> for H1Pool<TStream, TConnector>
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    fn get_key(&self) -> &i64 {
+        &self.desc.location_id
     }
 }
