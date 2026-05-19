@@ -9,6 +9,7 @@ use my_http_client::{
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::app::APP_CTX;
+use crate::upstream_status::UpstreamStatus;
 
 use super::{H2Entry, H2Pool};
 
@@ -68,8 +69,10 @@ where
             let alive = ping_entry(entry, path, &self.desc.authority).await;
             if alive {
                 entry.last_success.update(DateTimeAsMicroseconds::now());
+                self.last_status.set(UpstreamStatus::Ok);
             } else {
                 entry.dead.store(true, Ordering::Relaxed);
+                self.last_status.set(UpstreamStatus::Error);
                 spawn_revive(self.clone(), entry.clone());
             }
         }

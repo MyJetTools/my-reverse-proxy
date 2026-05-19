@@ -43,6 +43,7 @@ mod timers;
 mod types;
 mod upstream_h1_pool;
 mod upstream_h2_pool;
+mod upstream_status;
 mod utils;
 
 pub fn to_hyper_error(e: std::convert::Infallible) -> String {

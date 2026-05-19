@@ -322,6 +322,22 @@ table.locations td.upstream {
     font-size: 12px;
 }
 
+/* ---------- Upstream last-attempt status colors ----------
+ * Tints the upstream cell text by the last connect/revive/health-ping
+ * outcome surfaced by the pool. */
+table.locations tbody tr.upstream-ok td.upstream {
+    color: #38a169;
+}
+
+table.locations tbody tr.upstream-error td.upstream {
+    color: #c53030;
+    font-weight: 600;
+}
+
+table.locations tbody tr.upstream-unknown td.upstream {
+    color: #1a202c;
+}
+
 /* ---------- Type pills (location type) ---------- */
 .type-pill {
     display: inline-block;

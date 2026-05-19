@@ -280,8 +280,15 @@ fn render_location(loc: &HttpProxyPassLocationModel) -> Element {
 
     let type_class = format!("type-pill type-{}", normalize_type(loc.r#type.as_str()));
 
+    let row_class = match loc.last_status {
+        Some(1) => "upstream-ok",
+        Some(2) => "upstream-error",
+        Some(0) => "upstream-unknown",
+        _ => "",
+    };
+
     rsx! {
-        tr {
+        tr { class: "{row_class}",
             td { "{loc.path}" }
             td {
                 span { class: "{type_class}", "{loc.r#type}" }

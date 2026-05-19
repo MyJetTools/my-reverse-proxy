@@ -71,6 +71,9 @@ pub struct HttpProxyPassLocationModel {
     pub pool_alive: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool_total: Option<usize>,
+    /// 0 = unknown, 1 = ok, 2 = error.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_status: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

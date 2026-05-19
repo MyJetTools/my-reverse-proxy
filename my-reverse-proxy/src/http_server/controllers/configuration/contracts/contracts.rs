@@ -7,6 +7,7 @@ use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
 use crate::configurations::*;
+use crate::upstream_status::UpstreamStatus;
 
 use super::*;
 
@@ -244,6 +245,7 @@ impl HttpEndpointInfoModel {
                 id_string: String::new(),
                 pool_alive: None,
                 pool_total: None,
+                last_status: None,
             }],
             allowed_user_list_id: None,
             ssl_cert_id: None,
@@ -287,13 +289,16 @@ pub struct HttpProxyPassLocationModel {
     pub pool_alive: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pool_total: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_status: Option<i64>,
 }
 
 impl HttpProxyPassLocationModel {
     pub fn new(src: &Arc<ProxyPassLocationConfig>) -> Self {
-        let (pool_alive, pool_total) = lookup_pool_size(src.id)
-            .map(|(a, t)| (Some(a), Some(t)))
-            .unwrap_or((None, None));
+        let (pool_alive, pool_total, last_status) = match lookup_pool_state(src.id) {
+            Some((a, t, s)) => (Some(a), Some(t), Some(s.as_u8() as i64)),
+            None => (None, None, None),
+        };
 
         let result = Self {
             path: src.path.to_string(),
@@ -307,31 +312,32 @@ impl HttpProxyPassLocationModel {
             id_string: src.id_string.clone(),
             pool_alive,
             pool_total,
+            last_status,
         };
 
         result
     }
 }
 
-fn lookup_pool_size(location_id: i64) -> Option<(usize, usize)> {
+fn lookup_pool_state(location_id: i64) -> Option<(usize, usize, UpstreamStatus)> {
     let ctx = &crate::app::APP_CTX;
     if let Some(p) = ctx.h1_tcp_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     if let Some(p) = ctx.h1_tls_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     if let Some(p) = ctx.h1_uds_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     if let Some(p) = ctx.h2_tcp_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     if let Some(p) = ctx.h2_tls_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     if let Some(p) = ctx.h2_uds_pools.get(location_id) {
-        return Some((p.alive_count(), p.total_count()));
+        return Some((p.alive_count(), p.total_count(), p.last_status()));
     }
     None
 }

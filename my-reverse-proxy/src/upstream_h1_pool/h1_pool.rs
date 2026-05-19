@@ -11,6 +11,8 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use rust_extensions::sorted_vec::EntityWithKey;
 
+use crate::upstream_status::{AtomicUpstreamStatus, UpstreamStatus};
+
 use super::{ConnectorFactory, H1ClientHandle, H1Entry, PoolDesc, PoolParams, DISPOSABLE_COUNTER, MAX_DISPOSABLE};
 
 const OVERFLOW_RETRY_SLEEP: Duration = Duration::from_millis(10);
@@ -29,6 +31,10 @@ where
     pub next: AtomicUsize,
     pub shutdown: AtomicBool,
     pub factory: ConnectorFactory<TConnector>,
+    /// Outcome of the most recent connect / revive / health-ping attempt.
+    /// Surfaced to the admin UI; not used for routing decisions (the pool
+    /// already tracks per-entry `dead` for that).
+    pub last_status: AtomicUpstreamStatus,
 }
 
 impl<TStream, TConnector> H1Pool<TStream, TConnector>
@@ -49,6 +55,7 @@ where
             next: AtomicUsize::new(0),
             shutdown: AtomicBool::new(false),
             factory,
+            last_status: AtomicUpstreamStatus::new(),
         }
     }
 
@@ -158,8 +165,16 @@ where
         let (connector, metrics) = (self.factory)();
         let mut client = MyHttpClient::new_with_metrics(connector, metrics);
         client.set_connect_timeout(self.params.connect_timeout);
-        client.connect().await?;
-        Ok(client)
+        match client.connect().await {
+            Ok(_) => {
+                self.last_status.set(UpstreamStatus::Ok);
+                Ok(client)
+            }
+            Err(e) => {
+                self.last_status.set(UpstreamStatus::Error);
+                Err(e)
+            }
+        }
     }
 
     /// Revive a dead entry under its `revive_lock`. Used by Path B (foreground)
@@ -178,6 +193,10 @@ where
         entry.last_success.update(DateTimeAsMicroseconds::now());
         entry.dead.store(false, Ordering::Relaxed);
         Ok(())
+    }
+
+    pub fn last_status(&self) -> UpstreamStatus {
+        self.last_status.get()
     }
 
     pub fn alive_count(&self) -> usize {
