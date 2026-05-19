@@ -3,3 +3,4 @@
 .vscode
 .claude
 **/.DS_Store
+.mcp.json

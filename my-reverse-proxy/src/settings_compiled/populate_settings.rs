@@ -121,6 +121,7 @@ impl SettingsCompiled {
                     track_metrics_by_all_domains: host_settings
                         .endpoint
                         .track_metrics_by_all_domains,
+                    hsts: host_settings.endpoint.hsts,
                 },
                 locations,
             };

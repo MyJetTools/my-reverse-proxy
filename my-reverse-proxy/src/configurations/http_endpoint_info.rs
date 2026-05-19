@@ -24,6 +24,7 @@ pub struct HttpEndpointInfo {
     pub whitelisted_ip_list_id: Option<String>,
     pub keep_alive: bool,
     pub track_metrics_by_all_domains: bool,
+    pub hsts: bool,
 }
 
 impl HttpEndpointInfo {
@@ -41,6 +42,7 @@ impl HttpEndpointInfo {
         mut modify_headers_settings: HttpEndpointModifyHeadersSettings,
         keep_alive: bool,
         track_metrics_by_all_domains: bool,
+        hsts: bool,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -62,6 +64,7 @@ impl HttpEndpointInfo {
             whitelisted_ip_list_id,
             keep_alive,
             track_metrics_by_all_domains,
+            hsts,
         }
     }
 

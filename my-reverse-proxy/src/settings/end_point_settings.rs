@@ -27,6 +27,7 @@ pub struct EndpointSettings {
     pub allowed_users: Option<String>,
     pub keep_alive: Option<bool>,
     pub track_metrics_by_all_domains: Option<bool>,
+    pub hsts: Option<bool>,
 }
 
 impl EndpointSettings {

@@ -247,16 +247,16 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 .push_header(add_header.0, value.as_str());
         }
 
-        if http_headers.write_hsts_headers {
-            self.h1_headers_builder.push_header(
-                "Strict-Transport-Security",
-                "max-age=31536000; includeSubDomains; preload",
-            );
-        }
-
         if let H1HeadersKind::Response(info) = &kind {
             if !info.keep_alive {
                 self.h1_headers_builder.push_header("Connection", "close");
+            }
+
+            if info.hsts && info.listen_endpoint_type.is_https() {
+                self.h1_headers_builder.push_header(
+                    "Strict-Transport-Security",
+                    "max-age=31536000; includeSubDomains; preload",
+                );
             }
         }
 
