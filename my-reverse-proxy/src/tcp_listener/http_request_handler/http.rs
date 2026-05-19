@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
-use arc_swap::ArcSwapOption;
 use bytes::Bytes;
 use http::StatusCode;
 use http_body_util::{combinators::BoxBody, BodyExt, Full};
@@ -8,7 +8,7 @@ use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use crate::{configurations::HttpListenPortConfiguration, http_proxy_pass::*, types::ConnectionIp};
 
 pub struct HttpRequestHandler {
-    proxy_pass: ArcSwapOption<HttpProxyPass>,
+    proxy_passes: Mutex<HashMap<String, Arc<HttpProxyPass>>>,
     connection_ip: ConnectionIp,
     listen_port_config: Arc<HttpListenPortConfiguration>,
 }
@@ -19,7 +19,7 @@ impl HttpRequestHandler {
         listen_port_config: Arc<HttpListenPortConfiguration>,
     ) -> Self {
         Self {
-            proxy_pass: ArcSwapOption::empty(),
+            proxy_passes: Mutex::new(HashMap::new()),
             connection_ip,
             listen_port_config,
         }
@@ -29,10 +29,6 @@ impl HttpRequestHandler {
         &self,
         req: &hyper::Request<hyper::body::Incoming>,
     ) -> Result<Arc<HttpProxyPass>, hyper::Result<hyper::Response<BoxBody<Bytes, String>>>> {
-        if let Some(proxy_pass) = self.proxy_pass.load_full() {
-            return Ok(proxy_pass);
-        }
-
         let Some(host) = req.uri().host() else {
             println!(
                 "Can not detect host. Uri:{}. Headers: {:?}",
@@ -44,6 +40,15 @@ impl HttpRequestHandler {
                 "Unknown host".to_string().into_bytes(),
             ));
         };
+
+        let host_key = host.to_ascii_lowercase();
+
+        {
+            let map = self.proxy_passes.lock().unwrap();
+            if let Some(existing) = map.get(&host_key) {
+                return Ok(existing.clone());
+            }
+        }
 
         let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(Some(host));
         if http_endpoint_info.is_none() {
@@ -78,7 +83,13 @@ impl HttpRequestHandler {
 
         let http_proxy_pass = Arc::new(http_proxy_pass);
 
-        self.proxy_pass.store(Some(http_proxy_pass.clone()));
+        {
+            let mut map = self.proxy_passes.lock().unwrap();
+            if let Some(existing) = map.get(&host_key) {
+                return Ok(existing.clone());
+            }
+            map.insert(host_key, http_proxy_pass.clone());
+        }
 
         Ok(http_proxy_pass)
     }
@@ -96,7 +107,11 @@ impl HttpRequestHandler {
     }
 
     pub async fn dispose(&self) {
-        if let Some(proxy_pass) = self.proxy_pass.swap(None) {
+        let proxy_passes: Vec<Arc<HttpProxyPass>> = {
+            let mut map = self.proxy_passes.lock().unwrap();
+            map.drain().map(|(_, v)| v).collect()
+        };
+        for proxy_pass in proxy_passes {
             proxy_pass.dispose().await;
         }
     }
