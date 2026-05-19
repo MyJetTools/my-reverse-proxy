@@ -54,7 +54,9 @@ async fn main() {
     my_tls::install_default_crypto_providers();
     crate::http_server::start();
 
-    crate::flows::load_everything_from_settings().await;
+    crate::flows::load_everything_from_settings()
+        .await
+        .expect("Failed to load initial settings");
 
     let mut my_timer = MyTimer::new(Duration::from_secs(3600));
 

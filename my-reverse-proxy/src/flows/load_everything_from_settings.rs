@@ -1,7 +1,7 @@
 use crate::settings_compiled::SettingsCompiled;
 
-pub async fn load_everything_from_settings() {
-    let settings_model = SettingsCompiled::load_settings().await.unwrap();
+pub async fn load_everything_from_settings() -> Result<(), String> {
+    let settings_model = SettingsCompiled::load_settings().await?;
 
     crate::scripts::update_ssh_config_list(&settings_model).await;
 
@@ -41,4 +41,6 @@ pub async fn load_everything_from_settings() {
     println!("Kicking off tcp endpoints");
 
     crate::scripts::sync_endpoints().await;
+
+    Ok(())
 }

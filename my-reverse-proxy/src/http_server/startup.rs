@@ -3,7 +3,9 @@ use std::{net::SocketAddr, sync::Arc};
 use mcp_server_middleware::McpMiddleware;
 use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer, StaticFilesMiddleware};
 
-use crate::mcp::{GetProxyStateSnapshotHandler, LookupPoolHandler};
+use crate::mcp::{
+    GetProxyStateSnapshotHandler, GetSettingsHandler, LookupPoolHandler, ReloadSettingsHandler,
+};
 
 const DEFAULT_PORT: u16 = 8000;
 
@@ -34,6 +36,8 @@ pub fn start() {
     );
     mcp.register_tool_call(Arc::new(GetProxyStateSnapshotHandler));
     mcp.register_tool_call(Arc::new(LookupPoolHandler));
+    mcp.register_tool_call(Arc::new(GetSettingsHandler));
+    mcp.register_tool_call(Arc::new(ReloadSettingsHandler));
 
     http_server.add_middleware(Arc::new(mcp));
 
