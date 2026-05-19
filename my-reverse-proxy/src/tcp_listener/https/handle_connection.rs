@@ -77,6 +77,7 @@ pub fn handle_connection(
                     tls_stream,
                     cn_user_name,
                     endpoint_port,
+                    configuration.clone(),
                 )
                 .await;
             }
@@ -98,6 +99,7 @@ pub fn handle_connection(
                     tls_stream,
                     cn_user_name,
                     endpoint_port,
+                    configuration.clone(),
                 )
                 .await;
             }
@@ -117,6 +119,7 @@ async fn serve_https2(
     tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
     client_certificate: Option<Arc<ClientCertificateData>>,
     endpoint_port: u16,
+    configuration: Arc<HttpListenPortConfiguration>,
 ) {
     use hyper::service::service_fn;
     use hyper_util::server::conn::auto::Builder;
@@ -147,11 +150,17 @@ async fn serve_https2(
         connection_ip,
         endpoint_info.clone(),
         listening_port_info,
-        client_certificate,
+        client_certificate.clone(),
     )
     .await;
 
-    let https_requests_handler = HttpsRequestsHandler::new(http_proxy_pass, connection_ip);
+    let https_requests_handler = HttpsRequestsHandler::new(
+        endpoint_info.host_endpoint.as_str().to_string(),
+        http_proxy_pass,
+        connection_ip,
+        configuration,
+        client_certificate,
+    );
 
     let https_requests_handler = Arc::new(https_requests_handler);
 
