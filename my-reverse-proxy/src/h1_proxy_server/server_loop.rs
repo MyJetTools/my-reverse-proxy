@@ -217,11 +217,20 @@ async fn execute_request<
             Some(host_no_port.trim().to_string())
         });
 
-    if http_connection_info.endpoint_info.is_none() {
+    let needs_endpoint_resolve = match http_connection_info.endpoint_info.as_ref() {
+        None => true,
+        Some(current) => match request_host_for_metric.as_deref() {
+            Some(host) => !current.is_my_endpoint(host),
+            None => false,
+        },
+    };
+
+    if needs_endpoint_resolve {
+        let was_none = http_connection_info.endpoint_info.is_none();
         http_connection_info.endpoint_info =
             h1_reader.try_find_endpoint_info(&request_headers, &http_connection_info.listen_config);
 
-        if http_connection_info.endpoint_info.is_some() {
+        if was_none && http_connection_info.endpoint_info.is_some() {
             if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
                 crate::app::APP_CTX.ip_blocklist.register_success(&ip);
             }
