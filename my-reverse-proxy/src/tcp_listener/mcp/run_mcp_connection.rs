@@ -6,7 +6,12 @@ use crate::{configurations::HttpEndpointInfo, network_stream::*};
 
 const BUFFER_LEN: usize = 512 * 1024;
 
-const READ_TIMEOUT: Duration = Duration::from_secs(60 * 3);
+// Safety net only — the client→server direction of a tunneled MCP
+// session can legitimately stay idle for long periods (the client only
+// writes when it issues a JSON-RPC request), and the server→client
+// direction is kept warm by the SSE keepalive emitted by
+// mcp-server-middleware. 30 minutes is plenty of headroom for both.
+const READ_TIMEOUT: Duration = Duration::from_secs(60 * 30);
 
 const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -108,7 +113,7 @@ async fn link_tcp_streams(
             Err(err) => {
                 write_stream.shutdown_socket().await;
                 println!(
-                    "{connection_id} Mcp Read/Write loop is stopped. Error: {:?}",
+                    "{connection_id} Mcp pump {marker} stopped. Error: {:?}",
                     err
                 );
                 return;
@@ -116,23 +121,10 @@ async fn link_tcp_streams(
         };
 
         if read_size == 0 {
-            println!("{connection_id} Mcp Read/Write loop is stopped gracefully");
+            println!("{connection_id} Mcp pump {marker} stopped gracefully");
             return;
         }
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
-
-        println!("{connection_id} ---{marker}--- Start");
-
-        match std::str::from_utf8(buffer_to_write) {
-            Ok(value) => {
-                println!("`{}`", value);
-            }
-            Err(_) => {
-                println!("BinaryPayloadLen: {}", buffer_to_write.len());
-            }
-        }
-
-        println!("{connection_id} ---{marker}--- End");
 
         if write_stream
             .write_all_with_timeout(buffer_to_write, WRITE_TIMEOUT)
