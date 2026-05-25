@@ -123,6 +123,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         http_connection_info: &HttpConnectionInfo,
         identity: &Option<HttpProxyPassIdentity>,
         mcp_path: Option<&str>,
+        dynamic_proxy_host_override: Option<&str>,
     ) -> Result<bool, ProxyServerError> {
         let modify_headers = kind.modify_headers();
         let request_endpoint = match &kind {
@@ -178,7 +179,11 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
             let header_name =
                 unsafe { std::str::from_utf8_unchecked(&header[..header_name_end_pos]) };
 
-            if !modify_headers.has_to_be_removed(header_name) {
+            let skip_for_dynamic_proxy = dynamic_proxy_host_override.is_some()
+                && (header_name.eq_ignore_ascii_case("host")
+                    || header_name.eq_ignore_ascii_case("proxy-to"));
+
+            if !skip_for_dynamic_proxy && !modify_headers.has_to_be_removed(header_name) {
                 if header_name.eq_ignore_ascii_case("x-forwarded-for") {
                     if let Some(ip) = client_ip {
                         let value_bytes = &header[header_name_end_pos + 1..];
@@ -223,6 +228,10 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                     self.h1_headers_builder.push_header("CF-IPCountry", code_str);
                 }
             }
+        }
+
+        if let Some(host_override) = dynamic_proxy_host_override {
+            self.h1_headers_builder.push_header("Host", host_override);
         }
 
         let http_request_reader = HttpHeadersReader {

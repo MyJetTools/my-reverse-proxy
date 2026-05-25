@@ -268,7 +268,7 @@ impl Upstream {
             }
             ProxyPassToConfig::DynamicProxy(_) => {
                 unreachable!(
-                    "Upstream::connect must not be called for DynamicProxy proxy_pass — dynamic_proxy is served exclusively via HttpProxyPassContentSource::DynamicProxy"
+                    "Upstream::connect must not be called for DynamicProxy proxy_pass — the byte-pipe path (h1_proxy_server::server_loop) synthesizes ProxyPassToConfig::Http1 from the `proxy-to` header before reaching here, and the hyper path uses HttpProxyPassContentSource::DynamicProxy"
                 );
             }
         }

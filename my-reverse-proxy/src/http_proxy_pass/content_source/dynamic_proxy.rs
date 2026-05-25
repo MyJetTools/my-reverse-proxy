@@ -15,7 +15,7 @@ use crate::{
     http_proxy_pass::ProxyPassError,
 };
 
-use super::HttpResponse;
+use super::{HttpResponse, WebSocketUpgradeStream};
 
 pub struct DynamicProxyContentSource {
     pub request_timeout: Duration,
@@ -82,9 +82,15 @@ impl DynamicProxyContentSource {
                 client.set_connect_timeout(self.connect_timeout);
                 match client.do_request(&my_req, self.request_timeout).await? {
                     MyHttpResponse::Response(r) => Ok(HttpResponse::Response(r)),
-                    MyHttpResponse::WebSocketUpgrade { .. } => {
-                        Err(ProxyPassError::UpstreamUnavailable)
-                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => Ok(HttpResponse::WebSocketUpgrade {
+                        stream: WebSocketUpgradeStream::TcpStream(stream),
+                        response,
+                        disconnection,
+                    }),
                 }
             }
             Some(Scheme::Https) | Some(Scheme::Wss) => {
@@ -97,9 +103,15 @@ impl DynamicProxyContentSource {
                 client.set_connect_timeout(self.connect_timeout);
                 match client.do_request(&my_req, self.request_timeout).await? {
                     MyHttpResponse::Response(r) => Ok(HttpResponse::Response(r)),
-                    MyHttpResponse::WebSocketUpgrade { .. } => {
-                        Err(ProxyPassError::UpstreamUnavailable)
-                    }
+                    MyHttpResponse::WebSocketUpgrade {
+                        stream,
+                        response,
+                        disconnection,
+                    } => Ok(HttpResponse::WebSocketUpgrade {
+                        stream: WebSocketUpgradeStream::TlsStream(stream),
+                        response,
+                        disconnection,
+                    }),
                 }
             }
             _ => Err(ProxyPassError::ProxyToHeaderInvalid),

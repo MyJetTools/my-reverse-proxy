@@ -31,6 +31,10 @@ impl Http1HeadersBuilder {
                 self.payload
                     .extend_from_slice(b"HTTP/1.1 405 Not Method Not Allowed");
             }
+            421 => {
+                self.payload
+                    .extend_from_slice(b"HTTP/1.1 421 Misdirected Request");
+            }
             502 => {
                 self.payload.extend_from_slice(b"HTTP/1.1 502 Bad Gateway");
             }

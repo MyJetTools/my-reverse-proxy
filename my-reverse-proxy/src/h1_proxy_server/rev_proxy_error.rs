@@ -20,6 +20,9 @@ pub enum ProxyServerError {
     NotAuthorized,
     DropConnection,
     HttpResponse(Vec<u8>),
+    ProxyToHeaderMissing,
+    ProxyToHeaderInvalid,
+    ProxyToHostNotAllowed,
 }
 
 impl ProxyServerError {

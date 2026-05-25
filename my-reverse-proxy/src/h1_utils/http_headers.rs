@@ -80,6 +80,34 @@ impl Http1Headers {
         }
     }
 
+    /// Linear scan over the header block looking for `name` (case-insensitive).
+    /// Returns the trimmed UTF-8 value, or `None` if the header is missing or
+    /// has non-UTF-8 bytes. Use for headers not preparsed into `Http1Headers`
+    /// (e.g. `proxy-to`).
+    pub fn find_header_value_str<'s>(&self, src: &'s [u8], name: &[u8]) -> Option<&'s str> {
+        let mut pos = self.first_line_end + crate::consts::HTTP_CR_LF.len();
+        loop {
+            let end = src.find_sequence_pos(crate::consts::HTTP_CR_LF, pos)?;
+            if end == pos {
+                return None;
+            }
+            let value_pos = {
+                let http_header = HttpHeader::new(src, pos, end)?;
+                if http_header.is_my_header_name(name) {
+                    Some(http_header.get_value())
+                } else {
+                    None
+                }
+            };
+            if let Some(value_pos) = value_pos {
+                return std::str::from_utf8(&src[value_pos.start..value_pos.end])
+                    .ok()
+                    .map(str::trim);
+            }
+            pos = end + crate::consts::HTTP_CR_LF.len();
+        }
+    }
+
     pub fn push_first_line_with_other_path(
         &self,
         data: &[u8],

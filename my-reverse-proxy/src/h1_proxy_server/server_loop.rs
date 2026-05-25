@@ -1,5 +1,9 @@
 use std::cell::RefCell;
+use std::sync::Arc;
 
+use crate::configurations::{
+    MyReverseProxyRemoteEndpoint, ProxyPassToConfig, ProxyPassToModel,
+};
 use crate::network_stream::*;
 
 use super::*;
@@ -174,6 +178,13 @@ pub async fn serve_reverse_proxy<
                     ProxyServerError::NotAuthorized => {
                         crate::error_templates::NOT_AUTHORIZED_PAGE.as_slice()
                     }
+                    ProxyServerError::ProxyToHeaderMissing
+                    | ProxyServerError::ProxyToHeaderInvalid => {
+                        crate::error_templates::PROXY_TO_HEADER_MISSING.as_slice()
+                    }
+                    ProxyServerError::ProxyToHostNotAllowed => {
+                        crate::error_templates::PROXY_TO_HOST_NOT_ALLOWED.as_slice()
+                    }
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
                 let _ = h1_server_write_part
@@ -263,11 +274,61 @@ async fn execute_request<
         end_point_info: end_point_info.clone(),
     };
 
+    // Resolve dynamic_proxy: rewrite proxy_pass_to per-request from the
+    // `proxy-to` header, and force fresh upstream connect (no pooling).
+    let synthetic_proxy_pass_to: Option<ProxyPassToConfig>;
+    let dynamic_host_override: Option<String>;
+    match &location.proxy_pass_to {
+        ProxyPassToConfig::DynamicProxy(config) => {
+            let buf = h1_reader.loop_buffer.get_data();
+            let proxy_to = request_headers
+                .find_header_value_str(buf, b"proxy-to")
+                .ok_or(ProxyServerError::ProxyToHeaderMissing)?
+                .to_string();
+            let endpoint =
+                rust_extensions::remote_endpoint::RemoteEndpointOwned::try_parse(proxy_to)
+                    .map_err(|_| ProxyServerError::ProxyToHeaderInvalid)?;
+            use rust_extensions::remote_endpoint::Scheme;
+            match endpoint.get_scheme() {
+                Some(Scheme::Http)
+                | Some(Scheme::Https)
+                | Some(Scheme::Ws)
+                | Some(Scheme::Wss) => {}
+                _ => return Err(ProxyServerError::ProxyToHeaderInvalid),
+            }
+            if let Some(allowed) = &config.allowed_hosts {
+                let host = endpoint.get_host();
+                if !allowed.iter().any(|h| h.eq_ignore_ascii_case(host)) {
+                    return Err(ProxyServerError::ProxyToHostNotAllowed);
+                }
+            }
+            let host_port = endpoint.get_host_port().to_string();
+            let synth = ProxyPassToConfig::Http1(ProxyPassToModel {
+                remote_host: MyReverseProxyRemoteEndpoint::Direct {
+                    remote_host: Arc::new(endpoint),
+                },
+                request_timeout: config.request_timeout,
+                connect_timeout: config.connect_timeout,
+            });
+            // Drop any cached upstream — target varies per request.
+            upstream_state.discard(&location.proxy_pass_to, location.id);
+            synthetic_proxy_pass_to = Some(synth);
+            dynamic_host_override = Some(host_port);
+        }
+        _ => {
+            synthetic_proxy_pass_to = None;
+            dynamic_host_override = None;
+        }
+    }
+    let effective_proxy_pass_to: &ProxyPassToConfig = synthetic_proxy_pass_to
+        .as_ref()
+        .unwrap_or(&location.proxy_pass_to);
+
     let access = upstream_state
-        .get_or_connect(&location.proxy_pass_to, location.id, &http_connection_context)
+        .get_or_connect(effective_proxy_pass_to, location.id, &http_connection_context)
         .await
         .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
-            remote_resource: location.proxy_pass_to.to_string(),
+            remote_resource: effective_proxy_pass_to.to_string(),
             err,
         })?;
 
@@ -279,6 +340,7 @@ async fn execute_request<
         &http_connection_info,
         &identity,
         access.mcp_path,
+        dynamic_host_override.as_deref(),
     )?;
 
     let send_headers_result = access
@@ -289,15 +351,15 @@ async fn execute_request<
     let mut upstream = access.upstream;
 
     if !send_headers_result {
-        upstream_state.discard(&location.proxy_pass_to, location.id);
+        upstream_state.discard(effective_proxy_pass_to, location.id);
 
         println!("Doing reconnection to remote connection");
 
         let access = upstream_state
-            .get_or_connect(&location.proxy_pass_to, location.id, &http_connection_context)
+            .get_or_connect(effective_proxy_pass_to, location.id, &http_connection_context)
             .await
             .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
-                remote_resource: location.proxy_pass_to.to_string(),
+                remote_resource: effective_proxy_pass_to.to_string(),
                 err,
             })?;
 
@@ -347,6 +409,12 @@ async fn execute_request<
         return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(
             NetworkError::OtherStr("Remote connection is lost"),
         ));
+    }
+
+    // Dynamic proxy: tear down the upstream so the next request opens a fresh
+    // connection to whichever target the client picks next.
+    if synthetic_proxy_pass_to.is_some() {
+        upstream_state.discard(effective_proxy_pass_to, location.id);
     }
 
     Ok(None)
