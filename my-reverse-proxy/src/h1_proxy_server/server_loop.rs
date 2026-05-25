@@ -411,11 +411,12 @@ async fn execute_request<
         ));
     }
 
-    // Dynamic proxy: tear down the upstream so the next request opens a fresh
-    // connection to whichever target the client picks next.
-    if synthetic_proxy_pass_to.is_some() {
-        upstream_state.discard(effective_proxy_pass_to, location.id);
-    }
+    // Note: do NOT discard the upstream here for dynamic_proxy — the response
+    // for this request is still being pumped by the background
+    // `response_read_loop`; dropping the cached Upstream would abort the loop
+    // and the client would never see the response. The pre-connect discard at
+    // the top of the next dynamic_proxy request is what guarantees the next
+    // request opens a fresh upstream to its (potentially different) target.
 
     Ok(None)
 }
