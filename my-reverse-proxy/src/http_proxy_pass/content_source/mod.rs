@@ -28,3 +28,5 @@ mod http2_over_ssh;
 pub use http2_over_ssh::*;
 mod http1_over_ssh;
 pub use http1_over_ssh::*;
+mod dynamic_proxy;
+pub use dynamic_proxy::*;

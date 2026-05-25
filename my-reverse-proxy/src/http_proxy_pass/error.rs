@@ -28,6 +28,9 @@ pub enum ProxyPassError {
     UpstreamUnavailable,
     NoHostHeader,
     DropConnection,
+    ProxyToHeaderMissing,
+    ProxyToHeaderInvalid,
+    ProxyToHostNotAllowed,
 }
 
 impl ProxyPassError {

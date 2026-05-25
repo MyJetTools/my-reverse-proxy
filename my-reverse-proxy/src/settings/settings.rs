@@ -114,6 +114,7 @@ mod tests {
                     connect_timeout: None,
                     trace_payload: None,
                     auth_header: None,
+                    allowed_hosts: None,
                 }],
             },
         );

@@ -170,6 +170,14 @@ pub async fn compile_location_proxy_pass_to(
             ProxyPassToConfig::Static(model.into())
         }
         LocationType::Drop => ProxyPassToConfig::Drop,
+        LocationType::DynamicProxy => ProxyPassToConfig::DynamicProxy(
+            DynamicProxyConfig {
+                request_timeout: location_settings.get_request_timeout(),
+                connect_timeout: location_settings.get_connect_timeout(),
+                allowed_hosts: location_settings.allowed_hosts.clone(),
+            }
+            .into(),
+        ),
     };
 
     let result = ProxyPassLocationConfig::new(

@@ -266,6 +266,11 @@ impl Upstream {
                     "Upstream::connect must not be called for Drop proxy_pass — caller should short-circuit before reaching upstream connect"
                 );
             }
+            ProxyPassToConfig::DynamicProxy(_) => {
+                unreachable!(
+                    "Upstream::connect must not be called for DynamicProxy proxy_pass — dynamic_proxy is served exclusively via HttpProxyPassContentSource::DynamicProxy"
+                );
+            }
         }
     }
 

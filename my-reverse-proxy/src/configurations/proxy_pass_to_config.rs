@@ -39,6 +39,13 @@ pub struct ProxyPassToModel {
 }
 
 #[derive(Debug)]
+pub struct DynamicProxyConfig {
+    pub request_timeout: Duration,
+    pub connect_timeout: Duration,
+    pub allowed_hosts: Option<Vec<String>>,
+}
+
+#[derive(Debug)]
 pub enum ProxyPassToConfig {
     Http1(ProxyPassToModel),
     Http2(ProxyPassToModel),
@@ -48,6 +55,7 @@ pub enum ProxyPassToConfig {
     FilesPath(ProxyPassFilesPathModel),
     Static(Arc<StaticContentConfig>),
     Drop,
+    DynamicProxy(Arc<DynamicProxyConfig>),
 }
 
 impl ProxyPassToConfig {
@@ -62,6 +70,9 @@ impl ProxyPassToConfig {
             ProxyPassToConfig::FilesPath(model) => model.to_string(),
             ProxyPassToConfig::Static(model) => model.to_string(),
             ProxyPassToConfig::Drop => "drop".to_string(),
+            ProxyPassToConfig::DynamicProxy(_) => {
+                crate::consts::location_type::DYNAMIC.to_string()
+            }
         }
     }
 
@@ -75,6 +86,7 @@ impl ProxyPassToConfig {
             Self::FilesPath(_) => "files_path",
             Self::Static(_) => crate::consts::location_type::STATIC,
             Self::Drop => "drop",
+            Self::DynamicProxy(_) => crate::consts::location_type::DYNAMIC,
         }
     }
 
@@ -93,7 +105,7 @@ impl ProxyPassToConfig {
             | Self::UnixHttp1(m)
             | Self::UnixHttp2(m) => Some(m.remote_host.kind_as_str()),
             Self::FilesPath(m) => Some(m.files_path.kind_as_str()),
-            Self::Static(_) | Self::Drop => None,
+            Self::Static(_) | Self::Drop | Self::DynamicProxy(_) => None,
         }
     }
 }

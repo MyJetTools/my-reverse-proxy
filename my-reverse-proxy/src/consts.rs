@@ -15,4 +15,5 @@ pub mod location_type {
 
     pub const MCP: &'static str = "mcp";
     pub const STATIC: &'static str = "static";
+    pub const DYNAMIC: &'static str = "dynamic";
 }

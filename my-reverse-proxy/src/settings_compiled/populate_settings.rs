@@ -382,6 +382,7 @@ fn compile_locations(
             request_timeout: location.request_timeout,
             trace_payload: location.trace_payload,
             auth_header: variables.apply_variables_opt(location.auth_header)?,
+            allowed_hosts: location.allowed_hosts,
         });
     }
 

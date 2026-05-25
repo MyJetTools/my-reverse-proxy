@@ -98,6 +98,34 @@ pub fn generate_tech_page(
                 )
                 .unwrap();
         }
+        ProxyPassError::ProxyToHeaderMissing | ProxyPassError::ProxyToHeaderInvalid => {
+            return hyper::Response::builder()
+                .status(hyper::StatusCode::MISDIRECTED_REQUEST)
+                .body(
+                    Full::from(crate::error_templates::generate_layout(
+                        421,
+                        "Missing or invalid proxy-to header",
+                        second_line_error,
+                    ))
+                    .map_err(|e| crate::to_hyper_error(e))
+                    .boxed(),
+                )
+                .unwrap();
+        }
+        ProxyPassError::ProxyToHostNotAllowed => {
+            return hyper::Response::builder()
+                .status(hyper::StatusCode::FORBIDDEN)
+                .body(
+                    Full::from(crate::error_templates::generate_layout(
+                        403,
+                        "Upstream host not allowed",
+                        second_line_error,
+                    ))
+                    .map_err(|e| crate::to_hyper_error(e))
+                    .boxed(),
+                )
+                .unwrap();
+        }
         _ => {
             return hyper::Response::builder()
                 .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)

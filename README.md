@@ -555,6 +555,99 @@ Drop locations:
   endpoint also satisfies the default strict mode (`track_metrics_by_all_domains`
   unset / false on a wildcard endpoint).
 
+### Dynamic Proxy
+
+A `dynamic` location forwards each request to an upstream URL specified by
+the client in the `proxy-to` request header. Useful when one endpoint must
+fan out to many different upstreams and the choice is per-request, not
+per-config.
+
+```yaml
+hosts:
+  localhost:8080:
+    endpoint:
+      type: http
+    locations:
+    - path: /
+      proxy_pass_to: dynamic
+      connect_timeout: 5000     # ms — optional, default 5s
+      request_timeout: 15000    # ms — optional, default 15s
+      allowed_hosts:            # optional whitelist (case-insensitive)
+      - api.example.com
+      - cdn.example.com
+```
+
+Equivalent shorthand using the `type` field:
+
+```yaml
+locations:
+- path: /
+  type: dynamic
+```
+
+Request flow:
+
+1. Client sends `proxy-to: https://target.example` (header name is
+   case-insensitive) together with the original request.
+2. The proxy parses the header value as a base URL, strips the `proxy-to`
+   header, rewrites the request `Host` to the target host, and forwards the
+   original path + query as-is.
+3. The proxy opens a **fresh HTTP/1.1 connection per request** (no pooling)
+   using the parsed scheme — `http` / `ws` use plain TCP, `https` / `wss`
+   use TLS with the system CA bundle.
+4. The upstream response is returned to the client unchanged.
+
+Behavior notes:
+
+- **HTTP version to upstream is always HTTP/1.1**, regardless of the listen
+  endpoint type. WebSocket upgrade is not supported in the first version.
+- **`allowed_hosts` is optional**. When present, only listed hosts (matched
+  case-insensitively against the parsed host) are accepted; anything else
+  returns **403**. When absent, any host is allowed — the location behaves
+  as an open proxy and the caller is responsible for authentication
+  (combine with `auth_header` / `google_auth` / `whitelisted_ip`).
+- **No connection reuse** — every request creates and tears down its own
+  upstream connection. This is intentional: the target host is unbounded,
+  and a per-host pool with a TTL is not worth the complexity here.
+
+Error responses:
+
+| Condition                                | Status |
+|------------------------------------------|--------|
+| `proxy-to` header missing                | 421 Misdirected Request |
+| `proxy-to` value cannot be parsed as URL | 421 Misdirected Request |
+| Target host not in `allowed_hosts`       | 403 Forbidden |
+| Cannot connect to upstream               | 503 Upstream unavailable |
+
+Example with auth and whitelist:
+
+```yaml
+hosts:
+  proxy.example.com:443:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert
+    locations:
+    - path: /
+      proxy_pass_to: dynamic
+      auth_header: "Bearer ${env:DYNAMIC_PROXY_TOKEN}"
+      allowed_hosts:
+      - api.internal
+      - storage.internal
+```
+
+A request like:
+
+```
+GET /v1/users?limit=10 HTTP/1.1
+Host: proxy.example.com
+Authorization: Bearer ...
+proxy-to: https://api.internal
+```
+
+is forwarded to `https://api.internal/v1/users?limit=10` with `Host:
+api.internal` and without the `proxy-to` header.
+
 
 
 ## Debugging endpoints

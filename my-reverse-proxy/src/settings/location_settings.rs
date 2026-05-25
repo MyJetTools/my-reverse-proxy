@@ -15,6 +15,7 @@ pub enum LocationType {
     UnixSocketHttp2,
     Mcp,
     Drop,
+    DynamicProxy,
 }
 
 impl LocationType {
@@ -29,6 +30,12 @@ impl LocationType {
 
                 if src.eq_ignore_ascii_case("drop") {
                     return Ok(Self::Drop);
+                }
+
+                if src.eq_ignore_ascii_case(crate::consts::location_type::DYNAMIC)
+                    || src.eq_ignore_ascii_case("dynamic_proxy")
+                {
+                    return Ok(Self::DynamicProxy);
                 }
 
                 let mut splitted = src.split("->");
@@ -80,6 +87,7 @@ pub struct LocationSettings {
     pub request_timeout: Option<u64>,
     pub trace_payload: Option<bool>,
     pub auth_header: Option<String>,
+    pub allowed_hosts: Option<Vec<String>>,
 }
 
 impl LocationSettings {
@@ -97,6 +105,7 @@ impl LocationSettings {
                 STATIC => return Ok(LocationType::StaticContent.into()),
                 MCP => return Ok(LocationType::Mcp.into()),
                 "drop" => return Ok(LocationType::Drop.into()),
+                DYNAMIC | "dynamic_proxy" => return Ok(LocationType::DynamicProxy.into()),
                 _ => return Err(format!("Unknown remote location type {}", location_type)),
             }
         } else {

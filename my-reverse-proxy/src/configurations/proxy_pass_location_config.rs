@@ -375,6 +375,17 @@ impl ProxyPassLocationConfig {
                 }
             },
             ProxyPassToConfig::Drop => HttpProxyPassContentSource::Drop,
+            ProxyPassToConfig::DynamicProxy(config) => HttpProxyPassContentSource::DynamicProxy(
+                DynamicProxyContentSource {
+                    request_timeout: config.request_timeout,
+                    connect_timeout: config.connect_timeout,
+                    allowed_hosts: config
+                        .allowed_hosts
+                        .clone()
+                        .map(std::sync::Arc::new),
+                    debug,
+                },
+            ),
         };
 
         result
@@ -387,6 +398,7 @@ impl ProxyPassLocationConfig {
             ProxyPassToConfig::UnixHttp1(_) => Some(true),
             ProxyPassToConfig::Http2(_) => Some(false),
             ProxyPassToConfig::UnixHttp2(_) => Some(false),
+            ProxyPassToConfig::DynamicProxy(_) => Some(true),
             _ => None,
         }
     }
