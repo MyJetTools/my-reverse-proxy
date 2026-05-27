@@ -125,7 +125,7 @@ fn build_layout(
     .into_bytes();
 
     let mut headers = crate::h1_utils::Http1HeadersBuilder::new();
-    headers.push_response_first_line(200);
+    headers.push_response_first_line(status_code);
 
     headers.push_content_length(body.len());
     if connection_close {

@@ -33,6 +33,18 @@ pub async fn copy_streams<
     _ssh_session_handler: Option<SshSessionHandler>,
     recorder: Option<WsTrafficRecorder>,
 ) {
+    let direction_label = recorder
+        .as_ref()
+        .map(|r| match r.direction {
+            WsDirection::ClientToServer => "c2s",
+            WsDirection::ServerToClient => "s2c",
+        })
+        .unwrap_or("?");
+    let domain_label = recorder
+        .as_ref()
+        .map(|r| r.domain.as_str())
+        .unwrap_or("-");
+
     loop {
         {
             let buf = loop_buffer.get_data();
@@ -43,7 +55,14 @@ pub async fn copy_streams<
                     .write_all_with_timeout(buf, crate::consts::WRITE_TIMEOUT)
                     .await;
 
-                if write_result.is_err() {
+                if let Err(err) = write_result {
+                    eprintln!(
+                        "[ws-pump {dir} {dom}] write {n} bytes failed: {err:?}",
+                        dir = direction_label,
+                        dom = domain_label,
+                        n = len,
+                        err = err,
+                    );
                     break;
                 }
 
@@ -59,9 +78,24 @@ pub async fn copy_streams<
             .read_with_timeout(loop_buffer.get_mut().unwrap(), crate::consts::READ_TIMEOUT)
             .await;
 
-        let Ok(read_size) = read_result else {
-            writer.shutdown_socket().await;
-            break;
+        let read_size = match read_result {
+            Ok(0) => {
+                // Peer closed cleanly: forward the half-close so the other
+                // side sees EOF too instead of spinning forever on Ok(0).
+                writer.shutdown_socket().await;
+                break;
+            }
+            Ok(n) => n,
+            Err(err) => {
+                eprintln!(
+                    "[ws-pump {dir} {dom}] read failed: {err:?}",
+                    dir = direction_label,
+                    dom = domain_label,
+                    err = err,
+                );
+                writer.shutdown_socket().await;
+                break;
+            }
         };
 
         loop_buffer.advance(read_size);
