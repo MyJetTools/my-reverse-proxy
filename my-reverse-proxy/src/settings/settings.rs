@@ -7,6 +7,7 @@ use serde::*;
 pub struct SettingsModel {
     pub hosts: HashMap<String, HostSettings>,
     pub include: Option<Vec<String>>,
+    pub dynamic_settings_file: Option<String>,
     pub variables: Option<HashMap<String, String>>,
     pub ssl_certificates: Option<Vec<SslCertificatesSettingsModel>>,
     pub client_certificate_ca: Option<Vec<ClientCertificateCaSettings>>,
@@ -158,6 +159,7 @@ mod tests {
             hosts,
             global_settings: None,
             include: None,
+            dynamic_settings_file: None,
             variables: None,
             ssl_certificates: None,
             client_certificate_ca: None,

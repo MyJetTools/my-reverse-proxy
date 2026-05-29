@@ -2,30 +2,17 @@ use std::sync::Arc;
 
 use crate::configurations::*;
 
-pub async fn merge_http_configuration_with_existing_port(
+/// Pure merge: given the existing `ListenConfiguration` for a port (if any) and a new HTTP
+/// endpoint, produce the combined port configuration. Does NOT touch global state — the caller
+/// supplies `existing` from wherever it accumulates ports: the live configuration (targeted
+/// per-port reload) or a fresh map being built for a full reload + atomic swap.
+pub fn merge_http_into_existing(
+    existing: Option<ListenConfiguration>,
     http_endpoint_info: HttpEndpointInfo,
 ) -> Result<HttpListenPortConfiguration, String> {
-    let endpoint_port = http_endpoint_info.host_endpoint.get_port();
-    let host_key = http_endpoint_info.host_endpoint.as_str().to_string();
-
-    let listen_config = match endpoint_port {
-        EndpointPort::Tcp(port) => {
-            crate::app::APP_CTX
-                .current_configuration
-                .get(move |config| config.listen_tcp_endpoints.get(&port).cloned())
-                .await
-        }
-        EndpointPort::UnixSocket(unix_host) => {
-            crate::app::APP_CTX
-                .current_configuration
-                .get(move |config| config.listen_unix_socket_endpoints.get(&unix_host).cloned())
-                .await
-        }
-    };
-
     let listen_host = http_endpoint_info.host_endpoint.get_listen_host();
 
-    let Some(configuration) = listen_config else {
+    let Some(configuration) = existing else {
         return Ok(HttpListenPortConfiguration::new(
             Arc::new(http_endpoint_info),
             listen_host,
@@ -37,20 +24,17 @@ pub async fn merge_http_configuration_with_existing_port(
             check_endpoint_type(&config, &http_endpoint_info)?;
             let mut config = config.as_ref().clone();
             config.insert_or_replace_configuration(http_endpoint_info);
-            return Ok(config);
+            Ok(config)
         }
-        ListenConfiguration::Tcp(_) => {
-            return Err(format!(
-                "Can not apply endpoint {}. Endpoint {} is already configured as TCP.",
-                http_endpoint_info.host_endpoint.as_str(),
-                host_key
-            ));
-        }
+        ListenConfiguration::Tcp(_) => Err(format!(
+            "Can not apply endpoint {}. It is already configured as TCP.",
+            http_endpoint_info.host_endpoint.as_str(),
+        )),
         ListenConfiguration::Mcp(config) => {
             check_endpoint_type(&config, &http_endpoint_info)?;
             let mut config = config.as_ref().clone();
             config.insert_or_replace_configuration(http_endpoint_info);
-            return Ok(config);
+            Ok(config)
         }
     }
 }

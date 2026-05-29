@@ -146,102 +146,120 @@ impl McpToolCall<GetSettingsInputData, GetSettingsResponse> for GetSettingsHandl
         &self,
         _model: GetSettingsInputData,
     ) -> Result<GetSettingsResponse, String> {
-        let settings_file = resolve_settings_file_path();
-
+        // `get_settings` shows what the files declare right now: recompile from disk.
         let settings = SettingsCompiled::load_settings().await?;
+        let current_configuration_errors = load_current_configuration_errors().await;
 
-        let global = GlobalSettingsSummary {
-            http_control_port: settings
-                .get_http_control_port()
-                .map(|p| p as i64)
-                .unwrap_or(-1),
-            default_h2_livness_url: settings.get_default_h2_livness_url().unwrap_or_default(),
-            show_error_description_on_error_page: settings.get_show_error_description_on_error_page(),
-        };
-
-        let mut hosts: Vec<HostSettingsSummary> = settings
-            .hosts
-            .iter()
-            .map(|(host_id, host)| {
-                let locations = host
-                    .locations
-                    .iter()
-                    .map(|loc| LocationSettingsSummary {
-                        path: loc.path.clone().unwrap_or_default(),
-                        proxy_pass_to: loc.proxy_pass_to.clone().unwrap_or_default(),
-                        location_type: loc.location_type.clone().unwrap_or_default(),
-                        whitelisted_ip: loc.whitelisted_ip.clone().unwrap_or_default(),
-                    })
-                    .collect();
-
-                HostSettingsSummary {
-                    host_id: host_id.clone(),
-                    endpoint_type: host.endpoint.endpoint_type.clone(),
-                    debug: host.endpoint.debug.unwrap_or(false),
-                    ssl_certificate: host.endpoint.ssl_certificate.clone().unwrap_or_default(),
-                    client_certificate_ca: host
-                        .endpoint
-                        .client_certificate_ca
-                        .clone()
-                        .unwrap_or_default(),
-                    google_auth: host.endpoint.google_auth.clone().unwrap_or_default(),
-                    template_id: host.endpoint.template_id.clone().unwrap_or_default(),
-                    allowed_users: host.endpoint.allowed_users.clone().unwrap_or_default(),
-                    whitelisted_ip: host.endpoint.whitelisted_ip.clone().unwrap_or_default(),
-                    hsts: host.endpoint.hsts.unwrap_or(false),
-                    locations,
-                }
-            })
-            .collect();
-
-        hosts.sort_by(|a, b| a.host_id.cmp(&b.host_id));
-
-        let gateway_server = settings.gateway_server.as_ref().map(|g| GatewayServerSummary {
-            port: g.port as i64,
-            debug: g.is_debug(),
-            authorized_keys_count: g.authorized_keys.len() as i64,
-        });
-
-        let current_configuration_errors = APP_CTX
-            .current_configuration
-            .get(|cfg| {
-                cfg.error_configurations
-                    .iter()
-                    .map(|(host_id, error)| ConfigurationErrorEntry {
-                        host_id: host_id.clone(),
-                        error: error.clone(),
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .await;
-
-        Ok(GetSettingsResponse {
-            settings_file,
-            global,
-            hosts,
-            ssh_ids: sorted_keys(settings.ssh.keys()),
-            ssl_certificate_ids: settings
-                .ssl_certificates
-                .iter()
-                .map(|c| c.id.clone())
-                .collect(),
-            client_certificate_ca_ids: settings
-                .client_certificate_ca
-                .iter()
-                .map(|c| c.id.clone())
-                .collect(),
-            g_auth_ids: sorted_keys(settings.g_auth.keys()),
-            endpoint_template_ids: sorted_keys(settings.endpoint_templates.keys()),
-            allowed_users_list_ids: sorted_keys(settings.allowed_users.keys()),
-            ip_white_list_ids: sorted_keys(settings.ip_white_lists.keys()),
-            gateway_server,
-            gateway_client_ids: sorted_keys(settings.gateway_clients.keys()),
+        Ok(build_settings_summary(
+            &settings,
+            resolve_settings_file_path(),
             current_configuration_errors,
-        })
+        ))
     }
 }
 
-fn resolve_settings_file_path() -> String {
+/// Builds the structured overview shared by `get_settings` (compiled-from-files) and
+/// `get_applied_settings` (last-applied snapshot). Keeping it in one place means both
+/// tools return the exact same shape, so the two can be diffed field-by-field.
+pub fn build_settings_summary(
+    settings: &SettingsCompiled,
+    settings_file: String,
+    current_configuration_errors: Vec<ConfigurationErrorEntry>,
+) -> GetSettingsResponse {
+    let global = GlobalSettingsSummary {
+        http_control_port: settings
+            .get_http_control_port()
+            .map(|p| p as i64)
+            .unwrap_or(-1),
+        default_h2_livness_url: settings.get_default_h2_livness_url().unwrap_or_default(),
+        show_error_description_on_error_page: settings.get_show_error_description_on_error_page(),
+    };
+
+    let mut hosts: Vec<HostSettingsSummary> = settings
+        .hosts
+        .iter()
+        .map(|(host_id, host)| {
+            let locations = host
+                .locations
+                .iter()
+                .map(|loc| LocationSettingsSummary {
+                    path: loc.path.clone().unwrap_or_default(),
+                    proxy_pass_to: loc.proxy_pass_to.clone().unwrap_or_default(),
+                    location_type: loc.location_type.clone().unwrap_or_default(),
+                    whitelisted_ip: loc.whitelisted_ip.clone().unwrap_or_default(),
+                })
+                .collect();
+
+            HostSettingsSummary {
+                host_id: host_id.clone(),
+                endpoint_type: host.endpoint.endpoint_type.clone(),
+                debug: host.endpoint.debug.unwrap_or(false),
+                ssl_certificate: host.endpoint.ssl_certificate.clone().unwrap_or_default(),
+                client_certificate_ca: host
+                    .endpoint
+                    .client_certificate_ca
+                    .clone()
+                    .unwrap_or_default(),
+                google_auth: host.endpoint.google_auth.clone().unwrap_or_default(),
+                template_id: host.endpoint.template_id.clone().unwrap_or_default(),
+                allowed_users: host.endpoint.allowed_users.clone().unwrap_or_default(),
+                whitelisted_ip: host.endpoint.whitelisted_ip.clone().unwrap_or_default(),
+                hsts: host.endpoint.hsts.unwrap_or(false),
+                locations,
+            }
+        })
+        .collect();
+
+    hosts.sort_by(|a, b| a.host_id.cmp(&b.host_id));
+
+    let gateway_server = settings.gateway_server.as_ref().map(|g| GatewayServerSummary {
+        port: g.port as i64,
+        debug: g.is_debug(),
+        authorized_keys_count: g.authorized_keys.len() as i64,
+    });
+
+    GetSettingsResponse {
+        settings_file,
+        global,
+        hosts,
+        ssh_ids: sorted_keys(settings.ssh.keys()),
+        ssl_certificate_ids: settings
+            .ssl_certificates
+            .iter()
+            .map(|c| c.id.clone())
+            .collect(),
+        client_certificate_ca_ids: settings
+            .client_certificate_ca
+            .iter()
+            .map(|c| c.id.clone())
+            .collect(),
+        g_auth_ids: sorted_keys(settings.g_auth.keys()),
+        endpoint_template_ids: sorted_keys(settings.endpoint_templates.keys()),
+        allowed_users_list_ids: sorted_keys(settings.allowed_users.keys()),
+        ip_white_list_ids: sorted_keys(settings.ip_white_lists.keys()),
+        gateway_server,
+        gateway_client_ids: sorted_keys(settings.gateway_clients.keys()),
+        current_configuration_errors,
+    }
+}
+
+/// Snapshot of the running configuration's per-host error map.
+pub async fn load_current_configuration_errors() -> Vec<ConfigurationErrorEntry> {
+    APP_CTX
+        .current_configuration
+        .get(|cfg| {
+            cfg.error_configurations
+                .iter()
+                .map(|(host_id, error)| ConfigurationErrorEntry {
+                    host_id: host_id.clone(),
+                    error: error.clone(),
+                })
+                .collect::<Vec<_>>()
+        })
+        .await
+}
+
+pub fn resolve_settings_file_path() -> String {
     match std::env::var("HOME") {
         Ok(home) => format!("{}/.my-reverse-proxy", home),
         Err(_) => ".my-reverse-proxy".to_string(),

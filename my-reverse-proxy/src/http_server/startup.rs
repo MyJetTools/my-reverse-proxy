@@ -4,7 +4,8 @@ use mcp_server_middleware::McpMiddleware;
 use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer, StaticFilesMiddleware};
 
 use crate::mcp::{
-    GetProxyStateSnapshotHandler, GetSettingsHandler, LookupPoolHandler, ReloadSettingsHandler,
+    GetAppliedSettingsHandler, GetDynamicSettingsHandler, GetProxyStateSnapshotHandler,
+    GetSettingsHandler, LookupPoolHandler, ReloadSettingsHandler, SetDynamicSettingsHandler,
 };
 
 const DEFAULT_PORT: u16 = 8000;
@@ -37,7 +38,10 @@ pub fn start() {
     mcp.register_tool_call(Arc::new(GetProxyStateSnapshotHandler));
     mcp.register_tool_call(Arc::new(LookupPoolHandler));
     mcp.register_tool_call(Arc::new(GetSettingsHandler));
+    mcp.register_tool_call(Arc::new(GetAppliedSettingsHandler));
     mcp.register_tool_call(Arc::new(ReloadSettingsHandler));
+    mcp.register_tool_call(Arc::new(GetDynamicSettingsHandler));
+    mcp.register_tool_call(Arc::new(SetDynamicSettingsHandler));
 
     http_server.add_middleware(Arc::new(mcp));
 

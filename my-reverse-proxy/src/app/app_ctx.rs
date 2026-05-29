@@ -56,6 +56,11 @@ pub struct AppContext {
     pub connection_settings: ConnectionsSettingsModel,
     pub default_h2_livness_url: Option<String>,
 
+    /// Snapshot of the last compiled settings that were actually applied to the
+    /// running proxy (set at the end of `load_everything_from_settings`). Lets us
+    /// expose the applied configuration without recompiling the files from disk.
+    pub applied_settings: arc_swap::ArcSwapOption<SettingsCompiled>,
+
     pub token_secret_key: AesKey,
     pub current_configuration: AppConfiguration,
     pub states: Arc<AppStates>,
@@ -138,6 +143,7 @@ impl AppContext {
             id: AtomicI64::new(0),
             connection_settings,
             default_h2_livness_url,
+            applied_settings: arc_swap::ArcSwapOption::empty(),
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,
             current_configuration: AppConfiguration::new(),
