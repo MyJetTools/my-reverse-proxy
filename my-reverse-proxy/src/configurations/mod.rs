@@ -2,6 +2,10 @@ mod http_listen_port_configuration;
 pub use http_listen_port_configuration::*;
 mod http_endpoint_info;
 pub use http_endpoint_info::*;
+mod mcp_endpoint_settings;
+pub use mcp_endpoint_settings::*;
+mod pool_tuning;
+pub use pool_tuning::*;
 
 mod tcp_endpoint_host_config;
 pub use tcp_endpoint_host_config::*;

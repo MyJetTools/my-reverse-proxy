@@ -1,19 +1,9 @@
-use std::time::Duration;
-
 use tokio::io::AsyncWriteExt;
 
-use crate::{configurations::HttpEndpointInfo, network_stream::*};
-
-const BUFFER_LEN: usize = 512 * 1024;
-
-// Safety net only — the client→server direction of a tunneled MCP
-// session can legitimately stay idle for long periods (the client only
-// writes when it issues a JSON-RPC request), and the server→client
-// direction is kept warm by the SSE keepalive emitted by
-// mcp-server-middleware. 30 minutes is plenty of headroom for both.
-const READ_TIMEOUT: Duration = Duration::from_secs(60 * 30);
-
-const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+use crate::{
+    configurations::{HttpEndpointInfo, McpEndpointSettings},
+    network_stream::*,
+};
 
 pub async fn run_mcp_connection(
     mut tls_stream: my_tls::tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
@@ -61,6 +51,8 @@ pub async fn run_mcp_connection(
 
     let (accepted_connection_read, accepted_connection_write) = tokio::io::split(tls_stream);
 
+    let mcp_settings = http_endpoint_info.mcp_settings;
+
     crate::app::spawn_named(
         "mcp_link_to_server",
         link_tcp_streams(
@@ -68,6 +60,7 @@ pub async fn run_mcp_connection(
             write_remote_host,
             "->To MCP Server->",
             connection_id,
+            mcp_settings,
         ),
     );
 
@@ -78,6 +71,7 @@ pub async fn run_mcp_connection(
             accepted_connection_write,
             "<-From MCP Server<-",
             connection_id,
+            mcp_settings,
         ),
     );
 
@@ -97,15 +91,16 @@ async fn link_tcp_streams(
     mut write_stream: impl NetworkStreamWritePart + Send + Sync + 'static,
     marker: &'static str,
     connection_id: u64,
+    mcp_settings: McpEndpointSettings,
 ) {
-    let mut read_buffer = Vec::with_capacity(BUFFER_LEN);
+    let mut read_buffer = Vec::with_capacity(mcp_settings.buffer_size);
     unsafe {
-        read_buffer.set_len(BUFFER_LEN);
+        read_buffer.set_len(mcp_settings.buffer_size);
     }
 
     loop {
         let read_result = read_stream
-            .read_with_timeout(&mut read_buffer, READ_TIMEOUT)
+            .read_with_timeout(&mut read_buffer, mcp_settings.read_timeout)
             .await;
 
         let read_size = match read_result {
@@ -127,7 +122,7 @@ async fn link_tcp_streams(
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
 
         if write_stream
-            .write_all_with_timeout(buffer_to_write, WRITE_TIMEOUT)
+            .write_all_with_timeout(buffer_to_write, mcp_settings.write_timeout)
             .await
             .is_err()
         {

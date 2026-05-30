@@ -67,6 +67,7 @@ pub async fn compile_http_configuration(
             .track_metrics_by_all_domains
             .unwrap_or(false),
         host_settings.endpoint.hsts.unwrap_or(false),
+        crate::configurations::McpEndpointSettings::from_settings(&host_settings.endpoint),
     );
 
     Ok(http_endpoint_info)

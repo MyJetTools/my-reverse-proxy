@@ -55,6 +55,7 @@ pub struct AppContext {
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
     pub default_h2_livness_url: Option<String>,
+    pub pool_supervisor_interval: std::time::Duration,
 
     /// Snapshot of the last compiled settings that were actually applied to the
     /// running proxy (set at the end of `load_everything_from_settings`). Lets us
@@ -98,6 +99,7 @@ impl AppContext {
         let http_control_port = settings_model.get_http_control_port();
         let connection_settings = settings_model.get_connections_settings();
         let default_h2_livness_url = settings_model.get_default_h2_livness_url();
+        let pool_supervisor_interval = settings_model.get_pool_supervisor_interval();
 
         let token_secret_key = if let Some(session_key) = settings_model.get_session_key() {
             AesKey::new(get_token_secret_key_from_settings(session_key.as_bytes()).as_slice())
@@ -143,6 +145,7 @@ impl AppContext {
             id: AtomicI64::new(0),
             connection_settings,
             default_h2_livness_url,
+            pool_supervisor_interval,
             applied_settings: arc_swap::ArcSwapOption::empty(),
             // saved_client_certs: SavedClientCert::new(),
             token_secret_key,

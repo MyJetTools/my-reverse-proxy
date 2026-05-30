@@ -1,6 +1,9 @@
 mod settings;
 pub use settings::*;
 
+mod buffer_size;
+pub use buffer_size::*;
+
 mod connections_settings;
 pub use connections_settings::*;
 

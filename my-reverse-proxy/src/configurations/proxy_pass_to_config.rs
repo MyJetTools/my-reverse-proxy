@@ -36,6 +36,7 @@ pub struct ProxyPassToModel {
     pub remote_host: MyReverseProxyRemoteEndpoint,
     pub request_timeout: Duration,
     pub connect_timeout: Duration,
+    pub pool_tuning: super::PoolTuning,
 }
 
 #[derive(Debug)]

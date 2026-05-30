@@ -9,6 +9,9 @@ pub struct GlobalSettings {
     pub show_error_description_on_error_page: Option<bool>,
     pub http_control_port: Option<u16>,
     pub default_h2_livness_url: Option<String>,
+    /// How often the (single, global) supervisor sweeps every H1/H2 upstream
+    /// pool, in milliseconds. Defaults to 10000 (10s).
+    pub pool_supervisor_interval: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

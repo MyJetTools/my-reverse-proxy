@@ -6,7 +6,7 @@ File should be at `~/.my-reverse-proxy` location with yaml format:
 global_settings:
   connection_settings:
     buffer_size: 512Kb # Buffer, which is allocated twice (read/write) per connection to pass traffic by
-    connect_to_remote_timeout: 5s # Timeout to connect to remote host
+    connect_to_remote_timeout: 5000 # ms — timeout to connect to remote host (type: tcp endpoints)
     session_key: # key to encrypt session data. Not having this field means that key is going to be randomly generated
     show_error_description_on_error_page: true # Show error description on error page
   default_h2_livness_url: /health # Optional: HTTP path used by the h2 upstream pool supervisor as an active liveness probe (see "HTTP/2 upstream pool" section)
@@ -386,9 +386,27 @@ When `debug: true` is enabled, MCP endpoints will log:
 - Connection ID tracking for multiple concurrent connections
 
 **Connection Settings:**
-- **Read Timeout**: 3 minutes (180 seconds) - maximum time to wait for data from either side
-- **Write Timeout**: 30 seconds - maximum time to wait for write operations
-- **Buffer Size**: 512 KB per connection (allocated for read operations)
+
+These can be tuned per-endpoint (under `endpoint:`). All are optional and fall back to the defaults below. Timeouts are in **milliseconds** (integer); the buffer size accepts a raw byte count or a `Kb`/`Mb` suffix (e.g. `512Kb`, `1Mb`).
+
+| Setting             | YAML key            | Default              | Description |
+|---------------------|---------------------|----------------------|-------------|
+| Read Timeout        | `mcp_read_timeout`  | 1800000 ms (30 min)  | Max time to wait for data from either side. The client→server direction can stay idle for long periods, so this is a generous safety net. |
+| Write Timeout       | `mcp_write_timeout` | 30000 ms (30 sec)    | Max time to wait for write operations. |
+| Buffer Size         | `mcp_buffer_size`   | 512 KB (`512Kb`)     | Per-connection read buffer. |
+
+```yaml
+hosts:
+  localhost:8443:
+    endpoint:
+      type: mcp
+      ssl_certificate: my_ssl_cert
+      mcp_read_timeout: 600000   # ms — optional, default 1800000 (30m)
+      mcp_write_timeout: 15000   # ms — optional, default 30000 (30s)
+      mcp_buffer_size: 1Mb       # optional, default 512Kb
+    locations:
+    - proxy_pass_to: mcp-server:5123
+```
 
 **Example: MCP Endpoint with SSH Tunneling:**
 ```yaml
@@ -964,7 +982,7 @@ gateway_clients:
   gateway_name:
     remote_host: 10.0.0.0:30000
     encryption_key: 12345678901234567890
-    connect_timeout_seconds: 5
+    connect_timeout: 5000 # ms, optional, default 5000
     compress: true 
     allow_incoming_forward_connections: true
     sync_ssl_certificates:
@@ -1090,6 +1108,58 @@ nothing changes; the improvement is purely internal.
 
 
 
+## Timeouts & connection tuning — overview
+
+Every timeout/connection knob in the proxy, where it lives, and what it controls.
+Read this first to decide which one you actually need; each row links to its
+detailed section below.
+
+### Units
+
+**Every timeout is an integer number of milliseconds** — `connect_timeout`,
+`request_timeout`, `pool_*`, `mcp_read_timeout`, `mcp_write_timeout`,
+`pool_supervisor_interval`, `connect_to_remote_timeout`, and the gateway
+`connect_timeout`. So `1000` = 1 second, `60000` = 1 minute. ⚠️ `5` means **5
+milliseconds**, not 5 seconds — a common foot-gun.
+
+The only non-millisecond knobs are the **buffer sizes** (`mcp_buffer_size`,
+`connection_settings.buffer_size`), which take a raw byte count or a `Kb` / `Mb`
+suffix (e.g. `512Kb`, `1Mb`).
+
+### All settings
+
+| Setting | Where (YAML) | Unit | Default | Controls |
+|---------|--------------|------|---------|----------|
+| `connect_timeout` | `location` | ms | 5000 | TCP/TLS connect to an HTTP upstream (and the pool's connect). |
+| `request_timeout` | `location` | ms | 15000 | Time to complete a full HTTP request/response to the upstream. |
+| `pool_size` | `location` | int | 5 | Connections held in the h1/h2 upstream pool. |
+| `pool_ping_timeout` | `location` | ms | 1000 | Per-probe timeout of the h2 liveness check. **h2 + liveness URL only.** |
+| `pool_hot_window` | `location` | ms | 3000 | Idle window after a success during which the h2 probe is skipped. **h2 + liveness URL only.** |
+| `mcp_read_timeout` | `endpoint` (`type: mcp`) | ms | 1800000 (30m) | Max idle on either side of an MCP tunnel before it's closed. |
+| `mcp_write_timeout` | `endpoint` (`type: mcp`) | ms | 30000 (30s) | Max time for a single MCP write. |
+| `mcp_buffer_size` | `endpoint` (`type: mcp`) | bytes/`Kb`/`Mb` | `512Kb` | Per-connection MCP read buffer. |
+| `default_h2_livness_url` | `global_settings` | path | (unset) | Enables the h2 active liveness probe (without it, pool recovery is reactive only). |
+| `pool_supervisor_interval` | `global_settings` | ms | 10000 (10s) | How often the single supervisor sweeps every pool. |
+| `connect_to_remote_timeout` | `global_settings.connection_settings` | ms | 5000 (5s) | Connect timeout for **`type: tcp`** port-forward endpoints. |
+| `buffer_size` | `global_settings.connection_settings` | bytes/`Kb`/`Mb` | `512Kb` | Pump buffer for `type: tcp` port-forward endpoints. |
+| `connect_timeout` | `gateway_clients.<name>` | ms | 5000 (5s) | Connect timeout for a gateway-client link. |
+
+### Which knob for which symptom
+
+- **HTTP upstream slow to fail when down** → lower `connect_timeout` on the location.
+- **Long-running HTTP request being cut off** → raise `request_timeout` on the location.
+- **Too few / too many upstream connections** → `pool_size` on the location.
+- **Dead h2 upstream detected too slowly** → set `default_h2_livness_url`, then tune `pool_supervisor_interval` (sweep rate) and `pool_hot_window` (how stale a slot must be before it's probed).
+- **MCP tunnel dropped on a long-idle client** → raise `mcp_read_timeout` on the mcp endpoint.
+- **`type: tcp` forward hangs connecting** → lower `connect_to_remote_timeout` in `global_settings.connection_settings`.
+- **Gateway link slow to fail** → `connect_timeout` on the gateway client.
+
+Detailed sections: [Remote HTTP endpoint timeouts](#timeouts-for-remote-http-endpoints),
+MCP **Connection Settings** (under the MCP endpoint docs), and
+[HTTP/2 upstream pool](#http2-upstream-pool) below.
+
+
+
 ## HTTP/2 upstream pool
 
 All HTTP/2 upstreams (`http2`, `https2`, `unix+http2`) share a single named pool
@@ -1102,38 +1172,67 @@ requests over a fixed-size set of upstream h2 connections.
 - **Pool key**: `(scheme, host, port)`. Two locations pointing to the same
   endpoint share the same pool — opening a second `https2://api:443` location
   does not double the upstream FD count.
-- **Pool size**: hardcoded to **5** connections per endpoint.
+- **Pool size**: **5** connections per endpoint by default, overridable
+  per-location via `pool_size`.
 - **Cold start**: the pool is created at config load / hot-reload, and a
   background supervisor immediately starts filling the 5 slots. If a request
   arrives before any slot is connected, the proxy returns **503**
   `Upstream unavailable`.
 - **Reactive recovery**: a dead `MyHttp2Client` auto-reconnects on the next
   `do_request` (transient drops self-heal). If the upstream stays down, slots
-  remain empty and the supervisor retries every 10s.
+  remain empty and the supervisor retries on every tick (10s by default).
 
 ### Active liveness check (optional)
 
 If `default_h2_livness_url` is set in `global_settings`, the supervisor
-periodically issues a `GET` to that path on each connected slot. Statuses in
-`200..=205` reset the failure counter; anything else (including timeouts or
-hyper errors) increments it, and after **3** consecutive failures the slot is
-torn down so the supervisor can reconnect on the next tick.
+periodically issues a `GET` to that path on each connected slot that has been
+idle longer than the **hot window**. Statuses in `200..=205` keep the slot;
+anything else (including a timeout or hyper error) tears the slot down on the
+spot, and the supervisor reconnects it on the next tick. There is no
+multi-failure counter — a single failed probe is enough.
+
+This active probe is **HTTP/2 only**. HTTP/1 pools (`http`, `https`,
+`unix+http`, `ws`, `wss`) never probe — their supervisor only refills empty
+slots — so `pool_ping_timeout` and `pool_hot_window` have no effect on h1
+locations (only `pool_size` does).
 
 ```yaml
 global_settings:
   default_h2_livness_url: /health
 ```
 
-Hardcoded parameters (will be made per-upstream configurable later — tracked as
-tech debt):
+Pool tuning parameters. Everything below is in **integer milliseconds** (except
+`pool_size`). The per-location ones go under the `location` (next to
+`connect_timeout` / `request_timeout`); the supervisor tick is global (one timer
+sweeps every pool) and lives in `global_settings`.
 
-| Parameter           | Value     |
-|---------------------|-----------|
-| Pool size           | 5         |
-| Health-check tick   | 10s       |
-| Ping timeout        | 1s        |
-| Fail threshold      | 3 misses  |
-| Connect timeout     | 5s (or `connect_timeout` from the location) |
+| Parameter         | YAML key                  | Scope        | Unit | Default | Effective when |
+|-------------------|---------------------------|--------------|------|---------|----------------|
+| Pool size         | `pool_size`               | location     | int  | 5       | always (h1 + h2) |
+| Connect timeout   | `connect_timeout`         | location     | ms   | 5000    | always (also the pool's connect) |
+| Ping timeout      | `pool_ping_timeout`       | location     | ms   | 1000    | **h2 only**, and only if `default_h2_livness_url` is set |
+| Hot window        | `pool_hot_window`         | location     | ms   | 3000    | **h2 only**, and only if `default_h2_livness_url` is set |
+| Health-check tick | `pool_supervisor_interval`| `global_settings` | ms | 10000 | always |
+
+The **hot window** is how long a connection is considered "hot" after its last
+successful use — within that window the supervisor skips the liveness probe.
+
+```yaml
+hosts:
+  8005:
+    endpoint:
+      type: http2
+    locations:
+      - path: /
+        proxy_pass_to: https2://api.internal:443
+        pool_size: 10          # optional, default 5
+        pool_ping_timeout: 500 # ms, optional, default 1000
+        pool_hot_window: 2000  # ms, optional, default 3000
+
+global_settings:
+  default_h2_livness_url: /health
+  pool_supervisor_interval: 5000  # ms, optional, default 10000
+```
 
 If `default_h2_livness_url` is not set, the supervisor only refills empty slots
 and never actively probes — recovery is purely reactive on the next request.
@@ -1171,9 +1270,10 @@ hosts:
       proxy_pass_to: http://backend:5123
 ```
 
-Same as above, plus every 10s the supervisor sends `GET /health` on each
-connected slot. After 3 consecutive non-`200..=205` responses the slot is
-recreated.
+Same as above, plus every 10s (the default `pool_supervisor_interval`) the
+supervisor sends `GET /health` on each connected slot that has been idle past
+the hot window. A single non-`200..=205` response (or a timeout) recreates the
+slot.
 
 **3. Two locations on the same upstream → one shared pool**
 

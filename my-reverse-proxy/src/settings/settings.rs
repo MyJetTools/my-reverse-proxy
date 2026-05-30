@@ -98,6 +98,9 @@ mod tests {
                     keep_alive: None,
                     track_metrics_by_all_domains: None,
                     hsts: None,
+                    mcp_read_timeout: None,
+                    mcp_write_timeout: None,
+                    mcp_buffer_size: None,
                 },
                 locations: vec![LocationSettings {
                     path: Some("/".to_owned()),
@@ -116,6 +119,9 @@ mod tests {
                     trace_payload: None,
                     auth_header: None,
                     allowed_hosts: None,
+                    pool_size: None,
+                    pool_ping_timeout: None,
+                    pool_hot_window: None,
                 }],
             },
         );
@@ -150,7 +156,7 @@ mod tests {
                 debug: None,
                 compress: None,
                 allow_incoming_forward_connections: None,
-                connect_timeout_seconds: None,
+                connect_timeout: None,
                 sync_ssl_certificates: None,
             },
         );

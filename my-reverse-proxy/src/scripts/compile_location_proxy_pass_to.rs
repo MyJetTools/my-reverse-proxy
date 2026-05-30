@@ -35,6 +35,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
 
@@ -53,6 +54,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Http => {
@@ -70,6 +72,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Mcp => {
@@ -87,6 +90,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Http2 => {
@@ -104,6 +108,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Https1 => {
@@ -121,6 +126,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Https2 => {
@@ -138,6 +144,7 @@ pub async fn compile_location_proxy_pass_to(
                 .await?,
                 request_timeout: location_settings.get_request_timeout(),
                 connect_timeout: location_settings.get_connect_timeout(),
+                pool_tuning: PoolTuning::from_location_settings(location_settings),
             })
         }
         LocationType::Files => {

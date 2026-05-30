@@ -79,6 +79,18 @@ impl SettingsCompiled {
             .and_then(|g| g.default_h2_livness_url.clone())
     }
 
+    pub fn get_pool_supervisor_interval(&self) -> std::time::Duration {
+        let value = self
+            .global_settings
+            .as_ref()
+            .and_then(|g| g.pool_supervisor_interval);
+
+        match value {
+            Some(value) => std::time::Duration::from_millis(value),
+            None => crate::consts::DEFAULT_POOL_SUPERVISOR_INTERVAL,
+        }
+    }
+
     pub fn get_show_error_description_on_error_page(&self) -> bool {
         if let Some(global_settings) = self.global_settings.as_ref() {
             if let Some(show_error_description_on_error_page) =

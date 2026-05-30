@@ -309,6 +309,7 @@ async fn execute_request<
                 },
                 request_timeout: config.request_timeout,
                 connect_timeout: config.connect_timeout,
+                pool_tuning: crate::configurations::PoolTuning::default(),
             });
             // Drop any cached upstream — target varies per request.
             upstream_state.discard(&location.proxy_pass_to, location.id);

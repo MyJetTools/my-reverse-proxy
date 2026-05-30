@@ -13,9 +13,6 @@ use crate::upstream_status::UpstreamStatus;
 
 use super::{H2Entry, H2Pool};
 
-const PING_TIMEOUT: Duration = Duration::from_secs(1);
-const HOT_WINDOW_SECS: i64 = 3;
-
 pub type ConnectorFactory<TConnector> = Arc<
     dyn Fn() -> (
             TConnector,
@@ -54,11 +51,10 @@ where
                 continue;
             }
 
-            let idle_secs = now
+            let idle = now
                 .duration_since(entry.last_success.as_date_time())
-                .as_positive_or_zero()
-                .as_secs();
-            if (idle_secs as i64) < HOT_WINDOW_SECS {
+                .as_positive_or_zero();
+            if idle < self.params.hot_window {
                 continue;
             }
 
@@ -66,7 +62,8 @@ where
                 continue;
             };
 
-            let alive = ping_entry(entry, path, &self.desc.authority).await;
+            let alive =
+                ping_entry(entry, path, &self.desc.authority, self.params.ping_timeout).await;
             if alive {
                 entry.last_success.update(DateTimeAsMicroseconds::now());
                 self.last_status.set(UpstreamStatus::Ok);
@@ -107,6 +104,7 @@ async fn ping_entry<TStream, TConnector>(
     entry: &Arc<H2Entry<TStream, TConnector>>,
     health_check_path: &str,
     authority: &str,
+    ping_timeout: Duration,
 ) -> bool
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
@@ -129,7 +127,7 @@ where
     };
 
     let client = entry.client.load_full();
-    match tokio::time::timeout(PING_TIMEOUT, do_ping(&client, req)).await {
+    match tokio::time::timeout(ping_timeout, do_ping(&client, req, ping_timeout)).await {
         Ok(Ok(status)) => (200..=205).contains(&status),
         _ => false,
     }
@@ -138,11 +136,12 @@ where
 async fn do_ping<TStream, TConnector>(
     client: &Arc<MyHttp2Client<TStream, TConnector>>,
     req: hyper::Request<Full<Bytes>>,
+    ping_timeout: Duration,
 ) -> Result<u16, my_http_client::MyHttpClientError>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    let resp = client.do_request(req, PING_TIMEOUT).await?;
+    let resp = client.do_request(req, ping_timeout).await?;
     Ok(resp.status().as_u16())
 }

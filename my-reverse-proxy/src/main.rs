@@ -92,7 +92,8 @@ async fn main() {
         my_logger::LOGGER.clone(),
     );
 
-    let mut pool_supervisor_timer = rust_extensions::MyTimer::new(Duration::from_secs(10));
+    let mut pool_supervisor_timer =
+        rust_extensions::MyTimer::new(crate::app::APP_CTX.pool_supervisor_interval);
 
     pool_supervisor_timer.register_timer("PoolSupervisor", Arc::new(PoolSupervisorTimer));
 

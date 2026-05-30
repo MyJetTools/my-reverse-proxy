@@ -122,6 +122,10 @@ impl SettingsCompiled {
                         .endpoint
                         .track_metrics_by_all_domains,
                     hsts: host_settings.endpoint.hsts,
+                    mcp_read_timeout: host_settings.endpoint.mcp_read_timeout,
+                    mcp_write_timeout: host_settings.endpoint.mcp_write_timeout,
+                    mcp_buffer_size: variables
+                        .apply_variables_opt(host_settings.endpoint.mcp_buffer_size)?,
                 },
                 locations,
             };
@@ -190,6 +194,7 @@ impl SettingsCompiled {
                 show_error_description_on_error_page: itm.show_error_description_on_error_page,
                 http_control_port: itm.http_control_port,
                 default_h2_livness_url: itm.default_h2_livness_url,
+                pool_supervisor_interval: itm.pool_supervisor_interval,
             })
         }
 
@@ -314,7 +319,7 @@ impl SettingsCompiled {
                         compress: itm.compress,
                         debug: itm.debug,
                         allow_incoming_forward_connections: itm.allow_incoming_forward_connections,
-                        connect_timeout_seconds: itm.connect_timeout_seconds,
+                        connect_timeout: itm.connect_timeout,
                         sync_ssl_certificates: itm.sync_ssl_certificates,
                     },
                 );
@@ -407,6 +412,9 @@ fn compile_locations(
             trace_payload: location.trace_payload,
             auth_header: variables.apply_variables_opt(location.auth_header)?,
             allowed_hosts: location.allowed_hosts,
+            pool_size: location.pool_size,
+            pool_ping_timeout: location.pool_ping_timeout,
+            pool_hot_window: location.pool_hot_window,
         });
     }
 

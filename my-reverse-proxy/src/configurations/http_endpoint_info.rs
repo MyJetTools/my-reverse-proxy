@@ -25,6 +25,7 @@ pub struct HttpEndpointInfo {
     pub keep_alive: bool,
     pub track_metrics_by_all_domains: bool,
     pub hsts: bool,
+    pub mcp_settings: McpEndpointSettings,
 }
 
 impl HttpEndpointInfo {
@@ -43,6 +44,7 @@ impl HttpEndpointInfo {
         keep_alive: bool,
         track_metrics_by_all_domains: bool,
         hsts: bool,
+        mcp_settings: McpEndpointSettings,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -65,6 +67,7 @@ impl HttpEndpointInfo {
             keep_alive,
             track_metrics_by_all_domains,
             hsts,
+            mcp_settings,
         }
     }
 
