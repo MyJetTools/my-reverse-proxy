@@ -79,6 +79,15 @@ impl SettingsCompiled {
             .and_then(|g| g.default_h2_livness_url.clone())
     }
 
+    /// The lowest (global) level of the timeout cascade. Empty if no
+    /// `global_settings` block is present.
+    pub fn get_global_timeouts(&self) -> crate::settings::TimeoutsSettings {
+        self.global_settings
+            .as_ref()
+            .map(|g| g.timeouts)
+            .unwrap_or_default()
+    }
+
     pub fn get_pool_supervisor_interval(&self) -> std::time::Duration {
         let value = self
             .global_settings

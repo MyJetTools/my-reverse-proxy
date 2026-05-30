@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use serde::*;
 
 use super::*;
@@ -30,9 +28,9 @@ pub struct EndpointSettings {
     pub keep_alive: Option<bool>,
     pub track_metrics_by_all_domains: Option<bool>,
     pub hsts: Option<bool>,
-    pub mcp_read_timeout: Option<u64>,
-    pub mcp_write_timeout: Option<u64>,
     pub mcp_buffer_size: Option<String>,
+    #[serde(flatten)]
+    pub timeouts: TimeoutsSettings,
 }
 
 impl EndpointSettings {
@@ -42,20 +40,6 @@ impl EndpointSettings {
 
     pub fn get_inject_country(&self) -> bool {
         self.inject_country.unwrap_or(false)
-    }
-
-    pub fn get_mcp_read_timeout(&self) -> Duration {
-        match self.mcp_read_timeout {
-            Some(value) => Duration::from_millis(value),
-            None => crate::consts::DEFAULT_MCP_READ_TIMEOUT,
-        }
-    }
-
-    pub fn get_mcp_write_timeout(&self) -> Duration {
-        match self.mcp_write_timeout {
-            Some(value) => Duration::from_millis(value),
-            None => crate::consts::DEFAULT_MCP_WRITE_TIMEOUT,
-        }
     }
 
     pub fn get_mcp_buffer_size(&self) -> usize {

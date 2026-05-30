@@ -36,18 +36,42 @@ pub async fn compile_http_configuration(
         (None, None, None)
     };
 
+    // Timeout cascade: HardCode < Global < Endpoint < Location.
+    // Build the global→endpoint layer once, then layer each location on top.
+    let global_timeouts = settings_model.get_global_timeouts();
+    let endpoint_timeouts = global_timeouts.overriden_by(&host_settings.endpoint.timeouts);
+
+    // MCP timeouts are tunnel-scoped: resolved from the endpoint layer, with the
+    // first location allowed to override (an mcp endpoint carries one location).
+    let mut mcp_resolved = endpoint_timeouts.resolve();
+
     let listen_host = host_endpoint.as_str().to_string();
-    for location_settings in &host_settings.locations {
+    for (location_index, location_settings) in host_settings.locations.iter().enumerate() {
+        let resolved = endpoint_timeouts
+            .overriden_by(&location_settings.timeouts)
+            .resolve();
+
+        if location_index == 0 {
+            mcp_resolved = resolved;
+        }
+
         let proxy_pass_to = super::compile_location_proxy_pass_to(
             settings_model,
             location_settings,
             &listen_host,
+            &resolved,
         )
         .await?;
         {
             locations.push(Arc::new(proxy_pass_to));
         }
     }
+
+    let mcp_settings = crate::configurations::McpEndpointSettings::new(
+        mcp_resolved.mcp_read_timeout,
+        mcp_resolved.mcp_write_timeout,
+        host_settings.endpoint.get_mcp_buffer_size(),
+    );
 
     let http_endpoint_info = HttpEndpointInfo::new(
         host_endpoint,
@@ -67,7 +91,7 @@ pub async fn compile_http_configuration(
             .track_metrics_by_all_domains
             .unwrap_or(false),
         host_settings.endpoint.hsts.unwrap_or(false),
-        crate::configurations::McpEndpointSettings::from_settings(&host_settings.endpoint),
+        mcp_settings,
     );
 
     Ok(http_endpoint_info)

@@ -4,6 +4,9 @@ pub use settings::*;
 mod buffer_size;
 pub use buffer_size::*;
 
+mod timeouts_settings;
+pub use timeouts_settings::*;
+
 mod connections_settings;
 pub use connections_settings::*;
 

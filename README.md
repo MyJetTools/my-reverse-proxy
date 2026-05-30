@@ -387,7 +387,7 @@ When `debug: true` is enabled, MCP endpoints will log:
 
 **Connection Settings:**
 
-These can be tuned per-endpoint (under `endpoint:`). All are optional and fall back to the defaults below. Timeouts are in **milliseconds** (integer); the buffer size accepts a raw byte count or a `Kb`/`Mb` suffix (e.g. `512Kb`, `1Mb`).
+All optional, in **milliseconds** (integer); the buffer size accepts a raw byte count or a `Kb`/`Mb` suffix (e.g. `512Kb`, `1Mb`). The two timeouts are part of the [timeout cascade](#timeouts--connection-tuning--overview) — you can set them on the `endpoint:` (shown here), or globally, or on the location, with the more specific level winning. `mcp_buffer_size` is endpoint-scoped only.
 
 | Setting             | YAML key            | Default              | Description |
 |---------------------|---------------------|----------------------|-------------|
@@ -947,9 +947,9 @@ Sometimes if proxy pass is done to remote endpoint by ssh - it would be wise to 
 
 
 ### Timeouts for Remote HTTP Endpoints
-Remote HTTP endpoints have default timeouts: 5 seconds for establishing a connection and 15 seconds for completing a request.
+Remote HTTP endpoints have default timeouts: 5 seconds (`connect_timeout`) for establishing a connection and 15 seconds (`request_timeout`) for completing a request.
 
-You can adjust these timeouts using the following configuration example. Values are specified in milliseconds (ms); for instance, 1000 represents 1 second.
+Values are in milliseconds (`1000` = 1 second). Both are part of the [timeout cascade](#timeouts--connection-tuning--overview): the example below sets them per-location, but you can also set defaults on the `endpoint:` or in `global_settings`, with the more specific level winning.
 
 ```yaml
 
@@ -960,8 +960,8 @@ You can adjust these timeouts using the following configuration example. Values 
     locations:
       - path: /
         proxy_pass_to: http://127.0.0.1:8080
-        connect_timeout: 1000  # 1 second connection timeout
-        request_timeout: 2000  # 2 second request timeout
+        connect_timeout: 1000  # ms — 1 second connection timeout
+        request_timeout: 2000  # ms — 2 second request timeout
 
 ```
 
@@ -1110,48 +1110,87 @@ nothing changes; the improvement is purely internal.
 
 ## Timeouts & connection tuning — overview
 
-Every timeout/connection knob in the proxy, where it lives, and what it controls.
-Read this first to decide which one you actually need; each row links to its
-detailed section below.
+Read this first to decide which knob you need and where to set it.
+
+### The cascade — where a timeout wins
+
+The **timeout set** below can be specified at three config levels. They are
+layered, lowest priority first, each overriding the one before it, on top of the
+compiled-in defaults:
+
+```
+HardCode  <  global_settings  <  endpoint (listen endpoint)  <  location
+```
+
+So a value set on a `location` beats the same value on its `endpoint`, which
+beats `global_settings`, which beats the hardcoded default. A level that leaves
+a field unset simply lets the level below show through — you only set what you
+want to change, at the broadest level that makes sense.
 
 ### Units
 
-**Every timeout is an integer number of milliseconds** — `connect_timeout`,
-`request_timeout`, `pool_*`, `mcp_read_timeout`, `mcp_write_timeout`,
-`pool_supervisor_interval`, `connect_to_remote_timeout`, and the gateway
-`connect_timeout`. So `1000` = 1 second, `60000` = 1 minute. ⚠️ `5` means **5
-milliseconds**, not 5 seconds — a common foot-gun.
+**Every timeout is an integer number of milliseconds.** `1000` = 1 second,
+`60000` = 1 minute. ⚠️ `5` means **5 milliseconds**, not 5 seconds — a common
+foot-gun. The only non-millisecond knobs are the **buffer sizes**, which take a
+raw byte count or a `Kb` / `Mb` suffix (e.g. `512Kb`, `1Mb`).
 
-The only non-millisecond knobs are the **buffer sizes** (`mcp_buffer_size`,
-`connection_settings.buffer_size`), which take a raw byte count or a `Kb` / `Mb`
-suffix (e.g. `512Kb`, `1Mb`).
+### The timeout set (cascades global → endpoint → location)
 
-### All settings
+| Key | Unit | Default | Controls |
+|-----|------|---------|----------|
+| `connect_timeout` | ms | 5000 | TCP/TLS connect to the HTTP upstream (also the pool's connect). |
+| `request_timeout` | ms | 15000 | Time to complete a full HTTP request/response to the upstream. |
+| `pool_size` | int | 5 | Connections held in the h1/h2 upstream pool. |
+| `pool_ping_timeout` | ms | 1000 | Per-probe timeout of the h2 liveness check. **h2 + liveness URL only.** |
+| `pool_hot_window` | ms | 3000 | Idle window after a success during which the h2 probe is skipped. **h2 + liveness URL only.** |
+| `mcp_read_timeout` | ms | 1800000 (30m) | Max idle on either side of an MCP tunnel before it's closed. *(used by `type: mcp` only)* |
+| `mcp_write_timeout` | ms | 30000 (30s) | Max time for a single MCP write. *(used by `type: mcp` only)* |
+
+Any key can be written at `global_settings`, on the `endpoint:`, or on a
+`location` — same name, same unit. Keys that don't apply to a given
+endpoint/location type (e.g. `mcp_read_timeout` on an http location) are simply
+ignored there.
+
+### Outside the cascade (fixed scope)
 
 | Setting | Where (YAML) | Unit | Default | Controls |
 |---------|--------------|------|---------|----------|
-| `connect_timeout` | `location` | ms | 5000 | TCP/TLS connect to an HTTP upstream (and the pool's connect). |
-| `request_timeout` | `location` | ms | 15000 | Time to complete a full HTTP request/response to the upstream. |
-| `pool_size` | `location` | int | 5 | Connections held in the h1/h2 upstream pool. |
-| `pool_ping_timeout` | `location` | ms | 1000 | Per-probe timeout of the h2 liveness check. **h2 + liveness URL only.** |
-| `pool_hot_window` | `location` | ms | 3000 | Idle window after a success during which the h2 probe is skipped. **h2 + liveness URL only.** |
-| `mcp_read_timeout` | `endpoint` (`type: mcp`) | ms | 1800000 (30m) | Max idle on either side of an MCP tunnel before it's closed. |
-| `mcp_write_timeout` | `endpoint` (`type: mcp`) | ms | 30000 (30s) | Max time for a single MCP write. |
-| `mcp_buffer_size` | `endpoint` (`type: mcp`) | bytes/`Kb`/`Mb` | `512Kb` | Per-connection MCP read buffer. |
+| `pool_supervisor_interval` | `global_settings` | ms | 10000 (10s) | How often the single global supervisor sweeps every pool. One timer for all pools, so it can't be per-endpoint/location. |
 | `default_h2_livness_url` | `global_settings` | path | (unset) | Enables the h2 active liveness probe (without it, pool recovery is reactive only). |
-| `pool_supervisor_interval` | `global_settings` | ms | 10000 (10s) | How often the single supervisor sweeps every pool. |
-| `connect_to_remote_timeout` | `global_settings.connection_settings` | ms | 5000 (5s) | Connect timeout for **`type: tcp`** port-forward endpoints. |
+| `connect_to_remote_timeout` | `global_settings.connection_settings` | ms | 5000 | Connect timeout for **`type: tcp`** port-forward endpoints. |
 | `buffer_size` | `global_settings.connection_settings` | bytes/`Kb`/`Mb` | `512Kb` | Pump buffer for `type: tcp` port-forward endpoints. |
-| `connect_timeout` | `gateway_clients.<name>` | ms | 5000 (5s) | Connect timeout for a gateway-client link. |
+| `mcp_buffer_size` | `endpoint` (`type: mcp`) | bytes/`Kb`/`Mb` | `512Kb` | Per-connection MCP read buffer (endpoint-scoped). |
+| `connect_timeout` | `gateway_clients.<name>` | ms | 5000 | Connect timeout for a gateway-client link. |
+
+### Example — defaults at global, override at endpoint and location
+
+```yaml
+global_settings:
+  connect_timeout: 3000      # default connect for every upstream
+  request_timeout: 20000     # default request budget for every upstream
+
+hosts:
+  8005:
+    endpoint:
+      type: http2
+      request_timeout: 60000 # this endpoint's locations get 60s by default
+    locations:
+      - path: /slow
+        proxy_pass_to: https2://api.internal:443
+        request_timeout: 120000   # this one location overrides to 120s
+      - path: /
+        proxy_pass_to: https2://api.internal:443
+        # inherits 60000 from the endpoint, 3000 connect from global
+```
 
 ### Which knob for which symptom
 
-- **HTTP upstream slow to fail when down** → lower `connect_timeout` on the location.
-- **Long-running HTTP request being cut off** → raise `request_timeout` on the location.
-- **Too few / too many upstream connections** → `pool_size` on the location.
-- **Dead h2 upstream detected too slowly** → set `default_h2_livness_url`, then tune `pool_supervisor_interval` (sweep rate) and `pool_hot_window` (how stale a slot must be before it's probed).
-- **MCP tunnel dropped on a long-idle client** → raise `mcp_read_timeout` on the mcp endpoint.
-- **`type: tcp` forward hangs connecting** → lower `connect_to_remote_timeout` in `global_settings.connection_settings`.
+- **HTTP upstream slow to fail when down** → lower `connect_timeout` (set it at the level you want it to apply).
+- **Long-running HTTP request being cut off** → raise `request_timeout`.
+- **Too few / too many upstream connections** → `pool_size`.
+- **Dead h2 upstream detected too slowly** → set `default_h2_livness_url`, then tune `pool_supervisor_interval` (sweep rate) and `pool_hot_window`.
+- **MCP tunnel dropped on a long-idle client** → raise `mcp_read_timeout`.
+- **`type: tcp` forward hangs connecting** → lower `connect_to_remote_timeout`.
 - **Gateway link slow to fail** → `connect_timeout` on the gateway client.
 
 Detailed sections: [Remote HTTP endpoint timeouts](#timeouts-for-remote-http-endpoints),
@@ -1202,17 +1241,19 @@ global_settings:
 ```
 
 Pool tuning parameters. Everything below is in **integer milliseconds** (except
-`pool_size`). The per-location ones go under the `location` (next to
-`connect_timeout` / `request_timeout`); the supervisor tick is global (one timer
-sweeps every pool) and lives in `global_settings`.
+`pool_size`). `pool_size`, `pool_ping_timeout` and `pool_hot_window` are part of
+the [timeout cascade](#timeouts--connection-tuning--overview) — settable at
+`global_settings`, the `endpoint:`, or the `location`, most-specific wins. The
+supervisor tick is **outside** the cascade: one timer sweeps every pool, so it
+lives only in `global_settings`.
 
-| Parameter         | YAML key                  | Scope        | Unit | Default | Effective when |
-|-------------------|---------------------------|--------------|------|---------|----------------|
-| Pool size         | `pool_size`               | location     | int  | 5       | always (h1 + h2) |
-| Connect timeout   | `connect_timeout`         | location     | ms   | 5000    | always (also the pool's connect) |
-| Ping timeout      | `pool_ping_timeout`       | location     | ms   | 1000    | **h2 only**, and only if `default_h2_livness_url` is set |
-| Hot window        | `pool_hot_window`         | location     | ms   | 3000    | **h2 only**, and only if `default_h2_livness_url` is set |
-| Health-check tick | `pool_supervisor_interval`| `global_settings` | ms | 10000 | always |
+| Parameter         | YAML key                  | Scope                       | Unit | Default | Effective when |
+|-------------------|---------------------------|-----------------------------|------|---------|----------------|
+| Pool size         | `pool_size`               | cascade (global→ep→location)| int  | 5       | always (h1 + h2) |
+| Connect timeout   | `connect_timeout`         | cascade (global→ep→location)| ms   | 5000    | always (also the pool's connect) |
+| Ping timeout      | `pool_ping_timeout`       | cascade (global→ep→location)| ms   | 1000    | **h2 only**, and only if `default_h2_livness_url` is set |
+| Hot window        | `pool_hot_window`         | cascade (global→ep→location)| ms   | 3000    | **h2 only**, and only if `default_h2_livness_url` is set |
+| Health-check tick | `pool_supervisor_interval`| `global_settings` only      | ms   | 10000   | always |
 
 The **hot window** is how long a connection is considered "hot" after its last
 successful use — within that window the supervisor skips the liveness probe.

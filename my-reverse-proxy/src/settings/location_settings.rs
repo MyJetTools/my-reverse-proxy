@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use serde::*;
 
 use super::*;
@@ -83,14 +81,11 @@ pub struct LocationSettings {
     pub body: Option<String>,
     pub whitelisted_ip: Option<String>,
     pub compress: Option<bool>,
-    pub connect_timeout: Option<u64>,
-    pub request_timeout: Option<u64>,
     pub trace_payload: Option<bool>,
     pub auth_header: Option<String>,
     pub allowed_hosts: Option<Vec<String>>,
-    pub pool_size: Option<u8>,
-    pub pool_ping_timeout: Option<u64>,
-    pub pool_hot_window: Option<u64>,
+    #[serde(flatten)]
+    pub timeouts: TimeoutsSettings,
 }
 
 impl LocationSettings {
@@ -113,39 +108,6 @@ impl LocationSettings {
             }
         } else {
             Ok(None)
-        }
-    }
-
-    pub fn get_request_timeout(&self) -> Duration {
-        if let Some(request_timeout) = self.request_timeout {
-            return Duration::from_millis(request_timeout);
-        }
-
-        crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT
-    }
-    pub fn get_connect_timeout(&self) -> Duration {
-        if let Some(connection_timeout) = self.connect_timeout {
-            return Duration::from_millis(connection_timeout);
-        }
-
-        crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT
-    }
-
-    pub fn get_pool_size(&self) -> u8 {
-        self.pool_size.unwrap_or(crate::consts::DEFAULT_POOL_SIZE)
-    }
-
-    pub fn get_pool_ping_timeout(&self) -> Duration {
-        match self.pool_ping_timeout {
-            Some(value) => Duration::from_millis(value),
-            None => crate::consts::DEFAULT_POOL_PING_TIMEOUT,
-        }
-    }
-
-    pub fn get_pool_hot_window(&self) -> Duration {
-        match self.pool_hot_window {
-            Some(value) => Duration::from_millis(value),
-            None => crate::consts::DEFAULT_POOL_HOT_WINDOW,
         }
     }
 

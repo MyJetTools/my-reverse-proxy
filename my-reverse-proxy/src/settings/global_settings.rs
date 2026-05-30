@@ -1,6 +1,6 @@
 use serde::*;
 
-use super::{ConnectionsSettings, ModifyHttpHeadersSettings};
+use super::{ConnectionsSettings, ModifyHttpHeadersSettings, TimeoutsSettings};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GlobalSettings {
@@ -10,8 +10,13 @@ pub struct GlobalSettings {
     pub http_control_port: Option<u16>,
     pub default_h2_livness_url: Option<String>,
     /// How often the (single, global) supervisor sweeps every H1/H2 upstream
-    /// pool, in milliseconds. Defaults to 10000 (10s).
+    /// pool, in milliseconds. Defaults to 10000 (10s). Global-only — a single
+    /// timer drives every pool, so it is not part of the cascade.
     pub pool_supervisor_interval: Option<u64>,
+    /// Lowest level of the timeout cascade — overridden by the endpoint, then
+    /// the location.
+    #[serde(flatten)]
+    pub timeouts: TimeoutsSettings,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
