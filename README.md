@@ -1245,7 +1245,7 @@ config fragment that is editable at runtime over MCP and merged into the running
 configuration exactly like an `include:` file.
 
 ```yaml
-dynamic_settings_file: ~/.my-reverse-proxy-dynamic
+dynamic_configurations_file: ~/.my-reverse-proxy-dynamic
 ```
 
 Behavior:

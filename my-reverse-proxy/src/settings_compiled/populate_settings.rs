@@ -340,8 +340,8 @@ async fn load_includes(
 
     // The dynamic settings file is merged like an include, but it is allowed to be
     // missing (it may not have been written yet via MCP).
-    if let Some(dynamic_file) = settings_model.dynamic_settings_file.as_ref() {
-        if dynamic_settings_file_exists(dynamic_file) {
+    if let Some(dynamic_file) = settings_model.dynamic_configurations_file.as_ref() {
+        if dynamic_configurations_file_exists(dynamic_file) {
             let settings =
                 crate::settings::SettingsModel::load_async(Some(dynamic_file.as_str())).await?;
             result.push(settings);
@@ -365,8 +365,8 @@ fn load_includes_block(
 
     // The dynamic settings file is merged like an include, but it is allowed to be
     // missing (it may not have been written yet via MCP).
-    if let Some(dynamic_file) = settings_model.dynamic_settings_file.as_ref() {
-        if dynamic_settings_file_exists(dynamic_file) {
+    if let Some(dynamic_file) = settings_model.dynamic_configurations_file.as_ref() {
+        if dynamic_configurations_file_exists(dynamic_file) {
             let settings = crate::settings::SettingsModel::load(Some(dynamic_file.as_str()))?;
             result.push(settings);
         }
@@ -375,7 +375,7 @@ fn load_includes_block(
     Ok(result)
 }
 
-fn dynamic_settings_file_exists(file_name: &str) -> bool {
+fn dynamic_configurations_file_exists(file_name: &str) -> bool {
     let path = rust_extensions::file_utils::format_path(file_name).to_string();
     std::path::Path::new(path.as_str()).exists()
 }
