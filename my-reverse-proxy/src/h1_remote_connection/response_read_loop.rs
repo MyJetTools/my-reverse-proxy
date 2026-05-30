@@ -21,8 +21,11 @@ pub async fn response_read_loop<
     mut server_write_part: Http1ServerConnectionContext<ServerWritePart, ServerReadPart>,
     ssh_session_handler: Option<SshSessionHandler>,
 ) {
-    let mut remote_h1_reader =
-        H1Reader::new(remote_read_part, crate::types::HttpTimeouts::default());
+    // Endpoint-scoped transport timeouts, applied to both reading the upstream
+    // response and writing it back to the client.
+    let timeouts = server_write_part.end_point_info.timeouts;
+
+    let mut remote_h1_reader = H1Reader::new(remote_read_part, timeouts);
 
     loop {
         let resp_headers = match remote_h1_reader.read_headers().await {
@@ -38,13 +41,13 @@ pub async fn response_read_loop<
                         connection_id,
                         crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
                             .as_slice(),
-                        crate::consts::WRITE_TIMEOUT,
+                        timeouts.write_timeout,
                     )
                     .await;
 
                 server_write_part
                     .h1_server_write_part
-                    .request_is_done(connection_id)
+                    .request_is_done(connection_id, timeouts.write_timeout)
                     .await;
                 return;
             }
@@ -71,13 +74,13 @@ pub async fn response_read_loop<
                         connection_id,
                         crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
                             .as_slice(),
-                        crate::consts::WRITE_TIMEOUT,
+                        timeouts.write_timeout,
                     )
                     .await;
 
                 server_write_part
                     .h1_server_write_part
-                    .request_is_done(connection_id)
+                    .request_is_done(connection_id, timeouts.write_timeout)
                     .await;
                 return;
             }
@@ -88,7 +91,7 @@ pub async fn response_read_loop<
             .write_http_payload_with_timeout(
                 connection_id,
                 remote_h1_reader.h1_headers_builder.as_slice(),
-                crate::consts::WRITE_TIMEOUT,
+                timeouts.write_timeout,
             )
             .await
         {
@@ -101,13 +104,13 @@ pub async fn response_read_loop<
                 .write_http_payload_with_timeout(
                     connection_id,
                     crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
-                    crate::consts::WRITE_TIMEOUT,
+                    timeouts.write_timeout,
                 )
                 .await;
 
             server_write_part
                 .h1_server_write_part
-                .request_is_done(connection_id)
+                .request_is_done(connection_id, timeouts.write_timeout)
                 .await;
             return;
         }
@@ -132,13 +135,13 @@ pub async fn response_read_loop<
                         connection_id,
                         crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
                             .as_slice(),
-                        crate::consts::WRITE_TIMEOUT,
+                        timeouts.write_timeout,
                     )
                     .await;
 
                 server_write_part
                     .h1_server_write_part
-                    .request_is_done(connection_id)
+                    .request_is_done(connection_id, timeouts.write_timeout)
                     .await;
                 return;
             }
@@ -151,7 +154,7 @@ pub async fn response_read_loop<
 
         server_write_part
             .h1_server_write_part
-            .request_is_done(connection_id)
+            .request_is_done(connection_id, timeouts.write_timeout)
             .await;
 
         if web_socket_upgrade {
@@ -191,6 +194,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            timeouts,
                         ),
                     );
 
@@ -202,6 +206,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            timeouts,
                         ),
                     );
                 }
@@ -214,6 +219,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            timeouts,
                         ),
                     );
 
@@ -225,6 +231,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            timeouts,
                         ),
                     );
                 }
@@ -237,6 +244,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            timeouts,
                         ),
                     );
 
@@ -248,6 +256,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            timeouts,
                         ),
                     );
                 }
@@ -260,6 +269,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            timeouts,
                         ),
                     );
 
@@ -271,6 +281,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            timeouts,
                         ),
                     );
                 }
@@ -283,6 +294,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            timeouts,
                         ),
                     );
                     crate::app::spawn_named(
@@ -293,6 +305,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            timeouts,
                         ),
                     );
                 }

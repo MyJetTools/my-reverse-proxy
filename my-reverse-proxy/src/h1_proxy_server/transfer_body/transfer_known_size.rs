@@ -1,4 +1,4 @@
-use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*};
+use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*, types::HttpTimeouts};
 
 pub async fn transfer_known_size<
     ReadPart: NetworkStreamReadPart + Send + Sync + 'static,
@@ -9,6 +9,7 @@ pub async fn transfer_known_size<
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
     mut remaining_size: usize,
+    timeouts: HttpTimeouts,
 ) -> Result<usize, ProxyServerError> {
     let total = remaining_size;
     loop {
@@ -26,7 +27,7 @@ pub async fn transfer_known_size<
                     .write_http_payload(
                         connection_id,
                         &read_buf[..to_send],
-                        crate::consts::WRITE_TIMEOUT,
+                        timeouts.write_timeout,
                     )
                     .await;
 
@@ -49,7 +50,7 @@ pub async fn transfer_known_size<
         };
 
         let read_size = read_stream
-            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, timeouts.read_timeout)
             .await?;
 
         loop_buffer.advance(read_size);

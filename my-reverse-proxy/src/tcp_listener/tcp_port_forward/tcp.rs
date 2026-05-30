@@ -57,6 +57,7 @@ pub async fn handle_connection(
             accepted_server_connection,
             remote_tcp_connection_result,
             None,
+            configuration.timeouts,
         ),
     );
 }

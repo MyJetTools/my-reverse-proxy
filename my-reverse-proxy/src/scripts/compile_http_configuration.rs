@@ -68,10 +68,18 @@ pub async fn compile_http_configuration(
     }
 
     let mcp_settings = crate::configurations::McpEndpointSettings::new(
-        mcp_resolved.mcp_read_timeout,
-        mcp_resolved.mcp_write_timeout,
+        mcp_resolved.read_timeout,
+        mcp_resolved.write_timeout,
         host_settings.endpoint.get_mcp_buffer_size(),
     );
+
+    // Endpoint-scoped transport read/write timeouts (global → endpoint), applied
+    // to every byte pump of this endpoint's connections.
+    let endpoint_resolved = endpoint_timeouts.resolve();
+    let http_timeouts = crate::types::HttpTimeouts {
+        read_timeout: endpoint_resolved.read_timeout,
+        write_timeout: endpoint_resolved.write_timeout,
+    };
 
     let http_endpoint_info = HttpEndpointInfo::new(
         host_endpoint,
@@ -92,6 +100,7 @@ pub async fn compile_http_configuration(
             .unwrap_or(false),
         host_settings.endpoint.hsts.unwrap_or(false),
         mcp_settings,
+        http_timeouts,
     );
 
     Ok(http_endpoint_info)

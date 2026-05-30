@@ -304,6 +304,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                     write_stream,
                     &mut self.loop_buffer,
                     size,
+                    self.timeouts,
                 )
                 .await
             }
@@ -313,6 +314,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                     &mut self.read_part,
                     write_stream,
                     &mut self.loop_buffer,
+                    self.timeouts,
                 )
                 .await
             }

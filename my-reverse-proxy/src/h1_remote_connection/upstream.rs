@@ -502,13 +502,16 @@ async fn execute_local_path<
         .write_http_payload_with_timeout(
             connection_id,
             content.as_slice(),
-            crate::consts::WRITE_TIMEOUT,
+            connection_context.end_point_info.timeouts.write_timeout,
         )
         .await;
 
     connection_context
         .h1_server_write_part
-        .request_is_done(connection_id)
+        .request_is_done(
+            connection_id,
+            connection_context.end_point_info.timeouts.write_timeout,
+        )
         .await;
 }
 
@@ -533,12 +536,15 @@ async fn execute_static_content<
         .write_http_payload_with_timeout(
             connection_id,
             content.as_slice(),
-            crate::consts::WRITE_TIMEOUT,
+            connection_context.end_point_info.timeouts.write_timeout,
         )
         .await;
 
     connection_context
         .h1_server_write_part
-        .request_is_done(connection_id)
+        .request_is_done(
+            connection_id,
+            connection_context.end_point_info.timeouts.write_timeout,
+        )
         .await;
 }

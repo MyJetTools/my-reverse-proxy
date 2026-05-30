@@ -26,6 +26,9 @@ pub struct HttpEndpointInfo {
     pub track_metrics_by_all_domains: bool,
     pub hsts: bool,
     pub mcp_settings: McpEndpointSettings,
+    /// Endpoint-scoped transport read/write idle timeouts (resolved cascade,
+    /// global → endpoint). Used by every byte pump of this endpoint.
+    pub timeouts: crate::types::HttpTimeouts,
 }
 
 impl HttpEndpointInfo {
@@ -45,6 +48,7 @@ impl HttpEndpointInfo {
         track_metrics_by_all_domains: bool,
         hsts: bool,
         mcp_settings: McpEndpointSettings,
+        timeouts: crate::types::HttpTimeouts,
     ) -> Self {
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
@@ -68,6 +72,7 @@ impl HttpEndpointInfo {
             track_metrics_by_all_domains,
             hsts,
             mcp_settings,
+            timeouts,
         }
     }
 

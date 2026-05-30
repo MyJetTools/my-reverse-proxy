@@ -4,14 +4,14 @@ pub const DEFAULT_HTTP_REQUEST_TIMEOUT: std::time::Duration = std::time::Duratio
 
 pub const DEFAULT_HTTP_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-pub const READ_TIMEOUT: Duration = Duration::from_secs(60 * 5);
-pub const WRITE_TIMEOUT: Duration = Duration::from_secs(30);
-
-// MCP endpoint defaults (used when not overridden in the endpoint config).
-// The client→server direction of a tunneled MCP session can legitimately stay
-// idle for long periods, so the read timeout is a generous safety net.
-pub const DEFAULT_MCP_READ_TIMEOUT: Duration = Duration::from_secs(60 * 30);
-pub const DEFAULT_MCP_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
+// Transport-level idle read/write timeouts, applied to every byte-pump path
+// (H1 request/response transfer, MCP tunnel, TCP port-forward). Endpoint-scoped
+// and overridable via the timeout cascade (global → endpoint). The read timeout
+// doubles as dead-connection detection: if the peer drops, the pump unblocks
+// after this long. 3 minutes balances that against legitimately-idle sessions
+// (e.g. an MCP client that only speaks when it issues a request).
+pub const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(60 * 3);
+pub const DEFAULT_WRITE_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_MCP_BUFFER_SIZE: usize = 512 * 1024;
 
 // H1/H2 upstream pool defaults (used when not overridden in the location config).

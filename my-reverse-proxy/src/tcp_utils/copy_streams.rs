@@ -1,4 +1,4 @@
-use crate::{app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer};
+use crate::{app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer, types::HttpTimeouts};
 
 pub enum WsDirection {
     ClientToServer,
@@ -32,6 +32,7 @@ pub async fn copy_streams<
     mut loop_buffer: LoopBuffer,
     _ssh_session_handler: Option<SshSessionHandler>,
     recorder: Option<WsTrafficRecorder>,
+    timeouts: HttpTimeouts,
 ) {
     let direction_label = recorder
         .as_ref()
@@ -52,7 +53,7 @@ pub async fn copy_streams<
             if buf.len() > 0 {
                 let len = buf.len();
                 let write_result = writer
-                    .write_all_with_timeout(buf, crate::consts::WRITE_TIMEOUT)
+                    .write_all_with_timeout(buf, timeouts.write_timeout)
                     .await;
 
                 if let Err(err) = write_result {
@@ -75,7 +76,7 @@ pub async fn copy_streams<
         }
 
         let read_result = reader
-            .read_with_timeout(loop_buffer.get_mut().unwrap(), crate::consts::READ_TIMEOUT)
+            .read_with_timeout(loop_buffer.get_mut().unwrap(), timeouts.read_timeout)
             .await;
 
         let read_size = match read_result {

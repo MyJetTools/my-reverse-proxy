@@ -9,6 +9,8 @@ pub struct TcpEndpointHostConfig {
     pub remote_host: Arc<MyReverseProxyRemoteEndpoint>,
     pub debug: bool,
     pub ip_white_list_id: Option<String>,
+    /// Transport read/write idle timeouts (resolved cascade: global → endpoint).
+    pub timeouts: crate::types::HttpTimeouts,
 }
 
 impl TcpEndpointHostConfig {
@@ -36,11 +38,22 @@ impl TcpEndpointHostConfig {
         let remote_host =
             MyReverseProxyRemoteEndpoint::try_parse(remote_host.as_str(), settings_model).await?;
 
+        // Transport timeout cascade for this tcp endpoint: global → endpoint.
+        let resolved = settings_model
+            .get_global_timeouts()
+            .overriden_by(&host_settings.endpoint.timeouts)
+            .resolve();
+        let timeouts = crate::types::HttpTimeouts {
+            read_timeout: resolved.read_timeout,
+            write_timeout: resolved.write_timeout,
+        };
+
         let result = Self {
             host_endpoint,
             remote_host: remote_host.into(),
             debug: host_settings.endpoint.get_debug(),
             ip_white_list_id,
+            timeouts,
         };
 
         Ok(result)

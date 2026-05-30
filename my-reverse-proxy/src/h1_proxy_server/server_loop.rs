@@ -85,9 +85,14 @@ pub async fn serve_reverse_proxy<
 
     let (server_read_part, server_write_part) = server_stream.split();
 
-    let timeouts = crate::types::HttpTimeouts {
-        read_timeout: crate::consts::READ_TIMEOUT,
-    };
+    // Transport timeouts are endpoint-scoped. For TLS the endpoint is known via
+    // SNI; for plain HTTP it resolves on the first request, so fall back to the
+    // defaults until then.
+    let timeouts = http_connection_info
+        .endpoint_info
+        .as_ref()
+        .map(|e| e.timeouts)
+        .unwrap_or_default();
 
     let mut h1_reader = H1Reader::new(server_read_part, timeouts);
 
@@ -187,12 +192,13 @@ pub async fn serve_reverse_proxy<
                     }
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
+                let write_timeout = http_connection_info
+                    .endpoint_info
+                    .as_ref()
+                    .map(|e| e.timeouts.write_timeout)
+                    .unwrap_or(crate::consts::DEFAULT_WRITE_TIMEOUT);
                 let _ = h1_server_write_part
-                    .write_http_payload_with_timeout(
-                        request_id,
-                        content,
-                        crate::consts::WRITE_TIMEOUT,
-                    )
+                    .write_http_payload_with_timeout(request_id, content, write_timeout)
                     .await;
 
                 if close_after {
@@ -251,6 +257,10 @@ async fn execute_request<
     let (location, end_point_info) = h1_reader
         .find_location(&request_headers, &http_connection_info)
         .await?;
+
+    // Now that the endpoint is known, apply its transport read/write timeouts to
+    // the reader (for plain HTTP it started on defaults before the first request).
+    h1_reader.timeouts = end_point_info.timeouts;
 
     if let Some(domain) = end_point_info.tracked_domain(request_host_for_metric.as_deref()) {
         crate::app::APP_CTX.rps.inc_domain(domain);
@@ -346,7 +356,10 @@ async fn execute_request<
 
     let send_headers_result = access
         .upstream
-        .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
+        .send_h1_header(
+            &h1_reader.h1_headers_builder,
+            end_point_info.timeouts.write_timeout,
+        )
         .await;
 
     let mut upstream = access.upstream;
@@ -366,7 +379,10 @@ async fn execute_request<
 
         let send_headers_result = access
             .upstream
-            .send_h1_header(&h1_reader.h1_headers_builder, crate::consts::WRITE_TIMEOUT)
+            .send_h1_header(
+                &h1_reader.h1_headers_builder,
+                end_point_info.timeouts.write_timeout,
+            )
             .await;
 
         if !send_headers_result {

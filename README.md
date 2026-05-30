@@ -387,12 +387,12 @@ When `debug: true` is enabled, MCP endpoints will log:
 
 **Connection Settings:**
 
-All optional, in **milliseconds** (integer); the buffer size accepts a raw byte count or a `Kb`/`Mb` suffix (e.g. `512Kb`, `1Mb`). The two timeouts are part of the [timeout cascade](#timeouts--connection-tuning--overview) — you can set them on the `endpoint:` (shown here), or globally, or on the location, with the more specific level winning. `mcp_buffer_size` is endpoint-scoped only.
+All optional, in **milliseconds** (integer); the buffer size accepts a raw byte count or a `Kb`/`Mb` suffix (e.g. `512Kb`, `1Mb`). `read_timeout`/`write_timeout` are the generic transport timeouts from the [timeout cascade](#timeouts--connection-tuning--overview) (resolved global → endpoint) — the same keys also govern H1 transfer and TCP port-forward. `mcp_buffer_size` is endpoint-scoped only.
 
 | Setting             | YAML key            | Default              | Description |
 |---------------------|---------------------|----------------------|-------------|
-| Read Timeout        | `mcp_read_timeout`  | 1800000 ms (30 min)  | Max time to wait for data from either side. The client→server direction can stay idle for long periods, so this is a generous safety net. |
-| Write Timeout       | `mcp_write_timeout` | 30000 ms (30 sec)    | Max time to wait for write operations. |
+| Read Timeout        | `read_timeout`      | 180000 ms (3 min)    | Max idle on either side before the tunnel is torn down. Also bounds how long a dropped upstream goes unnoticed. |
+| Write Timeout       | `write_timeout`     | 30000 ms (30 sec)    | Max time to wait for write operations. |
 | Buffer Size         | `mcp_buffer_size`   | 512 KB (`512Kb`)     | Per-connection read buffer. |
 
 ```yaml
@@ -401,8 +401,8 @@ hosts:
     endpoint:
       type: mcp
       ssl_certificate: my_ssl_cert
-      mcp_read_timeout: 600000   # ms — optional, default 1800000 (30m)
-      mcp_write_timeout: 15000   # ms — optional, default 30000 (30s)
+      read_timeout: 600000       # ms — optional, default 180000 (3m)
+      write_timeout: 15000       # ms — optional, default 30000 (30s)
       mcp_buffer_size: 1Mb       # optional, default 512Kb
     locations:
     - proxy_pass_to: mcp-server:5123
@@ -1134,22 +1134,26 @@ want to change, at the broadest level that makes sense.
 foot-gun. The only non-millisecond knobs are the **buffer sizes**, which take a
 raw byte count or a `Kb` / `Mb` suffix (e.g. `512Kb`, `1Mb`).
 
-### The timeout set (cascades global → endpoint → location)
+### The timeout set
 
-| Key | Unit | Default | Controls |
-|-----|------|---------|----------|
-| `connect_timeout` | ms | 5000 | TCP/TLS connect to the HTTP upstream (also the pool's connect). |
-| `request_timeout` | ms | 15000 | Time to complete a full HTTP request/response to the upstream. |
-| `pool_size` | int | 5 | Connections held in the h1/h2 upstream pool. |
-| `pool_ping_timeout` | ms | 1000 | Per-probe timeout of the h2 liveness check. **h2 + liveness URL only.** |
-| `pool_hot_window` | ms | 3000 | Idle window after a success during which the h2 probe is skipped. **h2 + liveness URL only.** |
-| `mcp_read_timeout` | ms | 1800000 (30m) | Max idle on either side of an MCP tunnel before it's closed. *(used by `type: mcp` only)* |
-| `mcp_write_timeout` | ms | 30000 (30s) | Max time for a single MCP write. *(used by `type: mcp` only)* |
+Every key below is written the same way at any level it supports — same name,
+same unit. The **Levels** column says how far down the cascade each key is read:
 
-Any key can be written at `global_settings`, on the `endpoint:`, or on a
-`location` — same name, same unit. Keys that don't apply to a given
-endpoint/location type (e.g. `mcp_read_timeout` on an http location) are simply
-ignored there.
+- **global → endpoint → location**: per-request knobs; the most specific level wins.
+- **global → endpoint**: transport-level idle timeouts. They live on the connection (one reader/writer shared by all requests), so they resolve at the endpoint and a `location`-level value is ignored.
+
+| Key | Unit | Default | Levels | Controls |
+|-----|------|---------|--------|----------|
+| `connect_timeout` | ms | 5000 | global→endpoint→location | TCP/TLS connect to the HTTP upstream (also the pool's connect). |
+| `request_timeout` | ms | 15000 | global→endpoint→location | Time to complete a full HTTP request/response to the upstream. |
+| `pool_size` | int | 5 | global→endpoint→location | Connections held in the h1/h2 upstream pool. |
+| `pool_ping_timeout` | ms | 1000 | global→endpoint→location | Per-probe timeout of the h2 liveness check. **h2 + liveness URL only.** |
+| `pool_hot_window` | ms | 3000 | global→endpoint→location | Idle window after a success during which the h2 probe is skipped. **h2 + liveness URL only.** |
+| `read_timeout` | ms | 180000 (3m) | global→endpoint | Idle read timeout on every byte pump — H1 request/response body transfer, MCP tunnel, TCP port-forward, WebSocket. Doubles as dead-peer detection. |
+| `write_timeout` | ms | 30000 (30s) | global→endpoint | Idle write timeout on every byte pump (same paths as `read_timeout`). |
+
+Keys that don't apply to a given endpoint type (e.g. `pool_size` on a `type: tcp`
+endpoint) are simply ignored there.
 
 ### Outside the cascade (fixed scope)
 
@@ -1189,7 +1193,7 @@ hosts:
 - **Long-running HTTP request being cut off** → raise `request_timeout`.
 - **Too few / too many upstream connections** → `pool_size`.
 - **Dead h2 upstream detected too slowly** → set `default_h2_livness_url`, then tune `pool_supervisor_interval` (sweep rate) and `pool_hot_window`.
-- **MCP tunnel dropped on a long-idle client** → raise `mcp_read_timeout`.
+- **MCP tunnel / body transfer dropped on a long-idle peer** → raise `read_timeout` (on the endpoint or globally).
 - **`type: tcp` forward hangs connecting** → lower `connect_to_remote_timeout`.
 - **Gateway link slow to fail** → `connect_timeout` on the gateway client.
 

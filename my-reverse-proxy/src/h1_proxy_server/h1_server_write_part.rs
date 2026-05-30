@@ -80,7 +80,7 @@ impl<
             .push(H1CurrentRequest::new(connection_id));
     }
 
-    pub async fn request_is_done(&self, connection_id: u64) {
+    pub async fn request_is_done(&self, connection_id: u64, write_timeout: std::time::Duration) {
         let mut write_access = self.inner.lock().await;
 
         for itm in write_access.current_requests.iter_mut() {
@@ -106,7 +106,7 @@ impl<
                         .server_write_part
                         .as_mut()
                         .unwrap()
-                        .write_all_with_timeout(&done_item.buffer, crate::consts::WRITE_TIMEOUT)
+                        .write_all_with_timeout(&done_item.buffer, write_timeout)
                         .await
                         .unwrap();
                 }

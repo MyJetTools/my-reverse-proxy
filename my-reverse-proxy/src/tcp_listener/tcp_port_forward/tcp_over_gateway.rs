@@ -71,7 +71,12 @@ pub async fn handle_connection(
 
     crate::app::spawn_named(
         "tcp_forward_gateway",
-        super::handle_port_forward(accepted_server_connection, proxy_connection, None),
+        super::handle_port_forward(
+            accepted_server_connection,
+            proxy_connection,
+            None,
+            configuration.timeouts,
+        ),
     );
 }
 

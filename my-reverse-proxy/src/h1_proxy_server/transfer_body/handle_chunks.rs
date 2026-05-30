@@ -1,6 +1,6 @@
 use rust_extensions::slice_of_u8_utils::SliceOfU8Ext;
 
-use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*};
+use crate::{h1_proxy_server::*, network_stream::*, tcp_utils::*, types::HttpTimeouts};
 
 use super::*;
 
@@ -12,11 +12,12 @@ pub async fn transfer_chunked_body<
     read_stream: &mut ReadPart,
     write_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
+    timeouts: HttpTimeouts,
 ) -> Result<usize, ProxyServerError> {
     let mut total = 0usize;
     loop {
         // Read chunk header line
-        let chunk_header = read_chunk_header(read_stream, loop_buffer).await?;
+        let chunk_header = read_chunk_header(read_stream, loop_buffer, timeouts).await?;
 
         let chunk_size = chunk_header.chunk_size;
 
@@ -26,6 +27,7 @@ pub async fn transfer_chunked_body<
             write_stream,
             loop_buffer,
             chunk_header,
+            timeouts,
         )
         .await?;
         total += transferred;
@@ -39,6 +41,7 @@ pub async fn transfer_chunked_body<
 async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'static>(
     read_stream: &mut ReadPart,
     loop_buffer: &mut LoopBuffer,
+    timeouts: HttpTimeouts,
 ) -> Result<ChunkHeader, ProxyServerError> {
     loop {
         {
@@ -58,7 +61,7 @@ async fn read_chunk_header<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         };
 
         let read_size = read_stream
-            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, timeouts.read_timeout)
             .await?;
 
         loop_buffer.advance(read_size);
@@ -74,6 +77,7 @@ async fn transfer_chunk_data<
     remote_stream: &mut WritePart,
     loop_buffer: &mut LoopBuffer,
     chunk_header: ChunkHeader,
+    timeouts: HttpTimeouts,
 ) -> Result<usize, ProxyServerError> {
     let total =
         chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
@@ -96,7 +100,7 @@ async fn transfer_chunk_data<
                 }
 
                 let write_error = remote_stream
-                    .write_http_payload(connection_id, to_send_buf, crate::consts::WRITE_TIMEOUT)
+                    .write_http_payload(connection_id, to_send_buf, timeouts.write_timeout)
                     .await;
 
                 if let Err(write_error) = write_error {
@@ -120,7 +124,7 @@ async fn transfer_chunk_data<
         };
 
         let read_size = read_stream
-            .read_with_timeout(buffer, crate::consts::READ_TIMEOUT)
+            .read_with_timeout(buffer, timeouts.read_timeout)
             .await?;
 
         loop_buffer.advance(read_size);

@@ -1,12 +1,13 @@
 use crate::{
     app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer,
-    types::AcceptedServerConnection,
+    types::AcceptedServerConnection, types::HttpTimeouts,
 };
 
 pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sync + 'static>(
     server_stream: AcceptedServerConnection,
     remote_stream: TRemoteNetworkStream,
     ssh_session_handler: Option<SshSessionHandler>,
+    timeouts: HttpTimeouts,
 ) {
     let (remote_reader, remote_writer) = remote_stream.split();
     match server_stream {
@@ -20,6 +21,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     ssh_session_handler,
                     None,
+                    timeouts,
                 ),
             );
             crate::app::spawn_named(
@@ -30,6 +32,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     None,
                     None,
+                    timeouts,
                 ),
             );
         }
@@ -43,6 +46,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     ssh_session_handler,
                     None,
+                    timeouts,
                 ),
             );
             crate::app::spawn_named(
@@ -53,6 +57,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     None,
                     None,
+                    timeouts,
                 ),
             );
         }
