@@ -304,6 +304,12 @@ Notes:
 - For an upstream of type `http2` (or `unix+http2`) the upstream service must
   itself support WebSocket-over-HTTP/2. Services built on `MyHttpServer`
   support it from version `0.8.3`.
+- Both WebSocket pumps (H1 and H2) honor the cascade `read_timeout` /
+  `write_timeout` (defaults 180000 ms / 30000 ms, resolved global → endpoint;
+  see [Timeouts & connection tuning](#timeouts--connection-tuning--overview)).
+  An idle connection — no traffic in either direction — is torn down after
+  `read_timeout`, so `read_timeout` **must exceed the client heartbeat
+  interval** or live connections will be dropped falsely.
 
 ### Tcp
 ```yaml
@@ -1194,6 +1200,7 @@ hosts:
 - **Too few / too many upstream connections** → `pool_size`.
 - **Dead h2 upstream detected too slowly** → set `default_h2_livness_url`, then tune `pool_supervisor_interval` (sweep rate) and `pool_hot_window`.
 - **MCP tunnel / body transfer dropped on a long-idle peer** → raise `read_timeout` (on the endpoint or globally).
+- **WebSocket drops while idle (no app traffic)** → raise `read_timeout`, or make the client send a heartbeat shorter than `read_timeout`.
 - **`type: tcp` forward hangs connecting** → lower `connect_to_remote_timeout`.
 - **Gateway link slow to fail** → `connect_timeout` on the gateway client.
 

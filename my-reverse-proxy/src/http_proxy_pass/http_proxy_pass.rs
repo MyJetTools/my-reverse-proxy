@@ -10,7 +10,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     configurations::*, http_proxy_pass::GoogleAuthResult,
-    tcp_listener::https::ClientCertificateData, types::ConnectionIp,
+    tcp_listener::https::ClientCertificateData,
+    types::{ConnectionIp, HttpTimeouts},
 };
 
 use super::{
@@ -170,6 +171,7 @@ impl HttpProxyPass {
                     .endpoint_info
                     .tracked_domain(request_host_for_metric.as_deref())
                     .map(str::to_owned);
+                let timeouts = self.endpoint_info.timeouts;
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
                         spawn_websocket_pump(
@@ -180,6 +182,7 @@ impl HttpProxyPass {
                             disconnection,
                             trace_payload,
                             domain,
+                            timeouts,
                         )
                     }
 
@@ -192,6 +195,7 @@ impl HttpProxyPass {
                             disconnection,
                             trace_payload,
                             domain,
+                            timeouts,
                         )
                     }
 
@@ -204,6 +208,7 @@ impl HttpProxyPass {
                             disconnection,
                             trace_payload,
                             domain,
+                            timeouts,
                         )
                     }
                     super::content_source::WebSocketUpgradeStream::SshChannel(async_channel) => {
@@ -215,6 +220,7 @@ impl HttpProxyPass {
                             disconnection,
                             trace_payload,
                             domain,
+                            timeouts,
                         )
                     }
                     super::content_source::WebSocketUpgradeStream::H2Upgraded(h2_upgraded) => {
@@ -225,6 +231,7 @@ impl HttpProxyPass {
                             self.endpoint_info.debug,
                             disconnection,
                             domain,
+                            timeouts,
                         )
                     }
                 }
@@ -259,6 +266,7 @@ fn spawn_websocket_pump<S>(
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + Sync + 'static,
@@ -281,6 +289,7 @@ where
                     disconnection,
                     trace_payload,
                     domain.clone(),
+                    timeouts,
                 ),
             );
             into_full_body_response(upgrade_response)
@@ -291,7 +300,7 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h1",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain),
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain, timeouts),
             );
             into_full_body_response(upgrade_response)
         }
@@ -305,6 +314,7 @@ fn spawn_h2_websocket_pump<S>(
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) -> hyper::Response<BoxBody<Bytes, String>>
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -320,7 +330,7 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h2",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain),
+                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain, timeouts),
             );
             into_full_body_response(upgrade_response)
         }
@@ -341,6 +351,7 @@ async fn pump_h2_extended_connect<S>(
     debug: bool,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
@@ -359,40 +370,110 @@ async fn pump_h2_extended_connect<S>(
 
     // Reads on `client_side` are bytes coming FROM the client → upstream (c2s).
     // Reads on `upstream_side` are bytes coming FROM the upstream → client (s2c).
-    let copy_result = match domain {
+    // `tokio::io::copy_bidirectional` offers no idle hook, so we run a
+    // per-direction copy with read/write timeouts (defaults 180s/30s) and tear
+    // the pair down as soon as either direction ends — half-open H2 WS now reap.
+    match domain {
         Some(domain) => {
-            let mut client_side = crate::tcp_utils::MeteredStream::new(
+            let client_side = crate::tcp_utils::MeteredStream::new(
                 upgraded,
                 crate::tcp_utils::WsTrafficRecorder {
                     domain: domain.clone(),
                     direction: crate::tcp_utils::WsDirection::ClientToServer,
                 },
             );
-            let mut upstream_side = crate::tcp_utils::MeteredStream::new(
+            let upstream_side = crate::tcp_utils::MeteredStream::new(
                 upstream,
                 crate::tcp_utils::WsTrafficRecorder {
                     domain,
                     direction: crate::tcp_utils::WsDirection::ServerToClient,
                 },
             );
-            tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await
+            pump_bidirectional_with_timeouts(client_side, upstream_side, timeouts, debug).await;
         }
         None => {
-            let mut client_side = upgraded;
-            let mut upstream_side = upstream;
-            tokio::io::copy_bidirectional(&mut client_side, &mut upstream_side).await
+            pump_bidirectional_with_timeouts(upgraded, upstream, timeouts, debug).await;
         }
     };
 
+    disconnection.web_socket_disconnect();
+}
+
+/// Bidirectional copy over raw tokio streams with per-direction idle read and
+/// write timeouts. Returns once either direction finishes (EOF, error, or
+/// timeout), dropping the other half so the whole tunnel is torn down.
+async fn pump_bidirectional_with_timeouts<A, B>(
+    client_side: A,
+    upstream_side: B,
+    timeouts: HttpTimeouts,
+    debug: bool,
+) where
+    A: AsyncRead + AsyncWrite + Unpin,
+    B: AsyncRead + AsyncWrite + Unpin,
+{
+    let (client_read, client_write) = tokio::io::split(client_side);
+    let (upstream_read, upstream_write) = tokio::io::split(upstream_side);
+
+    let c2s = copy_one_direction(client_read, upstream_write, timeouts, "c2s", debug);
+    let s2c = copy_one_direction(upstream_read, client_write, timeouts, "s2c", debug);
+
+    tokio::select! {
+        _ = c2s => {}
+        _ = s2c => {}
+    }
+
     if debug {
-        match copy_result {
-            Ok((from_client, from_upstream)) => println!(
-                "h2 ext-CONNECT WS pump finished. client->upstream={} bytes, upstream->client={} bytes",
-                from_client, from_upstream
-            ),
-            Err(err) => println!("h2 ext-CONNECT WS pump error: {:?}", err),
+        println!("h2 ext-CONNECT WS pump finished");
+    }
+}
+
+async fn copy_one_direction<R, W>(
+    mut reader: R,
+    mut writer: W,
+    timeouts: HttpTimeouts,
+    dir: &'static str,
+    debug: bool,
+) where
+    R: AsyncRead + Unpin,
+    W: AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut buf = vec![0u8; 16 * 1024];
+    loop {
+        let n = match tokio::time::timeout(timeouts.read_timeout, reader.read(&mut buf)).await {
+            Err(_) => {
+                if debug {
+                    println!("h2 ext-CONNECT WS pump [{dir}] idle read timeout");
+                }
+                break;
+            }
+            Ok(Ok(0)) => break,
+            Ok(Ok(n)) => n,
+            Ok(Err(err)) => {
+                if debug {
+                    println!("h2 ext-CONNECT WS pump [{dir}] read error: {:?}", err);
+                }
+                break;
+            }
+        };
+
+        match tokio::time::timeout(timeouts.write_timeout, writer.write_all(&buf[..n])).await {
+            Err(_) => {
+                if debug {
+                    println!("h2 ext-CONNECT WS pump [{dir}] write timeout");
+                }
+                break;
+            }
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                if debug {
+                    println!("h2 ext-CONNECT WS pump [{dir}] write error: {:?}", err);
+                }
+                break;
+            }
         }
     }
 
-    disconnection.web_socket_disconnect();
+    let _ = writer.shutdown().await;
 }

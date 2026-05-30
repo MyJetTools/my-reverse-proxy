@@ -1,4 +1,4 @@
-use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
+use std::{panic::AssertUnwindSafe, sync::Arc};
 
 use futures::{
     stream::{SplitSink, SplitStream},
@@ -8,6 +8,8 @@ use hyper_tungstenite::{
     tungstenite::Message, HyperWebsocket, HyperWebsocketStream, WebSocketStream,
 };
 use my_http_client::MyHttpClientDisconnect;
+
+use crate::types::HttpTimeouts;
 
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -30,6 +32,7 @@ pub async fn start_web_socket_loop<
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) {
     let result = AssertUnwindSafe(async move {
         web_socket_loop(
@@ -38,6 +41,7 @@ pub async fn start_web_socket_loop<
             debug,
             trace_payload,
             domain,
+            timeouts,
         )
         .await;
     })
@@ -59,6 +63,7 @@ async fn web_socket_loop<
     debug: bool,
     trace_payload: bool,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) {
     let ws_stream = server_web_socket.await;
 
@@ -83,6 +88,7 @@ async fn web_socket_loop<
                     debug,
                     trace_payload,
                     domain.clone(),
+                    timeouts,
                 ),
             );
 
@@ -92,7 +98,8 @@ async fn web_socket_loop<
 
             let mut have_traced_message = false;
 
-            let read_timeout = Duration::from_secs(60);
+            let read_timeout = timeouts.read_timeout;
+            let write_timeout = timeouts.write_timeout;
 
             loop {
                 let future = from_remote_read.next();
@@ -133,12 +140,20 @@ async fn web_socket_loop<
                     crate::app::APP_CTX.traffic.record_ws_s2c(d, bytes);
                 }
 
-                if let Err(err) = ws_sender.send(message).await {
-                    if debug {
-                        println!("ws_sender.send error: {:?}", err);
+                match tokio::time::timeout(write_timeout, ws_sender.send(message)).await {
+                    Err(_) => {
+                        if debug {
+                            println!("ws_sender.send timed out after {:?}", write_timeout);
+                        }
+                        break;
                     }
-
-                    break;
+                    Ok(Err(err)) => {
+                        if debug {
+                            println!("ws_sender.send error: {:?}", err);
+                        }
+                        break;
+                    }
+                    Ok(Ok(())) => {}
                 }
             }
         }
@@ -158,6 +173,7 @@ async fn serve_from_server_to_client<
     debug: bool,
     trace_payload: bool,
     domain: Option<String>,
+    timeouts: HttpTimeouts,
 ) -> Result<(), Error> {
     if trace_payload {
         println!("WS is starting reading message to remote");
@@ -165,7 +181,8 @@ async fn serve_from_server_to_client<
 
     let mut have_traced_message = false;
 
-    let read_timeout = Duration::from_secs(60);
+    let read_timeout = timeouts.read_timeout;
+    let write_timeout = timeouts.write_timeout;
     loop {
         let future = websocket.next();
 
@@ -197,12 +214,23 @@ async fn serve_from_server_to_client<
             crate::app::APP_CTX.traffic.record_ws_c2s(d, bytes);
         }
 
-        let err = to_remote_write.send(msg).await;
-        if let Err(err) = err {
-            if debug {
-                println!("Error in websocket server_to_client loop: {:?}", err);
+        match tokio::time::timeout(write_timeout, to_remote_write.send(msg)).await {
+            Err(_) => {
+                if debug {
+                    println!(
+                        "to_remote_write.send timed out after {:?} in server_to_client loop",
+                        write_timeout
+                    );
+                }
+                break;
             }
-            break;
+            Ok(Err(err)) => {
+                if debug {
+                    println!("Error in websocket server_to_client loop: {:?}", err);
+                }
+                break;
+            }
+            Ok(Ok(())) => {}
         }
     }
 
