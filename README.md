@@ -1237,3 +1237,48 @@ include:
 - ~/other_config_file.yaml
 - ~/other_config_file2.yaml
 ```
+
+## Dynamic settings file
+
+A single settings file can be designated as the **dynamic settings file** — a
+config fragment that is editable at runtime over MCP and merged into the running
+configuration exactly like an `include:` file.
+
+```yaml
+dynamic_settings_file: ~/.my-reverse-proxy-dynamic
+```
+
+Behavior:
+
+- It is merged the same way as an `include:` entry — same schema as the main
+  `~/.my-reverse-proxy` file. Anything you can put in the main file (hosts,
+  variables, ssl_certificates, …) can go here.
+- It is **allowed to be missing**. Unlike a regular `include:`, a non-existent
+  dynamic settings file is silently skipped (it may not have been written yet),
+  so the proxy starts fine before the file exists.
+- Leading `~/` is expanded to `$HOME/…`.
+
+### Editing over MCP
+
+The MCP server exposes tools to read and write this file without touching the
+main config:
+
+- **`get_dynamic_settings`** — returns the resolved path, whether the file
+  exists, and its raw YAML content (empty if it does not exist yet).
+- **`set_dynamic_settings`** — full-file replace. The YAML is validated against
+  the settings schema before writing; on a parse error nothing is written.
+- **`reload_settings`** — applies the written file to the running proxy.
+
+The intended workflow is always: `get_dynamic_settings` → edit the returned
+content → `set_dynamic_settings` (full body) → `reload_settings`. Because
+`set_dynamic_settings` is a full-file replace, the content you send must already
+contain everything you want to keep plus your changes.
+
+### Inspecting what is applied
+
+- **`get_settings`** — what the files declare *now* (a fresh compile).
+- **`get_applied_settings`** — what is *currently live* (a snapshot from the
+  last successful reload).
+
+Diffing the two shows whether there are pending changes that a
+`reload_settings` would apply.
