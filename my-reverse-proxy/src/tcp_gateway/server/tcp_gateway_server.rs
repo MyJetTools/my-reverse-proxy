@@ -39,7 +39,12 @@ impl TcpGatewayServer {
                     inner.gateway_host.as_str(),
                 );
 
-        crate::app::spawn_named("tcp_gateway_server_accept_loop", connection_loop(inner, debug));
+        // TEMP: plain tokio::spawn to rule out spawn_named/APP_CTX issues.
+        tokio::spawn(async move {
+            println!("GATEWAY accept loop task STARTED");
+            connection_loop(inner, debug).await;
+            println!("GATEWAY accept loop task EXITED");
+        });
 
         result
     }
