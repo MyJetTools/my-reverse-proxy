@@ -84,7 +84,10 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         }
     };
 
-    while tcp_gateway.is_running() {
+    // NOTE: temporarily an unconditional loop — the accept loop must never exit
+    // and drop the listener (which would close the port). Was `while
+    // tcp_gateway.is_running()`.
+    loop {
         let accept_result = listener.accept().await;
 
         let (tcp_stream, socket_addr) = match accept_result {
