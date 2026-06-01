@@ -211,6 +211,8 @@ fn render_gateway_connections(connections: &[GatewayConnectionModel]) -> Element
                         th { "Forward conn" }
                         th { "Proxy conn" }
                         th { "Ping" }
+                        th { "In/s" }
+                        th { "Out/s" }
                         th { "Incoming forward" }
                         th { "Connected at" }
                     }
@@ -234,12 +236,17 @@ fn render_gateway_connection(conn: &GatewayConnectionModel) -> Element {
 
     let route_rows = gateway_route_rows(conn);
 
+    let in_per_sec = fmt_bytes_per_sec(conn.in_history.last().copied().unwrap_or(0));
+    let out_per_sec = fmt_bytes_per_sec(conn.out_history.last().copied().unwrap_or(0));
+
     rsx! {
         tr {
             td { class: "id-string", "{conn.name}" }
             td { "{conn.forward_connections}" }
             td { "{conn.proxy_connections}" }
             td { "{conn.ping_time}" }
+            td { "{in_per_sec}" }
+            td { "{out_per_sec}" }
             td {
                 span { class: "{forward_class}", "{forward_label}" }
             }
@@ -247,7 +254,7 @@ fn render_gateway_connection(conn: &GatewayConnectionModel) -> Element {
         }
         if !route_rows.is_empty() {
             tr { class: "gateway-routes-row",
-                td { colspan: "6",
+                td { colspan: "8",
                     table { class: "locations gateway-routes",
                         thead {
                             tr {
@@ -471,6 +478,17 @@ fn render_location(loc: &HttpProxyPassLocationModel) -> Element {
             td { "{pool_label}" }
             td { class: "id-string", "{loc.id_string}" }
         }
+    }
+}
+
+fn fmt_bytes_per_sec(bytes: usize) -> String {
+    let v = bytes as f64;
+    if v >= 1_048_576.0 {
+        format!("{:.1} MB/s", v / 1_048_576.0)
+    } else if v >= 1024.0 {
+        format!("{:.1} KB/s", v / 1024.0)
+    } else {
+        format!("{} B/s", bytes)
     }
 }
 
