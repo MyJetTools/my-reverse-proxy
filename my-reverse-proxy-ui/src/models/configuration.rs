@@ -102,6 +102,11 @@ pub struct GatewayConnectionModel {
     pub name: String,
     pub forward_connections: usize,
     pub proxy_connections: usize,
+    /// Active forward / proxy connections grouped by remote target (route -> count).
+    #[serde(default)]
+    pub forward_routes: HashMap<String, usize>,
+    #[serde(default)]
+    pub proxy_routes: HashMap<String, usize>,
     pub ping_time: String,
     pub is_incoming_forward_connection_allowed: bool,
     #[serde(default)]

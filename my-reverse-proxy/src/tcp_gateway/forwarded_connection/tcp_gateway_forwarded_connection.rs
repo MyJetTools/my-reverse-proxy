@@ -53,6 +53,10 @@ impl TcpGatewayForwardConnection {
         Ok(result)
     }
 
+    pub fn get_remote_endpoint(&self) -> Arc<String> {
+        self.remote_endpoint.clone()
+    }
+
     pub async fn send_payload(&self, payload: Vec<u8>) -> bool {
         let len = payload.len();
         if !self.inner.send_payload(payload) {

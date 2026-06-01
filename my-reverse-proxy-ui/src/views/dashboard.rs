@@ -232,6 +232,8 @@ fn render_gateway_connection(conn: &GatewayConnectionModel) -> Element {
         ("blocked", "type-pill type-drop")
     };
 
+    let route_rows = gateway_route_rows(conn);
+
     rsx! {
         tr {
             td { class: "id-string", "{conn.name}" }
@@ -243,7 +245,51 @@ fn render_gateway_connection(conn: &GatewayConnectionModel) -> Element {
             }
             td { class: "id-string", "{conn.timestamp}" }
         }
+        if !route_rows.is_empty() {
+            tr { class: "gateway-routes-row",
+                td { colspan: "6",
+                    table { class: "locations gateway-routes",
+                        thead {
+                            tr {
+                                th { "Route" }
+                                th { "Forward" }
+                                th { "Proxy" }
+                            }
+                        }
+                        tbody {
+                            for (route, fwd, proxy) in route_rows.iter() {
+                                tr {
+                                    td { class: "id-string", "{route}" }
+                                    td { "{fwd}" }
+                                    td { "{proxy}" }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
+}
+
+/// Union of forward/proxy route keys, sorted, as (route, forward_count, proxy_count).
+fn gateway_route_rows(conn: &GatewayConnectionModel) -> Vec<(String, usize, usize)> {
+    let mut keys: Vec<&String> = conn
+        .forward_routes
+        .keys()
+        .chain(conn.proxy_routes.keys())
+        .collect();
+    keys.sort();
+    keys.dedup();
+    keys.into_iter()
+        .map(|k| {
+            (
+                k.clone(),
+                conn.forward_routes.get(k).copied().unwrap_or(0),
+                conn.proxy_routes.get(k).copied().unwrap_or(0),
+            )
+        })
+        .collect()
 }
 
 fn render_ip_lists(cfg: &CurrentConfigurationModel) -> Element {

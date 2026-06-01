@@ -27,19 +27,26 @@ pub struct TcpGatewayProxyForwardConnectionHandler {
     connection_inner: Arc<TcpConnectionInner>,
     pub connection_id: u32,
     receive_buffer: Arc<ProxyReceiveBuffer>,
+    remote_host: Arc<String>,
 }
 
 impl TcpGatewayProxyForwardConnectionHandler {
     pub fn new(
         connection_id: u32,
         connection_inner: Arc<TcpConnectionInner>,
+        remote_host: Arc<String>,
     ) -> Self {
         Self {
             status: TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection,
             connection_id,
             connection_inner,
             receive_buffer: ProxyReceiveBuffer::new().into(),
+            remote_host,
         }
+    }
+
+    pub fn get_remote_host(&self) -> Arc<String> {
+        self.remote_host.clone()
     }
 
     pub fn get_status(&self) -> TcpGatewayProxyForwardedConnectionStatus {

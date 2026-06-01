@@ -136,6 +136,17 @@ impl TcpGatewayConnection {
         write_access.len()
     }
 
+    /// Active forward connections grouped by their remote target (route).
+    pub fn get_forward_connections_by_route(&self) -> HashMap<String, usize> {
+        let mut result = HashMap::new();
+        let access = self.forward_connections.lock();
+        for connection in access.values() {
+            let route = connection.get_remote_endpoint();
+            *result.entry(route.as_str().to_string()).or_insert(0) += 1;
+        }
+        result
+    }
+
     pub fn remove_forward_connection(
         &self,
         connection_id: u32,
@@ -169,17 +180,18 @@ impl TcpGatewayConnection {
             connection_id
         );
 
+        let remote_host_port = remote_endpoint.get_host_port();
+
         let connection = TcpGatewayProxyForwardConnectionHandler::new(
             connection_id,
             self.inner.clone(),
+            Arc::new(remote_host_port.as_str().to_string()),
         );
 
         {
             let mut write_access = self.forward_proxy_handlers.lock().await;
             write_access.insert(connection_id, connection);
         }
-
-        let remote_host_port = remote_endpoint.get_host_port();
 
         let connect_contract = TcpGatewayContract::Connect {
             connection_id,
@@ -366,6 +378,17 @@ impl TcpGatewayConnection {
     pub async fn get_forward_proxy_connections_amount(&self) -> usize {
         let write_access = self.forward_proxy_handlers.lock().await;
         write_access.len()
+    }
+
+    /// Active proxy (outbound) connections grouped by their remote target (route).
+    pub async fn get_forward_proxy_connections_by_route(&self) -> HashMap<String, usize> {
+        let mut result = HashMap::new();
+        let access = self.forward_proxy_handlers.lock().await;
+        for handler in access.values() {
+            let route = handler.get_remote_host();
+            *result.entry(route.as_str().to_string()).or_insert(0) += 1;
+        }
+        result
     }
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use my_http_server::macros::MyHttpObjectStructure;
@@ -30,6 +31,9 @@ pub struct GatewayConnection {
     pub name: String,
     pub forward_connections: usize,
     pub proxy_connections: usize,
+    // Active forward / proxy connections grouped by remote target (route -> count).
+    pub forward_routes: HashMap<String, usize>,
+    pub proxy_routes: HashMap<String, usize>,
     pub ping_time: String,
     pub is_incoming_forward_connection_allowed: bool,
     pub in_history: Vec<usize>,
@@ -55,6 +59,8 @@ impl GatewayConnection {
                 name: connection.get_gateway_id().to_string(),
                 forward_connections: connection.get_forward_connections_amount(),
                 proxy_connections: connection.get_forward_proxy_connections_amount().await,
+                forward_routes: connection.get_forward_connections_by_route(),
+                proxy_routes: connection.get_forward_proxy_connections_by_route().await,
                 ping_time: format!("{:?}", ping),
                 is_incoming_forward_connection_allowed: connection
                     .is_incoming_forward_connection_allowed(),

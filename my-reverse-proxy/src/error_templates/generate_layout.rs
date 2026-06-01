@@ -18,14 +18,6 @@ pub static LOCATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
     )
 });
 
-pub static CONFIGURATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    generate_layout_with_close(
-        503,
-        "Server Error",
-        Some("Endpoint configuration is missing".into()),
-    )
-});
-
 pub static ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: LazyLock<Vec<u8>> = LazyLock::new(|| {
     generate_layout(
         405,
