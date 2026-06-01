@@ -72,6 +72,13 @@ impl Drop for TcpGatewayServer {
 }
 
 async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
+
+
+           println!(
+                    "GATEWAY binding happened to {}",
+                    tcp_gateway.gateway_host.as_str(),
+                );
+
     let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
             
 
