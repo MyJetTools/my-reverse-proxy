@@ -73,6 +73,7 @@ impl Drop for TcpGatewayServer {
 
 async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
     let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
+            
 
     let listener = match listener {
         Ok(listener) => listener,
@@ -83,6 +84,13 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             );
         }
     };
+
+
+        println!(
+                    "GATEWAY bind happened to {}",
+                    tcp_gateway.gateway_host.as_str(),
+                );
+
 
     // NOTE: temporarily an unconditional loop — the accept loop must never exit
     // and drop the listener (which would close the port). Was `while
