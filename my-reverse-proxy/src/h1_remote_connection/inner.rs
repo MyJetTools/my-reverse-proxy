@@ -8,11 +8,8 @@ use rust_extensions::{remote_endpoint::RemoteEndpointOwned, UnsafeValue};
 
 use crate::{app::SshSessionHandler, network_stream::*};
 
-lazy_static::lazy_static!(
-       pub static ref CONN_ID: NextConnectionId = {
-           NextConnectionId::new()
-    };
-);
+pub static CONN_ID: std::sync::LazyLock<NextConnectionId> =
+    std::sync::LazyLock::new(NextConnectionId::new);
 
 pub struct NextConnectionId(AtomicU64);
 

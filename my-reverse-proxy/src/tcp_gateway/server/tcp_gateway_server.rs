@@ -39,12 +39,12 @@ impl TcpGatewayServer {
                     inner.gateway_host.as_str(),
                 );
 
-        // TEMP: plain tokio::spawn to rule out spawn_named/APP_CTX issues.
-        tokio::spawn(async move {
-            println!("GATEWAY accept loop task STARTED");
-            connection_loop(inner, debug).await;
-            println!("GATEWAY accept loop task EXITED");
-        });
+        // Plain tokio::spawn here (not spawn_named): this runs inside
+        // `AppContext::new`, which executes within the `APP_CTX` LazyLock
+        // initializer. spawn_named touches APP_CTX (prometheus counter), and
+        // that re-entrant deref of the still-initializing APP_CTX would prevent
+        // the accept loop from ever being scheduled.
+        tokio::spawn(connection_loop(inner, debug));
 
         result
     }

@@ -7,8 +7,8 @@ use ipv4_data::IPV4_RANGES;
 
 const IPV6_DB_PATH: &str = "ip_v6/IP2LOCATION-LITE-DB1.IPV6.BIN";
 
-lazy_static::lazy_static! {
-    static ref IPV6_DB: Option<LocationDB> = match LocationDB::from_file(IPV6_DB_PATH) {
+static IPV6_DB: std::sync::LazyLock<Option<LocationDB>> =
+    std::sync::LazyLock::new(|| match LocationDB::from_file(IPV6_DB_PATH) {
         Ok(db) => {
             println!("[ip_db] loaded IPv6 country DB from {}", IPV6_DB_PATH);
             Some(db)
@@ -17,8 +17,7 @@ lazy_static::lazy_static! {
             eprintln!("[ip_db] failed to load IPv6 DB from {}: {:?}", IPV6_DB_PATH, e);
             None
         }
-    };
-}
+    });
 
 pub fn lookup_country(ip: IpAddr) -> Option<[u8; 2]> {
     match ip {

@@ -32,12 +32,10 @@ use super::{ActiveListenPorts, CertPassKeys, Metrics, Prometheus};
 pub const APP_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const APP_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-lazy_static::lazy_static! {
-    pub static ref APP_CTX: AppContext = {
-        let settings_model = SettingsCompiled::load_settings_block().unwrap();
-        AppContext::new(settings_model)
-    };
-}
+pub static APP_CTX: std::sync::LazyLock<AppContext> = std::sync::LazyLock::new(|| {
+    let settings_model = SettingsCompiled::load_settings_block().unwrap();
+    AppContext::new(settings_model)
+});
 
 pub struct AppContext {
     pub http_over_ssh_clients_pool: HttpClientPool<SshAsyncChannel, HttpOverSshConnector>,

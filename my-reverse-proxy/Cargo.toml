@@ -40,7 +40,6 @@ my-http-client = { path = "vendor/my-http-client" }
 hyper-util = { version = "*", features = ["tokio", "server", "http1", "http2"] }
 http-body-util = "*"
 bytes = "*"
-lazy_static = "*"
 pem = "*"
 serde = { version = "*", features = ["derive"] }
 futures = "*"

@@ -1,50 +1,59 @@
+use std::sync::LazyLock;
+
 use rust_extensions::StrOrString;
 use x509_parser::nom::AsBytes;
 
-lazy_static::lazy_static! {
-    pub static ref NOT_FOUND: Vec<u8> = {
-       generate_layout(404, "Resource not found", None)
-    };
+pub static NOT_FOUND: LazyLock<Vec<u8>> =
+    LazyLock::new(|| generate_layout(404, "Resource not found", None));
 
-    pub static ref REMOTE_RESOURCE_IS_NOT_AVAILABLE: Vec<u8> = {
-       generate_layout(503, "Server Error", Some("Remote resource is not available".into()))
-    };
+pub static REMOTE_RESOURCE_IS_NOT_AVAILABLE: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    generate_layout(503, "Server Error", Some("Remote resource is not available".into()))
+});
 
-    pub static ref LOCATION_IS_NOT_FOUND: Vec<u8> = {
-       generate_layout_with_close(503, "Server Error", Some("Remote location configuration is missing".into()))
-    };
+pub static LOCATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    generate_layout_with_close(
+        503,
+        "Server Error",
+        Some("Remote location configuration is missing".into()),
+    )
+});
 
-    pub static ref CONFIGURATION_IS_NOT_FOUND: Vec<u8> = {
-       generate_layout_with_close(503, "Server Error", Some("Endpoint configuration is missing".into()))
-    };
+pub static CONFIGURATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    generate_layout_with_close(
+        503,
+        "Server Error",
+        Some("Endpoint configuration is missing".into()),
+    )
+});
 
+pub static ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    generate_layout(
+        405,
+        "Forbidden",
+        Some("Endpoint can not be upgraded to websocket".into()),
+    )
+});
 
- pub static ref ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: Vec<u8> = {
-       generate_layout(405, "Forbidden", Some("Endpoint can not be upgraded to websocket".into()))
-    };
+pub static ERROR_TIMEOUT: LazyLock<Vec<u8>> =
+    LazyLock::new(|| generate_layout(503, "Server Error", Some("Timeout".into())));
 
+pub static ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: LazyLock<Vec<u8>> =
+    LazyLock::new(|| generate_layout(502, "Server Error", Some("Bad gateway".into())));
 
-    pub static ref ERROR_TIMEOUT: Vec<u8> = {
-       generate_layout(503, "Server Error", Some("Timeout".into()))
-    };
+pub static NOT_AUTHORIZED_PAGE: LazyLock<Vec<u8>> =
+    LazyLock::new(|| generate_layout(401, "Not authorized request", None));
 
-     pub static ref ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: Vec<u8> = {
-       generate_layout(502, "Server Error", Some("Bad gateway".into()))
-    };
+pub static PROXY_TO_HEADER_MISSING: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    build_layout_with_explicit_status(
+        421,
+        "Misdirected Request",
+        Some("Missing or invalid proxy-to header".into()),
+    )
+});
 
-    pub static ref NOT_AUTHORIZED_PAGE: Vec<u8> = {
-       generate_layout(401, "Not authorized request", None)
-    };
-
-    pub static ref PROXY_TO_HEADER_MISSING: Vec<u8> = {
-       build_layout_with_explicit_status(421, "Misdirected Request", Some("Missing or invalid proxy-to header".into()))
-    };
-
-    pub static ref PROXY_TO_HOST_NOT_ALLOWED: Vec<u8> = {
-       build_layout_with_explicit_status(403, "Forbidden", Some("Upstream host not allowed".into()))
-    };
-
-}
+pub static PROXY_TO_HOST_NOT_ALLOWED: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    build_layout_with_explicit_status(403, "Forbidden", Some("Upstream host not allowed".into()))
+});
 
 pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {
     build_layout(status_code, text, second_line, false)
