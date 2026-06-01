@@ -975,27 +975,60 @@ Values are in milliseconds (`1000` = 1 second). Both are part of the [timeout ca
 
 Two or more instances of reverse proxy can be connected as network and forward traffic through gateway.
 
-How to setup Server Gateway connection
+Gateway authentication is based on SSH Ed25519 keys. The server holds a list of authorized public keys; each client signs the handshake with its private key. There are no shared secrets.
+
+## Generating a key pair
+
+A standalone helper generates an OpenSSH-format Ed25519 key pair ready to drop into the settings:
+
+```sh
+cargo run --bin gateway_keygen -- ~/gateway_keys/client_identity
+```
+
+It writes two files:
+
+- `~/gateway_keys/client_identity` — the private key, referenced from the client's `ssh:` registry entry (`private_key_file`).
+- `~/gateway_keys/client_identity.pub` — the public key, added to the server's `gateway_server.authorized_keys`.
+
+Generate one key pair per client.
+
+## Server side
+
 ```yaml
 gateway_server:
   port: 30000
-  encryption_key: 12345678901234567890
+  authorized_keys:
+    - ~/gateway_keys/client_identity.pub
+    - ~/gateway_keys/another_client.pub
+  allowed_ip:        # optional, restricts which source IPs may connect
+    - 10.0.0.5
+  debug: false       # optional, default false
 ```
 
-How to setup Client Gateway connections
+- `authorized_keys` - mandatory. List of paths to OpenSSH public key files (one per allowed client). Must be Ed25519.
+- `allowed_ip` - optional. If present, only connections from the listed IPs are accepted.
+
+## Client side
+
 ```yaml
+ssh:
+  gateway_identity:
+    private_key_file: ~/gateway_keys/client_identity
+    passphrase: optional_passphrase   # optional, only if the key is encrypted
+
 gateway_clients:
   gateway_name:
     remote_host: 10.0.0.0:30000
-    encryption_key: 12345678901234567890
+    ssh_credentials: gateway_identity   # id of the ssh: registry entry above
     connect_timeout: 5000 # ms, optional, default 5000
-    compress: true 
+    compress: true
     allow_incoming_forward_connections: true
     sync_ssl_certificates:
       - my_ssl_cert
       - another_ssl_cert
 ```
 
+- `ssh_credentials` - mandatory. Id of an entry in the `ssh:` registry that points to the client's private key (`private_key_file`). The key must be Ed25519; password-only ssh entries are not supported for gateway.
 - allow_incoming_forward_connections - is optional. Without this parameters - no Forward connections are allowed through gateway from Client side to Server side.
 - sync_ssl_certificates - is optional. List of SSL certificate ids to pull from the remote Gateway Server. See the `SSL Certificate Sync via Gateway` section below.
 
@@ -1018,8 +1051,6 @@ hosts:
 ```
 
 
-
-encryption_key - is mandatory and recommended to be 48 symbols and random as possible
 
 allow_incoming_forward_connections  - is optional. Without this parameters - no Forward connections are allowed through gateway from Server side to Client side.
 
@@ -1047,7 +1078,8 @@ No extra configuration is required on the server beyond the usual `ssl_certifica
 ```yaml
 gateway_server:
   port: 30000
-  encryption_key: 12345678901234567890
+  authorized_keys:
+    - ~/gateway_keys/client_identity.pub
 
 ssl_certificates:
   - id: my_ssl_cert
@@ -1063,10 +1095,14 @@ ssl_certificates:
 Add `sync_ssl_certificates` to the Gateway Client entry with the list of certificate ids that should be pulled from the server. The ids must match those defined on the server.
 
 ```yaml
+ssh:
+  gateway_identity:
+    private_key_file: ~/gateway_keys/client_identity
+
 gateway_clients:
   gateway_name:
     remote_host: 10.0.0.0:30000
-    encryption_key: 12345678901234567890
+    ssh_credentials: gateway_identity
     sync_ssl_certificates:
       - my_ssl_cert
       - another_ssl_cert
