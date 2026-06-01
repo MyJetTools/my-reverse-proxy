@@ -6,7 +6,8 @@ use dioxus_utils::{js::sleep, DataState, RenderState};
 use crate::{
     api,
     models::{
-        CurrentConfigurationModel, HttpEndpointInfoModel, HttpProxyPassLocationModel,
+        CurrentConfigurationModel, GatewayClientStatusModel, GatewayConnectionModel,
+        GatewayServerStatusModel, HttpEndpointInfoModel, HttpProxyPassLocationModel,
         PortConfigurationModel, SslCertificateInfoModel,
     },
 };
@@ -53,6 +54,12 @@ fn render_dashboard(cfg: &CurrentConfigurationModel) -> Element {
             h2 { "Reverse Proxy" }
             for port in &cfg.ports {
                 {render_port(port)}
+            }
+            if let Some(server) = cfg.gateway_server.as_ref() {
+                {render_gateway_server(server)}
+            }
+            if !cfg.gateway_clients.is_empty() {
+                {render_gateway_clients(&cfg.gateway_clients)}
             }
             if !cfg.ip_lists.is_empty() {
                 {render_ip_lists(cfg)}
@@ -121,6 +128,120 @@ fn render_ssl_cert(c: &SslCertificateInfoModel) -> Element {
                 span { class: "{pill_class}", "{c.days_left}" }
             }
             td { class: "id-string", "{c.expires_at}" }
+        }
+    }
+}
+
+fn render_gateway_server(server: &GatewayServerStatusModel) -> Element {
+    rsx! {
+        section { class: "port",
+            div { class: "port-header",
+                span { class: "label", "Gateway Server" }
+                span { class: "number", "{server.connections.len()}" }
+                {
+                    let conn_class = if server.connections.is_empty() {
+                        "conn-count"
+                    } else {
+                        "conn-count active"
+                    };
+                    rsx! {
+                        span { class: "{conn_class}",
+                            span { class: "label", "Clients" }
+                            span { class: "value", "{server.connections.len()}" }
+                        }
+                    }
+                }
+            }
+            if server.connections.is_empty() {
+                div { class: "endpoints",
+                    div { class: "gateway-empty", "No gateway clients connected" }
+                }
+            } else {
+                {render_gateway_connections(&server.connections)}
+            }
+        }
+    }
+}
+
+fn render_gateway_clients(clients: &[GatewayClientStatusModel]) -> Element {
+    rsx! {
+        section { class: "port",
+            div { class: "port-header",
+                span { class: "label", "Gateway Clients" }
+                span { class: "number", "{clients.len()}" }
+            }
+            div { class: "endpoints",
+                for client in clients {
+                    div { class: "endpoint",
+                        div { class: "endpoint-header",
+                            span { class: "host", "{client.name}" }
+                            {
+                                let conn_class = if client.connections.is_empty() {
+                                    "conn-count endpoint-conn"
+                                } else {
+                                    "conn-count endpoint-conn active"
+                                };
+                                rsx! {
+                                    span { class: "{conn_class}",
+                                        span { class: "label", "Conn" }
+                                        span { class: "value", "{client.connections.len()}" }
+                                    }
+                                }
+                            }
+                        }
+                        if client.connections.is_empty() {
+                            div { class: "gateway-empty", "Not connected" }
+                        } else {
+                            {render_gateway_connections(&client.connections)}
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_gateway_connections(connections: &[GatewayConnectionModel]) -> Element {
+    rsx! {
+        div { class: "locations-wrap",
+            table { class: "locations",
+                thead {
+                    tr {
+                        th { "Gateway" }
+                        th { "Forward conn" }
+                        th { "Proxy conn" }
+                        th { "Ping" }
+                        th { "Incoming forward" }
+                        th { "Connected at" }
+                    }
+                }
+                tbody {
+                    for conn in connections {
+                        {render_gateway_connection(conn)}
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn render_gateway_connection(conn: &GatewayConnectionModel) -> Element {
+    let (forward_label, forward_class) = if conn.is_incoming_forward_connection_allowed {
+        ("allowed", "type-pill type-http2")
+    } else {
+        ("blocked", "type-pill type-drop")
+    };
+
+    rsx! {
+        tr {
+            td { class: "id-string", "{conn.name}" }
+            td { "{conn.forward_connections}" }
+            td { "{conn.proxy_connections}" }
+            td { "{conn.ping_time}" }
+            td {
+                span { class: "{forward_class}", "{forward_label}" }
+            }
+            td { class: "id-string", "{conn.timestamp}" }
         }
     }
 }

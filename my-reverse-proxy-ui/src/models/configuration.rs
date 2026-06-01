@@ -76,22 +76,34 @@ pub struct HttpProxyPassLocationModel {
     pub last_status: Option<i64>,
 }
 
+/// Mirror of `GatewayServerStatus` — the local server-side gateway endpoint and
+/// the connections currently established to it by remote gateway clients.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct GatewayServerStatusModel {
     #[serde(default)]
-    pub clients: Vec<GatewayServerClientModel>,
+    pub connections: Vec<GatewayConnectionModel>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct GatewayServerClientModel {
-    pub id: String,
-    pub addr: String,
-    pub since: String,
-}
-
+/// Mirror of `GatewayClientStatus` — one configured outbound gateway link and
+/// its live connection(s) to the remote gateway server.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct GatewayClientStatusModel {
-    pub id: String,
-    pub remote: String,
-    pub status: String,
+    pub name: String,
+    #[serde(default)]
+    pub connections: Vec<GatewayConnectionModel>,
+}
+
+/// Mirror of `GatewayConnection` — a single live gateway TCP connection.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct GatewayConnectionModel {
+    pub name: String,
+    pub forward_connections: usize,
+    pub proxy_connections: usize,
+    pub ping_time: String,
+    pub is_incoming_forward_connection_allowed: bool,
+    #[serde(default)]
+    pub in_history: Vec<usize>,
+    #[serde(default)]
+    pub out_history: Vec<usize>,
+    pub timestamp: String,
 }

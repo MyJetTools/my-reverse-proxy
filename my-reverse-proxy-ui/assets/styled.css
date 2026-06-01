@@ -502,6 +502,14 @@ table.locations tbody tr.upstream-unknown td.upstream {
     color: #2d3748;
 }
 
+/* ---------- Gateway sections ---------- */
+.gateway-empty {
+    padding: 8px 16px 12px 16px;
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 12px;
+}
+
 /* ---------- IP whitelist section ---------- */
 .ip-lists {
     padding: 12px 16px 16px 16px;

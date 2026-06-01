@@ -99,13 +99,13 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
             }
         };
 
-        if debug {
-            println!(
-                "Gateway {} connection {} is accepted",
-                tcp_gateway.get_gateway_id(),
-                socket_addr
-            );
-        }
+        // Always log accepted inbound connections (not gated by debug) so the
+        // operator can confirm the gateway is reachable.
+        println!(
+            "Accepted GATEWAY connection from host: {} on {}",
+            socket_addr,
+            tcp_gateway.get_gateway_id()
+        );
 
         let tcp_gateway_clone = tcp_gateway.clone();
         crate::app::spawn_named(

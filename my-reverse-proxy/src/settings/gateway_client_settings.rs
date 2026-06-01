@@ -70,7 +70,11 @@ impl GatewayClientSettings {
             )
         })?;
 
-        let private = PrivateKey::from_openssh(&raw).map_err(|err| {
+        // The OpenSSH PEM parser is strict about boundaries: a stray trailing
+        // newline (e.g. an extra blank line left by an editor) makes it fail
+        // with `PreEncapsulationBoundary`. Trim trailing whitespace so a benign
+        // edit to the key file doesn't break the gateway link.
+        let private = PrivateKey::from_openssh(raw.trim_ascii_end()).map_err(|err| {
             format!(
                 "Gateway client '{client_id}': cannot parse OpenSSH private key '{resolved}': {err}"
             )
