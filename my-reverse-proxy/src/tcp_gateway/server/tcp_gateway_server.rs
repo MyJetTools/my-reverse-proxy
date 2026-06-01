@@ -36,7 +36,7 @@ impl TcpGatewayServer {
 
            println!(
                     "GATEWAY spawning {}",
-                    tcp_gateway.gateway_host.as_str(),
+                    inner.gateway_host.as_str(),
                 );
 
         crate::app::spawn_named("tcp_gateway_server_accept_loop", connection_loop(inner, debug));
