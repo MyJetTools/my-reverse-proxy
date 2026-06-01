@@ -39,10 +39,12 @@ impl TcpGatewayClient {
             next_connection_id: AtomicU32::new(0),
         };
 
-        crate::app::spawn_named(
-            "tcp_gateway_client_reconnect_loop",
-            connection_loop(inner.clone(), connect_timeout, debug),
-        );
+        // Plain tokio::spawn here (not spawn_named): this runs inside
+        // `AppContext::new`, which executes within the `APP_CTX` LazyLock
+        // initializer. spawn_named touches APP_CTX (prometheus counter), and
+        // that re-entrant deref of the still-initializing APP_CTX would prevent
+        // the reconnect loop from ever being scheduled.
+        tokio::spawn(connection_loop(inner.clone(), connect_timeout, debug));
 
         result
     }
