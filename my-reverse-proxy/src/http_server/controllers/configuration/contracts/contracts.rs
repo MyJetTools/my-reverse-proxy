@@ -42,6 +42,11 @@ impl CurrentConfigurationHttpModel {
                     ports.push(item);
                 }
 
+                for (path, listen_config) in &config.listen_unix_socket_endpoints {
+                    let item = PortConfigurationHttpModel::new_unix(path.as_str(), listen_config);
+                    ports.push(item);
+                }
+
                 let ip_list = config
                     .white_list_ip_list
                     .get_all(|itm| itm.to_list_of_string());
@@ -134,6 +139,10 @@ async fn collect_ssl_certs() -> Vec<SslCertificateInfoModel> {
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct PortConfigurationHttpModel {
     pub port: u16,
+    // Set for unix-socket listeners (host key starting with `/` or `~/`);
+    // `port` is 0 in that case.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unix_socket: Option<String>,
     pub r#type: String,
     pub endpoints: Vec<HttpEndpointInfoModel>,
     pub inbound_connections: i64,
@@ -141,26 +150,7 @@ pub struct PortConfigurationHttpModel {
 
 impl PortConfigurationHttpModel {
     pub fn new(port: u16, listen_config: &ListenConfiguration) -> Self {
-        let mut endpoints = Vec::new();
-
-        let r#type = match listen_config {
-            ListenConfiguration::Http(config) => {
-                for endpoint in &config.endpoints {
-                    endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
-                }
-                config.listen_endpoint_type.as_str()
-            }
-            ListenConfiguration::Tcp(config) => {
-                endpoints.push(HttpEndpointInfoModel::from_tcp_config(config.as_ref()));
-                "tcp"
-            }
-            ListenConfiguration::Mcp(config) => {
-                for endpoint in &config.endpoints {
-                    endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
-                }
-                config.listen_endpoint_type.as_str()
-            }
-        };
+        let (r#type, endpoints) = build_type_and_endpoints(listen_config);
 
         // Live count of inbound TCP connections currently open on this port —
         // maintained by `connection_by_port.inc()/dec()` calls in the listener
@@ -170,11 +160,53 @@ impl PortConfigurationHttpModel {
 
         Self {
             port,
-            r#type: r#type.to_string(),
+            unix_socket: None,
+            r#type,
             endpoints,
             inbound_connections,
         }
     }
+
+    pub fn new_unix(path: &str, listen_config: &ListenConfiguration) -> Self {
+        let (r#type, endpoints) = build_type_and_endpoints(listen_config);
+
+        Self {
+            port: 0,
+            unix_socket: Some(path.to_string()),
+            r#type,
+            endpoints,
+            // No per-port connection metric for unix sockets; per-endpoint
+            // counts are still surfaced inside `endpoints`.
+            inbound_connections: 0,
+        }
+    }
+}
+
+fn build_type_and_endpoints(
+    listen_config: &ListenConfiguration,
+) -> (String, Vec<HttpEndpointInfoModel>) {
+    let mut endpoints = Vec::new();
+
+    let r#type = match listen_config {
+        ListenConfiguration::Http(config) => {
+            for endpoint in &config.endpoints {
+                endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
+            }
+            config.listen_endpoint_type.as_str()
+        }
+        ListenConfiguration::Tcp(config) => {
+            endpoints.push(HttpEndpointInfoModel::from_tcp_config(config.as_ref()));
+            "tcp"
+        }
+        ListenConfiguration::Mcp(config) => {
+            for endpoint in &config.endpoints {
+                endpoints.push(HttpEndpointInfoModel::from_http_endpoint(endpoint))
+            }
+            config.listen_endpoint_type.as_str()
+        }
+    };
+
+    (r#type.to_string(), endpoints)
 }
 
 #[derive(MyHttpObjectStructure, Serialize)]

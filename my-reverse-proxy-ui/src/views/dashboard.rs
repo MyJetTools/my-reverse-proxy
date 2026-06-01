@@ -288,12 +288,18 @@ fn render_port(port: &PortConfigurationModel) -> Element {
     rsx! {
         section { class: "port",
             div { class: "port-header",
-                span { class: "label", "Port" }
-                span { class: "number", "{port.port}" }
-                span { class: "{port_type_class}", "{port.r#type}" }
-                span { class: "{port_conn_class}",
-                    span { class: "label", "TCP" }
-                    span { class: "value", "{port.inbound_connections}" }
+                if let Some(socket) = port.unix_socket.as_ref() {
+                    span { class: "label", "Unix socket" }
+                    span { class: "id-string", "{socket}" }
+                    span { class: "{port_type_class}", "{port.r#type}" }
+                } else {
+                    span { class: "label", "Port" }
+                    span { class: "number", "{port.port}" }
+                    span { class: "{port_type_class}", "{port.r#type}" }
+                    span { class: "{port_conn_class}",
+                        span { class: "label", "TCP" }
+                        span { class: "value", "{port.inbound_connections}" }
+                    }
                 }
             }
             div { class: "endpoints",

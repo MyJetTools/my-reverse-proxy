@@ -29,6 +29,9 @@ pub struct SslCertificateInfoModel {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PortConfigurationModel {
     pub port: u16,
+    /// Set for unix-socket listeners; `port` is 0 in that case.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unix_socket: Option<String>,
     #[serde(rename = "type")]
     pub r#type: String,
     pub endpoints: Vec<HttpEndpointInfoModel>,
