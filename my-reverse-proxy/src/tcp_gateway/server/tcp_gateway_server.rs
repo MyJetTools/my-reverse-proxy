@@ -33,6 +33,12 @@ impl TcpGatewayServer {
             next_connection_id: AtomicU32::new(0),
         };
 
+
+           println!(
+                    "GATEWAY spawning {}",
+                    tcp_gateway.gateway_host.as_str(),
+                );
+
         crate::app::spawn_named("tcp_gateway_server_accept_loop", connection_loop(inner, debug));
 
         result
@@ -75,7 +81,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
 
 
            println!(
-                    "GATEWAY binding happened to {}",
+                    "GATEWAY binding to {}",
                     tcp_gateway.gateway_host.as_str(),
                 );
 
