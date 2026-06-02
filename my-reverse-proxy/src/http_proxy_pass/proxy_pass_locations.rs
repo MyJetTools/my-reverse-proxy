@@ -18,13 +18,9 @@ impl ProxyPassLocations {
     pub async fn new(endpoint_info: &HttpEndpointInfo) -> Self {
         let mut data = Vec::with_capacity(endpoint_info.locations.len());
         for location in &endpoint_info.locations {
-            let location = ProxyPassLocation::new(
-                location.clone(),
-                endpoint_info.debug,
-                location.compress,
-                location.trace_payload,
-            )
-            .await;
+            let location =
+                ProxyPassLocation::new(location.clone(), endpoint_info.debug, location.compress)
+                    .await;
             data.push(location)
         }
 

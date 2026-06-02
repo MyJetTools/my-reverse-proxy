@@ -385,11 +385,7 @@ fn render_port(port: &PortConfigurationModel, dialog: LogsDialogSignal) -> Eleme
 }
 
 /// A small "logs" button that opens the in-memory logs dialog for a given scope.
-fn render_logs_button(
-    mut dialog: LogsDialogSignal,
-    title: String,
-    scope: LogScope,
-) -> Element {
+fn render_logs_button(mut dialog: LogsDialogSignal, title: String, scope: LogScope) -> Element {
     rsx! {
         button {
             class: "logs-btn",
@@ -399,8 +395,43 @@ fn render_logs_button(
     }
 }
 
+#[derive(Clone)]
+enum DebugTarget {
+    Endpoint(String),
+    Location(i64),
+}
+
+/// Runtime debug toggle: flips the endpoint/location debug flag on the server.
+/// The dashboard polls every second, so the rendered state refreshes on its own.
+fn render_debug_toggle(target: DebugTarget, enabled: bool) -> Element {
+    let class = if enabled {
+        "debug-toggle on"
+    } else {
+        "debug-toggle"
+    };
+    rsx! {
+        button {
+            class: "{class}",
+            title: "Toggle debug logging",
+            onclick: move |_| {
+                let target = target.clone();
+                spawn(async move {
+                    let _ = match target {
+                        DebugTarget::Endpoint(id) => crate::api::set_endpoint_debug(&id, !enabled).await,
+                        DebugTarget::Location(id) => crate::api::set_location_debug(id, !enabled).await,
+                    };
+                });
+            },
+            if enabled { "debug: on" } else { "debug: off" }
+        }
+    }
+}
+
 fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -> Element {
-    let listen_type_class = format!("type-pill listen-{}", normalize_type(endpoint.r#type.as_str()));
+    let listen_type_class = format!(
+        "type-pill listen-{}",
+        normalize_type(endpoint.r#type.as_str())
+    );
 
     let has_meta = endpoint.ssl_cert_id.is_some()
         || endpoint.client_cert_id.is_some()
@@ -413,9 +444,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
             div { class: "endpoint-header",
                 span { class: "{listen_type_class}", "{endpoint.r#type}" }
                 span { class: "host", "{endpoint.host}" }
-                if endpoint.debug {
-                    span { class: "debug-badge", "debug" }
-                }
+                {render_debug_toggle(DebugTarget::Endpoint(endpoint.host.clone()), endpoint.debug)}
                 {
                     let endpoint_conn_class = if endpoint.inbound_connections > 0 {
                         "conn-count endpoint-conn active"
@@ -475,7 +504,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
                             th { "Loc id" }
                             th { "Pool" }
                             th { "id_string" }
-                            th { "Logs" }
+                            th { "Debug / Logs" }
                         }
                     }
                     tbody {
@@ -516,7 +545,8 @@ fn render_location(loc: &HttpProxyPassLocationModel, dialog: LogsDialogSignal) -
             td { "{loc.location_id}" }
             td { "{pool_label}" }
             td { class: "id-string", "{loc.id_string}" }
-            td {
+            td { class: "loc-actions",
+                {render_debug_toggle(DebugTarget::Location(loc.location_id), loc.debug)}
                 {render_logs_button(dialog, logs_title, LogScope::Location(loc.location_id))}
             }
         }

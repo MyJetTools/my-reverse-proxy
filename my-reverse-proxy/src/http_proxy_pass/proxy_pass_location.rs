@@ -8,20 +8,13 @@ pub struct ProxyPassLocation {
     pub content_source: Arc<HttpProxyPassContentSource>,
     pub config: Arc<ProxyPassLocationConfig>,
     pub compress: bool,
-    pub debug: bool,
-    pub trace_payload: bool,
 }
 
 impl ProxyPassLocation {
-    pub async fn new(
-        config: Arc<ProxyPassLocationConfig>,
-        debug: bool,
-        compress: bool,
-        trace_payload: bool,
-    ) -> Self {
-        //let content_source = config.create_content_source(debug, request_timeout);
-        //let is_http1 = content_source.is_http1();
-
+    pub async fn new(config: Arc<ProxyPassLocationConfig>, debug: bool, compress: bool) -> Self {
+        // `debug` here is the settings-driven connector-level debug passed to the
+        // upstream content source; the in-memory request logging is gated at
+        // runtime via `APP_CTX.debug_flags` instead.
         let content_source = config
             .create_data_source(debug, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT)
             .await;
@@ -29,8 +22,6 @@ impl ProxyPassLocation {
             content_source: Arc::new(content_source),
             config,
             compress,
-            debug,
-            trace_payload,
         };
 
         result

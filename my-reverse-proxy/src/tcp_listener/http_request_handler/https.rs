@@ -74,14 +74,20 @@ impl HttpsRequestsHandler {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
-                format!("Rejected request: no endpoint configured for host [{}]", host),
+                format!(
+                    "Rejected request: no endpoint configured for host [{}]",
+                    host
+                ),
             );
             let content =
                 crate::error_templates::generate_layout(400, "No configuration found", None);
             return Err(create_err_response(StatusCode::BAD_REQUEST, content));
         };
 
-        if http_endpoint_info.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_endpoint_debug(http_endpoint_info.host_endpoint.as_str())
+        {
             crate::app::APP_CTX.proxy_logs.write(
                 http_endpoint_info.host_endpoint.as_str(),
                 None,

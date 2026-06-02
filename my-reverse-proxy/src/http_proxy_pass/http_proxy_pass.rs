@@ -51,17 +51,22 @@ impl HttpProxyPass {
         &self,
         req: hyper::Request<hyper::body::Incoming>,
         connection_ip: ConnectionIp,
-        debug: bool,
+        _debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
-        crate::app::APP_CTX.proxy_logs.write(
-            self.endpoint_info.host_endpoint.as_str(),
-            None,
-            format!("Request. Uri: [{}] Headers: {:?}", req.uri(), req.headers()),
-        );
+        let endpoint = self.endpoint_info.host_endpoint.as_str();
+        let endpoint_debug = crate::app::APP_CTX.debug_flags.is_endpoint_debug(endpoint);
+
+        if endpoint_debug {
+            crate::app::APP_CTX.proxy_logs.write(
+                endpoint,
+                None,
+                format!("Request. Uri: [{}] Headers: {:?}", req.uri(), req.headers()),
+            );
+        }
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
-        let (request, content_source, location_index, trace_payload) = {
+        let (request, content_source, location_index, location_debug) = {
             let Some(inner) = self.inner.load_full() else {
                 return Err(ProxyPassError::Disposed);
             };
@@ -95,18 +100,20 @@ impl HttpProxyPass {
             let location_index = inner.locations.find_location_index(
                 req.uri(),
                 self.endpoint_info.host_endpoint.as_str(),
-                debug,
+                endpoint_debug,
             )?;
 
             let proxy_pass_location = inner.locations.find(&location_index);
 
-            let trace_payload = proxy_pass_location.trace_payload;
+            let location_debug = crate::app::APP_CTX
+                .debug_flags
+                .is_location_debug(location_index.id);
 
             req.process_headers(self, &inner, proxy_pass_location);
 
             let request = req.into_request(self, proxy_pass_location).await?;
 
-            if trace_payload {
+            if location_debug {
                 crate::app::APP_CTX.proxy_logs.write(
                     self.endpoint_info.host_endpoint.as_str(),
                     Some(location_index.id),
@@ -135,7 +142,7 @@ impl HttpProxyPass {
                 request,
                 proxy_pass_location.content_source.clone(),
                 location_index,
-                trace_payload,
+                location_debug,
             )
         };
 
@@ -143,7 +150,7 @@ impl HttpProxyPass {
 
         let mut response = match result {
             super::content_source::HttpResponse::Response(response) => {
-                if trace_payload {
+                if location_debug {
                     crate::app::APP_CTX.proxy_logs.write(
                         self.endpoint_info.host_endpoint.as_str(),
                         Some(location_index.id),
@@ -157,7 +164,7 @@ impl HttpProxyPass {
                 response,
                 disconnection,
             } => {
-                if trace_payload {
+                if location_debug {
                     crate::app::APP_CTX.proxy_logs.write(
                         self.endpoint_info.host_endpoint.as_str(),
                         Some(location_index.id),
@@ -198,7 +205,7 @@ impl HttpProxyPass {
                             response,
                             log_scope.clone(),
                             disconnection,
-                            trace_payload,
+                            location_debug,
                             domain,
                             timeouts,
                         )
@@ -211,7 +218,7 @@ impl HttpProxyPass {
                             response,
                             log_scope.clone(),
                             disconnection,
-                            trace_payload,
+                            location_debug,
                             domain,
                             timeouts,
                         )
@@ -224,7 +231,7 @@ impl HttpProxyPass {
                             response,
                             log_scope.clone(),
                             disconnection,
-                            trace_payload,
+                            location_debug,
                             domain,
                             timeouts,
                         )
@@ -236,7 +243,7 @@ impl HttpProxyPass {
                             response,
                             log_scope.clone(),
                             disconnection,
-                            trace_payload,
+                            location_debug,
                             domain,
                             timeouts,
                         )

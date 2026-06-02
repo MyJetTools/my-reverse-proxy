@@ -70,6 +70,8 @@ pub struct HttpProxyPassLocationModel {
     pub remote_kind: Option<String>,
     pub location_id: i64,
     pub id_string: String,
+    #[serde(default)]
+    pub debug: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pool_alive: Option<usize>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

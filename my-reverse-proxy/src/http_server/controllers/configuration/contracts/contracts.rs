@@ -155,8 +155,9 @@ impl PortConfigurationHttpModel {
         // Live count of inbound TCP connections currently open on this port —
         // maintained by `connection_by_port.inc()/dec()` calls in the listener
         // accept paths (see `tcp_listener::http`, `http2`, `https`).
-        let inbound_connections =
-            crate::app::APP_CTX.metrics.get(|m| m.connection_by_port.get(&port)) as i64;
+        let inbound_connections = crate::app::APP_CTX
+            .metrics
+            .get(|m| m.connection_by_port.get(&port)) as i64;
 
         Self {
             port,
@@ -237,10 +238,12 @@ impl HttpEndpointInfoModel {
             .get(|m| m.connection_by_endpoint.get(&host_key))
             as i64;
 
+        let debug = crate::app::APP_CTX.debug_flags.is_endpoint_debug(&host_key);
+
         Self {
             host: host_key,
             r#type: endpoint.listen_endpoint_type.as_str().to_string(),
-            debug: endpoint.debug,
+            debug,
             allowed_user_list_id: endpoint.allowed_user_list_id.clone(),
             ip_list: endpoint.whitelisted_ip_list_id.clone(),
             ssl_cert_id: endpoint
@@ -275,6 +278,7 @@ impl HttpEndpointInfoModel {
                 remote_kind: Some(config.remote_host.kind_as_str().to_string()),
                 location_id: 0,
                 id_string: String::new(),
+                debug: false,
                 pool_alive: None,
                 pool_total: None,
                 last_status: None,
@@ -317,6 +321,7 @@ pub struct HttpProxyPassLocationModel {
     pub remote_kind: Option<String>,
     pub location_id: i64,
     pub id_string: String,
+    pub debug: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pool_alive: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -342,6 +347,7 @@ impl HttpProxyPassLocationModel {
                 .map(|s| s.to_string()),
             location_id: src.id,
             id_string: src.id_string.clone(),
+            debug: crate::app::APP_CTX.debug_flags.is_location_debug(src.id),
             pool_alive,
             pool_total,
             last_status,

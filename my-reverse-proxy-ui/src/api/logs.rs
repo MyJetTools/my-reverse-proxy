@@ -39,6 +39,35 @@ pub async fn get_location_logs(id: i64) -> Result<ProxyLogsModel, String> {
     get_logs(format!("/api/logs/location?id={id}")).await
 }
 
+async fn post(path_and_query: String) -> Result<(), String> {
+    let url = build_url(&path_and_query)?;
+    let resp = reqwest::Client::new()
+        .post(&url)
+        .send()
+        .await
+        .map_err(|e| format!("POST {url} failed: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("POST {url} returned {}", resp.status()));
+    }
+    Ok(())
+}
+
+pub async fn set_endpoint_debug(id: &str, enabled: bool) -> Result<(), String> {
+    post(format!(
+        "/api/logs/endpoint/debug?id={}&enabled={}",
+        urlencode(id),
+        enabled
+    ))
+    .await
+}
+
+pub async fn set_location_debug(id: i64, enabled: bool) -> Result<(), String> {
+    post(format!(
+        "/api/logs/location/debug?id={id}&enabled={enabled}"
+    ))
+    .await
+}
+
 /// Minimal percent-encoding for query values (host strings, unix paths).
 fn urlencode(value: &str) -> String {
     let mut result = String::with_capacity(value.len());

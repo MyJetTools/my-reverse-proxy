@@ -84,7 +84,7 @@ impl HttpRequestBuilder {
 
         if dest_http1.is_none() {
             let (parts, body) = self
-                .build_request(location.compress, location.debug, location.config.id)
+                .build_request(location.compress, location.config.id)
                 .await?;
 
             return Ok(TransformedRequest {
@@ -101,12 +101,15 @@ impl HttpRequestBuilder {
         }
 
         let (parts, body) = self
-            .build_request(location.compress, location.debug, location.config.id)
+            .build_request(location.compress, location.config.id)
             .await?;
 
         let mut web_socket_upgrade = None;
         if parts.headers.get("sec-websocket-key").is_some() {
-            if proxy_pass.endpoint_info.debug {
+            if crate::app::APP_CTX
+                .debug_flags
+                .is_location_debug(location.config.id)
+            {
                 crate::app::APP_CTX.proxy_logs.write(
                     proxy_pass.endpoint_info.host_endpoint.as_str(),
                     Some(location.config.id),
@@ -137,7 +140,10 @@ impl HttpRequestBuilder {
         proxy_pass: &HttpProxyPass,
         location: &ProxyPassLocation,
     ) -> Result<TransformedRequest, ProxyPassError> {
-        if proxy_pass.endpoint_info.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location.config.id)
+        {
             crate::app::APP_CTX.proxy_logs.write(
                 proxy_pass.endpoint_info.host_endpoint.as_str(),
                 Some(location.config.id),
@@ -188,7 +194,10 @@ impl HttpRequestBuilder {
             .body(Full::<Bytes>::new(Bytes::new()))
             .unwrap();
 
-        if location.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location.config.id)
+        {
             crate::app::APP_CTX.proxy_logs.write_location(
                 location.config.id,
                 format!(
@@ -214,7 +223,10 @@ impl HttpRequestBuilder {
         proxy_pass: &HttpProxyPass,
         location: &ProxyPassLocation,
     ) -> Result<TransformedRequest, ProxyPassError> {
-        if proxy_pass.endpoint_info.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location.config.id)
+        {
             crate::app::APP_CTX.proxy_logs.write(
                 proxy_pass.endpoint_info.host_endpoint.as_str(),
                 Some(location.config.id),
@@ -288,7 +300,10 @@ impl HttpRequestBuilder {
             .body(Full::<Bytes>::new(Bytes::new()))
             .unwrap();
 
-        if location.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location.config.id)
+        {
             println!(
                 "[{}]. h2->h1 WS handshake to upstream: {:?}",
                 request.uri(),
@@ -347,11 +362,14 @@ impl HttpRequestBuilder {
 
         let req_parts = self.parts.clone();
 
-        let body = into_full_body(bytes, location.debug, location.config.id);
+        let body = into_full_body(bytes, location.config.id);
 
         let request = builder.body(body).unwrap();
 
-        if location.debug {
+        if crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location.config.id)
+        {
             crate::app::APP_CTX.proxy_logs.write_location(
                 location.config.id,
                 format!(
@@ -410,10 +428,13 @@ impl HttpRequestBuilder {
     async fn build_request(
         self,
         compress: bool,
-        debug: bool,
         location_id: i64,
     ) -> Result<(Parts, Full<Bytes>), ProxyPassError> {
         use http_body_util::BodyExt;
+
+        let debug = crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(location_id);
 
         let mut parts = self.parts.clone();
 
@@ -454,7 +475,7 @@ impl HttpRequestBuilder {
 
             http_body_util::Full::new(compressed_data.into())
         } else {
-            into_full_body(bytes, debug, location_id)
+            into_full_body(bytes, location_id)
         };
 
         if debug {
@@ -528,8 +549,11 @@ fn apply_cf_ip_country(parts: &mut Parts, inner: &HttpProxyPassInner, endpoint: 
         .insert(HeaderName::from_static("cf-ipcountry"), value);
 }
 
-fn into_full_body(src: Bytes, debug: bool, location_id: i64) -> Full<Bytes> {
-    if debug {
+fn into_full_body(src: Bytes, location_id: i64) -> Full<Bytes> {
+    if crate::app::APP_CTX
+        .debug_flags
+        .is_location_debug(location_id)
+    {
         crate::app::APP_CTX
             .proxy_logs
             .write_location(location_id, format!("Body Len: {}", src.len()));

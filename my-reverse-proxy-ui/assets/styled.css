@@ -611,6 +611,33 @@ table.locations.gateway-routes thead th {
     margin-left: 0;
 }
 
+.debug-toggle {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.endpoint-header .debug-toggle {
+    margin-left: 8px;
+}
+
+.debug-toggle.on {
+    background: var(--debug-bg);
+    color: var(--debug-text);
+    border-color: var(--debug-text);
+}
+
+.loc-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    white-space: nowrap;
+}
+
 .logs-overlay {
     position: fixed;
     inset: 0;
@@ -625,8 +652,9 @@ table.locations.gateway-routes thead th {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: min(900px, 92vw);
-    max-height: 82vh;
+    width: 96vw;
+    max-width: 96vw;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);

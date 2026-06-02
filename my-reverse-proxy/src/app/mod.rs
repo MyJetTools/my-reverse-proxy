@@ -6,6 +6,8 @@ mod metrics;
 pub use metrics::*;
 mod proxy_logs;
 pub use proxy_logs::*;
+mod debug_flags;
+pub use debug_flags::*;
 mod cert_pass_keys;
 pub use cert_pass_keys::*;
 mod active_listen_ports;

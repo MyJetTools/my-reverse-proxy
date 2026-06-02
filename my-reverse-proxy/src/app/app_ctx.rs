@@ -68,6 +68,7 @@ pub struct AppContext {
     pub prometheus: Arc<Prometheus>,
     pub metrics: Metrics,
     pub proxy_logs: ProxyLogs,
+    pub debug_flags: DebugFlags,
     pub active_listen_ports: Mutex<ActiveListenPorts>,
 
     pub ssh_config_list: SshConfigList,
@@ -163,6 +164,7 @@ impl AppContext {
             ),
             metrics: Metrics::new(),
             proxy_logs: ProxyLogs::new(),
+            debug_flags: DebugFlags::new(),
             active_listen_ports: Mutex::new(ActiveListenPorts::new()),
             ssh_config_list: SshConfigList::new(),
             allowed_users_list: AllowedUsersList::new(),

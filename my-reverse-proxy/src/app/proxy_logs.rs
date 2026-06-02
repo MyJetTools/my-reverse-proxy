@@ -45,6 +45,12 @@ impl ProxyLogScope {
     }
 
     pub fn write(&self, message: String) {
+        if !crate::app::APP_CTX
+            .debug_flags
+            .is_location_debug(self.location_id)
+        {
+            return;
+        }
         crate::app::APP_CTX
             .proxy_logs
             .write(&self.endpoint, Some(self.location_id), message);

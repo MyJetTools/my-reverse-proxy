@@ -5,3 +5,7 @@ mod get_location_logs_action;
 pub use get_location_logs_action::*;
 mod get_port_logs_action;
 pub use get_port_logs_action::*;
+mod set_endpoint_debug_action;
+pub use set_endpoint_debug_action::*;
+mod set_location_debug_action;
+pub use set_location_debug_action::*;
