@@ -34,7 +34,11 @@ pub fn handle_connection(
             Err(err) => {
                 crate::app::APP_CTX.proxy_logs.write_port(
                     endpoint_port.to_string().as_str(),
-                    format!("Rejected TLS connection: {}", err),
+                    format!(
+                        "Rejected TLS connection from {}: {}",
+                        connection_ip.to_log_string(),
+                        err
+                    ),
                 );
                 if let Some(ip) = connection_ip.get_ip_addr() {
                     crate::app::APP_CTX.ip_blocklist.register_failure(ip);

@@ -107,7 +107,10 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                     .listen_host
                     .get_log_key()
                     .as_str(),
-                "Rejected request: no endpoint configuration resolved for connection".to_string(),
+                format!(
+                    "Rejected request from {}: no endpoint configuration resolved for connection",
+                    connection_info.connection_ip.to_log_string()
+                ),
             );
             return Err(ProxyServerError::HttpConfigurationIsNotFound);
         };

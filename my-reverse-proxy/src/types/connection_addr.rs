@@ -13,6 +13,15 @@ impl ConnectionIp {
             ConnectionIp::UnixSocket => None,
         }
     }
+
+    /// Source identity for port-level logs: the source IP for TCP, or a
+    /// `unix-socket` marker when there is no IP.
+    pub fn to_log_string(&self) -> String {
+        match self {
+            ConnectionIp::Tcp(addr) => addr.ip().to_string(),
+            ConnectionIp::UnixSocket => "unix-socket".to_string(),
+        }
+    }
 }
 
 impl Into<ConnectionIp> for SocketAddr {
