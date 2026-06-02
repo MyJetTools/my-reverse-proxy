@@ -53,7 +53,7 @@ pub async fn run_mcp_connection(
 
     let mcp_settings = http_endpoint_info.mcp_settings;
 
-    crate::app::spawn_named(
+    let mut pump_to_server = crate::app::spawn_named(
         "mcp_link_to_server",
         link_tcp_streams(
             accepted_connection_read,
@@ -64,7 +64,7 @@ pub async fn run_mcp_connection(
         ),
     );
 
-    crate::app::spawn_named(
+    let mut pump_from_server = crate::app::spawn_named(
         "mcp_link_from_server",
         link_tcp_streams(
             read_remote_host,
@@ -75,15 +75,13 @@ pub async fn run_mcp_connection(
         ),
     );
 
-    /*
-    let result = read_first_payload(&mut accepted_tcp_connection, configuration.as_ref())
-        .await
-        .unwrap();
-     */
-
-    //  let str = std::str::from_utf8(result.as_slice()).unwrap();
-
-    println!("")
+    // Both directions share one lifetime: the first pump to finish (a peer
+    // closed or a hard error) tears the whole session down by aborting its
+    // sibling, so no half-open tunnel or leaked pump task is left behind.
+    tokio::select! {
+        _ = &mut pump_to_server => { pump_from_server.abort(); }
+        _ = &mut pump_from_server => { pump_to_server.abort(); }
+    }
 }
 
 async fn link_tcp_streams(
