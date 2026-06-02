@@ -24,8 +24,7 @@ pub struct TcpGatewayConnection {
     inner: Arc<TcpConnectionInner>,
     last_incoming_payload_time: AtomicDateTimeAsMicroseconds,
     forward_connections: Arc<Mutex<HashMap<u32, Arc<TcpGatewayForwardConnection>>>>,
-    forward_proxy_handlers:
-        Arc<tokio::sync::Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>>,
+    forward_proxy_handlers: Arc<ForwardProxyHandlers>,
     allow_incoming_forward_connection: bool,
     pub ping_stop_watch: AtomicStopWatch,
     pub last_ping_duration: AtomicDuration,
@@ -186,6 +185,7 @@ impl TcpGatewayConnection {
             connection_id,
             self.inner.clone(),
             Arc::new(remote_host_port.as_str().to_string()),
+            Arc::downgrade(&self.forward_proxy_handlers),
         );
 
         {
@@ -392,10 +392,19 @@ impl TcpGatewayConnection {
     }
 
     pub async fn disconnect_forward_proxy_connection(&self, connection_id: u32, message: &str) {
-        let mut write_access = self.forward_proxy_handlers.lock().await;
-        if let Some(mut connection) = write_access.remove(&connection_id) {
-            connection.set_connection_error(message.into());
-            connection.disconnect().await;
+        {
+            let mut write_access = self.forward_proxy_handlers.lock().await;
+            if let Some(mut connection) = write_access.remove(&connection_id) {
+                connection.set_connection_error(message.into());
+                connection.disconnect().await;
+            }
+        }
+
+        // The same connection id may live as a forward connection on this side
+        // (when the peer is the proxy initiator). Tear it down too so its
+        // upstream socket is closed instead of lingering.
+        if let Some(forward_connection) = self.remove_forward_connection(connection_id) {
+            forward_connection.disconnect().await;
         }
     }
 }

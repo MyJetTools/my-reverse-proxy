@@ -1,17 +1,18 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use crate::{
     network_stream::*,
     tcp_gateway::{TcpConnectionInner, TcpGatewayContract},
 };
 
-use super::ProxyReceiveBuffer;
+use super::{ForwardProxyHandlers, ProxyReceiveBuffer};
 
 #[derive(Clone)]
 pub struct TcpGatewayProxyForwardStream {
     pub connection_id: u32,
     pub gateway_connection_inner: Arc<TcpConnectionInner>,
     pub receive_buffer: Arc<ProxyReceiveBuffer>,
+    pub handlers_map: Weak<ForwardProxyHandlers>,
 }
 
 impl TcpGatewayProxyForwardStream {
@@ -26,9 +27,16 @@ impl TcpGatewayProxyForwardStream {
     }
 
     pub fn disconnect(&self) {
-        if self.receive_buffer.disconnect() {
+        // `disconnect()` returns `true` only for whoever flips the buffer to
+        // disconnected first. If it returns `false` the connection was already
+        // torn down (peer-initiated, via disconnect_forward_proxy_connection),
+        // so there is nothing left to clean up or notify.
+        if !self.receive_buffer.disconnect() {
             return;
         }
+
+        // We initiated the close locally — notify the peer so it tears down the
+        // matching forward connection.
         let frame = TcpGatewayContract::ConnectionError {
             connection_id: self.connection_id,
             error: "",
@@ -36,6 +44,16 @@ impl TcpGatewayProxyForwardStream {
         .to_plain_frame();
 
         self.gateway_connection_inner.send_payload(frame);
+
+        // Drop our own handler from the registry so the proxy-connection count
+        // goes down. Peer-initiated closes already remove it; this covers the
+        // local-close path, which otherwise leaks the entry.
+        if let Some(handlers_map) = self.handlers_map.upgrade() {
+            let connection_id = self.connection_id;
+            crate::app::spawn_named("proxy_forward_stream_cleanup", async move {
+                handlers_map.lock().await.remove(&connection_id);
+            });
+        }
     }
 }
 

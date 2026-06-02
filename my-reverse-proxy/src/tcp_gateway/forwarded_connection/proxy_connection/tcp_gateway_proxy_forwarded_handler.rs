@@ -1,10 +1,17 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Weak};
 
 use rust_extensions::StrOrString;
 
 use crate::tcp_gateway::TcpConnectionInner;
 
 use super::{ProxyReceiveBuffer, TcpGatewayProxyForwardStream};
+
+/// Registry of active proxy (outbound) connections, keyed by connection id.
+/// Lives on `TcpGatewayConnection`; handlers/streams hold a `Weak` to it so a
+/// locally-closed stream can drop its own entry without an Arc cycle.
+pub type ForwardProxyHandlers =
+    tokio::sync::Mutex<HashMap<u32, TcpGatewayProxyForwardConnectionHandler>>;
 
 #[derive(Clone)]
 pub enum TcpGatewayProxyForwardedConnectionStatus {
@@ -28,6 +35,7 @@ pub struct TcpGatewayProxyForwardConnectionHandler {
     pub connection_id: u32,
     receive_buffer: Arc<ProxyReceiveBuffer>,
     remote_host: Arc<String>,
+    handlers_map: Weak<ForwardProxyHandlers>,
 }
 
 impl TcpGatewayProxyForwardConnectionHandler {
@@ -35,6 +43,7 @@ impl TcpGatewayProxyForwardConnectionHandler {
         connection_id: u32,
         connection_inner: Arc<TcpConnectionInner>,
         remote_host: Arc<String>,
+        handlers_map: Weak<ForwardProxyHandlers>,
     ) -> Self {
         Self {
             status: TcpGatewayProxyForwardedConnectionStatus::AcknowledgingConnection,
@@ -42,6 +51,7 @@ impl TcpGatewayProxyForwardConnectionHandler {
             connection_inner,
             receive_buffer: ProxyReceiveBuffer::new().into(),
             remote_host,
+            handlers_map,
         }
     }
 
@@ -80,6 +90,7 @@ impl TcpGatewayProxyForwardConnectionHandler {
             receive_buffer: self.receive_buffer.clone(),
             connection_id: self.connection_id,
             gateway_connection_inner: self.connection_inner.clone(),
+            handlers_map: self.handlers_map.clone(),
         }
     }
 
