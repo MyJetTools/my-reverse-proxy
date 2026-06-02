@@ -31,26 +31,66 @@ impl Http1ContentSource {
 
         let is_ws = is_h1_websocket_upgrade(&req);
 
+        let method = req.method().clone();
+        let uri = req.uri().clone();
+
         let handle = if is_ws {
             pool.create_ws_connection().await
         } else {
             pool.get_connection().await
         }
-        .map_err(|_| ProxyPassError::UpstreamUnavailable)?;
+        .map_err(|_| {
+            println!(
+                "h1 upstream UNAVAILABLE (no connection): {} {} -> [{}]",
+                method, uri, self.pool_desc.id_string
+            );
+            ProxyPassError::UpstreamUnavailable
+        })?;
+
+        println!(
+            "h1 upstream reached, sending: {} {} -> [{}]",
+            method, uri, self.pool_desc.id_string
+        );
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 
-        match handle.do_request(&req, self.request_timeout).await? {
-            MyHttpResponse::Response(response) => Ok(HttpResponse::Response(response)),
+        let response = match handle.do_request(&req, self.request_timeout).await {
+            Ok(response) => response,
+            Err(err) => {
+                println!(
+                    "h1 upstream request FAILED: {} {} -> [{}]: {:?}",
+                    method, uri, self.pool_desc.id_string, err
+                );
+                return Err(err.into());
+            }
+        };
+
+        match response {
+            MyHttpResponse::Response(response) => {
+                println!(
+                    "h1 upstream OK: {} {} -> [{}] status {}",
+                    method,
+                    uri,
+                    self.pool_desc.id_string,
+                    response.status()
+                );
+                Ok(HttpResponse::Response(response))
+            }
             MyHttpResponse::WebSocketUpgrade {
                 stream,
                 response,
                 disconnection,
-            } => Ok(HttpResponse::WebSocketUpgrade {
-                stream: WebSocketUpgradeStream::TcpStream(stream),
-                response,
-                disconnection,
-            }),
+            } => {
+                println!(
+                    "h1 upstream WS-UPGRADE: {} {} -> [{}]",
+                    method, uri, self.pool_desc.id_string
+                );
+                Ok(HttpResponse::WebSocketUpgrade {
+                    stream: WebSocketUpgradeStream::TcpStream(stream),
+                    response,
+                    disconnection,
+                })
+            }
         }
     }
 }
