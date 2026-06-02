@@ -47,9 +47,9 @@ impl HttpsRequestsHandler {
         let Some(host) = req.uri().host() else {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
+                self.connection_ip.get_ip_log(),
                 format!(
-                    "Rejected request from {}: can not detect host. Uri:{}. Headers: {:?}",
-                    self.connection_ip.to_log_string(),
+                    "Rejected request: can not detect host. Uri:{}. Headers: {:?}",
                     req.uri(),
                     req.headers()
                 ),
@@ -73,11 +73,8 @@ impl HttpsRequestsHandler {
         let Some(http_endpoint_info) = http_endpoint_info else {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
-                format!(
-                    "Rejected request from {}: no endpoint configured for host [{}]",
-                    self.connection_ip.to_log_string(),
-                    host
-                ),
+                self.connection_ip.get_ip_log(),
+                format!("Rejected request: no endpoint configured for host [{}]", host),
             );
             let content =
                 crate::error_templates::generate_layout(400, "No configuration found", None);

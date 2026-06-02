@@ -683,6 +683,14 @@ table.locations.gateway-routes thead th {
     flex: 0 0 auto;
 }
 
+.logs-ip {
+    color: var(--badge-text);
+    flex: 0 0 120px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .logs-msg {
     flex: 1 1 auto;
 }

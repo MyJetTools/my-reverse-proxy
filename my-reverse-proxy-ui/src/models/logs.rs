@@ -11,5 +11,7 @@ pub struct ProxyLogsModel {
 pub struct ProxyLogLineModel {
     /// Unix microseconds.
     pub moment: i64,
+    /// Source IP of the event, when it could be resolved.
+    pub ip: Option<String>,
     pub message: String,
 }

@@ -10,13 +10,18 @@ const MAX_LOG_MESSAGES: usize = 100;
 #[derive(Clone)]
 pub struct ProxyLogEntry {
     pub moment: DateTimeAsMicroseconds,
+    /// Source IP that initiated the event, when it could be resolved (TCP
+    /// connections). `None` for unix sockets and for messages without a
+    /// connection context.
+    pub ip: Option<String>,
     pub message: String,
 }
 
 impl ProxyLogEntry {
-    pub fn new(message: String) -> Self {
+    pub fn new(ip: Option<String>, message: String) -> Self {
         Self {
             moment: DateTimeAsMicroseconds::now(),
+            ip,
             message,
         }
     }
@@ -67,30 +72,35 @@ impl ProxyLogsInner {
         }
     }
 
-    fn push(buf: &mut VecDeque<ProxyLogEntry>, message: String) {
+    fn push(buf: &mut VecDeque<ProxyLogEntry>, ip: Option<String>, message: String) {
         if buf.len() == MAX_LOG_MESSAGES {
             buf.pop_front();
         }
-        buf.push_back(ProxyLogEntry::new(message));
+        buf.push_back(ProxyLogEntry::new(ip, message));
     }
 
-    fn push_into(map: &mut AHashMap<String, VecDeque<ProxyLogEntry>>, key: &str, message: String) {
+    fn push_into(
+        map: &mut AHashMap<String, VecDeque<ProxyLogEntry>>,
+        key: &str,
+        ip: Option<String>,
+        message: String,
+    ) {
         match map.get_mut(key) {
-            Some(buf) => Self::push(buf, message),
+            Some(buf) => Self::push(buf, ip, message),
             None => {
                 let mut buf = VecDeque::new();
-                Self::push(&mut buf, message);
+                Self::push(&mut buf, ip, message);
                 map.insert(key.to_string(), buf);
             }
         }
     }
 
-    fn push_into_location(&mut self, location_id: i64, message: String) {
+    fn push_into_location(&mut self, location_id: i64, ip: Option<String>, message: String) {
         match self.by_location.get_mut(&location_id) {
-            Some(buf) => Self::push(buf, message),
+            Some(buf) => Self::push(buf, ip, message),
             None => {
                 let mut buf = VecDeque::new();
-                Self::push(&mut buf, message);
+                Self::push(&mut buf, ip, message);
                 self.by_location.insert(location_id, buf);
             }
         }
@@ -114,25 +124,27 @@ impl ProxyLogs {
 
     /// Pre-endpoint log: a connection hit the listener but no endpoint could be
     /// resolved. `listen_id` is the TCP port (as a decimal string) or the unix
-    /// socket path.
-    pub fn write_port(&self, listen_id: &str, message: String) {
+    /// socket path. `ip` is the source IP when it could be resolved.
+    pub fn write_port(&self, listen_id: &str, ip: Option<String>, message: String) {
         let mut inner = self.inner.lock();
-        ProxyLogsInner::push_into(&mut inner.by_port, listen_id, message);
+        ProxyLogsInner::push_into(&mut inner.by_port, listen_id, ip, message);
     }
 
     /// Log attributed to a resolved endpoint and, when known, the location.
     pub fn write(&self, endpoint: &str, location_id: Option<i64>, message: String) {
         let mut inner = self.inner.lock();
-        ProxyLogsInner::push_into(&mut inner.by_endpoint, endpoint, message.clone());
+        ProxyLogsInner::push_into(&mut inner.by_endpoint, endpoint, None, message.clone());
         if let Some(location_id) = location_id {
-            inner.push_into_location(location_id, message);
+            inner.push_into_location(location_id, None, message);
         }
     }
 
     /// Log attributed to a resolved location only (request-building / payload
     /// details, where the endpoint string is not in scope).
     pub fn write_location(&self, location_id: i64, message: String) {
-        self.inner.lock().push_into_location(location_id, message);
+        self.inner
+            .lock()
+            .push_into_location(location_id, None, message);
     }
 
     pub fn get_by_port(&self, listen_id: &str) -> Vec<ProxyLogEntry> {
