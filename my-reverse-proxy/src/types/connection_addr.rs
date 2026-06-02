@@ -20,10 +20,13 @@ impl ConnectionIp {
         self.get_ip_addr().map(|ip| ip.to_string())
     }
 
-    /// ISO-3 country code for the source IP (flag file name in the UI), when
-    /// resolvable.
-    pub fn get_country_log(&self) -> Option<String> {
-        crate::ip_db::lookup_country_iso3(self.get_ip_addr()?)
+    /// Convenience for log call sites: the source IP string and its ISO-3
+    /// country, resolved together.
+    pub fn get_ip_country_log(&self) -> (Option<String>, Option<String>) {
+        match self.get_ip_addr() {
+            Some(ip) => (Some(ip.to_string()), crate::ip_db::lookup_country_iso3(ip)),
+            None => (None, None),
+        }
     }
 }
 

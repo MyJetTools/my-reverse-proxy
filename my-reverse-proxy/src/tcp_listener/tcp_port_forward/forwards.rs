@@ -21,6 +21,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     ssh_session_handler,
                     None,
+                    None,
                     timeouts,
                 ),
             );
@@ -30,6 +31,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),
+                    None,
                     None,
                     None,
                     timeouts,
@@ -46,6 +48,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     LoopBuffer::new(),
                     ssh_session_handler,
                     None,
+                    None,
                     timeouts,
                 ),
             );
@@ -55,6 +58,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),
+                    None,
                     None,
                     None,
                     timeouts,

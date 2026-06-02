@@ -1,9 +1,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use crate::configurations::{
-    MyReverseProxyRemoteEndpoint, ProxyPassToConfig, ProxyPassToModel,
-};
+use crate::configurations::{MyReverseProxyRemoteEndpoint, ProxyPassToConfig, ProxyPassToModel};
 use crate::network_stream::*;
 
 use super::*;
@@ -118,8 +116,7 @@ pub async fn serve_reverse_proxy<
         match execute_request_result {
             Ok(web_socket_upgrade) => {
                 if let Some(web_socket_upgrade) = web_socket_upgrade {
-                    if let Some(upstream) =
-                        upstream_state.take_http(web_socket_upgrade.location_id)
+                    if let Some(upstream) = upstream_state.take_http(web_socket_upgrade.location_id)
                     {
                         let (server_read_part, loop_buffer) = h1_reader.into_read_part();
 
@@ -271,7 +268,12 @@ async fn execute_request<
     }
 
     let identity = h1_reader
-        .authorize(end_point_info, location, &http_connection_info, &request_headers)
+        .authorize(
+            end_point_info,
+            location,
+            &http_connection_info,
+            &request_headers,
+        )
         .await?;
 
     if !end_point_info.user_is_allowed(&identity).await {
@@ -282,6 +284,7 @@ async fn execute_request<
         h1_server_write_part: h1_server_write_part.clone(),
         http_connection_info: http_connection_info.clone(),
         end_point_info: end_point_info.clone(),
+        location_id: location.id,
     };
 
     // Resolve dynamic_proxy: rewrite proxy_pass_to per-request from the
@@ -300,10 +303,8 @@ async fn execute_request<
                     .map_err(|_| ProxyServerError::ProxyToHeaderInvalid)?;
             use rust_extensions::remote_endpoint::Scheme;
             match endpoint.get_scheme() {
-                Some(Scheme::Http)
-                | Some(Scheme::Https)
-                | Some(Scheme::Ws)
-                | Some(Scheme::Wss) => {}
+                Some(Scheme::Http) | Some(Scheme::Https) | Some(Scheme::Ws) | Some(Scheme::Wss) => {
+                }
                 _ => return Err(ProxyServerError::ProxyToHeaderInvalid),
             }
             if let Some(allowed) = &config.allowed_hosts {
@@ -336,7 +337,11 @@ async fn execute_request<
         .unwrap_or(&location.proxy_pass_to);
 
     let access = upstream_state
-        .get_or_connect(effective_proxy_pass_to, location.id, &http_connection_context)
+        .get_or_connect(
+            effective_proxy_pass_to,
+            location.id,
+            &http_connection_context,
+        )
         .await
         .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
             remote_resource: effective_proxy_pass_to.to_string(),
@@ -370,7 +375,11 @@ async fn execute_request<
         println!("Doing reconnection to remote connection");
 
         let access = upstream_state
-            .get_or_connect(effective_proxy_pass_to, location.id, &http_connection_context)
+            .get_or_connect(
+                effective_proxy_pass_to,
+                location.id,
+                &http_connection_context,
+            )
             .await
             .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
                 remote_resource: effective_proxy_pass_to.to_string(),
@@ -416,9 +425,10 @@ async fn execute_request<
         }
     };
 
-    crate::app::APP_CTX
-        .traffic
-        .record_c2s(end_point_info.host_endpoint.as_str(), bytes_to_upstream as u64);
+    crate::app::APP_CTX.traffic.record_c2s(
+        end_point_info.host_endpoint.as_str(),
+        bytes_to_upstream as u64,
+    );
 
     let connected = upstream.read_http_response(http_connection_context);
 

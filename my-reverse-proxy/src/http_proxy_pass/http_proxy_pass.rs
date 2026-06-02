@@ -55,11 +55,13 @@ impl HttpProxyPass {
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
         let endpoint = self.endpoint_info.host_endpoint.as_str();
         let endpoint_debug = crate::app::APP_CTX.debug_flags.is_endpoint_debug(endpoint);
+        let ip = connection_ip.get_ip_log();
 
         if endpoint_debug {
             crate::app::APP_CTX.proxy_logs.write(
                 endpoint,
                 None,
+                ip.clone(),
                 format!("Request. Uri: [{}] Headers: {:?}", req.uri(), req.headers()),
             );
         }
@@ -100,6 +102,7 @@ impl HttpProxyPass {
             let location_index = inner.locations.find_location_index(
                 req.uri(),
                 self.endpoint_info.host_endpoint.as_str(),
+                ip.clone(),
                 endpoint_debug,
             )?;
 
@@ -117,6 +120,7 @@ impl HttpProxyPass {
                 crate::app::APP_CTX.proxy_logs.write(
                     self.endpoint_info.host_endpoint.as_str(),
                     Some(location_index.id),
+                    ip.clone(),
                     format!("Request parts: {:?}", request.req_parts),
                 );
             }
@@ -154,6 +158,7 @@ impl HttpProxyPass {
             Err(err) => {
                 crate::app::APP_CTX.proxy_logs.write_location(
                     location_index.id,
+                    ip.clone(),
                     format!("Upstream request failed: {:?}", err),
                 );
                 return Err(err);
@@ -166,6 +171,7 @@ impl HttpProxyPass {
                     crate::app::APP_CTX.proxy_logs.write(
                         self.endpoint_info.host_endpoint.as_str(),
                         Some(location_index.id),
+                        ip.clone(),
                         format!("Response headers: {:?}", response.headers()),
                     );
                 }
@@ -180,6 +186,7 @@ impl HttpProxyPass {
                     crate::app::APP_CTX.proxy_logs.write(
                         self.endpoint_info.host_endpoint.as_str(),
                         Some(location_index.id),
+                        ip.clone(),
                         format!(
                             "Response as web-socket upgrade. Headers: {:?}",
                             response.headers()
@@ -208,6 +215,7 @@ impl HttpProxyPass {
                 let log_scope = crate::app::ProxyLogScope::new(
                     Arc::new(self.endpoint_info.host_endpoint.as_str().to_string()),
                     location_index.id,
+                    ip.clone(),
                 );
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {

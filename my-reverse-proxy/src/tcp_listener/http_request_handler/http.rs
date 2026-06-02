@@ -33,7 +33,6 @@ impl HttpRequestHandler {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
-                self.connection_ip.get_country_log(),
                 format!(
                     "Rejected request: can not detect host. Uri:{}. Headers: {:?}",
                     req.uri(),
@@ -60,7 +59,6 @@ impl HttpRequestHandler {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
-                self.connection_ip.get_country_log(),
                 format!(
                     "Rejected request: no endpoint configured for host [{}]",
                     host
@@ -80,6 +78,7 @@ impl HttpRequestHandler {
             crate::app::APP_CTX.proxy_logs.write(
                 http_endpoint_info.host_endpoint.as_str(),
                 None,
+                self.connection_ip.get_ip_log(),
                 format!("Detected. [{}]{:?}", req.method(), req.uri()),
             );
         }

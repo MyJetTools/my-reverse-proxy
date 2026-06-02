@@ -1,4 +1,6 @@
-use crate::{app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer, types::HttpTimeouts};
+use crate::{
+    app::SshSessionHandler, network_stream::*, tcp_utils::LoopBuffer, types::HttpTimeouts,
+};
 
 pub enum WsDirection {
     ClientToServer,
@@ -32,6 +34,7 @@ pub async fn copy_streams<
     mut loop_buffer: LoopBuffer,
     _ssh_session_handler: Option<SshSessionHandler>,
     recorder: Option<WsTrafficRecorder>,
+    log_scope: Option<crate::app::ProxyLogScope>,
     timeouts: HttpTimeouts,
 ) {
     let direction_label = recorder
@@ -41,10 +44,13 @@ pub async fn copy_streams<
             WsDirection::ServerToClient => "s2c",
         })
         .unwrap_or("?");
-    let domain_label = recorder
-        .as_ref()
-        .map(|r| r.domain.as_str())
-        .unwrap_or("-");
+    // For the websocket pump `log_scope` carries the endpoint + location + IP,
+    // so route pump errors into that location's in-memory log instead of the
+    // console. Raw TCP port-forward copies have no scope and stay on stderr.
+    let log = |message: String| match &log_scope {
+        Some(scope) => scope.write_always(message),
+        None => eprintln!("{}", message),
+    };
 
     loop {
         {
@@ -57,13 +63,12 @@ pub async fn copy_streams<
                     .await;
 
                 if let Err(err) = write_result {
-                    eprintln!(
-                        "[ws-pump {dir} {dom}] write {n} bytes failed: {err:?}",
+                    log(format!(
+                        "ws-pump {dir} write {n} bytes failed: {err:?}",
                         dir = direction_label,
-                        dom = domain_label,
                         n = len,
                         err = err,
-                    );
+                    ));
                     break;
                 }
 
@@ -88,12 +93,11 @@ pub async fn copy_streams<
             }
             Ok(n) => n,
             Err(err) => {
-                eprintln!(
-                    "[ws-pump {dir} {dom}] read failed: {err:?}",
+                log(format!(
+                    "ws-pump {dir} read failed: {err:?}",
                     dir = direction_label,
-                    dom = domain_label,
                     err = err,
-                );
+                ));
                 writer.shutdown_socket().await;
                 break;
             }

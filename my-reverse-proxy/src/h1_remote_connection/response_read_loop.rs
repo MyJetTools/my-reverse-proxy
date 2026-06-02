@@ -166,6 +166,18 @@ pub async fn response_read_loop<
                 .as_str()
                 .to_string();
 
+            // Capture the log scope (endpoint + location + client IP) before the
+            // upgrade consumes the connection context, so pump errors land in the
+            // right location's in-memory log instead of the console.
+            let log_scope = crate::app::ProxyLogScope::new(
+                std::sync::Arc::new(ws_domain.clone()),
+                server_write_part.location_id,
+                server_write_part
+                    .http_connection_info
+                    .connection_ip
+                    .get_ip_log(),
+            );
+
             let (mut server_write_part, server_web_socket_data) = server_write_part
                 .h1_server_write_part
                 .upgrade_web_socket()
@@ -194,6 +206,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -206,6 +219,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -219,6 +233,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -231,6 +246,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -244,6 +260,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -256,6 +273,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -269,6 +287,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -281,6 +300,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -294,6 +314,7 @@ pub async fn response_read_loop<
                             remote_loop_buffer,
                             ssh_session_handler,
                             make_s2c_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );
@@ -305,6 +326,7 @@ pub async fn response_read_loop<
                             server_web_socket_data.loop_buffer,
                             None,
                             make_c2s_recorder(),
+                            Some(log_scope.clone()),
                             timeouts,
                         ),
                     );

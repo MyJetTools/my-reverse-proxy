@@ -31,6 +31,7 @@ impl ProxyPassLocations {
         &self,
         uri: &Uri,
         endpoint: &str,
+        ip: Option<String>,
         debug: bool,
     ) -> Result<LocationIndex, ProxyPassError> {
         for (index, proxy_pass_location) in self.data.iter().enumerate() {
@@ -38,6 +39,7 @@ impl ProxyPassLocations {
                 crate::app::APP_CTX.proxy_logs.write(
                     endpoint,
                     None,
+                    ip.clone(),
                     format!(
                         "{} ProxyPass path: [{}] UriPath: [{}]",
                         index,

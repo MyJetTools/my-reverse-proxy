@@ -37,12 +37,16 @@ pub async fn handle_requests(
 
     let endpoint = proxy_pass.endpoint_info.host_endpoint.as_str();
     let endpoint_debug = crate::app::APP_CTX.debug_flags.is_endpoint_debug(endpoint);
+    let ip = connection_ip.get_ip_log();
     let req_str: String = format!("[{}]{:?}", req.method(), req.uri());
     let sw = StopWatch::new();
     if endpoint_debug {
-        crate::app::APP_CTX
-            .proxy_logs
-            .write(endpoint, None, format!("Req: {}", req_str));
+        crate::app::APP_CTX.proxy_logs.write(
+            endpoint,
+            None,
+            ip.clone(),
+            format!("Req: {}", req_str),
+        );
     }
 
     match proxy_pass
@@ -56,6 +60,7 @@ pub async fn handle_requests(
                         crate::app::APP_CTX.proxy_logs.write(
                             endpoint,
                             None,
+                            ip.clone(),
                             format!(
                                 "Response: {}->{} {}",
                                 req_str,
@@ -68,6 +73,7 @@ pub async fn handle_requests(
                         crate::app::APP_CTX.proxy_logs.write(
                             endpoint,
                             None,
+                            ip.clone(),
                             format!(
                                 "Response Error: {}->{} {}",
                                 req_str,
@@ -86,6 +92,7 @@ pub async fn handle_requests(
                 crate::app::APP_CTX.proxy_logs.write(
                     endpoint,
                     None,
+                    ip.clone(),
                     format!(
                         "Tech Resp: {}->{:?} {}",
                         req_str,

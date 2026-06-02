@@ -102,7 +102,6 @@ async fn handle_accepted_connection(
         crate::app::APP_CTX.proxy_logs.write_port(
             listen_port.to_string().as_str(),
             Some(socket_addr.ip().to_string()),
-            crate::ip_db::lookup_country_iso3(socket_addr.ip()),
             format!(
                 "Rejected connection: no endpoint configured for port {}",
                 listen_port

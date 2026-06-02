@@ -19,6 +19,9 @@ pub struct Http1ServerConnectionContext<
     pub h1_server_write_part: H1ServerWritePart<ServerWritePart, ServerReadPart>,
     pub http_connection_info: HttpConnectionInfo,
     pub end_point_info: Arc<HttpEndpointInfo>,
+    /// Resolved location id for this request, used to attribute websocket-pump
+    /// diagnostics to the right in-memory location log.
+    pub location_id: i64,
 }
 
 impl<
@@ -31,6 +34,7 @@ impl<
             h1_server_write_part: self.h1_server_write_part.clone(),
             http_connection_info: self.http_connection_info.clone(),
             end_point_info: self.end_point_info.clone(),
+            location_id: self.location_id,
         }
     }
 }
