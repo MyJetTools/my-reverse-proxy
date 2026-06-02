@@ -20,6 +20,7 @@ rust-extensions = { tag = "0.1.5", git = "https://github.com/MyJetTools/rust-ext
 
 rust-common = { tag = "0.1.1", git = "https://github.com/MyJetTools/rust-common.git", features = [
     "placeholders",
+    "country-code",
 ] }
 
 my-settings-reader = { tag = "0.4.1", git = "https://github.com/MyJetTools/my-settings-reader.git" }

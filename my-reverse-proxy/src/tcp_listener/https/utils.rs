@@ -67,6 +67,7 @@ async fn lazy_accept_tcp_stream_internal(
                         crate::app::APP_CTX.proxy_logs.write_port(
                             endpoint_port.to_string().as_str(),
                             None,
+                            None,
                             format!("Client_CERT: {:?}", client_cert.as_str()),
                         );
                     }
@@ -76,6 +77,7 @@ async fn lazy_accept_tcp_stream_internal(
                     for cn in ca {
                         crate::app::APP_CTX.proxy_logs.write_port(
                             endpoint_port.to_string().as_str(),
+                            None,
                             None,
                             format!("DistName: {:?}", cn),
                         );

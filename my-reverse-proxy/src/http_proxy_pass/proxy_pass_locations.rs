@@ -47,13 +47,6 @@ impl ProxyPassLocations {
                 );
             }
             if proxy_pass_location.is_my_uri(uri) {
-                if debug {
-                    crate::app::APP_CTX.proxy_logs.write(
-                        endpoint,
-                        Some(proxy_pass_location.config.id),
-                        "Found location".to_string(),
-                    );
-                }
                 return Ok(LocationIndex {
                     index,
                     id: proxy_pass_location.config.id,

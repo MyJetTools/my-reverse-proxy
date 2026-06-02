@@ -14,7 +14,10 @@ static IPV6_DB: std::sync::LazyLock<Option<LocationDB>> =
             Some(db)
         }
         Err(e) => {
-            eprintln!("[ip_db] failed to load IPv6 DB from {}: {:?}", IPV6_DB_PATH, e);
+            eprintln!(
+                "[ip_db] failed to load IPv6 DB from {}: {:?}",
+                IPV6_DB_PATH, e
+            );
             None
         }
     });
@@ -24,6 +27,16 @@ pub fn lookup_country(ip: IpAddr) -> Option<[u8; 2]> {
         IpAddr::V4(v4) => lookup_country_v4(v4),
         IpAddr::V6(v6) => lookup_country_v6(v6),
     }
+}
+
+/// Resolves the ISO-3 country code (e.g. `USA`) for an IP, used as the flag
+/// file name in the UI. The country DB returns ISO-2; `rust_common` maps it to
+/// ISO-3.
+pub fn lookup_country_iso3(ip: IpAddr) -> Option<String> {
+    let code2 = lookup_country(ip)?;
+    let iso2 = std::str::from_utf8(&code2).ok()?;
+    let country = rust_common::country_code::CountryCode::parse(iso2).ok()?;
+    Some(country.as_iso3_str().to_string())
 }
 
 fn lookup_country_v4(ip: Ipv4Addr) -> Option<[u8; 2]> {

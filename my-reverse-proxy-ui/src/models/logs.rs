@@ -13,5 +13,8 @@ pub struct ProxyLogLineModel {
     pub moment: i64,
     /// Source IP of the event, when it could be resolved.
     pub ip: Option<String>,
+    /// ISO-3 country code resolved from the IP (flag file name), when known.
+    #[serde(default)]
+    pub country: Option<String>,
     pub message: String,
 }

@@ -24,6 +24,7 @@ impl ProxyLogsHttpModel {
 pub struct ProxyLogLineHttpModel {
     pub moment: i64,
     pub ip: Option<String>,
+    pub country: Option<String>,
     pub message: String,
 }
 
@@ -32,6 +33,7 @@ impl Into<ProxyLogLineHttpModel> for ProxyLogEntry {
         ProxyLogLineHttpModel {
             moment: self.moment.unix_microseconds,
             ip: self.ip,
+            country: self.country,
             message: self.message,
         }
     }

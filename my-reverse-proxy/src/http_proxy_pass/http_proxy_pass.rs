@@ -146,7 +146,19 @@ impl HttpProxyPass {
             )
         };
 
-        let result = content_source.send_request(request.request).await?;
+        // Upstream-unreachable failures are always captured per-location,
+        // regardless of debug mode — debug only adds the request/response
+        // detail above and below.
+        let result = match content_source.send_request(request.request).await {
+            Ok(result) => result,
+            Err(err) => {
+                crate::app::APP_CTX.proxy_logs.write_location(
+                    location_index.id,
+                    format!("Upstream request failed: {:?}", err),
+                );
+                return Err(err);
+            }
+        };
 
         let mut response = match result {
             super::content_source::HttpResponse::Response(response) => {

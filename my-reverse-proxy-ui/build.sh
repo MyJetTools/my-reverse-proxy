@@ -35,6 +35,14 @@ mkdir -p "$WWWROOT"
 
 cp -R "$DX_OUT"/. "$WWWROOT/"
 
+# Country flags are referenced dynamically (/assets/flags/<ISO3>.svg) from the
+# logs dialog, so dx's static-asset bundler doesn't pick them up. Copy them in
+# verbatim so the server can serve them.
+if [ -d "$SCRIPT_DIR/assets/flags" ]; then
+    mkdir -p "$WWWROOT/assets/flags"
+    cp -R "$SCRIPT_DIR/assets/flags/." "$WWWROOT/assets/flags/"
+fi
+
 echo
 echo "UI built  → $DX_OUT"
 echo "Copied to → $WWWROOT"

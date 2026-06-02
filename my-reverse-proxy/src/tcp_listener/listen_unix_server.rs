@@ -96,6 +96,7 @@ async fn handle_accepted_connection(
         crate::app::APP_CTX.proxy_logs.write_port(
             listen_host.as_str(),
             None,
+            None,
             format!(
                 "Rejected connection: no endpoint configured for unix socket {}",
                 listen_host.as_str()

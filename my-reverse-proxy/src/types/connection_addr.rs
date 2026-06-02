@@ -19,6 +19,12 @@ impl ConnectionIp {
     pub fn get_ip_log(&self) -> Option<String> {
         self.get_ip_addr().map(|ip| ip.to_string())
     }
+
+    /// ISO-3 country code for the source IP (flag file name in the UI), when
+    /// resolvable.
+    pub fn get_country_log(&self) -> Option<String> {
+        crate::ip_db::lookup_country_iso3(self.get_ip_addr()?)
+    }
 }
 
 impl Into<ConnectionIp> for SocketAddr {

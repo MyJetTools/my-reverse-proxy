@@ -35,6 +35,7 @@ pub fn handle_connection(
                 crate::app::APP_CTX.proxy_logs.write_port(
                     endpoint_port.to_string().as_str(),
                     connection_ip.get_ip_log(),
+                    connection_ip.get_country_log(),
                     format!("Rejected TLS connection: {}", err),
                 );
                 if let Some(ip) = connection_ip.get_ip_addr() {

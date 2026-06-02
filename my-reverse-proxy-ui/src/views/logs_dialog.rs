@@ -57,7 +57,16 @@ pub fn LogsDialog(
                         for line in &logs.items {
                             div { class: "logs-line",
                                 span { class: "logs-time", "{fmt_time(line.moment)}" }
-                                span { class: "logs-ip", "{line.ip.as_deref().unwrap_or(\"\")}" }
+                                span { class: "logs-ip",
+                                    if let Some(cc) = line.country.as_ref() {
+                                        img {
+                                            class: "logs-flag",
+                                            src: "/assets/flags/{cc}.svg",
+                                            title: "{cc}",
+                                        }
+                                    }
+                                    "{line.ip.as_deref().unwrap_or(\"\")}"
+                                }
                                 span { class: "logs-msg", "{line.message}" }
                             }
                         }
