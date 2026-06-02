@@ -10,7 +10,10 @@ use crate::{
         GatewayServerStatusModel, HttpEndpointInfoModel, HttpProxyPassLocationModel,
         PortConfigurationModel, SslCertificateInfoModel,
     },
+    views::{LogScope, LogsDialog, LogsDialogRequest},
 };
+
+type LogsDialogSignal = Signal<Option<LogsDialogRequest>>;
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -32,9 +35,11 @@ pub fn Dashboard() -> Element {
         });
     });
 
+    let logs_dialog = use_signal(|| Option::<LogsDialogRequest>::None);
+
     let state_ra = state.read();
 
-    match state_ra.as_ref() {
+    let content = match state_ra.as_ref() {
         RenderState::None | RenderState::Loading => {
             rsx! { div { class: "loading", "Loading configuration..." } }
         }
@@ -44,16 +49,25 @@ pub fn Dashboard() -> Element {
                 pre { "{err}" }
             }
         },
-        RenderState::Loaded(cfg) => render_dashboard(cfg),
+        RenderState::Loaded(cfg) => render_dashboard(cfg, logs_dialog),
+    };
+
+    let open_dialog = logs_dialog.read().clone();
+
+    rsx! {
+        {content}
+        if let Some(request) = open_dialog {
+            LogsDialog { request, dialog: logs_dialog }
+        }
     }
 }
 
-fn render_dashboard(cfg: &CurrentConfigurationModel) -> Element {
+fn render_dashboard(cfg: &CurrentConfigurationModel, dialog: LogsDialogSignal) -> Element {
     rsx! {
         div { class: "dashboard",
             h2 { "Reverse Proxy" }
             for port in &cfg.ports {
-                {render_port(port)}
+                {render_port(port, dialog)}
             }
             if let Some(server) = cfg.gateway_server.as_ref() {
                 {render_gateway_server(server)}
@@ -329,13 +343,18 @@ fn render_ip_lists(cfg: &CurrentConfigurationModel) -> Element {
     }
 }
 
-fn render_port(port: &PortConfigurationModel) -> Element {
+fn render_port(port: &PortConfigurationModel, dialog: LogsDialogSignal) -> Element {
     let port_type_class = format!("type-pill listen-{}", normalize_type(port.r#type.as_str()));
 
     let port_conn_class = if port.inbound_connections > 0 {
         "conn-count active"
     } else {
         "conn-count"
+    };
+
+    let (logs_id, logs_title) = match port.unix_socket.as_ref() {
+        Some(socket) => (socket.clone(), format!("Port logs — unix {socket}")),
+        None => (port.port.to_string(), format!("Port logs — {}", port.port)),
     };
 
     rsx! {
@@ -354,17 +373,33 @@ fn render_port(port: &PortConfigurationModel) -> Element {
                         span { class: "value", "{port.inbound_connections}" }
                     }
                 }
+                {render_logs_button(dialog, logs_title, LogScope::Port(logs_id))}
             }
             div { class: "endpoints",
                 for endpoint in &port.endpoints {
-                    {render_endpoint(endpoint)}
+                    {render_endpoint(endpoint, dialog)}
                 }
             }
         }
     }
 }
 
-fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
+/// A small "logs" button that opens the in-memory logs dialog for a given scope.
+fn render_logs_button(
+    mut dialog: LogsDialogSignal,
+    title: String,
+    scope: LogScope,
+) -> Element {
+    rsx! {
+        button {
+            class: "logs-btn",
+            onclick: move |_| dialog.set(Some(LogsDialogRequest { title: title.clone(), scope: scope.clone() })),
+            "logs"
+        }
+    }
+}
+
+fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -> Element {
     let listen_type_class = format!("type-pill listen-{}", normalize_type(endpoint.r#type.as_str()));
 
     let has_meta = endpoint.ssl_cert_id.is_some()
@@ -394,6 +429,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
                         }
                     }
                 }
+                {render_logs_button(dialog, format!("Endpoint logs — {}", endpoint.host), LogScope::Endpoint(endpoint.host.clone()))}
             }
             if has_meta {
                 div { class: "endpoint-meta",
@@ -439,11 +475,12 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
                             th { "Loc id" }
                             th { "Pool" }
                             th { "id_string" }
+                            th { "Logs" }
                         }
                     }
                     tbody {
                         for loc in &endpoint.locations {
-                            {render_location(loc)}
+                            {render_location(loc, dialog)}
                         }
                     }
                 }
@@ -452,7 +489,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel) -> Element {
     }
 }
 
-fn render_location(loc: &HttpProxyPassLocationModel) -> Element {
+fn render_location(loc: &HttpProxyPassLocationModel, dialog: LogsDialogSignal) -> Element {
     let pool_label = match (loc.pool_alive, loc.pool_total) {
         (Some(alive), Some(total)) => format!("{alive}/{total}"),
         _ => "—".to_string(),
@@ -467,6 +504,8 @@ fn render_location(loc: &HttpProxyPassLocationModel) -> Element {
         _ => "",
     };
 
+    let logs_title = format!("Location logs — {} ({})", loc.path, loc.location_id);
+
     rsx! {
         tr { class: "{row_class}",
             td { "{loc.path}" }
@@ -477,6 +516,9 @@ fn render_location(loc: &HttpProxyPassLocationModel) -> Element {
             td { "{loc.location_id}" }
             td { "{pool_label}" }
             td { class: "id-string", "{loc.id_string}" }
+            td {
+                {render_logs_button(dialog, logs_title, LogScope::Location(loc.location_id))}
+            }
         }
     }
 }

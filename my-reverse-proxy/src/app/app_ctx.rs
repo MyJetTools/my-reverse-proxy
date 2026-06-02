@@ -67,6 +67,7 @@ pub struct AppContext {
     pub show_error_description: UnsafeValue<bool>,
     pub prometheus: Arc<Prometheus>,
     pub metrics: Metrics,
+    pub proxy_logs: ProxyLogs,
     pub active_listen_ports: Mutex<ActiveListenPorts>,
 
     pub ssh_config_list: SshConfigList,
@@ -161,6 +162,7 @@ impl AppContext {
                 settings_model.get_show_error_description_on_error_page(),
             ),
             metrics: Metrics::new(),
+            proxy_logs: ProxyLogs::new(),
             active_listen_ports: Mutex::new(ActiveListenPorts::new()),
             ssh_config_list: SshConfigList::new(),
             allowed_users_list: AllowedUsersList::new(),

@@ -35,20 +35,12 @@ pub async fn handle_requests(
         crate::app::APP_CTX.rps.inc_domain(domain);
     }
 
-    let debug = if proxy_pass.endpoint_info.debug {
-        let req_str: String = format!(
-            "{}: [{}]{:?}",
-            proxy_pass.endpoint_info.as_str(),
-            req.method(),
-            req.uri()
-        );
-        let sw = StopWatch::new();
-
-        println!("Req: {}", req_str);
-        Some((req_str, sw))
-    } else {
-        None
-    };
+    let endpoint = proxy_pass.endpoint_info.host_endpoint.as_str();
+    let req_str: String = format!("[{}]{:?}", req.method(), req.uri());
+    let sw = StopWatch::new();
+    crate::app::APP_CTX
+        .proxy_logs
+        .write(endpoint, None, format!("Req: {}", req_str));
 
     match proxy_pass
         .send_payload(req, connection_ip, proxy_pass.endpoint_info.debug)
@@ -57,38 +49,44 @@ pub async fn handle_requests(
         Ok(response) => {
             match response.as_ref() {
                 Ok(response) => {
-                    if let Some((req_str, sw)) = debug {
-                        println!(
+                    crate::app::APP_CTX.proxy_logs.write(
+                        endpoint,
+                        None,
+                        format!(
                             "Response: {}->{} {}",
                             req_str,
                             response.status(),
                             sw.duration_as_string()
-                        );
-                    }
+                        ),
+                    );
                 }
                 Err(err) => {
-                    if let Some((req_str, sw)) = debug {
-                        println!(
+                    crate::app::APP_CTX.proxy_logs.write(
+                        endpoint,
+                        None,
+                        format!(
                             "Response Error: {}->{} {}",
                             req_str,
                             err,
                             sw.duration_as_string()
-                        );
-                    }
+                        ),
+                    );
                 }
             }
 
             return response;
         }
         Err(err) => {
-            if let Some((req_str, sw)) = debug {
-                println!(
+            crate::app::APP_CTX.proxy_logs.write(
+                endpoint,
+                None,
+                format!(
                     "Tech Resp: {}->{:?} {}",
                     req_str,
                     err,
                     sw.duration_as_string()
-                );
-            }
+                ),
+            );
             if matches!(err, ProxyPassError::DropConnection) {
                 let body: BoxBody<Bytes, String> = Full::new(Bytes::new())
                     .map_err(|never| match never {})

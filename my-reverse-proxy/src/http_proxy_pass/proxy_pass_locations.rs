@@ -34,20 +34,29 @@ impl ProxyPassLocations {
     pub fn find_location_index(
         &self,
         uri: &Uri,
+        endpoint: &str,
         debug: bool,
     ) -> Result<LocationIndex, ProxyPassError> {
         for (index, proxy_pass_location) in self.data.iter().enumerate() {
             if debug {
-                println!(
-                    "{} ProxyPass path: [{}] UriPath: [{}]",
-                    index,
-                    proxy_pass_location.config.path.as_str(),
-                    uri.path()
+                crate::app::APP_CTX.proxy_logs.write(
+                    endpoint,
+                    None,
+                    format!(
+                        "{} ProxyPass path: [{}] UriPath: [{}]",
+                        index,
+                        proxy_pass_location.config.path.as_str(),
+                        uri.path()
+                    ),
                 );
             }
             if proxy_pass_location.is_my_uri(uri) {
                 if debug {
-                    println!("Found location")
+                    crate::app::APP_CTX.proxy_logs.write(
+                        endpoint,
+                        Some(proxy_pass_location.config.id),
+                        "Found location".to_string(),
+                    );
                 }
                 return Ok(LocationIndex {
                     index,

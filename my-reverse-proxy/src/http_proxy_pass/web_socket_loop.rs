@@ -28,17 +28,18 @@ pub async fn start_web_socket_loop<
 >(
     server_web_socket: HyperWebsocket,
     to_remote_stream: TStream,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     disconnect: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
     domain: Option<String>,
     timeouts: HttpTimeouts,
 ) {
+    let panic_log_scope = log_scope.clone();
     let result = AssertUnwindSafe(async move {
         web_socket_loop(
             server_web_socket,
             to_remote_stream,
-            debug,
+            log_scope,
             trace_payload,
             domain,
             timeouts,
@@ -48,8 +49,8 @@ pub async fn start_web_socket_loop<
     .catch_unwind()
     .await;
 
-    if result.is_err() && debug {
-        println!("ws_loop_main panicked");
+    if result.is_err() {
+        panic_log_scope.write("ws_loop_main panicked".to_string());
     }
 
     disconnect.web_socket_disconnect();
@@ -60,7 +61,7 @@ async fn web_socket_loop<
 >(
     server_web_socket: HyperWebsocket,
     to_remote_stream: TStream,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     trace_payload: bool,
     domain: Option<String>,
     timeouts: HttpTimeouts,
@@ -85,7 +86,7 @@ async fn web_socket_loop<
                 serve_from_server_to_client(
                     ws_receiver,
                     to_remote_write,
-                    debug,
+                    log_scope.clone(),
                     trace_payload,
                     domain.clone(),
                     timeouts,
@@ -93,7 +94,7 @@ async fn web_socket_loop<
             );
 
             if trace_payload {
-                println!("WS is starting reading message from remote");
+                log_scope.write("WS is starting reading message from remote".to_string());
             }
 
             let mut have_traced_message = false;
@@ -119,9 +120,7 @@ async fn web_socket_loop<
                 let message = result.unwrap();
 
                 if message.is_err() {
-                    if debug {
-                        println!("Error in websocket connection: {:?}", message);
-                    }
+                    log_scope.write(format!("Error in websocket connection: {:?}", message));
 
                     break;
                 }
@@ -142,15 +141,14 @@ async fn web_socket_loop<
 
                 match tokio::time::timeout(write_timeout, ws_sender.send(message)).await {
                     Err(_) => {
-                        if debug {
-                            println!("ws_sender.send timed out after {:?}", write_timeout);
-                        }
+                        log_scope.write(format!(
+                            "ws_sender.send timed out after {:?}",
+                            write_timeout
+                        ));
                         break;
                     }
                     Ok(Err(err)) => {
-                        if debug {
-                            println!("ws_sender.send error: {:?}", err);
-                        }
+                        log_scope.write(format!("ws_sender.send error: {:?}", err));
                         break;
                     }
                     Ok(Ok(())) => {}
@@ -158,9 +156,7 @@ async fn web_socket_loop<
             }
         }
         Err(err) => {
-            if debug {
-                println!("Error in websocket connection: {}", err);
-            }
+            log_scope.write(format!("Error in websocket connection: {}", err));
         }
     }
 }
@@ -170,13 +166,13 @@ async fn serve_from_server_to_client<
 >(
     mut websocket: SplitStream<HyperWebsocketStream>,
     mut to_remote_write: SplitSink<WebSocketStream<TStream>, Message>,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     trace_payload: bool,
     domain: Option<String>,
     timeouts: HttpTimeouts,
 ) -> Result<(), Error> {
     if trace_payload {
-        println!("WS is starting reading message to remote");
+        log_scope.write("WS is starting reading message to remote".to_string());
     }
 
     let mut have_traced_message = false;
@@ -204,7 +200,7 @@ async fn serve_from_server_to_client<
 
         if trace_payload {
             if !have_traced_message {
-                println!("WS Message to remote: {:?}", msg);
+                log_scope.write(format!("WS Message to remote: {:?}", msg));
                 have_traced_message = true;
             }
         }
@@ -216,18 +212,17 @@ async fn serve_from_server_to_client<
 
         match tokio::time::timeout(write_timeout, to_remote_write.send(msg)).await {
             Err(_) => {
-                if debug {
-                    println!(
-                        "to_remote_write.send timed out after {:?} in server_to_client loop",
-                        write_timeout
-                    );
-                }
+                log_scope.write(format!(
+                    "to_remote_write.send timed out after {:?} in server_to_client loop",
+                    write_timeout
+                ));
                 break;
             }
             Ok(Err(err)) => {
-                if debug {
-                    println!("Error in websocket server_to_client loop: {:?}", err);
-                }
+                log_scope.write(format!(
+                    "Error in websocket server_to_client loop: {:?}",
+                    err
+                ));
                 break;
             }
             Ok(Ok(())) => {}

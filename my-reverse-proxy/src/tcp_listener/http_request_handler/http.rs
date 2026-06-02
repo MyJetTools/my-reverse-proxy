@@ -30,10 +30,13 @@ impl HttpRequestHandler {
         req: &hyper::Request<hyper::body::Incoming>,
     ) -> Result<Arc<HttpProxyPass>, hyper::Result<hyper::Response<BoxBody<Bytes, String>>>> {
         let Some(host) = req.uri().host() else {
-            println!(
-                "Can not detect host. Uri:{}. Headers: {:?}",
-                req.uri(),
-                req.headers()
+            crate::app::APP_CTX.proxy_logs.write_port(
+                self.listen_port_config.listen_host.get_log_key().as_str(),
+                format!(
+                    "Rejected request: can not detect host. Uri:{}. Headers: {:?}",
+                    req.uri(),
+                    req.headers()
+                ),
             );
             return Err(create_err_response(
                 StatusCode::BAD_REQUEST,
@@ -52,6 +55,13 @@ impl HttpRequestHandler {
 
         let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(Some(host));
         if http_endpoint_info.is_none() {
+            crate::app::APP_CTX.proxy_logs.write_port(
+                self.listen_port_config.listen_host.get_log_key().as_str(),
+                format!(
+                    "Rejected request: no endpoint configured for host [{}]",
+                    host
+                ),
+            );
             let content =
                 crate::error_templates::generate_layout(400, "No configuration found", None);
             return Err(create_err_response(StatusCode::BAD_REQUEST, content));
@@ -60,11 +70,10 @@ impl HttpRequestHandler {
         let http_endpoint_info = http_endpoint_info.unwrap();
 
         if http_endpoint_info.debug {
-            println!(
-                "Detected. {}: [{}]{:?}",
-                http_endpoint_info.as_str(),
-                req.method(),
-                req.uri()
+            crate::app::APP_CTX.proxy_logs.write(
+                http_endpoint_info.host_endpoint.as_str(),
+                None,
+                format!("Detected. [{}]{:?}", req.method(), req.uri()),
             );
         }
 

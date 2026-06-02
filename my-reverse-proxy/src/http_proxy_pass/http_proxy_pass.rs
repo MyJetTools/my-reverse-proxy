@@ -9,7 +9,8 @@ use my_http_client::MyHttpClientDisconnect;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
-    configurations::*, http_proxy_pass::GoogleAuthResult,
+    configurations::*,
+    http_proxy_pass::GoogleAuthResult,
     tcp_listener::https::ClientCertificateData,
     types::{ConnectionIp, HttpTimeouts},
 };
@@ -52,14 +53,11 @@ impl HttpProxyPass {
         connection_ip: ConnectionIp,
         debug: bool,
     ) -> Result<hyper::Result<hyper::Response<BoxBody<Bytes, String>>>, ProxyPassError> {
-        if self.endpoint_info.debug {
-            println!(
-                "Request. Endpoint [{}] Uri: [{}] Headers: {:?}",
-                self.endpoint_info.host_endpoint.as_str(),
-                req.uri(),
-                req.headers()
-            );
-        }
+        crate::app::APP_CTX.proxy_logs.write(
+            self.endpoint_info.host_endpoint.as_str(),
+            None,
+            format!("Request. Uri: [{}] Headers: {:?}", req.uri(), req.headers()),
+        );
 
         let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
 
@@ -94,7 +92,11 @@ impl HttpProxyPass {
                 }
             }
 
-            let location_index = inner.locations.find_location_index(req.uri(), debug)?;
+            let location_index = inner.locations.find_location_index(
+                req.uri(),
+                self.endpoint_info.host_endpoint.as_str(),
+                debug,
+            )?;
 
             let proxy_pass_location = inner.locations.find(&location_index);
 
@@ -105,7 +107,11 @@ impl HttpProxyPass {
             let request = req.into_request(self, proxy_pass_location).await?;
 
             if trace_payload {
-                println!("Request parts: {:?}", request.req_parts);
+                crate::app::APP_CTX.proxy_logs.write(
+                    self.endpoint_info.host_endpoint.as_str(),
+                    Some(location_index.id),
+                    format!("Request parts: {:?}", request.req_parts),
+                );
             }
 
             if let Some(ip_addr) = connection_ip.get_ip_addr() {
@@ -138,7 +144,11 @@ impl HttpProxyPass {
         let mut response = match result {
             super::content_source::HttpResponse::Response(response) => {
                 if trace_payload {
-                    println!("Response headers: {:?}", response.headers());
+                    crate::app::APP_CTX.proxy_logs.write(
+                        self.endpoint_info.host_endpoint.as_str(),
+                        Some(location_index.id),
+                        format!("Response headers: {:?}", response.headers()),
+                    );
                 }
                 response
             }
@@ -148,9 +158,13 @@ impl HttpProxyPass {
                 disconnection,
             } => {
                 if trace_payload {
-                    println!(
-                        "Response as web-socket upgrade. Headers: {:?}",
-                        response.headers()
+                    crate::app::APP_CTX.proxy_logs.write(
+                        self.endpoint_info.host_endpoint.as_str(),
+                        Some(location_index.id),
+                        format!(
+                            "Response as web-socket upgrade. Headers: {:?}",
+                            response.headers()
+                        ),
                     );
                 }
                 let request_host_for_metric: Option<String> = request
@@ -172,13 +186,17 @@ impl HttpProxyPass {
                     .tracked_domain(request_host_for_metric.as_deref())
                     .map(str::to_owned);
                 let timeouts = self.endpoint_info.timeouts;
+                let log_scope = crate::app::ProxyLogScope::new(
+                    Arc::new(self.endpoint_info.host_endpoint.as_str().to_string()),
+                    location_index.id,
+                );
                 match stream {
                     super::content_source::WebSocketUpgradeStream::TcpStream(tcp_stream) => {
                         spawn_websocket_pump(
                             request.web_socket_upgrade,
                             tcp_stream,
                             response,
-                            self.endpoint_info.debug,
+                            log_scope.clone(),
                             disconnection,
                             trace_payload,
                             domain,
@@ -191,7 +209,7 @@ impl HttpProxyPass {
                             request.web_socket_upgrade,
                             unix_stream,
                             response,
-                            self.endpoint_info.debug,
+                            log_scope.clone(),
                             disconnection,
                             trace_payload,
                             domain,
@@ -204,7 +222,7 @@ impl HttpProxyPass {
                             request.web_socket_upgrade,
                             tls_stream,
                             response,
-                            self.endpoint_info.debug,
+                            log_scope.clone(),
                             disconnection,
                             trace_payload,
                             domain,
@@ -216,7 +234,7 @@ impl HttpProxyPass {
                             request.web_socket_upgrade,
                             async_channel,
                             response,
-                            self.endpoint_info.debug,
+                            log_scope.clone(),
                             disconnection,
                             trace_payload,
                             domain,
@@ -228,7 +246,7 @@ impl HttpProxyPass {
                             request.web_socket_upgrade,
                             h2_upgraded,
                             response,
-                            self.endpoint_info.debug,
+                            log_scope.clone(),
                             disconnection,
                             domain,
                             timeouts,
@@ -262,7 +280,7 @@ fn spawn_websocket_pump<S>(
     web_socket_upgrade: Option<WebSocketUpgrade>,
     upstream: S,
     fallback_response: hyper::Response<BoxBody<Bytes, String>>,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     trace_payload: bool,
     domain: Option<String>,
@@ -285,7 +303,7 @@ where
                 super::start_web_socket_loop(
                     server_web_socket,
                     upstream,
-                    debug,
+                    log_scope,
                     disconnection,
                     trace_payload,
                     domain.clone(),
@@ -300,7 +318,14 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h1",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain, timeouts),
+                pump_h2_extended_connect(
+                    on_upgrade,
+                    upstream,
+                    log_scope,
+                    disconnection,
+                    domain,
+                    timeouts,
+                ),
             );
             into_full_body_response(upgrade_response)
         }
@@ -311,7 +336,7 @@ fn spawn_h2_websocket_pump<S>(
     web_socket_upgrade: Option<WebSocketUpgrade>,
     upstream: S,
     fallback_response: hyper::Response<BoxBody<Bytes, String>>,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     domain: Option<String>,
     timeouts: HttpTimeouts,
@@ -330,16 +355,24 @@ where
         } => {
             crate::app::spawn_named(
                 "ws_pump_h2_extended_connect_h2",
-                pump_h2_extended_connect(on_upgrade, upstream, debug, disconnection, domain, timeouts),
+                pump_h2_extended_connect(
+                    on_upgrade,
+                    upstream,
+                    log_scope,
+                    disconnection,
+                    domain,
+                    timeouts,
+                ),
             );
             into_full_body_response(upgrade_response)
         }
-        WebSocketUpgrade::H1 { upgrade_response, .. } => {
-            if debug {
-                println!(
-                    "Unexpected h1 WebSocketUpgrade for h2 upstream — returning fallback response"
-                );
-            }
+        WebSocketUpgrade::H1 {
+            upgrade_response, ..
+        } => {
+            log_scope.write(
+                "Unexpected h1 WebSocketUpgrade for h2 upstream — returning fallback response"
+                    .to_string(),
+            );
             into_full_body_response(upgrade_response)
         }
     }
@@ -348,7 +381,7 @@ where
 async fn pump_h2_extended_connect<S>(
     on_upgrade: hyper::upgrade::OnUpgrade,
     upstream: S,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
     disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static>,
     domain: Option<String>,
     timeouts: HttpTimeouts,
@@ -358,9 +391,7 @@ async fn pump_h2_extended_connect<S>(
     let upgraded = match on_upgrade.await {
         Ok(upgraded) => upgraded,
         Err(err) => {
-            if debug {
-                println!("h2 extended-CONNECT upgrade failed: {:?}", err);
-            }
+            log_scope.write(format!("h2 extended-CONNECT upgrade failed: {:?}", err));
             disconnection.web_socket_disconnect();
             return;
         }
@@ -389,10 +420,10 @@ async fn pump_h2_extended_connect<S>(
                     direction: crate::tcp_utils::WsDirection::ServerToClient,
                 },
             );
-            pump_bidirectional_with_timeouts(client_side, upstream_side, timeouts, debug).await;
+            pump_bidirectional_with_timeouts(client_side, upstream_side, timeouts, log_scope).await;
         }
         None => {
-            pump_bidirectional_with_timeouts(upgraded, upstream, timeouts, debug).await;
+            pump_bidirectional_with_timeouts(upgraded, upstream, timeouts, log_scope).await;
         }
     };
 
@@ -406,7 +437,7 @@ async fn pump_bidirectional_with_timeouts<A, B>(
     client_side: A,
     upstream_side: B,
     timeouts: HttpTimeouts,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
 ) where
     A: AsyncRead + AsyncWrite + Unpin,
     B: AsyncRead + AsyncWrite + Unpin,
@@ -414,17 +445,27 @@ async fn pump_bidirectional_with_timeouts<A, B>(
     let (client_read, client_write) = tokio::io::split(client_side);
     let (upstream_read, upstream_write) = tokio::io::split(upstream_side);
 
-    let c2s = copy_one_direction(client_read, upstream_write, timeouts, "c2s", debug);
-    let s2c = copy_one_direction(upstream_read, client_write, timeouts, "s2c", debug);
+    let c2s = copy_one_direction(
+        client_read,
+        upstream_write,
+        timeouts,
+        "c2s",
+        log_scope.clone(),
+    );
+    let s2c = copy_one_direction(
+        upstream_read,
+        client_write,
+        timeouts,
+        "s2c",
+        log_scope.clone(),
+    );
 
     tokio::select! {
         _ = c2s => {}
         _ = s2c => {}
     }
 
-    if debug {
-        println!("h2 ext-CONNECT WS pump finished");
-    }
+    log_scope.write("h2 ext-CONNECT WS pump finished".to_string());
 }
 
 async fn copy_one_direction<R, W>(
@@ -432,7 +473,7 @@ async fn copy_one_direction<R, W>(
     mut writer: W,
     timeouts: HttpTimeouts,
     dir: &'static str,
-    debug: bool,
+    log_scope: crate::app::ProxyLogScope,
 ) where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
@@ -443,33 +484,31 @@ async fn copy_one_direction<R, W>(
     loop {
         let n = match tokio::time::timeout(timeouts.read_timeout, reader.read(&mut buf)).await {
             Err(_) => {
-                if debug {
-                    println!("h2 ext-CONNECT WS pump [{dir}] idle read timeout");
-                }
+                log_scope.write(format!("h2 ext-CONNECT WS pump [{dir}] idle read timeout"));
                 break;
             }
             Ok(Ok(0)) => break,
             Ok(Ok(n)) => n,
             Ok(Err(err)) => {
-                if debug {
-                    println!("h2 ext-CONNECT WS pump [{dir}] read error: {:?}", err);
-                }
+                log_scope.write(format!(
+                    "h2 ext-CONNECT WS pump [{dir}] read error: {:?}",
+                    err
+                ));
                 break;
             }
         };
 
         match tokio::time::timeout(timeouts.write_timeout, writer.write_all(&buf[..n])).await {
             Err(_) => {
-                if debug {
-                    println!("h2 ext-CONNECT WS pump [{dir}] write timeout");
-                }
+                log_scope.write(format!("h2 ext-CONNECT WS pump [{dir}] write timeout"));
                 break;
             }
             Ok(Ok(())) => {}
             Ok(Err(err)) => {
-                if debug {
-                    println!("h2 ext-CONNECT WS pump [{dir}] write error: {:?}", err);
-                }
+                log_scope.write(format!(
+                    "h2 ext-CONNECT WS pump [{dir}] write error: {:?}",
+                    err
+                ));
                 break;
             }
         }

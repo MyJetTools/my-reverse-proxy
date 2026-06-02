@@ -43,6 +43,10 @@ pub fn build_controllers() -> ControllersMiddleware {
         super::controllers::configuration::RefreshIpListAction,
     ));
 
+    result.register_get_action(Arc::new(super::controllers::logs::GetPortLogsAction));
+    result.register_get_action(Arc::new(super::controllers::logs::GetEndpointLogsAction));
+    result.register_get_action(Arc::new(super::controllers::logs::GetLocationLogsAction));
+
     result.register_get_action(Arc::new(super::controllers::prometheus::GetMetricsAction));
 
     result.register_get_action(Arc::new(

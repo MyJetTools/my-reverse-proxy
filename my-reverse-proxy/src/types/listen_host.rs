@@ -33,6 +33,16 @@ impl ListenHost {
         }
     }
 
+    /// Key used to group in-memory port-level logs: the TCP port number for
+    /// TCP listeners, the socket path for unix listeners. Matches the key the
+    /// TCP/unix accept loops use when writing port-level rejections.
+    pub fn get_log_key(&self) -> String {
+        match self {
+            ListenHost::Tcp(socket_addr) => socket_addr.port().to_string(),
+            ListenHost::Unix(socket) => socket.to_string(),
+        }
+    }
+
     pub fn get_port(&self) -> Option<u16> {
         match self {
             ListenHost::Tcp(socket_addr) => Some(socket_addr.port()),

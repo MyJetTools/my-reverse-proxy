@@ -59,18 +59,24 @@ async fn lazy_accept_tcp_stream_internal(
                 let server_name = if let Some(server_name) = client_hello.server_name() {
                     server_name
                 } else {
-                    return Err("Unknown server name detecting from client hello".to_string());
+                    return Err("no server name (SNI) in client hello".to_string());
                 };
 
                 if let Some(client_cert) = client_hello.client_cert_types() {
                     for client_cert in client_cert {
-                        println!("Client_CERT: {:?}", client_cert.as_str());
+                        crate::app::APP_CTX.proxy_logs.write_port(
+                            endpoint_port.to_string().as_str(),
+                            format!("Client_CERT: {:?}", client_cert.as_str()),
+                        );
                     }
                 }
 
                 if let Some(ca) = client_hello.certificate_authorities() {
                     for cn in ca {
-                        println!("DistName: {:?}", cn);
+                        crate::app::APP_CTX.proxy_logs.write_port(
+                            endpoint_port.to_string().as_str(),
+                            format!("DistName: {:?}", cn),
+                        );
                     }
                 }
 

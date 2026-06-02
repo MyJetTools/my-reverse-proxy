@@ -99,6 +99,13 @@ async fn handle_accepted_connection(
         .await;
 
     if endpoint_type.is_none() {
+        crate::app::APP_CTX.proxy_logs.write_port(
+            listen_port.to_string().as_str(),
+            format!(
+                "Rejected connection from {}: no endpoint configured for port {}",
+                socket_addr, listen_port
+            ),
+        );
         use tokio::io::AsyncWriteExt;
         let _ = accepted_connection.shutdown().await;
         return;

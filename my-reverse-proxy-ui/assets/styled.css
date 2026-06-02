@@ -589,3 +589,114 @@ table.locations.gateway-routes thead th {
     font-family: SFMono-Regular, Consolas, monospace;
     font-size: 11px;
 }
+
+/* ---------- Logs button + dialog ---------- */
+.logs-btn {
+    margin-left: auto;
+    background: var(--badge-bg);
+    color: var(--badge-text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.logs-btn:hover {
+    background: var(--row-hover);
+}
+
+/* Keep the location-row logs button compact. */
+.locations .logs-btn {
+    margin-left: 0;
+}
+
+.logs-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(27, 31, 35, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.logs-modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: min(900px, 92vw);
+    max-height: 82vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.logs-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border);
+    border-radius: 8px 8px 0 0;
+}
+
+.logs-modal-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.logs-close {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--text-dim);
+}
+
+.logs-modal-body {
+    padding: 10px 14px;
+    overflow: auto;
+}
+
+.logs-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-family: SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+}
+
+.logs-line {
+    display: flex;
+    gap: 10px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--row-alt);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.logs-time {
+    color: var(--text-dim);
+    flex: 0 0 auto;
+}
+
+.logs-msg {
+    flex: 1 1 auto;
+}
+
+.logs-empty {
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 8px 0;
+}
+
+.logs-error {
+    background: var(--error-bg);
+    color: var(--error-text);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+}

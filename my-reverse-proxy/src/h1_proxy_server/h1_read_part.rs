@@ -101,6 +101,14 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         connection_info: &'s HttpConnectionInfo,
     ) -> Result<(&'s ProxyPassLocationConfig, &'s Arc<HttpEndpointInfo>), ProxyServerError> {
         let Some(endpoint_info) = &connection_info.endpoint_info else {
+            crate::app::APP_CTX.proxy_logs.write_port(
+                connection_info
+                    .listen_config
+                    .listen_host
+                    .get_log_key()
+                    .as_str(),
+                "Rejected request: no endpoint configuration resolved for connection".to_string(),
+            );
             return Err(ProxyServerError::HttpConfigurationIsNotFound);
         };
 
@@ -154,8 +162,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         } else {
             None
         };
-        let inject_country_enabled =
-            request_endpoint.map(|e| e.inject_country).unwrap_or(false);
+        let inject_country_enabled = request_endpoint.map(|e| e.inject_country).unwrap_or(false);
         let mut xff_written = false;
 
         loop {
@@ -187,9 +194,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                 if header_name.eq_ignore_ascii_case("x-forwarded-for") {
                     if let Some(ip) = client_ip {
                         let value_bytes = &header[header_name_end_pos + 1..];
-                        let value_str = std::str::from_utf8(value_bytes)
-                            .unwrap_or("")
-                            .trim();
+                        let value_str = std::str::from_utf8(value_bytes).unwrap_or("").trim();
                         let new_value = format!("{},{}", value_str, ip);
                         self.h1_headers_builder
                             .push_header("X-Forwarded-For", &new_value);
@@ -200,8 +205,7 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                             .push_raw_payload(crate::consts::HTTP_CR_LF);
                         xff_written = true;
                     }
-                } else if inject_country_enabled
-                    && header_name.eq_ignore_ascii_case("cf-ipcountry")
+                } else if inject_country_enabled && header_name.eq_ignore_ascii_case("cf-ipcountry")
                 {
                     // drop client-supplied value; we'll write our own below
                 } else {
@@ -225,7 +229,8 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
             if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
                 if let Some(code) = crate::ip_db::lookup_country(ip) {
                     let code_str = std::str::from_utf8(&code).unwrap();
-                    self.h1_headers_builder.push_header("CF-IPCountry", code_str);
+                    self.h1_headers_builder
+                        .push_header("CF-IPCountry", code_str);
                 }
             }
         }

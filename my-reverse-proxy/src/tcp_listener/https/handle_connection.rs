@@ -29,11 +29,18 @@ pub fn handle_connection(
         )
         .await;
 
-        let Ok(result) = result else {
-            if let Some(ip) = connection_ip.get_ip_addr() {
-                crate::app::APP_CTX.ip_blocklist.register_failure(ip);
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                crate::app::APP_CTX.proxy_logs.write_port(
+                    endpoint_port.to_string().as_str(),
+                    format!("Rejected TLS connection: {}", err),
+                );
+                if let Some(ip) = connection_ip.get_ip_addr() {
+                    crate::app::APP_CTX.ip_blocklist.register_failure(ip);
+                }
+                return;
             }
-            return;
         };
 
         if let Some(ip) = connection_ip.get_ip_addr() {
