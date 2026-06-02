@@ -13,6 +13,9 @@ pub struct Http1ContentSource {
     pub pool_params: PoolParams,
     pub factory: ConnectorFactory<HttpConnector>,
     pub request_timeout: std::time::Duration,
+    /// `true` when this h1 source backs an `mcp` location — used only to gate
+    /// the upstream tracing logs.
+    pub is_mcp: bool,
 }
 
 impl Http1ContentSource {
@@ -40,40 +43,48 @@ impl Http1ContentSource {
             pool.get_connection().await
         }
         .map_err(|_| {
-            println!(
-                "h1 upstream UNAVAILABLE (no connection): {} {} -> [{}]",
-                method, uri, self.pool_desc.id_string
-            );
+            if self.is_mcp {
+                println!(
+                    "MCP upstream UNAVAILABLE (no connection): {} {} -> [{}]",
+                    method, uri, self.pool_desc.id_string
+                );
+            }
             ProxyPassError::UpstreamUnavailable
         })?;
 
-        println!(
-            "h1 upstream reached, sending: {} {} -> [{}]",
-            method, uri, self.pool_desc.id_string
-        );
+        if self.is_mcp {
+            println!(
+                "MCP upstream reached, sending: {} {} -> [{}]",
+                method, uri, self.pool_desc.id_string
+            );
+        }
 
         let req = MyHttpRequest::from_hyper_request(req).await;
 
         let response = match handle.do_request(&req, self.request_timeout).await {
             Ok(response) => response,
             Err(err) => {
-                println!(
-                    "h1 upstream request FAILED: {} {} -> [{}]: {:?}",
-                    method, uri, self.pool_desc.id_string, err
-                );
+                if self.is_mcp {
+                    println!(
+                        "MCP upstream request FAILED: {} {} -> [{}]: {:?}",
+                        method, uri, self.pool_desc.id_string, err
+                    );
+                }
                 return Err(err.into());
             }
         };
 
         match response {
             MyHttpResponse::Response(response) => {
-                println!(
-                    "h1 upstream OK: {} {} -> [{}] status {}",
-                    method,
-                    uri,
-                    self.pool_desc.id_string,
-                    response.status()
-                );
+                if self.is_mcp {
+                    println!(
+                        "MCP upstream OK: {} {} -> [{}] status {}",
+                        method,
+                        uri,
+                        self.pool_desc.id_string,
+                        response.status()
+                    );
+                }
                 Ok(HttpResponse::Response(response))
             }
             MyHttpResponse::WebSocketUpgrade {
@@ -81,10 +92,12 @@ impl Http1ContentSource {
                 response,
                 disconnection,
             } => {
-                println!(
-                    "h1 upstream WS-UPGRADE: {} {} -> [{}]",
-                    method, uri, self.pool_desc.id_string
-                );
+                if self.is_mcp {
+                    println!(
+                        "MCP upstream WS-UPGRADE: {} {} -> [{}]",
+                        method, uri, self.pool_desc.id_string
+                    );
+                }
                 Ok(HttpResponse::WebSocketUpgrade {
                     stream: WebSocketUpgradeStream::TcpStream(stream),
                     response,

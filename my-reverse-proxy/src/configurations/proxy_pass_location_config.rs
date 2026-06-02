@@ -75,6 +75,8 @@ impl ProxyPassLocationConfig {
         debug: bool,
         timeout: Duration,
     ) -> HttpProxyPassContentSource {
+        let is_mcp = matches!(self.proxy_pass_to, ProxyPassToConfig::McpHttp1(_));
+
         let result = match &self.proxy_pass_to {
             ProxyPassToConfig::Static(config) => HttpProxyPassContentSource::Static(
                 crate::http_content_source::static_content::StaticContentSrc::new(config.clone()),
@@ -123,6 +125,7 @@ impl ProxyPassLocationConfig {
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Https => {
@@ -150,6 +153,7 @@ impl ProxyPassLocationConfig {
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
@@ -254,6 +258,7 @@ impl ProxyPassLocationConfig {
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Wss => {
