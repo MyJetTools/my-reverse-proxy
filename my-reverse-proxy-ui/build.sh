@@ -15,6 +15,13 @@ WWWROOT="${WWWROOT:-$SCRIPT_DIR/../my-reverse-proxy/wwwroot}"
 DX_OUT="$SCRIPT_DIR/target/dx/my-reverse-proxy-ui/release/web/public"
 
 cd "$SCRIPT_DIR"
+
+# Wipe the dx output dir before building. dx keeps previously-built, content
+# hashed bundles around in this folder, and the copy below would otherwise
+# carry every stale .js/.wasm/.css into wwwroot. Removing it first guarantees
+# wwwroot ends up with exactly the current bundle.
+rm -rf "$SCRIPT_DIR/target/dx/my-reverse-proxy-ui"
+
 dx build --release --platform web
 
 if [ ! -d "$DX_OUT" ]; then
