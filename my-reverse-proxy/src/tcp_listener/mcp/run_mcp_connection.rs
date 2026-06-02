@@ -14,12 +14,9 @@ pub async fn run_mcp_connection(
         println!("Accepted mcp connection",);
     }
 
-    let remote_host = http_endpoint_info
-        .locations
-        .get(0)
-        .unwrap()
-        .proxy_pass_to
-        .to_string();
+    let location = http_endpoint_info.locations.get(0).unwrap();
+    let route_path = location.path.clone();
+    let remote_host = location.proxy_pass_to.to_string();
 
     let remote_host = if remote_host.starts_with("http://") {
         &remote_host[7..]
@@ -31,7 +28,12 @@ pub async fn run_mcp_connection(
         &remote_host
     };
 
-    println!("Connecting mcp to remote host: {}", remote_host);
+    println!(
+        "MCP[{connection_id}] route decision: endpoint '{}' path '{}' -> proxy_pass '{}'",
+        http_endpoint_info.host_endpoint.as_str(),
+        route_path,
+        remote_host
+    );
 
     let connect_result = tokio::net::TcpStream::connect(remote_host).await;
 
@@ -79,8 +81,14 @@ pub async fn run_mcp_connection(
     // closed or a hard error) tears the whole session down by aborting its
     // sibling, so no half-open tunnel or leaked pump task is left behind.
     tokio::select! {
-        _ = &mut pump_to_server => { pump_from_server.abort(); }
-        _ = &mut pump_from_server => { pump_to_server.abort(); }
+        _ = &mut pump_to_server => {
+            println!("MCP[{connection_id}] ->To MCP Server-> ended first; aborting the <-From MCP Server<- pump");
+            pump_from_server.abort();
+        }
+        _ = &mut pump_from_server => {
+            println!("MCP[{connection_id}] <-From MCP Server<- ended first; aborting the ->To MCP Server-> pump");
+            pump_to_server.abort();
+        }
     }
 }
 
@@ -96,6 +104,10 @@ async fn link_tcp_streams(
         read_buffer.set_len(mcp_settings.buffer_size);
     }
 
+    // Total bytes forwarded in this direction — tells us whether the drop hit
+    // mid-stream or on a connection that had been idle.
+    let mut forwarded: u64 = 0;
+
     loop {
         let read_result = read_stream
             .read_with_timeout(&mut read_buffer, mcp_settings.read_timeout)
@@ -105,27 +117,42 @@ async fn link_tcp_streams(
             Ok(read_size) => read_size,
             Err(err) => {
                 write_stream.shutdown_socket().await;
+                let reason = match &err {
+                    NetworkError::Timeout(d) => format!("READ IDLE-TIMEOUT after {:?}", d),
+                    NetworkError::Disconnected => "PEER DISCONNECTED (read==0)".to_string(),
+                    other => format!("READ IO-ERROR: {:?}", other),
+                };
                 println!(
-                    "{connection_id} Mcp pump {marker} stopped. Error: {:?}",
-                    err
+                    "MCP[{connection_id}] DROP {marker}: {reason}. Forwarded {forwarded} bytes before drop",
                 );
                 return;
             }
         };
 
         if read_size == 0 {
-            println!("{connection_id} Mcp pump {marker} stopped gracefully");
+            println!(
+                "MCP[{connection_id}] DROP {marker}: graceful EOF. Forwarded {forwarded} bytes"
+            );
             return;
         }
         let buffer_to_write = &read_buffer.as_slice()[..read_size];
 
-        if write_stream
+        if let Err(err) = write_stream
             .write_all_with_timeout(buffer_to_write, mcp_settings.write_timeout)
             .await
-            .is_err()
         {
-            break;
+            let reason = match &err {
+                NetworkError::Timeout(d) => format!("WRITE TIMEOUT after {:?}", d),
+                other => format!("WRITE ERROR: {:?}", other),
+            };
+            write_stream.shutdown_socket().await;
+            println!(
+                "MCP[{connection_id}] DROP {marker}: {reason}. Forwarded {forwarded} bytes before drop"
+            );
+            return;
         }
+
+        forwarded += read_size as u64;
     }
 }
 
