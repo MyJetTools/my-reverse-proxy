@@ -47,7 +47,17 @@ impl HttpProxyPassContentSource {
             //Self::Http2OverGateway(model) => model.execute(req).await,
             Self::PathOverGateway(model) => model.execute(req).await,
             Self::Static(model) => model.execute(req).await,
-            Self::Drop => Err(ProxyPassError::DropConnection),
+            Self::Drop => {
+                println!(
+                    "DROP location hit: {} {} (Host: {:?}) -> connection dropped",
+                    req.method(),
+                    req.uri(),
+                    req.headers()
+                        .get(hyper::header::HOST)
+                        .and_then(|v| v.to_str().ok())
+                );
+                Err(ProxyPassError::DropConnection)
+            }
             Self::DynamicProxy(model) => model.execute(req).await,
         }
     }
