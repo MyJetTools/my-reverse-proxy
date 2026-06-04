@@ -92,6 +92,8 @@ pub struct AppContext {
     pub ip_blocklist: IpBlocklist,
 
     pub traffic: TrafficAccumulator,
+
+    pub resolved_domain_ips: ResolvedDomainIps,
 }
 
 impl AppContext {
@@ -191,6 +193,7 @@ impl AppContext {
             rps: Arc::new(RpsAccumulator::new()),
             ip_blocklist: IpBlocklist::new(),
             traffic: TrafficAccumulator::new(),
+            resolved_domain_ips: ResolvedDomainIps::new(),
         }
     }
 

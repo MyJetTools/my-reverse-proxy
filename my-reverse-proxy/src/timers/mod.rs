@@ -18,3 +18,5 @@ mod ip_blocklist_gc_timer;
 pub use ip_blocklist_gc_timer::*;
 mod traffic_timer;
 pub use traffic_timer::*;
+mod resolve_domains_ip_timer;
+pub use resolve_domains_ip_timer::*;

@@ -444,6 +444,9 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
             div { class: "endpoint-header",
                 span { class: "{listen_type_class}", "{endpoint.r#type}" }
                 span { class: "host", "{endpoint.host}" }
+                if let Some(ip) = endpoint.resolved_ip.as_ref() {
+                    span { class: "resolved-ip", title: "Resolved IP", "({ip})" }
+                }
                 {render_debug_toggle(DebugTarget::Endpoint(endpoint.host.clone()), endpoint.debug)}
                 {
                     let endpoint_conn_class = if endpoint.inbound_connections > 0 {

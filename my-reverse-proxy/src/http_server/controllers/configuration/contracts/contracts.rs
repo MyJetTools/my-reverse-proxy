@@ -218,6 +218,11 @@ pub struct HttpEndpointInfoModel {
     pub locations: Vec<HttpProxyPassLocationModel>,
     pub debug: bool,
     pub inbound_connections: i64,
+    // IP(s) the endpoint domain currently resolves to (refreshed by
+    // `ResolveDomainsIpTimer`). `None` for wildcard hosts, bare IP literals and
+    // domains not yet resolved.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_ip: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_list: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -240,10 +245,16 @@ impl HttpEndpointInfoModel {
 
         let debug = crate::app::APP_CTX.debug_flags.is_endpoint_debug(&host_key);
 
+        let resolved_ip = endpoint
+            .host_endpoint
+            .get_server_name()
+            .and_then(|domain| crate::app::APP_CTX.resolved_domain_ips.get_display(domain));
+
         Self {
             host: host_key,
             r#type: endpoint.listen_endpoint_type.as_str().to_string(),
             debug,
+            resolved_ip,
             allowed_user_list_id: endpoint.allowed_user_list_id.clone(),
             ip_list: endpoint.whitelisted_ip_list_id.clone(),
             ssl_cert_id: endpoint
@@ -265,10 +276,16 @@ impl HttpEndpointInfoModel {
     }
 
     pub fn from_tcp_config(config: &TcpEndpointHostConfig) -> Self {
+        let resolved_ip = config
+            .host_endpoint
+            .get_server_name()
+            .and_then(|domain| crate::app::APP_CTX.resolved_domain_ips.get_display(domain));
+
         Self {
             host: config.host_endpoint.as_str().to_string(),
             r#type: "tcp".to_string(),
             debug: config.debug,
+            resolved_ip,
             ip_list: config.ip_white_list_id.clone(),
             inbound_connections: 0,
             locations: vec![HttpProxyPassLocationModel {

@@ -3,7 +3,8 @@ use std::{sync::Arc, time::Duration};
 use rust_extensions::MyTimer;
 use timers::{
     CrlRefresherTimer, EndpointRpsTimer, GatewaySyncCertsTimer, GcConnectionsTimer, GcPoolsTimer,
-    IpBlocklistGcTimer, MetricsTimer, PoolSupervisorTimer, SslCertsRefreshTimer, TrafficTimer,
+    IpBlocklistGcTimer, MetricsTimer, PoolSupervisorTimer, ResolveDomainsIpTimer,
+    SslCertsRefreshTimer, TrafficTimer,
 };
 
 mod app;
@@ -107,6 +108,19 @@ async fn main() {
     gc_pools_timer.register_timer("GcPools", Arc::new(GcPoolsTimer));
 
     gc_pools_timer.start(
+        crate::app::APP_CTX.states.clone(),
+        my_logger::LOGGER.clone(),
+    );
+
+    // Resolve endpoint domains once at startup so the IP shows up immediately,
+    // then keep it fresh on a timer.
+    tokio::spawn(crate::timers::resolve_endpoint_domains());
+
+    let mut domains_resolve_timer = rust_extensions::MyTimer::new(Duration::from_secs(60));
+
+    domains_resolve_timer.register_timer("ResolveDomainsIp", Arc::new(ResolveDomainsIpTimer));
+
+    domains_resolve_timer.start(
         crate::app::APP_CTX.states.clone(),
         my_logger::LOGGER.clone(),
     );

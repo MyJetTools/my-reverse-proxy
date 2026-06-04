@@ -429,6 +429,13 @@ table.locations tbody tr.upstream-unknown td.upstream {
     font-weight: 600;
 }
 
+.endpoint-header .resolved-ip {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* ---------- Endpoint metadata row (ssl/auth/ip-list chips) ---------- */
 .endpoint-meta {
     display: flex;

@@ -28,6 +28,9 @@ pub use ip_blocklist::*;
 mod traffic_accumulator;
 pub use traffic_accumulator::*;
 
+mod resolved_domain_ips;
+pub use resolved_domain_ips::*;
+
 //mod local_port_allocator;
 //pub use local_port_allocator::*;
 //mod app_ctx_wrapper;

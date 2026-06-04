@@ -48,6 +48,9 @@ pub struct HttpEndpointInfoModel {
     pub debug: bool,
     #[serde(default)]
     pub inbound_connections: i64,
+    /// IP(s) the endpoint domain currently resolves to, shown next to the host.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_ip: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip_list: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
