@@ -26,39 +26,54 @@ pub async fn delete_http_endpoint_if_exists(
         return Ok(());
     };
 
-    if let ListenConfiguration::Http(http_config) = listen_configuration {
-        if let Some(new_configuration) = http_config.delete_configuration(&host_endpoint) {
-            if new_configuration.endpoints.is_empty() {
-                crate::app::APP_CTX
-                    .current_configuration
-                    .write(move |config| match endpoint_port {
-                        crate::configurations::EndpointPort::Tcp(port) => {
-                            config.listen_tcp_endpoints.remove(&port);
-                        }
-                        crate::configurations::EndpointPort::UnixSocket(unix_host) => {
-                            config.listen_unix_socket_endpoints.remove(&unix_host);
-                        }
-                    })
-                    .await;
-            } else {
-                crate::app::APP_CTX
-                    .current_configuration
-                    .write(move |config| match endpoint_port {
-                        crate::configurations::EndpointPort::Tcp(port) => {
-                            config.listen_tcp_endpoints.insert(
-                                port,
-                                ListenConfiguration::Http(new_configuration.clone().into()),
-                            );
-                        }
-                        crate::configurations::EndpointPort::UnixSocket(unix_host) => {
-                            config.listen_unix_socket_endpoints.insert(
-                                unix_host,
-                                ListenConfiguration::Http(new_configuration.into()),
-                            );
-                        }
-                    })
-                    .await;
+    match listen_configuration {
+        ListenConfiguration::Http(http_config) | ListenConfiguration::Mcp(http_config) => {
+            if let Some(new_configuration) = http_config.delete_configuration(&host_endpoint) {
+                if new_configuration.endpoints.is_empty() {
+                    crate::app::APP_CTX
+                        .current_configuration
+                        .write(move |config| match endpoint_port {
+                            crate::configurations::EndpointPort::Tcp(port) => {
+                                config.listen_tcp_endpoints.remove(&port);
+                            }
+                            crate::configurations::EndpointPort::UnixSocket(unix_host) => {
+                                config.listen_unix_socket_endpoints.remove(&unix_host);
+                            }
+                        })
+                        .await;
+                } else {
+                    crate::app::APP_CTX
+                        .current_configuration
+                        .write(move |config| match endpoint_port {
+                            crate::configurations::EndpointPort::Tcp(port) => {
+                                config.listen_tcp_endpoints.insert(
+                                    port,
+                                    ListenConfiguration::Http(new_configuration.clone().into()),
+                                );
+                            }
+                            crate::configurations::EndpointPort::UnixSocket(unix_host) => {
+                                config.listen_unix_socket_endpoints.insert(
+                                    unix_host,
+                                    ListenConfiguration::Http(new_configuration.into()),
+                                );
+                            }
+                        })
+                        .await;
+                }
             }
+        }
+        ListenConfiguration::Tcp(_) => {
+            crate::app::APP_CTX
+                .current_configuration
+                .write(move |config| match endpoint_port {
+                    crate::configurations::EndpointPort::Tcp(port) => {
+                        config.listen_tcp_endpoints.remove(&port);
+                    }
+                    crate::configurations::EndpointPort::UnixSocket(unix_host) => {
+                        config.listen_unix_socket_endpoints.remove(&unix_host);
+                    }
+                })
+                .await;
         }
     }
 
