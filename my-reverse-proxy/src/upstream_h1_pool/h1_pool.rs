@@ -35,6 +35,13 @@ where
     /// Surfaced to the admin UI; not used for routing decisions (the pool
     /// already tracks per-entry `dead` for that).
     pub last_status: AtomicUpstreamStatus,
+    /// Live on-demand (disposable) connections currently handed out for THIS
+    /// pool — Phase 0 race-losers + Phase 2 overflow. Inc'd at hand-out, dec'd
+    /// by `H1ClientHandle::Disposable::drop`. The global `DISPOSABLE_COUNTER`
+    /// caps the total across all pools; this attributes the count per upstream
+    /// for diagnostics. Held in an `Arc` so the handle can dec it on Drop
+    /// without keeping the whole pool alive.
+    pub live_disposables: Arc<AtomicUsize>,
 }
 
 impl<TStream, TConnector> H1Pool<TStream, TConnector>
@@ -56,6 +63,7 @@ where
             shutdown: AtomicBool::new(false),
             factory,
             last_status: AtomicUpstreamStatus::new(),
+            live_disposables: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -100,7 +108,11 @@ where
                 // hand it out as Disposable (counter inc'd so Drop dec'es).
                 drop(_g);
                 DISPOSABLE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                return Ok(H1ClientHandle::disposable(new_client));
+                self.live_disposables.fetch_add(1, Ordering::Relaxed);
+                return Ok(H1ClientHandle::disposable(
+                    new_client,
+                    self.live_disposables.clone(),
+                ));
             }
 
             // Phase 1 — rent scan (pool at target).
@@ -135,7 +147,11 @@ where
                 if cur < MAX_DISPOSABLE {
                     match self.connect_one().await {
                         Ok(client) => {
-                            return Ok(H1ClientHandle::disposable(Arc::new(client)));
+                            self.live_disposables.fetch_add(1, Ordering::Relaxed);
+                            return Ok(H1ClientHandle::disposable(
+                                Arc::new(client),
+                                self.live_disposables.clone(),
+                            ));
                         }
                         Err(e) => {
                             // Connect failed — undo counter inc and bubble up.
@@ -197,6 +213,11 @@ where
 
     pub fn last_status(&self) -> UpstreamStatus {
         self.last_status.get()
+    }
+
+    /// Live on-demand (disposable) connections currently handed out for this pool.
+    pub fn live_disposables(&self) -> usize {
+        self.live_disposables.load(Ordering::Relaxed)
     }
 
     pub fn alive_count(&self) -> usize {

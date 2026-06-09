@@ -1,4 +1,7 @@
-use std::sync::{atomic::Ordering, Arc};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use std::time::Duration;
 
 use my_http_client::{
@@ -15,7 +18,8 @@ use super::{H1Entry, DISPOSABLE_COUNTER};
 ///   so the next request can pick this entry. `do_request` updates the entry's
 ///   `last_success` / `dead` based on result.
 /// - **Disposable** — overflow client (or Phase 0 race-lost). Drop decrements
-///   the global `DISPOSABLE_COUNTER`. Underlying TCP closes when Arc dies.
+///   both the global `DISPOSABLE_COUNTER` and the owning pool's per-upstream
+///   `live_disposables`. Underlying TCP closes when Arc dies.
 /// - **Ws** — fresh client created for a WebSocket session. Drop is a no-op;
 ///   the WS-upgraded TCP keeps the Arc alive until the session closes.
 pub enum H1ClientHandle<TStream, TConnector>
@@ -29,6 +33,8 @@ where
     },
     Disposable {
         client: Arc<MyHttpClient<TStream, TConnector>>,
+        /// The owning pool's per-upstream live-disposable counter; dec'd on Drop.
+        live_disposables: Arc<AtomicUsize>,
     },
     Ws {
         client: Arc<MyHttpClient<TStream, TConnector>>,
@@ -47,8 +53,14 @@ where
         Self::Reusable { client, entry }
     }
 
-    pub(super) fn disposable(client: Arc<MyHttpClient<TStream, TConnector>>) -> Self {
-        Self::Disposable { client }
+    pub(super) fn disposable(
+        client: Arc<MyHttpClient<TStream, TConnector>>,
+        live_disposables: Arc<AtomicUsize>,
+    ) -> Self {
+        Self::Disposable {
+            client,
+            live_disposables,
+        }
     }
 
     pub(super) fn ws(client: Arc<MyHttpClient<TStream, TConnector>>) -> Self {
@@ -58,7 +70,7 @@ where
     fn client(&self) -> &Arc<MyHttpClient<TStream, TConnector>> {
         match self {
             Self::Reusable { client, .. } => client,
-            Self::Disposable { client } => client,
+            Self::Disposable { client, .. } => client,
             Self::Ws { client } => client,
         }
     }
@@ -87,8 +99,11 @@ where
     fn drop(&mut self) {
         match self {
             Self::Reusable { entry, .. } => entry.release_rent(),
-            Self::Disposable { .. } => {
+            Self::Disposable {
+                live_disposables, ..
+            } => {
                 DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+                live_disposables.fetch_sub(1, Ordering::Relaxed);
             }
             Self::Ws { .. } => {}
         }

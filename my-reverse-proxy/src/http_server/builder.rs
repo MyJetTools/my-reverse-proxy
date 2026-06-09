@@ -63,5 +63,9 @@ pub fn build_controllers() -> ControllersMiddleware {
 
     result.register_post_action(Arc::new(super::controllers::ssh::InitPassKeyAction));
 
+    result.register_get_action(Arc::new(
+        super::controllers::debug::GetUpstreamsSnapshotAction,
+    ));
+
     result
 }

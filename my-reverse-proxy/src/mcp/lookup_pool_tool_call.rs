@@ -1,12 +1,10 @@
-use std::sync::atomic::Ordering;
-
 use mcp_server_middleware::*;
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 use serde::*;
 
 use crate::app::APP_CTX;
 
-use super::{EntrySnapshot, PoolSnapshot};
+use super::{build_h1_pool_snapshot, build_h2_pool_snapshot, PoolSnapshot};
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct LookupPoolInputData {
@@ -36,7 +34,7 @@ pub struct LookupPoolHandler;
 
 impl ToolDefinition for LookupPoolHandler {
     const FUNC_NAME: &'static str = "lookup_pool";
-    const DESCRIPTION: &'static str = "Look up an upstream pool by location_id and/or id_string across all 6 pool registries. Returns the same per-entry detail as get_proxy_state_snapshot but only for matching pools — useful for re-checking a specific pool right after observing a state change in the admin UI.";
+    const DESCRIPTION: &'static str = "Look up an upstream pool by location_id and/or id_string across all 6 pool registries. Returns the same per-pool detail as get_proxy_state_snapshot (last_status / live_disposables / per-entry dead / rented / last_success) but only for matching pools — useful for re-checking one upstream right after observing a state change, e.g. to confirm whether the proxy now sees it as 'ok' or still 'error'.";
 }
 
 #[async_trait::async_trait]
@@ -91,41 +89,9 @@ where
     TConnector: my_http_client::MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     reg.list_pools()
-        .into_iter()
+        .iter()
         .filter(|pool| id_match(pool.desc.location_id, &pool.desc.id_string))
-        .map(|pool| {
-            let entries_snap = pool.clients.load();
-            let entries: Vec<EntrySnapshot> = entries_snap
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| {
-                    let last = entry.last_success.as_date_time();
-                    let idle_secs = now
-                        .duration_since(last)
-                        .as_positive_or_zero()
-                        .as_secs() as i64;
-                    EntrySnapshot {
-                        index: i as i64,
-                        dead: entry.dead.load(Ordering::Relaxed),
-                        last_success: last.to_rfc3339(),
-                        idle_secs,
-                        rented: Some(entry.rented.load(Ordering::Relaxed)),
-                    }
-                })
-                .collect();
-
-            PoolSnapshot {
-                registry: registry.to_string(),
-                location_id: pool.desc.location_id,
-                pool_name: pool.desc.name.clone(),
-                id_string: pool.desc.id_string.clone(),
-                alive_count: pool.alive_count() as i64,
-                total_count: pool.total_count() as i64,
-                shutdown: pool.shutdown.load(Ordering::Relaxed),
-                entries,
-                has_matching_location: false,
-            }
-        })
+        .map(|pool| build_h1_pool_snapshot(pool, registry, now))
         .collect()
 }
 
@@ -140,40 +106,8 @@ where
     TConnector: my_http_client::MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
     reg.list_pools()
-        .into_iter()
+        .iter()
         .filter(|pool| id_match(pool.desc.location_id, &pool.desc.id_string))
-        .map(|pool| {
-            let entries_snap = pool.clients.load();
-            let entries: Vec<EntrySnapshot> = entries_snap
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| {
-                    let last = entry.last_success.as_date_time();
-                    let idle_secs = now
-                        .duration_since(last)
-                        .as_positive_or_zero()
-                        .as_secs() as i64;
-                    EntrySnapshot {
-                        index: i as i64,
-                        dead: entry.dead.load(Ordering::Relaxed),
-                        last_success: last.to_rfc3339(),
-                        idle_secs,
-                        rented: None,
-                    }
-                })
-                .collect();
-
-            PoolSnapshot {
-                registry: registry.to_string(),
-                location_id: pool.desc.location_id,
-                pool_name: pool.desc.name.clone(),
-                id_string: pool.desc.id_string.clone(),
-                alive_count: pool.alive_count() as i64,
-                total_count: pool.total_count() as i64,
-                shutdown: pool.shutdown.load(Ordering::Relaxed),
-                entries,
-                has_matching_location: false,
-            }
-        })
+        .map(|pool| build_h2_pool_snapshot(pool, registry, now))
         .collect()
 }

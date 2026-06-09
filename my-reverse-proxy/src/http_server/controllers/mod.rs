@@ -1,4 +1,5 @@
 pub mod configuration;
+pub mod debug;
 pub mod ip_blocklist;
 pub mod logs;
 pub mod prometheus;

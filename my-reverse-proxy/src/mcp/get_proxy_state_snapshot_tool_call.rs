@@ -7,6 +7,8 @@ use serde::*;
 
 use crate::app::APP_CTX;
 use crate::configurations::{AppConfigurationInner, ListenConfiguration};
+use crate::upstream_h1_pool::{DISPOSABLE_COUNTER, MAX_DISPOSABLE};
+use crate::upstream_status::UpstreamStatus;
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetProxyStateSnapshotInputData {}
@@ -60,6 +62,16 @@ pub struct PoolSnapshot {
 
     #[property(description = "Total number of entries in the pool's clients vec")]
     pub total_count: i64,
+
+    #[property(
+        description = "What the proxy itself believes about this upstream: outcome of the most recent connect / revive / health-ping. 'ok' = last attempt succeeded; 'error' = last attempt failed (the proxy KNOWS it is down); 'unknown' = no attempt made yet. This is the answer to 'do we see that it fell down'."
+    )]
+    pub last_status: String,
+
+    #[property(
+        description = "h1 only: number of on-demand (disposable) connections currently in flight for THIS upstream — created when every pooled entry is rented (Phase 0 race-loser or Phase 2 overflow), counted down when the request finishes. null for h2 pools, which are multiplexed and never open on-demand connections. See live_disposables_global / max_disposables_global on the top-level response for the process-wide budget."
+    )]
+    pub live_disposables: Option<i64>,
 
     #[property(
         description = "Whether the pool has been signaled to shut down. drain_unused removes shutdown pools, so visible pools should normally have shutdown=false"
@@ -124,13 +136,23 @@ pub struct GetProxyStateSnapshotResponse {
 
     #[property(description = "location_ids that exist in current_configuration but have NO pool yet (lazy creation pending or pool was drained)")]
     pub naked_location_ids: Vec<i64>,
+
+    #[property(
+        description = "Process-wide count of live on-demand (disposable) h1 connections across ALL pools (sum of every pool's live_disposables). This is the value checked against max_disposables_global before a new overflow connection is opened."
+    )]
+    pub live_disposables_global: i64,
+
+    #[property(
+        description = "Hard cap on concurrent on-demand (disposable) h1 connections process-wide (MAX_DISPOSABLE). When live_disposables_global reaches this, get_connection stops opening overflow connections and retries every 10ms instead — a sustained value at the cap means upstreams are saturated."
+    )]
+    pub max_disposables_global: i64,
 }
 
 pub struct GetProxyStateSnapshotHandler;
 
 impl ToolDefinition for GetProxyStateSnapshotHandler {
     const FUNC_NAME: &'static str = "get_proxy_state_snapshot";
-    const DESCRIPTION: &'static str = "Detailed snapshot of all upstream pools across the 6 pool registries (h1/h2 × tcp/tls/uds) and all locations from the current configuration. Includes per-entry pool state (dead / last_success / idle_secs / rented), pool alive/total counts, shutdown flag, location id_string, and orphan/naked correlation flags. Use to diagnose pool disappearance, location_id drift across reloads, and connection lifecycle issues.";
+    const DESCRIPTION: &'static str = "Detailed snapshot of all upstream pools across the 6 pool registries (h1/h2 × tcp/tls/uds) and all locations from the current configuration. Per pool: alive/total entry counts, last_status (what the proxy believes about the upstream — 'ok'/'error'/'unknown' from the last connect/revive/health-ping, i.e. whether WE see it is down), live_disposables (on-demand connections in flight for this upstream — h1 only), shutdown flag, id_string, and per-entry state (dead / last_success / idle_secs / rented). Top-level: live_disposables_global / max_disposables_global (process-wide on-demand budget) and orphan/naked correlation. Use to see, per upstream, which connections are pooled vs on-demand and whether the proxy has detected it as down.";
 }
 
 #[async_trait::async_trait]
@@ -141,6 +163,15 @@ impl McpToolCall<GetProxyStateSnapshotInputData, GetProxyStateSnapshotResponse>
         &self,
         _model: GetProxyStateSnapshotInputData,
     ) -> Result<GetProxyStateSnapshotResponse, String> {
+        Ok(build_proxy_state_snapshot().await)
+    }
+}
+
+/// Builds the full proxy-state snapshot (all pools + locations + correlation +
+/// on-demand budget). Shared by the `get_proxy_state_snapshot` MCP tool and the
+/// `/api/debug/upstreams-snapshot` REST endpoint so both return identical data.
+pub async fn build_proxy_state_snapshot() -> GetProxyStateSnapshotResponse {
+    {
         let now = DateTimeAsMicroseconds::now();
 
         let mut pools: Vec<PoolSnapshot> = Vec::new();
@@ -177,13 +208,15 @@ impl McpToolCall<GetProxyStateSnapshotInputData, GetProxyStateSnapshotResponse>
             .map(|l| l.location_id)
             .collect();
 
-        Ok(GetProxyStateSnapshotResponse {
+        GetProxyStateSnapshotResponse {
             captured_at: now.to_rfc3339(),
             pools,
             locations,
             orphan_pool_location_ids,
             naked_location_ids,
-        })
+            live_disposables_global: DISPOSABLE_COUNTER.load(Ordering::Relaxed) as i64,
+            max_disposables_global: MAX_DISPOSABLE as i64,
+        }
     }
 }
 
@@ -198,39 +231,7 @@ where
 {
     reg.list_pools()
         .iter()
-        .map(|pool| {
-            let entries_snap = pool.clients.load();
-            let entries: Vec<EntrySnapshot> = entries_snap
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| {
-                    let last = entry.last_success.as_date_time();
-                    let idle_secs = now
-                        .duration_since(last)
-                        .as_positive_or_zero()
-                        .as_secs() as i64;
-                    EntrySnapshot {
-                        index: i as i64,
-                        dead: entry.dead.load(Ordering::Relaxed),
-                        last_success: last.to_rfc3339(),
-                        idle_secs,
-                        rented: Some(entry.rented.load(Ordering::Relaxed)),
-                    }
-                })
-                .collect();
-
-            PoolSnapshot {
-                registry: registry.to_string(),
-                location_id: pool.desc.location_id,
-                pool_name: pool.desc.name.clone(),
-                id_string: pool.desc.id_string.clone(),
-                alive_count: pool.alive_count() as i64,
-                total_count: pool.total_count() as i64,
-                shutdown: pool.shutdown.load(Ordering::Relaxed),
-                entries,
-                has_matching_location: false,
-            }
-        })
+        .map(|pool| build_h1_pool_snapshot(pool, registry, now))
         .collect()
 }
 
@@ -245,40 +246,109 @@ where
 {
     reg.list_pools()
         .iter()
-        .map(|pool| {
-            let entries_snap = pool.clients.load();
-            let entries: Vec<EntrySnapshot> = entries_snap
-                .iter()
-                .enumerate()
-                .map(|(i, entry)| {
-                    let last = entry.last_success.as_date_time();
-                    let idle_secs = now
-                        .duration_since(last)
-                        .as_positive_or_zero()
-                        .as_secs() as i64;
-                    EntrySnapshot {
-                        index: i as i64,
-                        dead: entry.dead.load(Ordering::Relaxed),
-                        last_success: last.to_rfc3339(),
-                        idle_secs,
-                        rented: None,
-                    }
-                })
-                .collect();
+        .map(|pool| build_h2_pool_snapshot(pool, registry, now))
+        .collect()
+}
 
-            PoolSnapshot {
-                registry: registry.to_string(),
-                location_id: pool.desc.location_id,
-                pool_name: pool.desc.name.clone(),
-                id_string: pool.desc.id_string.clone(),
-                alive_count: pool.alive_count() as i64,
-                total_count: pool.total_count() as i64,
-                shutdown: pool.shutdown.load(Ordering::Relaxed),
-                entries,
-                has_matching_location: false,
+fn upstream_status_str(status: UpstreamStatus) -> String {
+    match status {
+        UpstreamStatus::Ok => "ok",
+        UpstreamStatus::Error => "error",
+        UpstreamStatus::Unknown => "unknown",
+    }
+    .to_string()
+}
+
+fn entry_idle_secs(last: DateTimeAsMicroseconds, now: DateTimeAsMicroseconds) -> i64 {
+    now.duration_since(last).as_positive_or_zero().as_secs() as i64
+}
+
+/// Builds the snapshot for a single h1 pool. Shared by `get_proxy_state_snapshot`
+/// and `lookup_pool` so the per-entry / per-pool shape stays identical between
+/// the two tools. `has_matching_location` is left false — the snapshot tool fills
+/// it in a second pass; lookup leaves it false (it has no config to correlate).
+pub(super) fn build_h1_pool_snapshot<TStream, TConnector>(
+    pool: &std::sync::Arc<crate::upstream_h1_pool::H1Pool<TStream, TConnector>>,
+    registry: &str,
+    now: DateTimeAsMicroseconds,
+) -> PoolSnapshot
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: my_http_client::MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    let entries: Vec<EntrySnapshot> = pool
+        .clients
+        .load()
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let last = entry.last_success.as_date_time();
+            EntrySnapshot {
+                index: i as i64,
+                dead: entry.dead.load(Ordering::Relaxed),
+                last_success: last.to_rfc3339(),
+                idle_secs: entry_idle_secs(last, now),
+                rented: Some(entry.rented.load(Ordering::Relaxed)),
             }
         })
-        .collect()
+        .collect();
+
+    PoolSnapshot {
+        registry: registry.to_string(),
+        location_id: pool.desc.location_id,
+        pool_name: pool.desc.name.clone(),
+        id_string: pool.desc.id_string.clone(),
+        alive_count: pool.alive_count() as i64,
+        total_count: pool.total_count() as i64,
+        last_status: upstream_status_str(pool.last_status()),
+        live_disposables: Some(pool.live_disposables() as i64),
+        shutdown: pool.shutdown.load(Ordering::Relaxed),
+        entries,
+        has_matching_location: false,
+    }
+}
+
+/// Builds the snapshot for a single h2 pool. h2 entries have no `rented` flag and
+/// h2 never opens on-demand connections, so `rented` / `live_disposables` are null.
+pub(super) fn build_h2_pool_snapshot<TStream, TConnector>(
+    pool: &std::sync::Arc<crate::upstream_h2_pool::H2Pool<TStream, TConnector>>,
+    registry: &str,
+    now: DateTimeAsMicroseconds,
+) -> PoolSnapshot
+where
+    TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
+    TConnector: my_http_client::MyHttpClientConnector<TStream> + Send + Sync + 'static,
+{
+    let entries: Vec<EntrySnapshot> = pool
+        .clients
+        .load()
+        .iter()
+        .enumerate()
+        .map(|(i, entry)| {
+            let last = entry.last_success.as_date_time();
+            EntrySnapshot {
+                index: i as i64,
+                dead: entry.dead.load(Ordering::Relaxed),
+                last_success: last.to_rfc3339(),
+                idle_secs: entry_idle_secs(last, now),
+                rented: None,
+            }
+        })
+        .collect();
+
+    PoolSnapshot {
+        registry: registry.to_string(),
+        location_id: pool.desc.location_id,
+        pool_name: pool.desc.name.clone(),
+        id_string: pool.desc.id_string.clone(),
+        alive_count: pool.alive_count() as i64,
+        total_count: pool.total_count() as i64,
+        last_status: upstream_status_str(pool.last_status()),
+        live_disposables: None,
+        shutdown: pool.shutdown.load(Ordering::Relaxed),
+        entries,
+        has_matching_location: false,
+    }
 }
 
 fn collect_locations(cfg: &AppConfigurationInner) -> Vec<LocationSnapshot> {
