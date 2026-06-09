@@ -81,6 +81,11 @@ where
     ) -> Result<H1ClientHandle<TStream, TConnector>, MyHttpClientError> {
         let target = self.params.pool_size as usize;
 
+        // Bounds the Phase 2 overflow wait so a saturated upstream can't spin
+        // forever (it used to sleep-retry with no deadline once the disposable
+        // budget was exhausted).
+        let overflow_deadline = tokio::time::Instant::now() + self.params.connect_timeout;
+
         loop {
             if self.shutdown.load(Ordering::Relaxed) {
                 return Err(MyHttpClientError::Disposed);
@@ -141,27 +146,36 @@ where
                 }
             }
 
-            // Phase 2 — all rented; need overflow disposable.
+            // Phase 2 — all rented; need overflow disposable. Reserve a slot in
+            // both the global and the per-pool budget (reserve-then-check, so
+            // we undo on overshoot). The per-pool cap stops one saturated
+            // upstream from consuming the whole global budget.
             {
-                let cur = DISPOSABLE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if cur < MAX_DISPOSABLE {
+                let cur_global = DISPOSABLE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                let cur_pool = self.live_disposables.fetch_add(1, Ordering::Relaxed);
+                if cur_global < MAX_DISPOSABLE && cur_pool < self.params.max_disposables {
                     match self.connect_one().await {
                         Ok(client) => {
-                            self.live_disposables.fetch_add(1, Ordering::Relaxed);
                             return Ok(H1ClientHandle::disposable(
                                 Arc::new(client),
                                 self.live_disposables.clone(),
                             ));
                         }
                         Err(e) => {
-                            // Connect failed — undo counter inc and bubble up.
+                            // Connect failed — undo both reservations and bubble up.
                             DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+                            self.live_disposables.fetch_sub(1, Ordering::Relaxed);
                             return Err(e);
                         }
                     }
                 }
-                // Limit reached — undo and sleep before retrying.
+                // Over a limit — undo both reservations. Give up if we've waited
+                // past the deadline instead of spinning forever.
                 DISPOSABLE_COUNTER.fetch_sub(1, Ordering::Relaxed);
+                self.live_disposables.fetch_sub(1, Ordering::Relaxed);
+                if tokio::time::Instant::now() >= overflow_deadline {
+                    return Err(MyHttpClientError::Disconnected);
+                }
                 tokio::time::sleep(OVERFLOW_RETRY_SLEEP).await;
             }
         }
@@ -177,10 +191,25 @@ where
         Ok(H1ClientHandle::ws(client))
     }
 
+    /// Fresh non-pooled client for a single request whose response may stream
+    /// indefinitely (e.g. an MCP SSE channel). Not stored, not rented, not
+    /// counted against the disposable budget. The caller MUST tie the returned
+    /// handle to the response body (see `attach_conn_guard`) — when the body
+    /// ends and the handle drops, the last Arc drops and the connection is
+    /// disposed. Bypassing the pool means concurrent requests to the same MCP
+    /// upstream never pipeline behind the in-flight stream.
+    pub async fn create_dedicated_connection(
+        &self,
+    ) -> Result<H1ClientHandle<TStream, TConnector>, MyHttpClientError> {
+        let client = Arc::new(self.connect_one().await?);
+        Ok(H1ClientHandle::dedicated(client))
+    }
+
     async fn connect_one(&self) -> Result<MyHttpClient<TStream, TConnector>, MyHttpClientError> {
         let (connector, metrics) = (self.factory)();
         let mut client = MyHttpClient::new_with_metrics(connector, metrics);
         client.set_connect_timeout(self.params.connect_timeout);
+        client.set_read_from_stream_timeout(self.params.read_stream_timeout);
         match client.connect().await {
             Ok(_) => {
                 self.last_status.set(UpstreamStatus::Ok);

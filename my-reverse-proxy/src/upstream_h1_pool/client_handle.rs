@@ -22,6 +22,11 @@ use super::{H1Entry, DISPOSABLE_COUNTER};
 ///   `live_disposables`. Underlying TCP closes when Arc dies.
 /// - **Ws** — fresh client created for a WebSocket session. Drop is a no-op;
 ///   the WS-upgraded TCP keeps the Arc alive until the session closes.
+/// - **Dedicated** — fresh non-pooled client for a single request whose
+///   response may stream indefinitely (e.g. MCP SSE). Not rented, not counted
+///   as a disposable. Drop is a no-op: the caller ties this handle to the
+///   response body (see `attach_conn_guard`), so the last `Arc` drops — and the
+///   connection is disposed — only when the body ends.
 pub enum H1ClientHandle<TStream, TConnector>
 where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
@@ -37,6 +42,9 @@ where
         live_disposables: Arc<AtomicUsize>,
     },
     Ws {
+        client: Arc<MyHttpClient<TStream, TConnector>>,
+    },
+    Dedicated {
         client: Arc<MyHttpClient<TStream, TConnector>>,
     },
 }
@@ -67,11 +75,16 @@ where
         Self::Ws { client }
     }
 
+    pub(super) fn dedicated(client: Arc<MyHttpClient<TStream, TConnector>>) -> Self {
+        Self::Dedicated { client }
+    }
+
     fn client(&self) -> &Arc<MyHttpClient<TStream, TConnector>> {
         match self {
             Self::Reusable { client, .. } => client,
             Self::Disposable { client, .. } => client,
             Self::Ws { client } => client,
+            Self::Dedicated { client } => client,
         }
     }
 
@@ -106,6 +119,7 @@ where
                 live_disposables.fetch_sub(1, Ordering::Relaxed);
             }
             Self::Ws { .. } => {}
+            Self::Dedicated { .. } => {}
         }
     }
 }

@@ -13,6 +13,9 @@ pub struct Https1ContentSource {
     pub pool_params: PoolParams,
     pub factory: ConnectorFactory<HttpTlsConnector>,
     pub request_timeout: std::time::Duration,
+    /// `true` when this source backs an `mcp` location — such requests get a
+    /// dedicated non-pooled connection (see `execute`).
+    pub is_mcp: bool,
 }
 
 impl Https1ContentSource {
@@ -33,6 +36,11 @@ impl Https1ContentSource {
 
         let handle = if is_ws {
             pool.create_ws_connection().await
+        } else if self.is_mcp {
+            // MCP responses can be infinite SSE streams; give each request its
+            // own connection so concurrent JSON-RPC POSTs never pipeline behind
+            // an in-flight stream on a shared pooled connection.
+            pool.create_dedicated_connection().await
         } else {
             pool.get_connection().await
         }
@@ -41,7 +49,12 @@ impl Https1ContentSource {
         let req = MyHttpRequest::from_hyper_request(req).await;
 
         match handle.do_request(&req, self.request_timeout).await? {
-            MyHttpResponse::Response(response) => Ok(HttpResponse::Response(response)),
+            MyHttpResponse::Response(response) => {
+                // Tie the pool handle to the body lifetime so the entry is not
+                // released while a streaming body is still being read.
+                let response = attach_conn_guard(response, Box::new(handle));
+                Ok(HttpResponse::Response(response))
+            }
             MyHttpResponse::WebSocketUpgrade {
                 stream,
                 response,

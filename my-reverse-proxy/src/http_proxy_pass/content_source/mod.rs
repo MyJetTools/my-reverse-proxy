@@ -2,6 +2,8 @@ mod http_proxy_pass_content_source;
 pub use http_proxy_pass_content_source::*;
 mod http_response;
 pub use http_response::*;
+mod conn_guard;
+pub use conn_guard::*;
 mod http1;
 pub use http1::*;
 mod https1;

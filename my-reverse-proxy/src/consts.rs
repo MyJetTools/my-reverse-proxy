@@ -23,6 +23,15 @@ pub const DEFAULT_POOL_HOT_WINDOW: Duration = Duration::from_secs(3);
 pub const DEFAULT_POOL_PING_TIMEOUT: Duration = Duration::from_secs(1);
 // How often the (single, global) supervisor sweeps every pool.
 pub const DEFAULT_POOL_SUPERVISOR_INTERVAL: Duration = Duration::from_secs(10);
+// Per-pool cap on concurrent on-demand (disposable) overflow connections. Below
+// the global MAX_DISPOSABLE ceiling so one saturated upstream cannot starve the
+// process-wide budget for the others.
+pub const DEFAULT_MAX_DISPOSABLES_PER_POOL: usize = 50;
+// Read/stream inactivity timeout for MCP upstream connections. MCP streamable-
+// HTTP / SSE bodies can idle far longer than DEFAULT_READ_TIMEOUT with no
+// keepalive, so MCP locations get a large value to avoid dropping a healthy but
+// idle stream. (TCP RST/FIN still surfaces immediately regardless of this.)
+pub const DEFAULT_MCP_READ_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
 pub const HTTP_CR_LF: &[u8] = b"\r\n";
 

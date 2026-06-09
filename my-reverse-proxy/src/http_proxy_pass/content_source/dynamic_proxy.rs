@@ -15,7 +15,7 @@ use crate::{
     http_proxy_pass::ProxyPassError,
 };
 
-use super::{HttpResponse, WebSocketUpgradeStream};
+use super::{attach_conn_guard, HttpResponse, WebSocketUpgradeStream};
 
 pub struct DynamicProxyContentSource {
     pub request_timeout: Duration,
@@ -81,7 +81,15 @@ impl DynamicProxyContentSource {
                 let mut client = MyHttpClient::new_with_metrics(connector, metrics);
                 client.set_connect_timeout(self.connect_timeout);
                 match client.do_request(&my_req, self.request_timeout).await? {
-                    MyHttpResponse::Response(r) => Ok(HttpResponse::Response(r)),
+                    MyHttpResponse::Response(r) => {
+                        // The client owns the upstream connection — tie it to
+                        // the body so a streaming response is not cut off when
+                        // `execute` returns.
+                        Ok(HttpResponse::Response(attach_conn_guard(
+                            r,
+                            Box::new(client),
+                        )))
+                    }
                     MyHttpResponse::WebSocketUpgrade {
                         stream,
                         response,
@@ -102,7 +110,15 @@ impl DynamicProxyContentSource {
                 let mut client = MyHttpClient::new_with_metrics(connector, metrics);
                 client.set_connect_timeout(self.connect_timeout);
                 match client.do_request(&my_req, self.request_timeout).await? {
-                    MyHttpResponse::Response(r) => Ok(HttpResponse::Response(r)),
+                    MyHttpResponse::Response(r) => {
+                        // The client owns the upstream connection — tie it to
+                        // the body so a streaming response is not cut off when
+                        // `execute` returns.
+                        Ok(HttpResponse::Response(attach_conn_guard(
+                            r,
+                            Box::new(client),
+                        )))
+                    }
                     MyHttpResponse::WebSocketUpgrade {
                         stream,
                         response,

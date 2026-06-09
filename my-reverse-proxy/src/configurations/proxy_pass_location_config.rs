@@ -119,7 +119,7 @@ impl ProxyPassLocationConfig {
                     match remote_endpoint_scheme.as_ref().unwrap() {
                         rust_extensions::remote_endpoint::Scheme::Http => {
                             let (pool_desc, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone());
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone(), is_mcp);
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
                                 pool_desc,
                                 pool_params,
@@ -137,17 +137,19 @@ impl ProxyPassLocationConfig {
                                 proxy_pass.pool_tuning,
                                 self.id,
                                 self.id_string.clone(),
+                                is_mcp,
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
                                 pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
                             let (pool_desc, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone());
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone(), is_mcp);
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
                                 pool_desc,
                                 pool_params,
@@ -165,22 +167,25 @@ impl ProxyPassLocationConfig {
                                 proxy_pass.pool_tuning,
                                 self.id,
                                 self.id_string.clone(),
+                                is_mcp,
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
                                 pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
                             let (pool_desc, pool_params, factory) =
-                                make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone());
+                                make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone(), is_mcp);
                             return HttpProxyPassContentSource::UnixHttp1(UnixHttp1ContentSource {
                                 pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                     }
@@ -252,7 +257,7 @@ impl ProxyPassLocationConfig {
                         }
                         rust_extensions::remote_endpoint::Scheme::Ws => {
                             let (pool_desc, pool_params, factory) =
-                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone());
+                                make_tcp_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone(), is_mcp);
                             return HttpProxyPassContentSource::Http1(Http1ContentSource {
                                 pool_desc,
                                 pool_params,
@@ -270,12 +275,14 @@ impl ProxyPassLocationConfig {
                                 proxy_pass.pool_tuning,
                                 self.id,
                                 self.id_string.clone(),
+                                is_mcp,
                             );
                             return HttpProxyPassContentSource::Https1(Https1ContentSource {
                                 pool_desc,
                                 pool_params,
                                 factory,
                                 request_timeout: proxy_pass.request_timeout,
+                                is_mcp,
                             });
                         }
                         rust_extensions::remote_endpoint::Scheme::UnixSocket => {
@@ -345,12 +352,13 @@ impl ProxyPassLocationConfig {
                 }
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
                     let (pool_desc, pool_params, factory) =
-                        make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone());
+                        make_uds_h1_pool_factory(remote_host, debug, proxy_pass.connect_timeout, proxy_pass.pool_tuning, self.id, self.id_string.clone(), is_mcp);
                     return HttpProxyPassContentSource::UnixHttp1(UnixHttp1ContentSource {
                         pool_desc,
                         pool_params,
                         factory,
                         request_timeout: proxy_pass.request_timeout,
+                        is_mcp,
                     });
                 }
             },
@@ -451,6 +459,24 @@ fn h2_uds_pool_name(socket_path: &str, location_id: i64) -> String {
     format!("uds-h2://{}#{}", socket_path, location_id)
 }
 
+fn h1_pool_params(
+    connect_timeout: Duration,
+    pool_tuning: PoolTuning,
+    is_mcp: bool,
+) -> crate::upstream_h1_pool::PoolParams {
+    let mut params = crate::upstream_h1_pool::PoolParams::default();
+    params.connect_timeout = connect_timeout;
+    params.pool_size = pool_tuning.pool_size;
+    params.ping_timeout = pool_tuning.ping_timeout;
+    params.hot_window = pool_tuning.hot_window;
+    if is_mcp {
+        // MCP SSE bodies can idle far longer than the default read timeout
+        // without any keepalive — don't tear down a healthy idle stream.
+        params.read_stream_timeout = crate::consts::DEFAULT_MCP_READ_TIMEOUT;
+    }
+    params
+}
+
 pub(crate) fn make_tcp_h1_pool_factory(
     remote_host: &std::sync::Arc<rust_extensions::remote_endpoint::RemoteEndpointOwned>,
     debug: bool,
@@ -458,6 +484,7 @@ pub(crate) fn make_tcp_h1_pool_factory(
     pool_tuning: PoolTuning,
     location_id: i64,
     id_string: String,
+    is_mcp: bool,
 ) -> (
     crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
@@ -470,11 +497,7 @@ pub(crate) fn make_tcp_h1_pool_factory(
         id_string,
     };
     let endpoint_arc = remote_host.clone();
-    let mut params = crate::upstream_h1_pool::PoolParams::default();
-    params.connect_timeout = connect_timeout;
-    params.pool_size = pool_tuning.pool_size;
-    params.ping_timeout = pool_tuning.ping_timeout;
-    params.hot_window = pool_tuning.hot_window;
+    let params = h1_pool_params(connect_timeout, pool_tuning, is_mcp);
     let factory: crate::upstream_h1_pool::ConnectorFactory<
         crate::http_client_connectors::HttpConnector,
     > = std::sync::Arc::new(move || {
@@ -500,6 +523,7 @@ pub(crate) fn make_tls_h1_pool_factory(
     pool_tuning: PoolTuning,
     location_id: i64,
     id_string: String,
+    is_mcp: bool,
 ) -> (
     crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
@@ -512,11 +536,7 @@ pub(crate) fn make_tls_h1_pool_factory(
         id_string,
     };
     let endpoint_arc = remote_host.clone();
-    let mut params = crate::upstream_h1_pool::PoolParams::default();
-    params.connect_timeout = connect_timeout;
-    params.pool_size = pool_tuning.pool_size;
-    params.ping_timeout = pool_tuning.ping_timeout;
-    params.hot_window = pool_tuning.hot_window;
+    let params = h1_pool_params(connect_timeout, pool_tuning, is_mcp);
     let factory: crate::upstream_h1_pool::ConnectorFactory<
         crate::http_client_connectors::HttpTlsConnector,
     > = std::sync::Arc::new(move || {
@@ -542,6 +562,7 @@ pub(crate) fn make_uds_h1_pool_factory(
     pool_tuning: PoolTuning,
     location_id: i64,
     id_string: String,
+    is_mcp: bool,
 ) -> (
     crate::upstream_h1_pool::PoolDesc,
     crate::upstream_h1_pool::PoolParams,
@@ -553,11 +574,7 @@ pub(crate) fn make_uds_h1_pool_factory(
         id_string,
     };
     let endpoint_arc = remote_host.clone();
-    let mut params = crate::upstream_h1_pool::PoolParams::default();
-    params.connect_timeout = connect_timeout;
-    params.pool_size = pool_tuning.pool_size;
-    params.ping_timeout = pool_tuning.ping_timeout;
-    params.hot_window = pool_tuning.hot_window;
+    let params = h1_pool_params(connect_timeout, pool_tuning, is_mcp);
     let factory: crate::upstream_h1_pool::ConnectorFactory<
         crate::http_client_connectors::UnixSocketHttpConnector,
     > = std::sync::Arc::new(move || {

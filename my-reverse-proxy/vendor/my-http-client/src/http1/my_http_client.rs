@@ -72,6 +72,13 @@ impl<
         self.connect_timeout = connect_timeout;
     }
 
+    /// Per-read inactivity timeout used by the read loop. For long-lived
+    /// streaming bodies with no keepalive (e.g. MCP SSE) set this large so an
+    /// idle-but-healthy stream is not torn down. Must be set before `connect()`.
+    pub fn set_read_from_stream_timeout(&mut self, read_from_stream_timeout: std::time::Duration) {
+        self.read_from_stream_timeout = read_from_stream_timeout;
+    }
+
     pub async fn connect(&self) -> Result<(), MyHttpClientError> {
         let connect_feature = self.connector.connect();
 
@@ -174,6 +181,15 @@ impl<
                             println!("Read loop exited with error: {:?}", err);
                         }
                     }
+                    // Read loop exited cleanly (Ok). This happens when the
+                    // awaiter was abandoned (try_set_ok failed after a caller
+                    // timeout) — the write half is still `Connected`, so without
+                    // this the connection becomes a zombie: future sends are
+                    // written to a socket nobody reads. `read_loop_stopped`
+                    // transitions to `Disconnected` (a retirable error), so the
+                    // next send reconnects instead. It no-ops on a WS upgrade or
+                    // a stale connection_id.
+                    inner.read_loop_stopped(current_connection_id).await;
                 }
                 Err(_panic) => {
                     if let Some(mut task) = inner.pop_request(current_connection_id, false) {
