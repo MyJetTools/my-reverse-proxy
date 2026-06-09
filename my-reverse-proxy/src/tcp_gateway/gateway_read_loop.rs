@@ -224,7 +224,7 @@ async fn read_buffer(read: &mut OwnedReadHalf, buffer: &mut [u8], debug: bool) -
                 return 0;
             }
 
-            return result + 4;
+            return result;
         }
         Err(err) => {
             if debug {
