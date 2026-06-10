@@ -54,6 +54,23 @@ pub async fn handle_requests(
         .await
     {
         Ok(response) => {
+            // 5xx from the upstream itself is always recorded, so server errors
+            // are visible in /api/logs + MCP without enabling debug mode.
+            if let Ok(resp) = response.as_ref() {
+                if resp.status().is_server_error() {
+                    crate::app::APP_CTX.proxy_logs.write(
+                        endpoint,
+                        None,
+                        ip.clone(),
+                        format!(
+                            "Upstream responded {}: {} {}",
+                            resp.status().as_u16(),
+                            req_str,
+                            sw.duration_as_string()
+                        ),
+                    );
+                }
+            }
             if endpoint_debug {
                 match response.as_ref() {
                     Ok(response) => {
@@ -112,10 +129,29 @@ pub async fn handle_requests(
                     .unwrap();
                 return Ok(response);
             }
-            return Ok(super::utils::generate_tech_page(
+            let err_desc = format!("{:?}", err);
+            let response = super::utils::generate_tech_page(
                 err,
                 crate::app::APP_CTX.show_error_description.get_value(),
-            ));
+            );
+            // Every proxy-generated 5xx (upstream unreachable / timeout /
+            // internal) is always recorded — visible in /api/logs + MCP
+            // without enabling debug mode. 4xx tech pages stay debug-only.
+            if response.status().is_server_error() {
+                crate::app::APP_CTX.proxy_logs.write(
+                    endpoint,
+                    None,
+                    ip.clone(),
+                    format!(
+                        "Returned {} to client: {} upstream failure: {} {}",
+                        response.status().as_u16(),
+                        req_str,
+                        err_desc,
+                        sw.duration_as_string()
+                    ),
+                );
+            }
+            return Ok(response);
         }
     }
 }
