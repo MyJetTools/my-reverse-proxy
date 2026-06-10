@@ -190,6 +190,31 @@ pub async fn serve_reverse_proxy<
                     }
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
+
+                // Every 5xx returned to the client is always recorded at the
+                // endpoint scope — same contract as the hyper path.
+                let status_5xx = match &err {
+                    ProxyServerError::BufferAllocationFail => Some(503u16),
+                    ProxyServerError::CanNotConnectToRemoteResource { err, .. } => {
+                        Some(if err.as_timeout().is_some() { 504 } else { 503 })
+                    }
+                    ProxyServerError::CanNotWriteContentToRemoteConnection(_) => Some(503),
+                    _ => None,
+                };
+                if let Some(status) = status_5xx {
+                    if let Some(endpoint_info) = http_connection_info.endpoint_info.as_ref() {
+                        crate::app::APP_CTX.proxy_logs.write(
+                            endpoint_info.host_endpoint.as_str(),
+                            None,
+                            http_connection_info.connection_ip.get_ip_log(),
+                            format!(
+                                "Returned {} to client: upstream failure: {:?}",
+                                status, err
+                            ),
+                        );
+                    }
+                }
+
                 let write_timeout = http_connection_info
                     .endpoint_info
                     .as_ref()
@@ -341,9 +366,20 @@ async fn execute_request<
     let access = upstream_state
         .get_or_connect(effective_proxy_pass_to, &http_connection_context)
         .await
-        .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
-            remote_resource: effective_proxy_pass_to.to_string(),
-            err,
+        .map_err(|err| {
+            log_upstream_failure(
+                location.id,
+                http_connection_info,
+                format!(
+                    "Can not connect to upstream {}: {:?}",
+                    effective_proxy_pass_to.to_string(),
+                    err
+                ),
+            );
+            ProxyServerError::CanNotConnectToRemoteResource {
+                remote_resource: effective_proxy_pass_to.to_string(),
+                err,
+            }
         })?;
 
     let content_length = request_headers.content_length;
@@ -375,9 +411,20 @@ async fn execute_request<
         let access = upstream_state
             .get_or_connect(effective_proxy_pass_to, &http_connection_context)
             .await
-            .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
-                remote_resource: effective_proxy_pass_to.to_string(),
-                err,
+            .map_err(|err| {
+                log_upstream_failure(
+                    location.id,
+                    http_connection_info,
+                    format!(
+                        "Can not reconnect to upstream {}: {:?}",
+                        effective_proxy_pass_to.to_string(),
+                        err
+                    ),
+                );
+                ProxyServerError::CanNotConnectToRemoteResource {
+                    remote_resource: effective_proxy_pass_to.to_string(),
+                    err,
+                }
             })?;
 
         let send_headers_result = access
@@ -389,6 +436,14 @@ async fn execute_request<
             .await;
 
         if !send_headers_result {
+            log_upstream_failure(
+                location.id,
+                http_connection_info,
+                format!(
+                    "Upstream {} reconnected but sending request headers failed again",
+                    effective_proxy_pass_to.to_string()
+                ),
+            );
             return Err(ProxyServerError::CanNotWriteContentToRemoteConnection(
                 NetworkError::OtherStr("Remote resource is disconnected"),
             ));
@@ -415,6 +470,15 @@ async fn execute_request<
         Err(err) => {
             // Remote may have received partial body — connection is desynced
             upstream_state.mark_disposed(effective_proxy_pass_to);
+            log_upstream_failure(
+                location.id,
+                http_connection_info,
+                format!(
+                    "Upstream {} request failed transferring request body: {:?}",
+                    effective_proxy_pass_to.to_string(),
+                    err
+                ),
+            );
             return Err(err);
         }
     };
@@ -443,4 +507,18 @@ async fn execute_request<
 
 pub struct WebSocketUpgradeResult {
     upstream_key: String,
+}
+
+/// Upstream-reach failures are always recorded at the location scope — same
+/// contract as the hyper path.
+fn log_upstream_failure(
+    location_id: i64,
+    http_connection_info: &HttpConnectionInfo,
+    message: String,
+) {
+    crate::app::APP_CTX.proxy_logs.write_location(
+        location_id,
+        http_connection_info.connection_ip.get_ip_log(),
+        message,
+    );
 }
