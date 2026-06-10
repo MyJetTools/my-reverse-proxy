@@ -116,7 +116,8 @@ pub async fn serve_reverse_proxy<
         match execute_request_result {
             Ok(web_socket_upgrade) => {
                 if let Some(web_socket_upgrade) = web_socket_upgrade {
-                    if let Some(upstream) = upstream_state.take_http(web_socket_upgrade.location_id)
+                    if let Some(upstream) =
+                        upstream_state.take(web_socket_upgrade.upstream_key.as_str())
                     {
                         let (server_read_part, loop_buffer) = h1_reader.into_read_part();
 
@@ -322,8 +323,9 @@ async fn execute_request<
                 connect_timeout: config.connect_timeout,
                 pool_tuning: crate::configurations::PoolTuning::default(),
             });
-            // Drop any cached upstream — target varies per request.
-            upstream_state.discard(&location.proxy_pass_to, location.id);
+            // No pre-discard needed: upstreams are keyed by remote host, so a
+            // different proxy-to target maps to its own entry, and the same
+            // host is reused on purpose.
             synthetic_proxy_pass_to = Some(synth);
             dynamic_host_override = Some(host_port);
         }
@@ -337,11 +339,7 @@ async fn execute_request<
         .unwrap_or(&location.proxy_pass_to);
 
     let access = upstream_state
-        .get_or_connect(
-            effective_proxy_pass_to,
-            location.id,
-            &http_connection_context,
-        )
+        .get_or_connect(effective_proxy_pass_to, &http_connection_context)
         .await
         .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
             remote_resource: effective_proxy_pass_to.to_string(),
@@ -370,16 +368,12 @@ async fn execute_request<
     let mut upstream = access.upstream;
 
     if !send_headers_result {
-        upstream_state.discard(effective_proxy_pass_to, location.id);
+        upstream_state.mark_disposed(effective_proxy_pass_to);
 
         println!("Doing reconnection to remote connection");
 
         let access = upstream_state
-            .get_or_connect(
-                effective_proxy_pass_to,
-                location.id,
-                &http_connection_context,
-            )
+            .get_or_connect(effective_proxy_pass_to, &http_connection_context)
             .await
             .map_err(|err| ProxyServerError::CanNotConnectToRemoteResource {
                 remote_resource: effective_proxy_pass_to.to_string(),
@@ -405,7 +399,7 @@ async fn execute_request<
 
     if web_socket_upgrade {
         return Ok(Some(WebSocketUpgradeResult {
-            location_id: location.id,
+            upstream_key: crate::h1_remote_connection::connection_key(effective_proxy_pass_to),
         }));
     }
 
@@ -420,7 +414,7 @@ async fn execute_request<
         Ok(bytes) => bytes,
         Err(err) => {
             // Remote may have received partial body — connection is desynced
-            upstream_state.discard(&location.proxy_pass_to, location.id);
+            upstream_state.mark_disposed(effective_proxy_pass_to);
             return Err(err);
         }
     };
@@ -438,16 +432,15 @@ async fn execute_request<
         ));
     }
 
-    // Note: do NOT discard the upstream here for dynamic_proxy — the response
-    // for this request is still being pumped by the background
+    // Note: do NOT drop the upstream here even on success — the response for
+    // this request is still being pumped by the background
     // `response_read_loop`; dropping the cached Upstream would abort the loop
-    // and the client would never see the response. The pre-connect discard at
-    // the top of the next dynamic_proxy request is what guarantees the next
-    // request opens a fresh upstream to its (potentially different) target.
+    // and the client would never see the response. A broken entry is only
+    // marked disposed and gets recreated by the next get_or_connect.
 
     Ok(None)
 }
 
 pub struct WebSocketUpgradeResult {
-    location_id: i64,
+    upstream_key: String,
 }

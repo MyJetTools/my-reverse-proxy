@@ -278,6 +278,20 @@ impl Upstream {
         }
     }
 
+    /// Remote end is known to be gone — the flag is set by the
+    /// response_read_loop when it observes EOF or a read error.
+    pub fn is_disconnected(&self) -> bool {
+        match &self.inner {
+            UpstreamInner::Http1Direct(connection) => connection.is_disconnected(),
+            UpstreamInner::Http1UnixSocket(connection) => connection.is_disconnected(),
+            UpstreamInner::Https1Direct(connection) => connection.is_disconnected(),
+            UpstreamInner::Http1OverSsh(connection) => connection.is_disconnected(),
+            UpstreamInner::Http1OverGateway(connection) => connection.is_disconnected(),
+            UpstreamInner::StaticContent(_) => false,
+            UpstreamInner::LocalFiles(_) => false,
+        }
+    }
+
     pub async fn send_h1_header(
         &mut self,
         h1_headers: &Http1HeadersBuilder,
