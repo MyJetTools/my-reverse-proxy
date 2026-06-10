@@ -191,26 +191,22 @@ pub async fn serve_reverse_proxy<
                     ProxyServerError::HttpResponse(payload) => payload.as_slice(),
                 };
 
-                // Every 5xx returned to the client is always recorded at the
-                // endpoint scope — same contract as the hyper path.
+                // Every 5xx returned to the client is always recorded.
                 let status_5xx = match &err {
-                    ProxyServerError::BufferAllocationFail => Some(503u16),
-                    ProxyServerError::CanNotConnectToRemoteResource { err, .. } => {
-                        Some(if err.as_timeout().is_some() { 504 } else { 503 })
-                    }
-                    ProxyServerError::CanNotWriteContentToRemoteConnection(_) => Some(503),
+                    ProxyServerError::BufferAllocationFail
+                    | ProxyServerError::CanNotConnectToRemoteResource { .. }
+                    | ProxyServerError::CanNotWriteContentToRemoteConnection(_)
+                    | ProxyServerError::LocationIsNotFound => Some(503u16),
                     _ => None,
                 };
                 if let Some(status) = status_5xx {
                     if let Some(endpoint_info) = http_connection_info.endpoint_info.as_ref() {
-                        crate::app::APP_CTX.proxy_logs.write(
+                        crate::app::APP_CTX.proxy_logs.write_returned_5xx(
                             endpoint_info.host_endpoint.as_str(),
                             None,
                             http_connection_info.connection_ip.get_ip_log(),
-                            format!(
-                                "Returned {} to client: upstream failure: {:?}",
-                                status, err
-                            ),
+                            status,
+                            format!("{:?}", err),
                         );
                     }
                 }

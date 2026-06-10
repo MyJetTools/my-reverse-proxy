@@ -6,9 +6,47 @@ use super::*;
 
 use crate::{
     app::SshSessionHandler,
-    h1_proxy_server::{H1HeadersKind, H1Reader, H1Writer},
+    h1_proxy_server::{H1HeadersKind, H1Reader},
     network_stream::*,
 };
+
+/// Upstream response failed mid-flight: mark the upstream disconnected, record
+/// the 502 through the root-level 5xx log contract, send the Bad Gateway page
+/// and complete the request.
+async fn respond_bad_gateway<
+    ServerWritePart: NetworkStreamWritePart + Send + Sync + 'static,
+    ServerReadPart: NetworkStreamReadPart + Send + Sync + 'static,
+>(
+    connection_id: u64,
+    remote_disconnected: &Arc<UnsafeValue<bool>>,
+    ctx: &Http1ServerConnectionContext<ServerWritePart, ServerReadPart>,
+    failure: String,
+) {
+    remote_disconnected.set_value(true);
+
+    crate::app::APP_CTX.proxy_logs.write_returned_5xx(
+        ctx.end_point_info.host_endpoint.as_str(),
+        Some(ctx.location_id),
+        ctx.http_connection_info.connection_ip.get_ip_log(),
+        502,
+        failure,
+    );
+
+    let write_timeout = ctx.end_point_info.timeouts.write_timeout;
+
+    let _ = ctx
+        .h1_server_write_part
+        .write_http_payload_with_timeout(
+            connection_id,
+            crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
+            write_timeout,
+        )
+        .await;
+
+    ctx.h1_server_write_part
+        .request_is_done(connection_id, write_timeout)
+        .await;
+}
 
 pub async fn response_read_loop<
     RemoteReadPart: NetworkStreamReadPart + Send + Sync + 'static,
@@ -31,24 +69,13 @@ pub async fn response_read_loop<
         let resp_headers = match remote_h1_reader.read_headers().await {
             Ok(headers) => headers,
             Err(err) => {
-                println!("Reading header from remote: {:?}", err);
-
-                remote_disconnected.set_value(true);
-
-                let _ = server_write_part
-                    .h1_server_write_part
-                    .write_http_payload_with_timeout(
-                        connection_id,
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice(),
-                        timeouts.write_timeout,
-                    )
-                    .await;
-
-                server_write_part
-                    .h1_server_write_part
-                    .request_is_done(connection_id, timeouts.write_timeout)
-                    .await;
+                respond_bad_gateway(
+                    connection_id,
+                    &remote_disconnected,
+                    &server_write_part,
+                    format!("Reading response headers from upstream: {:?}", err),
+                )
+                .await;
                 return;
             }
         };
@@ -65,23 +92,13 @@ pub async fn response_read_loop<
         ) {
             Ok(web_socket_upgrade) => web_socket_upgrade,
             Err(err) => {
-                println!("Compile headers from remote: {:?}", err);
-
-                remote_disconnected.set_value(true);
-                let _ = server_write_part
-                    .h1_server_write_part
-                    .write_http_payload_with_timeout(
-                        connection_id,
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice(),
-                        timeouts.write_timeout,
-                    )
-                    .await;
-
-                server_write_part
-                    .h1_server_write_part
-                    .request_is_done(connection_id, timeouts.write_timeout)
-                    .await;
+                respond_bad_gateway(
+                    connection_id,
+                    &remote_disconnected,
+                    &server_write_part,
+                    format!("Compiling response headers from upstream: {:?}", err),
+                )
+                .await;
                 return;
             }
         };
@@ -95,23 +112,13 @@ pub async fn response_read_loop<
             )
             .await
         {
-            println!("Sending headers from remote to server: {:?}", err);
-
-            remote_disconnected.set_value(true);
-
-            let _ = server_write_part
-                .h1_server_write_part
-                .write_http_payload_with_timeout(
-                    connection_id,
-                    crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
-                    timeouts.write_timeout,
-                )
-                .await;
-
-            server_write_part
-                .h1_server_write_part
-                .request_is_done(connection_id, timeouts.write_timeout)
-                .await;
+            respond_bad_gateway(
+                connection_id,
+                &remote_disconnected,
+                &server_write_part,
+                format!("Sending response headers to client: {:?}", err),
+            )
+            .await;
             return;
         }
 
@@ -125,24 +132,13 @@ pub async fn response_read_loop<
         {
             Ok(bytes) => bytes,
             Err(err) => {
-                println!("Sending body from remote to server: {:?}", err);
-
-                remote_disconnected.set_value(true);
-
-                let _ = server_write_part
-                    .h1_server_write_part
-                    .write_http_payload(
-                        connection_id,
-                        crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE
-                            .as_slice(),
-                        timeouts.write_timeout,
-                    )
-                    .await;
-
-                server_write_part
-                    .h1_server_write_part
-                    .request_is_done(connection_id, timeouts.write_timeout)
-                    .await;
+                respond_bad_gateway(
+                    connection_id,
+                    &remote_disconnected,
+                    &server_write_part,
+                    format!("Transferring response body from upstream: {:?}", err),
+                )
+                .await;
                 return;
             }
         };

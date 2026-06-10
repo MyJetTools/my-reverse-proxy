@@ -138,17 +138,12 @@ pub async fn handle_requests(
             // internal) is always recorded — visible in /api/logs + MCP
             // without enabling debug mode. 4xx tech pages stay debug-only.
             if response.status().is_server_error() {
-                crate::app::APP_CTX.proxy_logs.write(
+                crate::app::APP_CTX.proxy_logs.write_returned_5xx(
                     endpoint,
                     None,
                     ip.clone(),
-                    format!(
-                        "Returned {} to client: {} upstream failure: {} {}",
-                        response.status().as_u16(),
-                        req_str,
-                        err_desc,
-                        sw.duration_as_string()
-                    ),
+                    response.status().as_u16(),
+                    format!("{} {} {}", req_str, err_desc, sw.duration_as_string()),
                 );
             }
             return Ok(response);

@@ -170,6 +170,25 @@ impl ProxyLogs {
         }
     }
 
+    /// Root-level contract: EVERY 5xx page the proxy returns to a client goes
+    /// through here, regardless of the serving path (hyper or h1 byte-pipe) —
+    /// so "why did the client get a 5xx" is always answerable from the logs.
+    pub fn write_returned_5xx(
+        &self,
+        endpoint: &str,
+        location_id: Option<i64>,
+        ip: Option<String>,
+        status: u16,
+        failure: String,
+    ) {
+        self.write(
+            endpoint,
+            location_id,
+            ip,
+            format!("Returned {} to client: upstream failure: {}", status, failure),
+        );
+    }
+
     /// Log attributed to a resolved location only (request-building / payload
     /// details, where the endpoint string is not in scope).
     pub fn write_location(&self, location_id: i64, ip: Option<String>, message: String) {
