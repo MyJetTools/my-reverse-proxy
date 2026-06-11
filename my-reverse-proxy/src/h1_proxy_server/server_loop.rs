@@ -139,8 +139,6 @@ pub async fn serve_reverse_proxy<
                 }
             }
             Err(err) => {
-                let close_after = matches!(&err, ProxyServerError::LocationIsNotFound);
-
                 let content = match &err {
                     ProxyServerError::NetworkError(_) => {
                         break;
@@ -220,9 +218,12 @@ pub async fn serve_reverse_proxy<
                     .write_http_payload_with_timeout(request_id, content, write_timeout)
                     .await;
 
-                if close_after {
-                    break;
-                }
+                // The failed request was never consumed from the read buffer
+                // (read_headers only peeks; consumption happens during
+                // forwarding). Looping again would re-parse the same bytes and
+                // spin at machine speed producing the same error page. The
+                // connection is desynced anyway — close it.
+                break;
             }
         }
     }
