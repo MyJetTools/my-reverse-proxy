@@ -19,7 +19,7 @@ impl StaticContentConfig {
         )
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProxyPassFilesPathModel {
     pub files_path: MyReverseProxyRemoteEndpoint,
     pub default_file: Option<String>,
@@ -31,7 +31,7 @@ impl ProxyPassFilesPathModel {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProxyPassToModel {
     pub remote_host: MyReverseProxyRemoteEndpoint,
     pub request_timeout: Duration,
@@ -39,14 +39,14 @@ pub struct ProxyPassToModel {
     pub pool_tuning: super::PoolTuning,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DynamicProxyConfig {
     pub request_timeout: Duration,
     pub connect_timeout: Duration,
     pub allowed_hosts: Option<Vec<String>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ProxyPassToConfig {
     Http1(ProxyPassToModel),
     Http2(ProxyPassToModel),

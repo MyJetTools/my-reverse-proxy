@@ -34,6 +34,18 @@ pub trait NetworkStreamReadPart {
     }
 }
 
+/// Lets a boxed read half (the type-erased upstream read half handed out by
+/// `Upstream::connect_owned`, where the 5 transports have 5 concrete read-half
+/// types) be driven through the same `NetworkStreamReadPart` API — e.g. wrapped
+/// in `H1Reader<Box<dyn NetworkStreamReadPart + Send + Sync>>` so a worker can
+/// read the upstream response uniformly.
+#[async_trait::async_trait]
+impl NetworkStreamReadPart for Box<dyn NetworkStreamReadPart + Send + Sync> {
+    async fn read_from_socket(&mut self, buf: &mut [u8]) -> Result<usize, std::io::Error> {
+        (**self).read_from_socket(buf).await
+    }
+}
+
 pub enum MyOwnedReadHalf {
     Tcp(tokio::net::tcp::OwnedReadHalf),
     Unix(tokio::net::unix::OwnedReadHalf),

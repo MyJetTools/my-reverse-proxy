@@ -32,6 +32,14 @@ pub static ERROR_TIMEOUT: LazyLock<Vec<u8>> =
 pub static ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE: LazyLock<Vec<u8>> =
     LazyLock::new(|| generate_layout(502, "Server Error", Some("Bad gateway".into())));
 
+pub static UPSTREAM_IS_NOT_HTTP: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    generate_layout(
+        502,
+        "Server Error",
+        Some("Upstream is not a valid HTTP server".into()),
+    )
+});
+
 pub static NOT_AUTHORIZED_PAGE: LazyLock<Vec<u8>> =
     LazyLock::new(|| generate_layout(401, "Not authorized request", None));
 

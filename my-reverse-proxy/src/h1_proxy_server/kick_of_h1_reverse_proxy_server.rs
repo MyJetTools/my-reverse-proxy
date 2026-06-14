@@ -27,7 +27,7 @@ pub async fn kick_h1_reverse_proxy_server(
         endpoint_info: Some(endpoint_info),
         listen_config,
     };
-    super::server_loop::serve_reverse_proxy(server_stream, http_connection_info).await;
+    super::serve_reverse_proxy_pipelined(server_stream, http_connection_info).await;
 }
 
 pub fn kick_h1_tcp_reverse_proxy_server_from_http(
@@ -44,7 +44,7 @@ pub fn kick_h1_tcp_reverse_proxy_server_from_http(
 
     crate::app::spawn_named(
         "h1_tcp_server_connection",
-        super::server_loop::serve_reverse_proxy(accepted_connection, http_connection_info),
+        super::serve_reverse_proxy_pipelined(accepted_connection, http_connection_info),
     );
 }
 
@@ -60,6 +60,6 @@ pub fn kick_h1_unix_reverse_proxy_server_from_http(
     };
     crate::app::spawn_named(
         "h1_unix_server_connection",
-        super::server_loop::serve_reverse_proxy(accepted_connection, http_connection_info),
+        super::serve_reverse_proxy_pipelined(accepted_connection, http_connection_info),
     );
 }

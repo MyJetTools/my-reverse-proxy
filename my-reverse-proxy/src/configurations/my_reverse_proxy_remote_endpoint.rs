@@ -7,7 +7,7 @@ use crate::settings_compiled::SettingsCompiled;
 
 pub const GATEWAY_PREFIX: &str = "gateway:";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MyReverseProxyRemoteEndpoint {
     Gateway {
         id: Arc<String>,
