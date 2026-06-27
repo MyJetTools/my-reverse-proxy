@@ -111,6 +111,20 @@ impl HttpEndpointInfo {
         None
     }
 
+    /// Guards against HTTP/2 connection coalescing (and any cross-SNI
+    /// `Host`/`:authority` reuse): mTLS is enforced only during the TLS
+    /// handshake, which is bound to the SNI that opened the connection. A
+    /// connection opened for a non-mTLS vhost must never be allowed to serve
+    /// this endpoint via a different `Host` when this endpoint requires a client
+    /// certificate. Returns `false` exactly when mTLS is required here but the
+    /// connection presented no verified client certificate.
+    pub fn connection_satisfies_client_cert(&self, connection_has_client_cert: bool) -> bool {
+        if self.client_certificate_id.is_some() {
+            return connection_has_client_cert;
+        }
+        true
+    }
+
     pub fn must_be_authorized<'s>(&'s self) -> Option<AuthorizationRequired<'s>> {
         if let Some(g_auth) = self.g_auth.as_deref() {
             return Some(AuthorizationRequired::GoogleAuth(g_auth));

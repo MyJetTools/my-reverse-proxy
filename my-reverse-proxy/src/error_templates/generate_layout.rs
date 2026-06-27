@@ -55,6 +55,14 @@ pub static PROXY_TO_HOST_NOT_ALLOWED: LazyLock<Vec<u8>> = LazyLock::new(|| {
     build_layout_with_explicit_status(403, "Forbidden", Some("Upstream host not allowed".into()))
 });
 
+pub static MTLS_REQUIRED_MISDIRECTED: LazyLock<Vec<u8>> = LazyLock::new(|| {
+    build_layout_with_explicit_status(
+        421,
+        "Misdirected Request",
+        Some("A client certificate is required for this host".into()),
+    )
+});
+
 pub fn generate_layout(status_code: u16, text: &str, second_line: Option<StrOrString>) -> Vec<u8> {
     build_layout(status_code, text, second_line, false)
 }

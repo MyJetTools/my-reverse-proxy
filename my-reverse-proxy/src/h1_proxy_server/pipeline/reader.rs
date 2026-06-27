@@ -220,6 +220,22 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     let keep_alive = end_point_info.keep_alive;
     let endpoint_for_error = end_point_info.host_endpoint.as_str().to_string();
 
+    // mTLS is enforced only during the TLS handshake (bound to the connection's
+    // SNI). If this request was routed by Host to an endpoint that requires a
+    // client certificate over a connection that presented none (a deliberate
+    // cross-vhost request on a keep-alive connection), refuse it with 421 so the
+    // client re-opens a dedicated connection and performs mTLS.
+    if !end_point_info.connection_satisfies_client_cert(http_connection_info.cn_user_name.is_some())
+    {
+        return respond_error(
+            queue_tx,
+            http_connection_info,
+            Some(&endpoint_for_error),
+            ProxyServerError::MisdirectedClientCertRequired,
+        )
+        .await;
+    }
+
     if let Some(domain) = end_point_info.tracked_domain(request_host_for_metric.as_deref()) {
         crate::app::APP_CTX.rps.inc_domain(domain);
     }

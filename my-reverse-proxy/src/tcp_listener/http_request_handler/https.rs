@@ -84,6 +84,33 @@ impl HttpsRequestsHandler {
             return Err(create_err_response(StatusCode::BAD_REQUEST, content));
         };
 
+        // mTLS is enforced only during the TLS handshake, which is bound to the
+        // SNI used to open this connection. A browser may coalesce HTTP/2
+        // requests for several hosts onto one connection (RFC 7540 §9.1.1), and a
+        // hostile client can simply send a different `:authority`. If the
+        // resolved endpoint requires a client certificate but this connection
+        // presented none, refuse with 421 Misdirected Request so the client
+        // re-opens a dedicated connection (with the right SNI) and performs mTLS.
+        if !http_endpoint_info.connection_satisfies_client_cert(self.client_certificate.is_some()) {
+            crate::app::APP_CTX.proxy_logs.write_port(
+                self.listen_port_config.listen_host.get_log_key().as_str(),
+                self.connection_ip.get_ip_log(),
+                format!(
+                    "Rejected request for host [{}]: endpoint requires a client certificate but the TLS connection presented none (HTTP/2 coalescing or SNI mismatch)",
+                    host
+                ),
+            );
+            let content = crate::error_templates::generate_layout(
+                421,
+                "Misdirected Request",
+                Some("A client certificate is required for this host".into()),
+            );
+            return Err(create_err_response(
+                StatusCode::MISDIRECTED_REQUEST,
+                content,
+            ));
+        }
+
         if crate::app::APP_CTX
             .debug_flags
             .is_endpoint_debug(http_endpoint_info.host_endpoint.as_str())

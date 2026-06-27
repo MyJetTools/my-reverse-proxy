@@ -23,6 +23,12 @@ pub enum ProxyServerError {
     ProxyToHeaderMissing,
     ProxyToHeaderInvalid,
     ProxyToHostNotAllowed,
+    /// Request routed (by `Host`/`:authority`) to an endpoint that requires a
+    /// client certificate, over a TLS connection that presented none — i.e. the
+    /// connection was opened with a different SNI (HTTP/2 connection coalescing
+    /// or a deliberate cross-vhost request). Answered with 421 so the client
+    /// re-opens a dedicated connection and performs mTLS.
+    MisdirectedClientCertRequired,
 }
 
 /// Everything `serve_reverse_proxy` needs to do with a failed request, derived
@@ -108,6 +114,14 @@ impl ProxyServerError {
             },
             Self::ProxyToHostNotAllowed => ErrorHandling {
                 page: Some(tpl::PROXY_TO_HOST_NOT_ALLOWED.as_slice()),
+                status_5xx: None,
+                register_ip_failure: false,
+            },
+
+            // mTLS mismatch — legitimate 421 retry signal, not a malformed
+            // request, so do not penalise the source IP.
+            Self::MisdirectedClientCertRequired => ErrorHandling {
+                page: Some(tpl::MTLS_REQUIRED_MISDIRECTED.as_slice()),
                 status_5xx: None,
                 register_ip_failure: false,
             },
