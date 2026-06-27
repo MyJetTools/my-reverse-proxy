@@ -57,7 +57,7 @@ async fn lazy_accept_tcp_stream_internal(
             Ok(start_handshake) => {
                 let client_hello = start_handshake.client_hello();
                 let server_name = if let Some(server_name) = client_hello.server_name() {
-                    server_name
+                    server_name.to_string()
                 } else {
                     return Err("no server name (SNI) in client hello".to_string());
                 };
@@ -83,11 +83,13 @@ async fn lazy_accept_tcp_stream_internal(
                 }
 
                 let config_result =
-                    super::tls_acceptor::create_config(configuration, server_name, endpoint_port)
+                    super::tls_acceptor::create_config(configuration, &server_name, endpoint_port)
                         .await;
 
                 if let Err(err) = &config_result {
-                    return Err(format!("Failed to create tls config. Err: {err:#}"));
+                    return Err(format!(
+                        "Failed to create tls config for '{server_name}'. Err: {err:#}"
+                    ));
                 }
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
@@ -95,7 +97,14 @@ async fn lazy_accept_tcp_stream_internal(
                 let tls_stream = start_handshake.into_stream(config.into()).await;
 
                 if let Err(err) = &tls_stream {
-                    return Err(format!("failed to perform tls handshake: {err:#}"));
+                    let mtls_hint = if client_cert_cell.is_some() {
+                        " (endpoint requires a client certificate / mTLS)"
+                    } else {
+                        ""
+                    };
+                    return Err(format!(
+                        "failed to perform tls handshake for '{server_name}': {err:#}{mtls_hint}"
+                    ));
                 }
 
                 let tls_stream = tls_stream.unwrap();
