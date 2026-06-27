@@ -4,11 +4,55 @@ use futures::FutureExt;
 use my_tls::tokio_rustls::{rustls::server::Acceptor, LazyConfigAcceptor};
 
 use crate::{
+    app::FailureSeverity,
     configurations::{HttpEndpointInfo, HttpListenPortConfiguration},
     tcp_listener::https::ClientCertificateData,
 };
 
 const RESOLVE_TLS_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Why a TLS connection was rejected before it could be served. The block-list
+/// policy is derived from the variant via [`TlsAcceptError::block_severity`].
+pub enum TlsAcceptError {
+    /// The endpoint requires a client certificate (mTLS) and the client
+    /// presented none or an invalid one (a browser that hasn't selected a cert,
+    /// an HTTP/2 coalesced connection, a probe). Lenient — soft failure; only
+    /// the white-list is fully exempt.
+    ClientCertRequired(String),
+    /// The ClientHello did not map to any configured endpoint — no SNI, or an
+    /// SNI for a host we do not serve. Internet background noise; a few are
+    /// harmless, but a flood is a scanner → soft failure.
+    UnknownServerName(String),
+    /// The peer never produced a valid ClientHello (non-TLS bytes on the TLS
+    /// port, port scanner, garbage). Unambiguous abuse → hard failure.
+    MalformedTls(String),
+    /// Any other handshake failure on a configured endpoint (handshake abort,
+    /// server misconfig, timeout, panic). Noisy → soft failure.
+    Other(String),
+}
+
+impl TlsAcceptError {
+    pub fn message(&self) -> &str {
+        match self {
+            Self::ClientCertRequired(msg)
+            | Self::UnknownServerName(msg)
+            | Self::MalformedTls(msg)
+            | Self::Other(msg) => msg.as_str(),
+        }
+    }
+
+    /// How this rejection counts toward the auto IP block-list. Every rejection
+    /// counts; the white-list (enforced in `register_failure`) is the only full
+    /// exemption.
+    pub fn block_severity(&self) -> FailureSeverity {
+        match self {
+            Self::MalformedTls(_) => FailureSeverity::Hard,
+            Self::ClientCertRequired(_) | Self::UnknownServerName(_) | Self::Other(_) => {
+                FailureSeverity::Soft
+            }
+        }
+    }
+}
 
 pub async fn lazy_accept_tcp_stream(
     endpoint_port: u16,
@@ -20,17 +64,17 @@ pub async fn lazy_accept_tcp_stream(
         Arc<HttpEndpointInfo>,
         Option<Arc<ClientCertificateData>>,
     ),
-    String,
+    TlsAcceptError,
 > {
     let future = lazy_accept_tcp_stream_internal(endpoint_port, tcp_stream, configuration);
 
     let result = tokio::time::timeout(RESOLVE_TLS_TIMEOUT, future).await;
 
     if result.is_err() {
-        return Err(format!(
+        return Err(TlsAcceptError::Other(format!(
             "Accepting TLS connection timeout for port: {}",
             endpoint_port
-        ));
+        )));
     }
 
     result.unwrap()
@@ -46,7 +90,7 @@ async fn lazy_accept_tcp_stream_internal(
         Arc<HttpEndpointInfo>,
         Option<Arc<ClientCertificateData>>,
     ),
-    String,
+    TlsAcceptError,
 > {
     let handshake = async move {
         let lazy_acceptor = LazyConfigAcceptor::new(Acceptor::default(), tcp_stream);
@@ -59,8 +103,21 @@ async fn lazy_accept_tcp_stream_internal(
                 let server_name = if let Some(server_name) = client_hello.server_name() {
                     server_name.to_string()
                 } else {
-                    return Err("no server name (SNI) in client hello".to_string());
+                    return Err(TlsAcceptError::UnknownServerName(
+                        "no server name (SNI) in client hello".to_string(),
+                    ));
                 };
+
+                // SNI for a host we do not serve at all — unroutable noise, do
+                // not penalise the source IP.
+                if configuration
+                    .get_http_endpoint_info(Some(server_name.as_str()))
+                    .is_none()
+                {
+                    return Err(TlsAcceptError::UnknownServerName(format!(
+                        "server name '{server_name}' is not configured on this port"
+                    )));
+                }
 
                 if let Some(client_cert) = client_hello.client_cert_types() {
                     for client_cert in client_cert {
@@ -87,9 +144,9 @@ async fn lazy_accept_tcp_stream_internal(
                         .await;
 
                 if let Err(err) = &config_result {
-                    return Err(format!(
+                    return Err(TlsAcceptError::Other(format!(
                         "Failed to create tls config for '{server_name}'. Err: {err:#}"
-                    ));
+                    )));
                 }
 
                 let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
@@ -97,14 +154,17 @@ async fn lazy_accept_tcp_stream_internal(
                 let tls_stream = start_handshake.into_stream(config.into()).await;
 
                 if let Err(err) = &tls_stream {
-                    let mtls_hint = if client_cert_cell.is_some() {
-                        " (endpoint requires a client certificate / mTLS)"
-                    } else {
-                        ""
-                    };
-                    return Err(format!(
-                        "failed to perform tls handshake for '{server_name}': {err:#}{mtls_hint}"
-                    ));
+                    // When the endpoint requires a client certificate, a failed
+                    // handshake is almost always the client not presenting a
+                    // valid cert — an expected condition we must not penalise.
+                    if client_cert_cell.is_some() {
+                        return Err(TlsAcceptError::ClientCertRequired(format!(
+                            "failed to perform tls handshake for '{server_name}': {err:#} (endpoint requires a client certificate / mTLS)"
+                        )));
+                    }
+                    return Err(TlsAcceptError::Other(format!(
+                        "failed to perform tls handshake for '{server_name}': {err:#}"
+                    )));
                 }
 
                 let tls_stream = tls_stream.unwrap();
@@ -118,7 +178,11 @@ async fn lazy_accept_tcp_stream_internal(
                 (tls_stream, endpoint_info, client_certificate)
             }
             Err(err) => {
-                return Err(format!("failed to perform tls handshake: {err:#}"));
+                // Could not even parse a ClientHello — non-TLS traffic on the
+                // TLS port / scanner. Unambiguous abuse → hard failure.
+                return Err(TlsAcceptError::MalformedTls(format!(
+                    "failed to perform tls handshake: {err:#}"
+                )));
             }
         };
 
@@ -135,7 +199,9 @@ async fn lazy_accept_tcp_stream_internal(
             } else {
                 "unknown panic payload".to_string()
             };
-            Err(format!("tls handshake panicked: {msg}"))
+            Err(TlsAcceptError::Other(format!(
+                "tls handshake panicked: {msg}"
+            )))
         }
     }
 }

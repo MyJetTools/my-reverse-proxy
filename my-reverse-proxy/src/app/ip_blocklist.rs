@@ -8,13 +8,26 @@ use rust_extensions::date_time::DateTimeAsMicroseconds;
 
 use crate::types::WhiteListedIpList;
 
-const WINDOW_SECS: i64 = 60;
-const FAIL_THRESHOLD: u16 = 10;
+const WINDOW_SECS: i64 = 15;
+/// Unambiguous abuse (e.g. non-TLS bytes on a TLS port) — block quickly.
+const HARD_FAIL_THRESHOLD: u16 = 5;
+/// Noisier, possibly-benign failures on a real endpoint — must pile up.
+/// 30 over the 15s window ≈ 2 requests/sec sustained.
+const SOFT_FAIL_THRESHOLD: u16 = 30;
 const BLOCK_SECS: i64 = 5 * 60;
+
+/// How strong a signal a failed attempt is. Hard failures are unambiguous abuse
+/// we want blocked fast; soft failures are noisy and must accumulate.
+#[derive(Clone, Copy, Debug)]
+pub enum FailureSeverity {
+    Hard,
+    Soft,
+}
 
 #[derive(Clone, Copy)]
 struct IpEntry {
-    fail_count: u16,
+    hard_count: u16,
+    soft_count: u16,
     window_start: DateTimeAsMicroseconds,
     blocked_until: Option<DateTimeAsMicroseconds>,
 }
@@ -79,23 +92,25 @@ impl IpBlocklist {
         map.remove(ip).is_some()
     }
 
-    pub fn register_failure(&self, ip: IpAddr) {
+    pub fn register_failure(&self, ip: IpAddr, severity: FailureSeverity) {
         if self.is_white_listed(&ip) {
             return;
         }
 
         let now = DateTimeAsMicroseconds::now();
 
-        let (newly_blocked, fail_count) = {
+        let (newly_blocked, hard_count, soft_count) = {
             let mut map = self.map.lock();
             let entry = map.entry(ip).or_insert(IpEntry {
-                fail_count: 0,
+                hard_count: 0,
+                soft_count: 0,
                 window_start: now,
                 blocked_until: None,
             });
 
             if now.duration_since(entry.window_start).get_full_seconds() > WINDOW_SECS {
-                entry.fail_count = 0;
+                entry.hard_count = 0;
+                entry.soft_count = 0;
                 entry.window_start = now;
             }
 
@@ -104,9 +119,12 @@ impl IpBlocklist {
                 None => false,
             };
 
-            entry.fail_count = entry.fail_count.saturating_add(1);
+            match severity {
+                FailureSeverity::Hard => entry.hard_count = entry.hard_count.saturating_add(1),
+                FailureSeverity::Soft => entry.soft_count = entry.soft_count.saturating_add(1),
+            }
 
-            if entry.fail_count >= FAIL_THRESHOLD {
+            if entry.hard_count >= HARD_FAIL_THRESHOLD || entry.soft_count >= SOFT_FAIL_THRESHOLD {
                 let mut blocked_until = now;
                 blocked_until.add_seconds(BLOCK_SECS);
                 entry.blocked_until = Some(blocked_until);
@@ -117,7 +135,11 @@ impl IpBlocklist {
                 None => false,
             };
 
-            (blocked_now && !was_blocked, entry.fail_count)
+            (
+                blocked_now && !was_blocked,
+                entry.hard_count,
+                entry.soft_count,
+            )
         };
 
         // One line per new block (not per failure), with the offending IP.
@@ -126,7 +148,7 @@ impl IpBlocklist {
                 "ip-blocklist",
                 Some(ip.to_string()),
                 format!(
-                    "Blocked IP {ip} for {BLOCK_SECS}s after {fail_count} failed connections within {WINDOW_SECS}s"
+                    "Blocked IP {ip} for {BLOCK_SECS}s ({hard_count} hard / {soft_count} soft failures within {WINDOW_SECS}s)"
                 ),
             );
         }

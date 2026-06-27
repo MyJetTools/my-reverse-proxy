@@ -492,7 +492,11 @@ async fn respond_error(
 
     if handling.register_ip_failure {
         if let Some(ip) = http_connection_info.connection_ip.get_ip_addr() {
-            crate::app::APP_CTX.ip_blocklist.register_failure(ip);
+            // Malformed HTTP after a successful TLS handshake — noisy, treat as a
+            // soft failure (must accumulate before blocking).
+            crate::app::APP_CTX
+                .ip_blocklist
+                .register_failure(ip, crate::app::FailureSeverity::Soft);
         }
     }
 
