@@ -193,6 +193,7 @@ impl SettingsCompiled {
                 show_error_description_on_error_page: itm.show_error_description_on_error_page,
                 http_control_port: itm.http_control_port,
                 default_h2_livness_url: itm.default_h2_livness_url,
+                ip_blocklist_white_list: itm.ip_blocklist_white_list,
                 pool_supervisor_interval: itm.pool_supervisor_interval,
                 timeouts: itm.timeouts,
             })

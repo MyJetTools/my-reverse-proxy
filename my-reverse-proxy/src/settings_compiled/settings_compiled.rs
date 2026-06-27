@@ -111,4 +111,12 @@ impl SettingsCompiled {
 
         false
     }
+
+    /// Global IP block-list allow-list (fail2ban exemptions), if configured.
+    pub fn get_ip_blocklist_white_list(&self) -> Option<Vec<String>> {
+        self.global_settings
+            .as_ref()?
+            .ip_blocklist_white_list
+            .clone()
+    }
 }

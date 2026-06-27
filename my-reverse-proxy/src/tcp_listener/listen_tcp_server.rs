@@ -51,6 +51,11 @@ async fn accept_connections_loop(
                 let (tcp_stream, addr) = accepted_connection.unwrap();
 
                 if crate::app::APP_CTX.ip_blocklist.is_blocked(&addr.ip()) {
+                    crate::app::APP_CTX.proxy_logs.write_port(
+                        listening_addr.port().to_string().as_str(),
+                        Some(addr.ip().to_string()),
+                        format!("Dropped connection from blocked IP {}", addr.ip()),
+                    );
                     drop(tcp_stream);
                     continue;
                 }

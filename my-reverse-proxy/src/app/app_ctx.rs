@@ -143,6 +143,9 @@ impl AppContext {
             gateway_clients.insert(id.clone(), client);
         }
 
+        let ip_blocklist = IpBlocklist::new();
+        ip_blocklist.set_white_list(settings_model.get_ip_blocklist_white_list());
+
         Self {
             id: AtomicI64::new(0),
             connection_settings,
@@ -191,7 +194,7 @@ impl AppContext {
                 .unwrap(),
             ),
             rps: Arc::new(RpsAccumulator::new()),
-            ip_blocklist: IpBlocklist::new(),
+            ip_blocklist,
             traffic: TrafficAccumulator::new(),
             resolved_domain_ips: ResolvedDomainIps::new(),
         }
