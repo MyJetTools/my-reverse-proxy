@@ -66,7 +66,7 @@ impl HttpProxyPass {
             );
         }
 
-        let mut req = HttpRequestBuilder::new(self.endpoint_info.listen_endpoint_type.clone(), req);
+        let mut req = HttpRequestBuilder::new(req);
 
         let (request, content_source, location_index, location_debug) = {
             let Some(inner) = self.inner.load_full() else {

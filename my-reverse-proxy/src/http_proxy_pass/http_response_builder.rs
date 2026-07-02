@@ -10,14 +10,16 @@ use super::{HttpProxyPass, HttpProxyPassInner, LocationIndex};
 pub fn modify_resp_headers(
     proxy_pass: &HttpProxyPass,
     inner: &HttpProxyPassInner,
-    req_host_port: &impl HttpRequestReader,
+    req_parts: &hyper::http::request::Parts,
     headers: &mut HeaderMap<HeaderValue>,
     location_index: &LocationIndex,
 ) {
     let proxy_pass_location = inner.locations.find(location_index);
 
     if let Some(dest_http1) = proxy_pass_location.is_http1() {
-        if dest_http1 && !proxy_pass.listening_port_info.endpoint_type.is_http1() {
+        // Keyed on the request's wire version, not the endpoint's configured
+        // listen type — they differ on coalesced connections (RFC 7540 §9.1.1).
+        if dest_http1 && !super::client_is_http1(req_parts.version) {
             headers.remove(header::TRANSFER_ENCODING);
             headers.remove(header::CONNECTION);
             headers.remove(header::UPGRADE);
@@ -29,14 +31,14 @@ pub fn modify_resp_headers(
 
     modify_headers(
         inner,
-        req_host_port,
+        req_parts,
         headers,
         &proxy_pass.endpoint_info.modify_response_headers,
     );
 
     modify_headers(
         inner,
-        req_host_port,
+        req_parts,
         headers,
         &proxy_pass_location.config.modify_response_headers,
     );

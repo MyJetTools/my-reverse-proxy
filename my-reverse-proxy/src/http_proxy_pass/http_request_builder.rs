@@ -30,7 +30,16 @@ pub struct TransformedRequest {
 pub struct HttpRequestBuilder {
     pub parts: Parts,
     body: Incoming,
-    src_http_type: ListenHttpEndpointType,
+}
+
+/// Whether the client side of this exchange is HTTP/1.x ON THE WIRE. The
+/// endpoint's configured listen type cannot be used for this: an HTTP/2
+/// connection opened for another vhost (browser connection coalescing,
+/// RFC 7540 §9.1.1) legitimately carries requests for endpoints configured
+/// as http1, so protocol-conversion decisions must follow the actual version
+/// of the request itself.
+pub fn client_is_http1(version: hyper::Version) -> bool {
+    !matches!(version, hyper::Version::HTTP_2 | hyper::Version::HTTP_3)
 }
 
 fn is_h2_websocket_connect(parts: &Parts) -> bool {
@@ -46,17 +55,10 @@ fn is_h2_websocket_connect(parts: &Parts) -> bool {
 }
 
 impl HttpRequestBuilder {
-    pub fn new(
-        src_http_type: ListenHttpEndpointType,
-        src: hyper::Request<hyper::body::Incoming>,
-    ) -> Self {
+    pub fn new(src: hyper::Request<hyper::body::Incoming>) -> Self {
         let (parts, body) = src.into_parts();
 
-        Self {
-            parts,
-            body,
-            src_http_type,
-        }
+        Self { parts, body }
     }
 
     pub async fn into_request(
@@ -101,7 +103,7 @@ impl HttpRequestBuilder {
 
         let dest_http1 = dest_http1.unwrap();
 
-        if !self.src_http_type.is_http1() && dest_http1 {
+        if !client_is_http1(self.parts.version) && dest_http1 {
             return self.http2_to_http1(location, ip).await;
         }
 
