@@ -21,19 +21,12 @@ pub struct HttpsRequestsHandler {
 
 impl HttpsRequestsHandler {
     pub fn new(
-        initial_host_key: String,
-        initial_proxy_pass: HttpProxyPass,
         connection_ip: ConnectionIp,
         listen_port_config: Arc<HttpListenPortConfiguration>,
         client_certificate: Option<Arc<ClientCertificateData>>,
     ) -> Self {
-        let mut map = HashMap::new();
-        map.insert(
-            initial_host_key.to_ascii_lowercase(),
-            Arc::new(initial_proxy_pass),
-        );
         Self {
-            proxy_passes: Mutex::new(map),
+            proxy_passes: Mutex::new(HashMap::new()),
             connection_ip,
             listen_port_config,
             client_certificate,
@@ -44,7 +37,20 @@ impl HttpsRequestsHandler {
         &self,
         req: &hyper::Request<hyper::body::Incoming>,
     ) -> Result<Arc<HttpProxyPass>, hyper::Result<hyper::Response<BoxBody<Bytes, String>>>> {
-        let Some(host) = req.uri().host() else {
+        let host: String = if let Some(host) = req.uri().host() {
+            host.to_string()
+        } else if let Some(host) = req
+            .headers()
+            .get(hyper::header::HOST)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.split(':').next().unwrap_or(v).trim())
+            .filter(|v| !v.is_empty())
+        {
+            // Origin-form HTTP/1.1 request (e.g. an http/1.1 client reaching this
+            // h2-typed endpoint via ALPN fallback): the authority is only in the
+            // `Host` header, not the request URI.
+            host.to_string()
+        } else {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
@@ -69,7 +75,9 @@ impl HttpsRequestsHandler {
             }
         }
 
-        let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(Some(host));
+        let http_endpoint_info = self
+            .listen_port_config
+            .get_http_endpoint_info(Some(host.as_str()));
         let Some(http_endpoint_info) = http_endpoint_info else {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
@@ -109,6 +117,38 @@ impl HttpsRequestsHandler {
                 StatusCode::MISDIRECTED_REQUEST,
                 content,
             ));
+        }
+
+        // Enforce the *request-host* endpoint's IP allow-list per request. The
+        // connection-level check in handle_connection only sees the SNI
+        // endpoint; a coalesced / cross-`Host` request (RFC 7540 §9.1.1) must
+        // still satisfy the allow-list of the vhost it actually targets. Skip
+        // when the client IP is unknown (unix socket), matching the
+        // location-level check in HttpProxyPass::send_payload.
+        if let Some(ip_list_id) = http_endpoint_info.whitelisted_ip_list_id.as_ref() {
+            if let Some(client_ip) = self.connection_ip.get_ip_addr() {
+                let is_whitelisted = crate::app::APP_CTX
+                    .current_configuration
+                    .get(|config| {
+                        config
+                            .white_list_ip_list
+                            .is_white_listed(ip_list_id, &client_ip)
+                    })
+                    .await;
+                if !is_whitelisted {
+                    crate::app::APP_CTX.proxy_logs.write_port(
+                        self.listen_port_config.listen_host.get_log_key().as_str(),
+                        self.connection_ip.get_ip_log(),
+                        format!(
+                            "Rejected request for host [{}]: client IP is not in the endpoint allow-list",
+                            host
+                        ),
+                    );
+                    let content =
+                        crate::error_templates::generate_layout(401, "Restricted by IP", None);
+                    return Err(create_err_response(StatusCode::UNAUTHORIZED, content));
+                }
+            }
         }
 
         if crate::app::APP_CTX

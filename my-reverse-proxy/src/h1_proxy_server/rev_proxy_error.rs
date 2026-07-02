@@ -62,9 +62,22 @@ impl ProxyServerError {
                 register_ip_failure: false,
             },
 
-            // Malformed or unroutable request — close and penalise the source.
-            Self::HttpConfigurationIsNotFound
-            | Self::ParsingPayloadError(_)
+            // A well-formed request whose `Host`/`:authority` matches no
+            // configured vhost — happens for HTTP/2 coalescing, cross-vhost
+            // reuse on a keep-alive connection, or a since-removed endpoint on a
+            // long-lived connection, not just for scanners. The connection has
+            // already passed SNI validation at the TLS layer, so close it but do
+            // NOT penalise the source IP — a false block would take out all of a
+            // legitimate client's traffic.
+            Self::HttpConfigurationIsNotFound => ErrorHandling {
+                page: None,
+                status_5xx: None,
+                register_ip_failure: false,
+            },
+
+            // Genuinely malformed HTTP (garbage bytes, bad chunk/header framing)
+            // — close and penalise the source.
+            Self::ParsingPayloadError(_)
             | Self::ChunkHeaderParseError
             | Self::HeadersParseError(_) => ErrorHandling {
                 page: None,
@@ -190,7 +203,6 @@ mod tests {
     #[test]
     fn malformed_request_penalises_source_without_page() {
         for err in [
-            ProxyServerError::HttpConfigurationIsNotFound,
             ProxyServerError::ParsingPayloadError("x"),
             ProxyServerError::ChunkHeaderParseError,
             ProxyServerError::HeadersParseError("x"),
@@ -200,6 +212,14 @@ mod tests {
             assert_eq!(h.status_5xx, None);
             assert!(h.register_ip_failure, "{:?}", err);
         }
+    }
+
+    #[test]
+    fn unroutable_host_closes_without_penalising_source() {
+        let h = ProxyServerError::HttpConfigurationIsNotFound.error_handling();
+        assert!(h.page.is_none());
+        assert_eq!(h.status_5xx, None);
+        assert!(!h.register_ip_failure);
     }
 
     #[test]

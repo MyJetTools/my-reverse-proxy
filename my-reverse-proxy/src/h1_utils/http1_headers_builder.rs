@@ -29,7 +29,7 @@ impl Http1HeadersBuilder {
             }
             405 => {
                 self.payload
-                    .extend_from_slice(b"HTTP/1.1 405 Not Method Not Allowed");
+                    .extend_from_slice(b"HTTP/1.1 405 Method Not Allowed");
             }
             421 => {
                 self.payload
@@ -38,9 +38,23 @@ impl Http1HeadersBuilder {
             502 => {
                 self.payload.extend_from_slice(b"HTTP/1.1 502 Bad Gateway");
             }
-            _ => {
+            503 => {
                 self.payload
                     .extend_from_slice(b"HTTP/1.1 503 Service Temporarily Unavailable");
+            }
+            other => {
+                // Any other configured/proxied status: emit the real code with
+                // its canonical reason phrase instead of silently masking it as
+                // 503 (e.g. a static location configured with status_code: 400).
+                let reason = http::StatusCode::from_u16(other)
+                    .ok()
+                    .and_then(|s| s.canonical_reason())
+                    .unwrap_or("Status");
+                self.payload.extend_from_slice(b"HTTP/1.1 ");
+                self.payload
+                    .extend_from_slice(other.to_string().as_bytes());
+                self.payload.push(b' ');
+                self.payload.extend_from_slice(reason.as_bytes());
             }
         }
 

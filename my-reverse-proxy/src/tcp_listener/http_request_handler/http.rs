@@ -29,7 +29,19 @@ impl HttpRequestHandler {
         &self,
         req: &hyper::Request<hyper::body::Incoming>,
     ) -> Result<Arc<HttpProxyPass>, hyper::Result<hyper::Response<BoxBody<Bytes, String>>>> {
-        let Some(host) = req.uri().host() else {
+        let host: String = if let Some(host) = req.uri().host() {
+            host.to_string()
+        } else if let Some(host) = req
+            .headers()
+            .get(hyper::header::HOST)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.split(':').next().unwrap_or(v).trim())
+            .filter(|v| !v.is_empty())
+        {
+            // Origin-form HTTP/1.1 request: the authority is only in the `Host`
+            // header, not the request URI.
+            host.to_string()
+        } else {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
@@ -54,7 +66,9 @@ impl HttpRequestHandler {
             }
         }
 
-        let http_endpoint_info = self.listen_port_config.get_http_endpoint_info(Some(host));
+        let http_endpoint_info = self
+            .listen_port_config
+            .get_http_endpoint_info(Some(host.as_str()));
         if http_endpoint_info.is_none() {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),

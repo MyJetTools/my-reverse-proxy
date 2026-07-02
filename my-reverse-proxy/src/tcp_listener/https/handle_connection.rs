@@ -4,7 +4,6 @@ use hyper_util::rt::TokioIo;
 use tokio::io::AsyncWriteExt;
 
 use crate::configurations::*;
-use crate::http_proxy_pass::{HttpListenPortInfo, HttpProxyPass};
 use crate::tcp_listener::http_request_handler::https::HttpsRequestsHandler;
 use crate::types::ConnectionIp;
 
@@ -56,18 +55,23 @@ pub fn handle_connection(
         let (mut tls_stream, endpoint_info, cn_user_name) = result;
 
         if let Some(ip_list_id) = endpoint_info.whitelisted_ip_list_id.as_ref() {
-            let is_whitelisted = crate::app::APP_CTX
-                .current_configuration
-                .get(|config| {
-                    config
-                        .white_list_ip_list
-                        .is_white_listed(ip_list_id, &listening_addr.ip())
-                })
-                .await;
+            // Match against the CLIENT's IP, not the proxy's own listening
+            // address. Skip when the client IP is unknown (unix socket), matching
+            // the location-level allow-list check in HttpProxyPass::send_payload.
+            if let Some(client_ip) = connection_ip.get_ip_addr() {
+                let is_whitelisted = crate::app::APP_CTX
+                    .current_configuration
+                    .get(|config| {
+                        config
+                            .white_list_ip_list
+                            .is_white_listed(ip_list_id, &client_ip)
+                    })
+                    .await;
 
-            if !is_whitelisted {
-                let _ = tls_stream.shutdown().await;
-                return;
+                if !is_whitelisted {
+                    let _ = tls_stream.shutdown().await;
+                    return;
+                }
             }
         }
 
@@ -154,26 +158,10 @@ async fn serve_https2(
     let mut http_builder = Builder::new(TokioExecutor::new());
     http_builder.http2().enable_connect_protocol();
 
-    let listening_port_info = HttpListenPortInfo {
-        endpoint_type: endpoint_info.listen_endpoint_type,
-        listen_host: listening_addr.into(),
-    };
-
-    let http_proxy_pass = HttpProxyPass::new(
-        connection_ip,
-        endpoint_info.clone(),
-        listening_port_info,
-        client_certificate.clone(),
-    )
-    .await;
-
-    let https_requests_handler = HttpsRequestsHandler::new(
-        endpoint_info.host_endpoint.as_str().to_string(),
-        http_proxy_pass,
-        connection_ip,
-        configuration,
-        client_certificate,
-    );
+    // Per-request HttpProxyPasses are built lazily by the handler (keyed by the
+    // request's Host), so there is no pre-seeded entry to build here.
+    let https_requests_handler =
+        HttpsRequestsHandler::new(connection_ip, configuration, client_certificate);
 
     let https_requests_handler = Arc::new(https_requests_handler);
 
