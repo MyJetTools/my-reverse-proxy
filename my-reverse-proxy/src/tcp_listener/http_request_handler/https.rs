@@ -97,14 +97,17 @@ impl HttpsRequestsHandler {
         // requests for several hosts onto one connection (RFC 7540 §9.1.1), and a
         // hostile client can simply send a different `:authority`. If the
         // resolved endpoint requires a client certificate but this connection
-        // presented none, refuse with 421 Misdirected Request so the client
-        // re-opens a dedicated connection (with the right SNI) and performs mTLS.
-        if !http_endpoint_info.connection_satisfies_client_cert(self.client_certificate.is_some()) {
+        // presented none — or one verified by a different CA — refuse with 421
+        // Misdirected Request so the client re-opens a dedicated connection
+        // (with the right SNI) and performs mTLS against this endpoint's CA.
+        if !http_endpoint_info.connection_satisfies_client_cert(
+            self.client_certificate.as_ref().map(|c| c.ca_id.as_str()),
+        ) {
             crate::app::APP_CTX.proxy_logs.write_port(
                 self.listen_port_config.listen_host.get_log_key().as_str(),
                 self.connection_ip.get_ip_log(),
                 format!(
-                    "Rejected request for host [{}]: endpoint requires a client certificate but the TLS connection presented none (HTTP/2 coalescing or SNI mismatch)",
+                    "Rejected request for host [{}]: endpoint requires a client certificate but the TLS connection presented none or one from a different CA (HTTP/2 coalescing or SNI mismatch)",
                     host
                 ),
             );
@@ -168,11 +171,22 @@ impl HttpsRequestsHandler {
             listen_host: self.listen_port_config.listen_host.clone(),
         };
 
+        // The connection's client-cert identity is scoped to endpoints that
+        // require the same CA that verified it. On a coalesced / cross-`Host`
+        // request to an endpoint with no (or another) mTLS requirement the
+        // identity must stay empty — same as on a dedicated connection, where
+        // such an endpoint would never have asked for a certificate.
+        let client_certificate = self
+            .client_certificate
+            .as_ref()
+            .filter(|cert| http_endpoint_info.client_cert_identity_applies(cert.ca_id.as_str()))
+            .cloned();
+
         let http_proxy_pass = HttpProxyPass::new(
             self.connection_ip,
             http_endpoint_info,
             listening_port_info,
-            self.client_certificate.clone(),
+            client_certificate,
         )
         .await;
 

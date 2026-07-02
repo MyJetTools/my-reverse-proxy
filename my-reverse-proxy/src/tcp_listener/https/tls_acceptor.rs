@@ -104,9 +104,19 @@ pub async fn create_config(
     if let Some(client_cert_ca) = client_cert_ca {
         let client_cert_cell = Arc::new(ClientCertCell::new());
 
+        // client_cert_ca was resolved from this endpoint's client_certificate_id
+        // above, so the id is always present here.
+        let ca_id = http_endpoint_info
+            .client_certificate_id
+            .as_ref()
+            .unwrap()
+            .as_str()
+            .to_string();
+
         let client_cert_verifier = Arc::new(MyClientCertVerifier::new(
             client_cert_cell.clone(),
             client_cert_ca,
+            ca_id,
             endpoint_port,
         ));
 

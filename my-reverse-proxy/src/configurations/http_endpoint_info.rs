@@ -113,16 +113,34 @@ impl HttpEndpointInfo {
 
     /// Guards against HTTP/2 connection coalescing (and any cross-SNI
     /// `Host`/`:authority` reuse): mTLS is enforced only during the TLS
-    /// handshake, which is bound to the SNI that opened the connection. A
-    /// connection opened for a non-mTLS vhost must never be allowed to serve
-    /// this endpoint via a different `Host` when this endpoint requires a client
-    /// certificate. Returns `false` exactly when mTLS is required here but the
-    /// connection presented no verified client certificate.
-    pub fn connection_satisfies_client_cert(&self, connection_has_client_cert: bool) -> bool {
-        if self.client_certificate_id.is_some() {
-            return connection_has_client_cert;
+    /// handshake, which is bound to the SNI that opened the connection.
+    /// `connection_cert_ca` is the `client_certificate_id` that verified the
+    /// connection's client certificate (None — no certificate presented).
+    /// Returns `false` when this endpoint requires a client certificate but the
+    /// connection has none, OR has one verified by a DIFFERENT CA — presence
+    /// alone is not enough: a certificate trusted by another vhost's CA says
+    /// nothing about this endpoint's mTLS requirement. The caller answers 421
+    /// so the client re-opens a dedicated connection and performs mTLS here.
+    pub fn connection_satisfies_client_cert(&self, connection_cert_ca: Option<&str>) -> bool {
+        match self.client_certificate_id.as_ref() {
+            Some(required_ca) => connection_cert_ca == Some(required_ca.as_str()),
+            None => true,
         }
-        true
+    }
+
+    /// Whether the connection's client-certificate identity (CN) is meaningful
+    /// for THIS endpoint: only when the endpoint itself requires a client
+    /// certificate from the same CA that verified it. A certificate presented
+    /// for another vhost's handshake must not become an identity here — it
+    /// would leak into `allowed_users` checks and `${CLIENT_CERT_CN}` headers
+    /// for a vhost whose CA never saw that certificate. This also keeps a
+    /// coalesced request's outcome identical to a dedicated-connection one
+    /// (where a no-mTLS endpoint never asks for a certificate at all).
+    pub fn client_cert_identity_applies(&self, connection_cert_ca: &str) -> bool {
+        match self.client_certificate_id.as_ref() {
+            Some(required_ca) => required_ca.as_str() == connection_cert_ca,
+            None => false,
+        }
     }
 
     pub fn must_be_authorized<'s>(&'s self) -> Option<AuthorizationRequired<'s>> {

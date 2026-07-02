@@ -24,10 +24,11 @@ pub enum ProxyServerError {
     ProxyToHeaderInvalid,
     ProxyToHostNotAllowed,
     /// Request routed (by `Host`/`:authority`) to an endpoint that requires a
-    /// client certificate, over a TLS connection that presented none — i.e. the
-    /// connection was opened with a different SNI (HTTP/2 connection coalescing
-    /// or a deliberate cross-vhost request). Answered with 421 so the client
-    /// re-opens a dedicated connection and performs mTLS.
+    /// client certificate, over a TLS connection that presented none — or one
+    /// verified by a different CA — i.e. the connection was opened with a
+    /// different SNI (HTTP/2 connection coalescing or a deliberate cross-vhost
+    /// request). Answered with 421 so the client re-opens a dedicated
+    /// connection and performs mTLS against this endpoint's CA.
     MisdirectedClientCertRequired,
 }
 

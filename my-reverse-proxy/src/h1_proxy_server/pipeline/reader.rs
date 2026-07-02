@@ -222,11 +222,28 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
 
     // mTLS is enforced only during the TLS handshake (bound to the connection's
     // SNI). If this request was routed by Host to an endpoint that requires a
-    // client certificate over a connection that presented none (a deliberate
-    // cross-vhost request on a keep-alive connection), refuse it with 421 so the
-    // client re-opens a dedicated connection and performs mTLS.
-    if !end_point_info.connection_satisfies_client_cert(http_connection_info.cn_user_name.is_some())
-    {
+    // client certificate over a connection that presented none — or one
+    // verified by a different CA (a deliberate cross-vhost request on a
+    // keep-alive connection) — refuse it with 421 so the client re-opens a
+    // dedicated connection and performs mTLS against this endpoint's CA.
+    if !end_point_info.connection_satisfies_client_cert(
+        http_connection_info
+            .cn_user_name
+            .as_ref()
+            .map(|c| c.ca_id.as_str()),
+    ) {
+        crate::app::APP_CTX.proxy_logs.write_port(
+            http_connection_info
+                .listen_config
+                .listen_host
+                .get_log_key()
+                .as_str(),
+            http_connection_info.connection_ip.get_ip_log(),
+            format!(
+                "Rejected request for host [{}]: endpoint requires a client certificate but the TLS connection presented none or one from a different CA (cross-vhost reuse)",
+                endpoint_for_error
+            ),
+        );
         return respond_error(
             queue_tx,
             http_connection_info,
@@ -234,6 +251,32 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
             ProxyServerError::MisdirectedClientCertRequired,
         )
         .await;
+    }
+
+    // Enforce the *request-host* endpoint's IP allow-list per request: the
+    // accept-time check only saw the SNI endpoint, and a keep-alive connection
+    // can carry requests for other vhosts (mirrors the h2 handler). Skip when
+    // the client IP is unknown (unix socket).
+    if let Some(ip_list_id) = end_point_info.whitelisted_ip_list_id.as_ref() {
+        if let Some(client_ip) = http_connection_info.connection_ip.get_ip_addr() {
+            let is_whitelisted = crate::app::APP_CTX
+                .current_configuration
+                .get(|config| {
+                    config
+                        .white_list_ip_list
+                        .is_white_listed(ip_list_id, &client_ip)
+                })
+                .await;
+            if !is_whitelisted {
+                return respond_error(
+                    queue_tx,
+                    http_connection_info,
+                    Some(&endpoint_for_error),
+                    ProxyServerError::NotAuthorized,
+                )
+                .await;
+            }
+        }
     }
 
     if let Some(domain) = end_point_info.tracked_domain(request_host_for_metric.as_deref()) {

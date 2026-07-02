@@ -88,14 +88,20 @@ impl HttpProxyPass {
             }
 
             if let Some(allowed_user_list_id) = self.endpoint_info.allowed_user_list_id.as_ref() {
-                if let Some(identity) = inner.identity.load_full() {
-                    if !crate::app::APP_CTX
-                        .allowed_users_list
-                        .is_allowed(allowed_user_list_id, identity.as_str())
-                        .await
-                    {
-                        return Err(ProxyPassError::UserIsForbidden);
+                // No identity means NOT allowed — an anonymous request must not
+                // bypass the allow-list. Same fail-closed rule as the h1 path's
+                // user_is_allowed (that one answers 401, this path 403).
+                let allowed = match inner.identity.load_full() {
+                    Some(identity) => {
+                        crate::app::APP_CTX
+                            .allowed_users_list
+                            .is_allowed(allowed_user_list_id, identity.as_str())
+                            .await
                     }
+                    None => false,
+                };
+                if !allowed {
+                    return Err(ProxyPassError::UserIsForbidden);
                 }
             }
 

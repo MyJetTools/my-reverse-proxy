@@ -51,6 +51,18 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
         http_connection_info: &HttpConnectionInfo,
         http_headers: &Http1Headers,
     ) -> Result<Option<HttpProxyPassIdentity>, ProxyServerError> {
+        // The connection-level client cert becomes an identity only for
+        // endpoints requiring the same CA that verified it: on a cross-`Host`
+        // request (coalescing / keep-alive reuse) another vhost's CN must not
+        // leak into this endpoint's allowed_users checks or
+        // ${CLIENT_CERT_CN} headers.
+        let cert_identity = http_connection_info
+            .cn_user_name
+            .as_ref()
+            .filter(|cert| endpoint_info.client_cert_identity_applies(cert.ca_id.as_str()))
+            .cloned()
+            .map(HttpProxyPassIdentity::ClientCert);
+
         if let Some(expected) = location.auth_header.as_deref() {
             let actual = find_authorization_value(http_headers, self.loop_buffer.get_data());
             let matches = match actual {
@@ -118,18 +130,12 @@ impl<TNetworkReadPart: NetworkStreamReadPart + Send + Sync + 'static> H1Reader<T
                     }
                 }
                 AuthorizationRequired::ClientCertificate => {
-                    return Ok(http_connection_info
-                        .cn_user_name
-                        .clone()
-                        .map(|cert| HttpProxyPassIdentity::ClientCert(cert)));
+                    return Ok(cert_identity);
                 }
             };
         }
 
-        return Ok(http_connection_info
-            .cn_user_name
-            .clone()
-            .map(|cert| HttpProxyPassIdentity::ClientCert(cert)));
+        return Ok(cert_identity);
     }
 }
 

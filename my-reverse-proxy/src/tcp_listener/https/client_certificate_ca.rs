@@ -10,6 +10,12 @@ use my_tls::{crl::CrlRecord, tokio_rustls::rustls};
 #[derive(Debug, Clone)]
 pub struct ClientCertificateData {
     pub cn: String,
+    /// `client_certificate_id` of the CA this certificate was verified against
+    /// during the TLS handshake. A connection may carry requests for other
+    /// vhosts (HTTP/2 coalescing, keep-alive cross-`Host` reuse), so every
+    /// per-endpoint decision must check that the endpoint requires THIS CA —
+    /// the CN below means nothing to an endpoint trusting a different CA.
+    pub ca_id: String,
 }
 
 pub struct ClientCertificateCa {
@@ -75,6 +81,7 @@ impl ClientCertificateCa {
     pub fn verify_cert(
         &self,
         certificate_to_check: &rustls_pki_types::CertificateDer,
+        ca_id: &str,
     ) -> Option<Arc<ClientCertificateData>> {
         let (_, issuer) = X509Certificate::from_der(self.ca_content.as_ref()).unwrap();
 
@@ -97,7 +104,10 @@ impl ClientCertificateCa {
                 }
             }
 
-            let cert_data = ClientCertificateData { cn };
+            let cert_data = ClientCertificateData {
+                cn,
+                ca_id: ca_id.to_string(),
+            };
 
             let cert_data = Arc::new(cert_data);
 

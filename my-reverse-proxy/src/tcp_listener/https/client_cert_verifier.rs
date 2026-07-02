@@ -9,6 +9,10 @@ use super::{client_cert_cell::ClientCertCell, ClientCertificateCa};
 pub struct MyClientCertVerifier {
     client_cert_cell: Arc<ClientCertCell>,
     pub ca: Arc<ClientCertificateCa>,
+    /// `client_certificate_id` this verifier was built for — stamped into the
+    /// produced [`ClientCertificateData`] so per-endpoint checks can tell which
+    /// CA actually verified the connection's certificate.
+    ca_id: String,
     endpoint_port: u16,
 }
 
@@ -16,11 +20,13 @@ impl MyClientCertVerifier {
     pub fn new(
         client_cert_cell: Arc<ClientCertCell>,
         ca: Arc<ClientCertificateCa>,
+        ca_id: String,
         endpoint_port: u16,
     ) -> Self {
         Self {
             ca,
             client_cert_cell,
+            ca_id,
             endpoint_port,
         }
     }
@@ -73,7 +79,7 @@ impl ClientCertVerifier for MyClientCertVerifier {
         my_tls::tokio_rustls::rustls::server::danger::ClientCertVerified,
         my_tls::tokio_rustls::rustls::Error,
     > {
-        if let Some(client_certificate) = self.ca.verify_cert(end_entity) {
+        if let Some(client_certificate) = self.ca.verify_cert(end_entity, self.ca_id.as_str()) {
             self.client_cert_cell.set(client_certificate);
 
             return Ok(
