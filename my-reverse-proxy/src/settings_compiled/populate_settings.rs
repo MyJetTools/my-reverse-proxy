@@ -144,8 +144,8 @@ impl SettingsCompiled {
             for itm in ssl {
                 self.ssl_certificates.push(SslCertificatesSettingsModel {
                     id: variables.apply_variables(itm.id)?,
-                    certificate: variables.apply_variables(itm.certificate)?,
-                    private_key: variables.apply_variables(itm.private_key)?,
+                    certificate: variables.apply_variables_opt(itm.certificate)?,
+                    private_key: variables.apply_variables_opt(itm.private_key)?,
                 });
             }
         }

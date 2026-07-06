@@ -5,8 +5,9 @@ use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer, Stat
 
 use crate::mcp::{
     GetAppliedSettingsHandler, GetDynamicSettingsHandler, GetProxyLogsHandler,
-    GetProxyStateSnapshotHandler, GetSettingsHandler, LookupPoolHandler, ReloadSettingsHandler,
-    SetDynamicSettingsHandler,
+    GetProxyStateSnapshotHandler, GetSettingsHandler, GetSslCertificateHandler,
+    GetSslEndpointsStatusHandler, InitSslCertificateHandler, LookupPoolHandler,
+    ReloadSettingsHandler, SetDynamicSettingsHandler,
 };
 
 const DEFAULT_PORT: u16 = 8000;
@@ -44,6 +45,9 @@ pub fn start() {
     mcp.register_tool_call(Arc::new(GetDynamicSettingsHandler));
     mcp.register_tool_call(Arc::new(SetDynamicSettingsHandler));
     mcp.register_tool_call(Arc::new(GetProxyLogsHandler));
+    mcp.register_tool_call(Arc::new(GetSslEndpointsStatusHandler));
+    mcp.register_tool_call(Arc::new(GetSslCertificateHandler));
+    mcp.register_tool_call(Arc::new(InitSslCertificateHandler));
 
     http_server.add_middleware(Arc::new(mcp));
 

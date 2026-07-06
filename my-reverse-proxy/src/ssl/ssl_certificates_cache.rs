@@ -18,6 +18,20 @@ pub enum SslCertificateOrigin {
         #[allow(dead_code)]
         gateway_id: String,
     },
+    /// Certificate has no source in the configuration; it is pushed at runtime
+    /// via POST /api/SslCertificates/Init (e.g. over an SSH port-forward to the
+    /// service port). There is nothing to auto-resolve or renew from.
+    ManuallyProvided,
+}
+
+impl SslCertificateOrigin {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SslCertificateOrigin::LocalSource { .. } => "local_source",
+            SslCertificateOrigin::GatewayPushed { .. } => "gateway_pushed",
+            SslCertificateOrigin::ManuallyProvided => "manually_provided",
+        }
+    }
 }
 
 pub struct SslCertificateHolder {

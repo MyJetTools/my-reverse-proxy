@@ -6,7 +6,7 @@ pub fn generate(cn_name: String) -> Result<tokio_rustls::rustls::sign::Certified
 
     let private_key = crate::ssl::certificates::load_private_key(key_pair.as_bytes().to_vec())?;
 
-    Ok(crate::ssl::calc_cert_key(&private_key, vec![cert]))
+    crate::ssl::calc_cert_key(&private_key, vec![cert])
 }
 
 fn generate_pk(cn_name: String) -> (CertificateDer<'static>, String) {

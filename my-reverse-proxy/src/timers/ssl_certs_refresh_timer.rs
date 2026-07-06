@@ -41,6 +41,9 @@ async fn try_renew_cert(
         SslCertificateOrigin::GatewayPushed { .. } => {
             return;
         }
+        SslCertificateOrigin::ManuallyProvided => {
+            return;
+        }
     };
 
     let ssl_cert_info = ssl_holder.ssl_cert.get_cert_info();

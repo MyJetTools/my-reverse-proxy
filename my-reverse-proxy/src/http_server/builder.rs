@@ -61,6 +61,14 @@ pub fn build_controllers() -> ControllersMiddleware {
         super::controllers::ssl_certificates::GetCurrentSslCertificatesAction,
     ));
 
+    result.register_post_action(Arc::new(
+        super::controllers::ssl_certificates::InitSslCertificateAction,
+    ));
+
+    result.register_get_action(Arc::new(
+        super::controllers::ssl_certificates::GetSslCertificateAction,
+    ));
+
     result.register_post_action(Arc::new(super::controllers::ssh::InitPassKeyAction));
 
     result.register_get_action(Arc::new(

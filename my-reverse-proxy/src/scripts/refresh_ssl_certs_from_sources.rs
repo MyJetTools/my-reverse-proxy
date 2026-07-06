@@ -28,13 +28,20 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
 
     let ssl_certificate = found_certificate.unwrap();
 
-    let private_key_src = OverSshConnectionSettings::try_parse(
-        ssl_certificate.private_key.as_str(),
-    )
-    .ok_or(format!(
-        "Invalid TLS Private Key file source {}",
-        ssl_certificate.private_key.as_str()
-    ))?;
+    // A "manual" certificate has no source configured — it is pushed at runtime via
+    // POST /api/SslCertificates/Init. Nothing to resolve here, so the endpoint is allowed
+    // to start with the certificate absent from the cache (the TLS handshake will fail until
+    // it is pushed).
+    let (cert_source, private_key_source) = match ssl_certificate.get_sources()? {
+        Some(sources) => sources,
+        None => return Ok(()),
+    };
+
+    let private_key_src =
+        OverSshConnectionSettings::try_parse(private_key_source).ok_or(format!(
+            "Invalid TLS Private Key file source {}",
+            private_key_source
+        ))?;
 
     let private_key = super::load_file(
         &private_key_src,
@@ -42,11 +49,10 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
     )
     .await?;
 
-    let cert_src = OverSshConnectionSettings::try_parse(ssl_certificate.certificate.as_str())
-        .ok_or(format!(
-            "Invalid TLS Certificate Key file source {}",
-            ssl_certificate.certificate.as_str()
-        ))?;
+    let cert_src = OverSshConnectionSettings::try_parse(cert_source).ok_or(format!(
+        "Invalid TLS Certificate Key file source {}",
+        cert_source
+    ))?;
 
     let certificate =
         super::load_file(&cert_src, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT).await?;
