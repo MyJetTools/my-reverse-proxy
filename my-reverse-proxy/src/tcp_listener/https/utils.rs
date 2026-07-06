@@ -17,23 +17,29 @@ pub enum TlsAcceptError {
     /// The endpoint requires a client certificate (mTLS) and the client
     /// presented none or an invalid one (a browser that hasn't selected a cert,
     /// an HTTP/2 coalesced connection, a probe). Lenient — soft failure; only
-    /// the white-list is fully exempt.
-    ClientCertRequired(String),
+    /// the white-list is fully exempt. Attributable to a specific endpoint.
+    ClientCertRequired {
+        endpoint_host: String,
+        message: String,
+    },
     /// The ClientHello did not map to any configured endpoint — no SNI, or an
     /// SNI for a host we do not serve. Internet background noise; a few are
-    /// harmless, but a flood is a scanner → soft failure.
+    /// harmless, but a flood is a scanner → soft failure. Not attributable.
     UnknownServerName(String),
     /// The peer never produced a valid ClientHello (non-TLS bytes on the TLS
-    /// port, port scanner, garbage). Unambiguous abuse → hard failure.
+    /// port, port scanner, garbage). Unambiguous abuse → hard failure. Not
+    /// attributable.
     MalformedTls(String),
-    /// Any other handshake failure on a configured endpoint (handshake abort,
-    /// server misconfig, timeout, panic). Noisy → soft failure.
-    Other(String),
+    /// Any other handshake failure (handshake abort, server misconfig, timeout,
+    /// panic). Noisy → soft failure. `endpoint_host` is `Some` when the failure
+    /// could be attributed to a resolved endpoint.
+    Other {
+        endpoint_host: Option<String>,
+        message: String,
+    },
     /// The endpoint matched, but its certificate is not loaded yet (e.g. a
     /// manually-provided cert still arriving in the background). Server-side and
     /// expected — cut the connection but do NOT penalise the waiting client.
-    /// Carries the endpoint host so the rejection can be surfaced in that
-    /// endpoint's debug log.
     CertificateUnavailable {
         endpoint_host: String,
         message: String,
@@ -43,11 +49,21 @@ pub enum TlsAcceptError {
 impl TlsAcceptError {
     pub fn message(&self) -> &str {
         match self {
-            Self::ClientCertRequired(msg)
-            | Self::UnknownServerName(msg)
-            | Self::MalformedTls(msg)
-            | Self::Other(msg) => msg.as_str(),
-            Self::CertificateUnavailable { message, .. } => message.as_str(),
+            Self::UnknownServerName(msg) | Self::MalformedTls(msg) => msg.as_str(),
+            Self::ClientCertRequired { message, .. }
+            | Self::Other { message, .. }
+            | Self::CertificateUnavailable { message, .. } => message.as_str(),
+        }
+    }
+
+    /// The endpoint this rejection is attributable to, when known. Used to also
+    /// surface the rejection in that endpoint's (debug) log.
+    pub fn endpoint_host(&self) -> Option<&str> {
+        match self {
+            Self::ClientCertRequired { endpoint_host, .. }
+            | Self::CertificateUnavailable { endpoint_host, .. } => Some(endpoint_host.as_str()),
+            Self::Other { endpoint_host, .. } => endpoint_host.as_deref(),
+            Self::UnknownServerName(_) | Self::MalformedTls(_) => None,
         }
     }
 
@@ -65,10 +81,10 @@ impl TlsAcceptError {
     pub fn block_severity(&self) -> FailureSeverity {
         match self {
             Self::MalformedTls(_) => FailureSeverity::Hard,
-            Self::ClientCertRequired(_)
+            Self::ClientCertRequired { .. }
             | Self::UnknownServerName(_)
             | Self::CertificateUnavailable { .. }
-            | Self::Other(_) => FailureSeverity::Soft,
+            | Self::Other { .. } => FailureSeverity::Soft,
         }
     }
 }
@@ -90,10 +106,10 @@ pub async fn lazy_accept_tcp_stream(
     let result = tokio::time::timeout(RESOLVE_TLS_TIMEOUT, future).await;
 
     if result.is_err() {
-        return Err(TlsAcceptError::Other(format!(
-            "Accepting TLS connection timeout for port: {}",
-            endpoint_port
-        )));
+        return Err(TlsAcceptError::Other {
+            endpoint_host: None,
+            message: format!("Accepting TLS connection timeout for port: {}", endpoint_port),
+        });
     }
 
     result.unwrap()
@@ -129,14 +145,16 @@ async fn lazy_accept_tcp_stream_internal(
 
                 // SNI for a host we do not serve at all — unroutable noise, do
                 // not penalise the source IP.
-                if configuration
+                let endpoint_host = match configuration
                     .get_http_endpoint_info(Some(server_name.as_str()))
-                    .is_none()
                 {
-                    return Err(TlsAcceptError::UnknownServerName(format!(
-                        "server name '{server_name}' is not configured on this port"
-                    )));
-                }
+                    Some(endpoint_info) => endpoint_info.host_endpoint.as_str().to_string(),
+                    None => {
+                        return Err(TlsAcceptError::UnknownServerName(format!(
+                            "server name '{server_name}' is not configured on this port"
+                        )));
+                    }
+                };
 
                 if let Some(client_cert) = client_hello.client_cert_types() {
                     for client_cert in client_cert {
@@ -176,9 +194,12 @@ async fn lazy_accept_tcp_stream_internal(
                         });
                     }
                     Err(super::tls_acceptor::CreateConfigError::Other(msg)) => {
-                        return Err(TlsAcceptError::Other(format!(
-                            "Failed to create tls config for '{server_name}'. Err: {msg}"
-                        )));
+                        return Err(TlsAcceptError::Other {
+                            endpoint_host: Some(endpoint_host.clone()),
+                            message: format!(
+                                "Failed to create tls config for '{server_name}'. Err: {msg}"
+                            ),
+                        });
                     }
                 };
 
@@ -189,13 +210,17 @@ async fn lazy_accept_tcp_stream_internal(
                     // handshake is almost always the client not presenting a
                     // valid cert — an expected condition we must not penalise.
                     if client_cert_cell.is_some() {
-                        return Err(TlsAcceptError::ClientCertRequired(format!(
-                            "failed to perform tls handshake for '{server_name}': {err:#} (endpoint requires a client certificate / mTLS)"
-                        )));
+                        return Err(TlsAcceptError::ClientCertRequired {
+                            endpoint_host: endpoint_host.clone(),
+                            message: format!(
+                                "failed to perform tls handshake for '{server_name}': {err:#} (endpoint requires a client certificate / mTLS)"
+                            ),
+                        });
                     }
-                    return Err(TlsAcceptError::Other(format!(
-                        "failed to perform tls handshake for '{server_name}': {err:#}"
-                    )));
+                    return Err(TlsAcceptError::Other {
+                        endpoint_host: Some(endpoint_host.clone()),
+                        message: format!("failed to perform tls handshake for '{server_name}': {err:#}"),
+                    });
                 }
 
                 let tls_stream = tls_stream.unwrap();
@@ -230,9 +255,10 @@ async fn lazy_accept_tcp_stream_internal(
             } else {
                 "unknown panic payload".to_string()
             };
-            Err(TlsAcceptError::Other(format!(
-                "tls handshake panicked: {msg}"
-            )))
+            Err(TlsAcceptError::Other {
+                endpoint_host: None,
+                message: format!("tls handshake panicked: {msg}"),
+            })
         }
     }
 }

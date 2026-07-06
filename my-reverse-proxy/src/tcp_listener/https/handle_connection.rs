@@ -36,12 +36,10 @@ pub fn handle_connection(
                     connection_ip.get_ip_log(),
                     format!("Rejected TLS connection: {}", err.message()),
                 );
-                // When the connection was cut because the endpoint's certificate isn't loaded
-                // yet, and that endpoint is in debug mode, surface it in the endpoint's debug
-                // log too so the operator can see the cert is still missing.
-                if let super::utils::TlsAcceptError::CertificateUnavailable { endpoint_host, .. } =
-                    &err
-                {
+                // When the rejection is attributable to a specific endpoint and that endpoint is
+                // in debug mode, also surface it in the endpoint's debug log so every error hitting
+                // the endpoint is visible there while debugging it.
+                if let Some(endpoint_host) = err.endpoint_host() {
                     if crate::app::APP_CTX
                         .debug_flags
                         .is_endpoint_debug(endpoint_host)
@@ -50,7 +48,7 @@ pub fn handle_connection(
                             endpoint_host,
                             None,
                             connection_ip.get_ip_log(),
-                            format!("TLS connection cut: {}", err.message()),
+                            format!("Rejected TLS connection: {}", err.message()),
                         );
                     }
                 }
@@ -91,6 +89,22 @@ pub fn handle_connection(
                     .await;
 
                 if !is_whitelisted {
+                    // Endpoint-level rejection (endpoint resolved, client IP not allowed) — surface
+                    // it in the endpoint's debug log when the endpoint is being debugged.
+                    if crate::app::APP_CTX
+                        .debug_flags
+                        .is_endpoint_debug(endpoint_info.as_str())
+                    {
+                        crate::app::APP_CTX.proxy_logs.write(
+                            endpoint_info.as_str(),
+                            None,
+                            connection_ip.get_ip_log(),
+                            format!(
+                                "Rejected connection: client IP not in allow-list '{}'",
+                                ip_list_id
+                            ),
+                        );
+                    }
                     let _ = tls_stream.shutdown().await;
                     return;
                 }
