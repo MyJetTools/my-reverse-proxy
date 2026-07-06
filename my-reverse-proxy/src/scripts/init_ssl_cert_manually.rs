@@ -79,6 +79,14 @@ pub async fn init_ssl_cert_manually(
     // (3) The certificate must serve the same SNI(s) as what it protects / replaces.
     let cert_domains = ssl_cert.get_domains();
 
+    // A certificate with no identifiable domain can never be validated against an SNI.
+    if cert_domains.is_empty() {
+        return Err(
+            "The uploaded certificate has no SAN DNS name or Common Name — refusing a certificate with no identifiable domain."
+                .to_string(),
+        );
+    }
+
     // The domains the certificate currently loaded under this id is valid for. A replacement
     // must keep covering these — this is what makes the new and existing SNIs coincide, and it
     // catches an unrelated certificate even for an endpoint that has no configured server name.
@@ -97,6 +105,16 @@ pub async fn init_ssl_cert_manually(
     }
     for domain in &existing_domains {
         push_required(&mut required, domain, "existing certificate");
+    }
+
+    // Fail closed: with no SNI to validate against (every referencing endpoint is a catch-all
+    // with no server name AND nothing is loaded under this id yet) we cannot establish that the
+    // certificate belongs to the endpoint, so we refuse it rather than accept an arbitrary cert.
+    if required.is_empty() {
+        return Err(format!(
+            "Cannot verify the domain of certificate '{}': its referencing endpoint(s) have no configured server name and no certificate is currently loaded under this id to compare against. Configure a server name on the endpoint (or establish the certificate from a configured source first) before uploading.",
+            cert_id
+        ));
     }
 
     let mut validated_sni: Vec<String> = Vec::new();
@@ -179,6 +197,12 @@ fn cert_covers_domain(cert_domains: &[String], domain: &str) -> bool {
 
 fn wildcard_match(pattern: &str, domain: &str) -> bool {
     if let Some(suffix) = pattern.strip_prefix("*.") {
+        // Reject a wildcard that spans a whole TLD, e.g. `*.com`: the base must have at least
+        // two labels (contain a dot), otherwise an over-broad cert would match any two-label host.
+        if !suffix.contains('.') {
+            return false;
+        }
+
         return match domain.split_once('.') {
             Some((_, rest)) => rest.eq_ignore_ascii_case(suffix),
             None => false,
@@ -186,4 +210,46 @@ fn wildcard_match(pattern: &str, domain: &str) -> bool {
     }
 
     pattern.eq_ignore_ascii_case(domain)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cert_covers_domain, wildcard_match};
+
+    #[test]
+    fn exact_match_is_case_insensitive() {
+        assert!(wildcard_match("example.com", "example.com"));
+        assert!(wildcard_match("Example.COM", "example.com"));
+        assert!(!wildcard_match("example.com", "other.com"));
+    }
+
+    #[test]
+    fn wildcard_matches_exactly_one_label() {
+        assert!(wildcard_match("*.example.com", "api.example.com"));
+        assert!(wildcard_match("*.example.com", "API.example.com"));
+        // wildcard does not match the bare base...
+        assert!(!wildcard_match("*.example.com", "example.com"));
+        // ...nor more than one label deep.
+        assert!(!wildcard_match("*.example.com", "a.b.example.com"));
+    }
+
+    #[test]
+    fn tld_wide_wildcard_is_rejected() {
+        assert!(!wildcard_match("*.com", "myapp.com"));
+        assert!(!wildcard_match("*.io", "app.io"));
+    }
+
+    #[test]
+    fn bare_star_does_not_over_match() {
+        assert!(!wildcard_match("*", "example.com"));
+    }
+
+    #[test]
+    fn cert_covers_domain_uses_any_pattern() {
+        let domains = vec!["*.example.com".to_string(), "example.com".to_string()];
+        assert!(cert_covers_domain(&domains, "api.example.com"));
+        assert!(cert_covers_domain(&domains, "example.com"));
+        assert!(!cert_covers_domain(&domains, "example.org"));
+        assert!(!cert_covers_domain(&[], "example.com"));
+    }
 }

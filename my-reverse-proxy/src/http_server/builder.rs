@@ -62,7 +62,11 @@ pub fn build_controllers() -> ControllersMiddleware {
     ));
 
     result.register_post_action(Arc::new(
-        super::controllers::ssl_certificates::InitSslCertificateAction,
+        super::controllers::ssl_certificates::UploadCertificateAction,
+    ));
+
+    result.register_post_action(Arc::new(
+        super::controllers::ssl_certificates::UploadPrivateKeyAction,
     ));
 
     result.register_get_action(Arc::new(
