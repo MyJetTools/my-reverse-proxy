@@ -36,13 +36,35 @@ pub fn handle_connection(
                     connection_ip.get_ip_log(),
                     format!("Rejected TLS connection: {}", err.message()),
                 );
-                // Every rejection counts toward the block-list, weighted by
-                // severity; only white-listed IPs are exempt, which
-                // `register_failure` enforces.
-                if let Some(ip) = connection_ip.get_ip_addr() {
-                    crate::app::APP_CTX
-                        .ip_blocklist
-                        .register_failure(ip, err.block_severity());
+                // When the connection was cut because the endpoint's certificate isn't loaded
+                // yet, and that endpoint is in debug mode, surface it in the endpoint's debug
+                // log too so the operator can see the cert is still missing.
+                if let super::utils::TlsAcceptError::CertificateUnavailable { endpoint_host, .. } =
+                    &err
+                {
+                    if crate::app::APP_CTX
+                        .debug_flags
+                        .is_endpoint_debug(endpoint_host)
+                    {
+                        crate::app::APP_CTX.proxy_logs.write(
+                            endpoint_host,
+                            None,
+                            connection_ip.get_ip_log(),
+                            format!("TLS connection cut: {}", err.message()),
+                        );
+                    }
+                }
+                // Most rejections count toward the block-list, weighted by severity; only
+                // white-listed IPs are exempt (enforced in `register_failure`). A server-side
+                // "certificate not loaded yet" is the exception: the cert is expected to arrive
+                // in the background and the client keeps retrying, so we cut the connection
+                // without penalising it.
+                if err.should_penalise_client() {
+                    if let Some(ip) = connection_ip.get_ip_addr() {
+                        crate::app::APP_CTX
+                            .ip_blocklist
+                            .register_failure(ip, err.block_severity());
+                    }
                 }
                 return;
             }

@@ -29,6 +29,15 @@ pub enum TlsAcceptError {
     /// Any other handshake failure on a configured endpoint (handshake abort,
     /// server misconfig, timeout, panic). Noisy → soft failure.
     Other(String),
+    /// The endpoint matched, but its certificate is not loaded yet (e.g. a
+    /// manually-provided cert still arriving in the background). Server-side and
+    /// expected — cut the connection but do NOT penalise the waiting client.
+    /// Carries the endpoint host so the rejection can be surfaced in that
+    /// endpoint's debug log.
+    CertificateUnavailable {
+        endpoint_host: String,
+        message: String,
+    },
 }
 
 impl TlsAcceptError {
@@ -38,7 +47,16 @@ impl TlsAcceptError {
             | Self::UnknownServerName(msg)
             | Self::MalformedTls(msg)
             | Self::Other(msg) => msg.as_str(),
+            Self::CertificateUnavailable { message, .. } => message.as_str(),
         }
+    }
+
+    /// Whether the source IP should be penalised in the auto block-list for this
+    /// rejection. Server-side conditions (the certificate simply isn't loaded yet)
+    /// are the endpoint operator's problem, not the client's — the client is
+    /// expected to keep retrying while the cert arrives, so it must not be blocked.
+    pub fn should_penalise_client(&self) -> bool {
+        !matches!(self, Self::CertificateUnavailable { .. })
     }
 
     /// How this rejection counts toward the auto IP block-list. Every rejection
@@ -47,9 +65,10 @@ impl TlsAcceptError {
     pub fn block_severity(&self) -> FailureSeverity {
         match self {
             Self::MalformedTls(_) => FailureSeverity::Hard,
-            Self::ClientCertRequired(_) | Self::UnknownServerName(_) | Self::Other(_) => {
-                FailureSeverity::Soft
-            }
+            Self::ClientCertRequired(_)
+            | Self::UnknownServerName(_)
+            | Self::CertificateUnavailable { .. }
+            | Self::Other(_) => FailureSeverity::Soft,
         }
     }
 }
@@ -143,13 +162,25 @@ async fn lazy_accept_tcp_stream_internal(
                     super::tls_acceptor::create_config(configuration, &server_name, endpoint_port)
                         .await;
 
-                if let Err(err) = &config_result {
-                    return Err(TlsAcceptError::Other(format!(
-                        "Failed to create tls config for '{server_name}'. Err: {err:#}"
-                    )));
-                }
-
-                let (config, endpoint_info, client_cert_cell) = config_result.unwrap();
+                let (config, endpoint_info, client_cert_cell) = match config_result {
+                    Ok(result) => result,
+                    Err(super::tls_acceptor::CreateConfigError::CertificateUnavailable {
+                        endpoint_host,
+                        message,
+                    }) => {
+                        return Err(TlsAcceptError::CertificateUnavailable {
+                            endpoint_host,
+                            message: format!(
+                                "certificate for '{server_name}' is not available yet: {message}"
+                            ),
+                        });
+                    }
+                    Err(super::tls_acceptor::CreateConfigError::Other(msg)) => {
+                        return Err(TlsAcceptError::Other(format!(
+                            "Failed to create tls config for '{server_name}'. Err: {msg}"
+                        )));
+                    }
+                };
 
                 let tls_stream = start_handshake.into_stream(config.into()).await;
 

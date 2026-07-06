@@ -12,6 +12,20 @@ use crate::configurations::*;
 
 use super::MyClientCertVerifier;
 
+/// Why building the TLS `ServerConfig` for an endpoint failed.
+pub enum CreateConfigError {
+    /// The endpoint is configured but its certificate (or client-cert CA) is not loaded yet —
+    /// e.g. a manually-provided cert that is still arriving in the background. Expected and
+    /// transient: cut the connection, but do not penalise the client. Carries the endpoint host
+    /// so the rejection can be surfaced in that endpoint's debug log.
+    CertificateUnavailable {
+        endpoint_host: String,
+        message: String,
+    },
+    /// Any other misconfiguration.
+    Other(String),
+}
+
 pub async fn create_config(
     configuration: Arc<HttpListenPortConfiguration>,
     server_name: &str,
@@ -22,15 +36,15 @@ pub async fn create_config(
         Arc<HttpEndpointInfo>,
         Option<Arc<ClientCertCell>>,
     ),
-    String,
+    CreateConfigError,
 > {
     let ssl_cert_result = configuration.get_ssl_certificate(server_name);
 
     if ssl_cert_result.is_none() {
-        return Err(format!(
+        return Err(CreateConfigError::Other(format!(
             "No ssl certificate found for server_name: {}",
             server_name
-        ));
+        )));
     }
 
     let (ssl_cert_id, http_endpoint_info) = ssl_cert_result.unwrap();
@@ -48,11 +62,14 @@ pub async fn create_config(
                     {
                         Some(client_cert_ca)
                     } else {
-                        return Err(format!(
-                            "Client certificate ca [{}] not found for endpoint: {}",
-                            client_cert_ca_id.as_str(),
-                            endpoint_port
-                        ));
+                        return Err(CreateConfigError::CertificateUnavailable {
+                            endpoint_host: http_endpoint_info.as_str().to_string(),
+                            message: format!(
+                                "Client certificate ca [{}] not found for endpoint: {}",
+                                client_cert_ca_id.as_str(),
+                                endpoint_port
+                            ),
+                        });
                     }
                 } else {
                     None
@@ -71,10 +88,10 @@ pub async fn create_config(
                 let ssl_cert = app_config.ssl_certs.get(ssl_cert_id);
 
                 if ssl_cert.is_none() {
-                    return Err(format!(
-                        "No ssl certificate found with id: {}",
-                        ssl_cert_id.as_str()
-                    ));
+                    return Err(CreateConfigError::CertificateUnavailable {
+                        endpoint_host: http_endpoint_info.as_str().to_string(),
+                        message: format!("No ssl certificate found with id: {}", ssl_cert_id.as_str()),
+                    });
                 }
 
                 let ssl_cert_holder = ssl_cert.unwrap();
@@ -86,11 +103,14 @@ pub async fn create_config(
                     {
                         Some(client_cert_ca)
                     } else {
-                        return Err(format!(
-                            "Client certificate ca [{}] not found for endpoint: {}",
-                            client_cert_ca_id.as_str(),
-                            endpoint_port
-                        ));
+                        return Err(CreateConfigError::CertificateUnavailable {
+                            endpoint_host: http_endpoint_info.as_str().to_string(),
+                            message: format!(
+                                "Client certificate ca [{}] not found for endpoint: {}",
+                                client_cert_ca_id.as_str(),
+                                endpoint_port
+                            ),
+                        });
                     }
                 } else {
                     None
