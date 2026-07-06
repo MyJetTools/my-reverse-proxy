@@ -57,6 +57,10 @@ pub struct HttpEndpointInfoModel {
     pub allowed_user_list_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssl_cert_id: Option<String>,
+    /// True when this endpoint references a real (non self-signed) SSL certificate that is not
+    /// currently loaded — the endpoint listens but cuts TLS until the certificate is provided.
+    #[serde(default)]
+    pub ssl_cert_missing: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_cert_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

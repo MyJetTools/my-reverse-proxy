@@ -482,6 +482,36 @@ table.locations tbody tr.upstream-unknown td.upstream {
     color: #1c4532;
 }
 
+/* SSL certificate referenced but not loaded — red warning */
+.meta-chip.ssl.missing .label {
+    background: #c53030;
+}
+.meta-chip.ssl.missing .value {
+    background: #fed7d7;
+    color: #742a2a;
+}
+.meta-chip.ssl.missing .value.state {
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 10px;
+    font-weight: 700;
+    border-left: 1px solid #fc8181;
+}
+
+.endpoint-header .cert-missing-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    background: #fed7d7;
+    color: #c53030;
+    border: 1px solid #fc8181;
+    white-space: nowrap;
+}
+
 /* Auth (client cert / google / users) — yellow accent */
 .meta-chip.auth .label {
     background: #b7791f;

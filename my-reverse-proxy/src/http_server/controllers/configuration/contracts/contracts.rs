@@ -69,6 +69,25 @@ impl CurrentConfigurationHttpModel {
 
         let ssl_certs = collect_ssl_certs().await;
 
+        // Flag every endpoint that references a real (non self-signed) certificate which is not in
+        // the loaded set — these listen but cut TLS until the certificate arrives.
+        {
+            let loaded_cert_ids: std::collections::HashSet<&str> =
+                ssl_certs.iter().map(|cert| cert.id.as_str()).collect();
+
+            for port in ports.iter_mut() {
+                for endpoint in port.endpoints.iter_mut() {
+                    if let Some(cert_id) = endpoint.ssl_cert_id.as_deref() {
+                        if cert_id != crate::self_signed_cert::SELF_SIGNED_CERT_NAME
+                            && !loaded_cert_ids.contains(cert_id)
+                        {
+                            endpoint.ssl_cert_missing = true;
+                        }
+                    }
+                }
+            }
+        }
+
         let mut remote_connections = HashMap::new();
 
         crate::app::APP_CTX
@@ -229,6 +248,9 @@ pub struct HttpEndpointInfoModel {
     pub allowed_user_list_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_cert_id: Option<String>,
+    // True when this endpoint references a real (non self-signed) SSL certificate that is NOT
+    // currently loaded in the cache — the endpoint listens but cuts TLS until the cert arrives.
+    pub ssl_cert_missing: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_cert_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -261,6 +283,9 @@ impl HttpEndpointInfoModel {
                 .ssl_certificate_id
                 .as_ref()
                 .map(|itm| itm.as_str().to_string()),
+            // Filled in a second pass in `CurrentConfigurationHttpModel::new` once the loaded
+            // certificate set is known.
+            ssl_cert_missing: false,
             client_cert_id: endpoint
                 .client_certificate_id
                 .as_ref()
@@ -302,6 +327,7 @@ impl HttpEndpointInfoModel {
             }],
             allowed_user_list_id: None,
             ssl_cert_id: None,
+            ssl_cert_missing: false,
             client_cert_id: None,
             g_auth: None,
         }

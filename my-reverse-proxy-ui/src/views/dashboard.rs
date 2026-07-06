@@ -439,6 +439,12 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
         || endpoint.allowed_user_list_id.is_some()
         || endpoint.ip_list.is_some();
 
+    let ssl_chip_class = if endpoint.ssl_cert_missing {
+        "meta-chip ssl missing"
+    } else {
+        "meta-chip ssl"
+    };
+
     rsx! {
         div { class: "endpoint",
             div { class: "endpoint-header",
@@ -446,6 +452,13 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
                 span { class: "host", "{endpoint.host}" }
                 if let Some(ip) = endpoint.resolved_ip.as_ref() {
                     span { class: "resolved-ip", title: "Resolved IP", "({ip})" }
+                }
+                if endpoint.ssl_cert_missing {
+                    span {
+                        class: "cert-missing-badge",
+                        title: "SSL certificate is not loaded — this endpoint listens but every TLS connection is cut until the certificate is uploaded (POST /api/SslCertificates/Init).",
+                        "⚠ SSL cert not loaded"
+                    }
                 }
                 {render_debug_toggle(DebugTarget::Endpoint(endpoint.host.clone()), endpoint.debug)}
                 {
@@ -466,9 +479,12 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
             if has_meta {
                 div { class: "endpoint-meta",
                     if let Some(ssl) = endpoint.ssl_cert_id.as_ref() {
-                        span { class: "meta-chip ssl",
+                        span { class: "{ssl_chip_class}",
                             span { class: "label", "SSL" }
                             span { class: "value", "{ssl}" }
+                            if endpoint.ssl_cert_missing {
+                                span { class: "value state", "not loaded" }
+                            }
                         }
                     }
                     if let Some(client) = endpoint.client_cert_id.as_ref() {
