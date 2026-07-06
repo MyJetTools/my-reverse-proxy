@@ -11,18 +11,29 @@ pub struct InitSslCertResult {
     pub expires: DateTimeAsMicroseconds,
     /// Domains (SAN + CN) the uploaded certificate is valid for.
     pub covered_domains: Vec<String>,
-    /// Endpoint domains that were verified against the certificate.
-    pub validated_endpoint_domains: Vec<String>,
+    /// The SNI(s) that were required and verified to be covered by the uploaded certificate.
+    pub validated_sni: Vec<String>,
+}
+
+struct RequiredSni {
+    domain: String,
+    /// Where this SNI requirement came from — for a clear rejection message.
+    source: &'static str,
 }
 
 /// Uploads (or replaces) an SSL certificate in the running cache by id.
 ///
 /// Safety checks performed before anything is stored:
-/// 1. The PEM material must parse and the private key must be of a supported type.
+/// 1. The PEM material must parse and the private key must match the certificate (see
+///    [`SslCertificate::new`]).
 /// 2. At least one https/mcp endpoint must reference `cert_id` — we refuse to store a
 ///    certificate that protects no endpoint (guards against typos / orphan uploads).
-/// 3. The certificate must cover the domain (SNI server name) of every endpoint that
-///    references `cert_id` — we refuse to serve a certificate issued for a different domain.
+/// 3. The uploaded certificate must cover every required SNI — i.e. it must serve the same
+///    domain(s) as (a) each referencing endpoint's configured server name AND (b) the
+///    certificate currently loaded under `cert_id` (if any). This is the core guard against
+///    accidentally installing a certificate for an unrelated domain: a replacement must match
+///    the SNI of what it replaces, and this holds even for endpoints with no configured
+///    server name.
 ///
 /// The stored certificate is marked [`SslCertificateOrigin::ManuallyProvided`], so the
 /// renewal timer leaves it untouched. It is served on the next TLS handshake — no reload
@@ -65,33 +76,42 @@ pub async fn init_ssl_cert_manually(
         ));
     }
 
-    // (3) The certificate must cover every endpoint domain it is being installed for.
+    // (3) The certificate must serve the same SNI(s) as what it protects / replaces.
     let cert_domains = ssl_cert.get_domains();
 
-    let mut validated_endpoint_domains: Vec<String> = Vec::new();
-    let mut uncovered: Vec<String> = Vec::new();
+    // The domains the certificate currently loaded under this id is valid for. A replacement
+    // must keep covering these — this is what makes the new and existing SNIs coincide, and it
+    // catches an unrelated certificate even for an endpoint that has no configured server name.
+    let existing_domains = crate::app::APP_CTX
+        .ssl_certificates_cache
+        .read(|c| c.ssl_certs.get(SslCertificateIdRef::new(cert_id)))
+        .await
+        .map(|holder| holder.ssl_cert.get_domains())
+        .unwrap_or_default();
 
+    let mut required: Vec<RequiredSni> = Vec::new();
     for endpoint in &referencing {
-        let Some(server_name) = endpoint.server_name.as_deref() else {
-            // Default endpoint without SNI — no domain to validate against.
-            continue;
-        };
+        if let Some(server_name) = endpoint.server_name.as_deref() {
+            push_required(&mut required, server_name, "endpoint server name");
+        }
+    }
+    for domain in &existing_domains {
+        push_required(&mut required, domain, "existing certificate");
+    }
 
-        if cert_covers_domain(&cert_domains, server_name) {
-            if !validated_endpoint_domains
-                .iter()
-                .any(|d| d.eq_ignore_ascii_case(server_name))
-            {
-                validated_endpoint_domains.push(server_name.to_string());
-            }
-        } else if !uncovered.iter().any(|d| d.eq_ignore_ascii_case(server_name)) {
-            uncovered.push(server_name.to_string());
+    let mut validated_sni: Vec<String> = Vec::new();
+    let mut uncovered: Vec<String> = Vec::new();
+    for req in &required {
+        if cert_covers_domain(&cert_domains, &req.domain) {
+            validated_sni.push(req.domain.clone());
+        } else {
+            uncovered.push(format!("{} (required by {})", req.domain, req.source));
         }
     }
 
     if !uncovered.is_empty() {
         return Err(format!(
-            "Uploaded certificate does not cover endpoint domain(s): [{}]. The certificate is valid for: [{}]. Refusing upload — this looks like a certificate for a different domain.",
+            "Uploaded certificate does not cover the required SNI(s): [{}]. The certificate is valid for: [{}]. Refusing upload — the new certificate must serve the same domain(s) as the endpoint and the certificate it replaces.",
             uncovered.join(", "),
             if cert_domains.is_empty() {
                 "<none>".to_string()
@@ -128,8 +148,24 @@ pub async fn init_ssl_cert_manually(
         cn: cert_info.cn,
         expires: cert_info.expires,
         covered_domains: cert_domains,
-        validated_endpoint_domains,
+        validated_sni,
     })
+}
+
+/// Adds `domain` to the required-SNI list unless an equal (case-insensitive) entry is already
+/// present. The first source that introduced the domain is kept for the rejection message.
+fn push_required(required: &mut Vec<RequiredSni>, domain: &str, source: &'static str) {
+    if required
+        .iter()
+        .any(|req| req.domain.eq_ignore_ascii_case(domain))
+    {
+        return;
+    }
+
+    required.push(RequiredSni {
+        domain: domain.to_string(),
+        source,
+    });
 }
 
 /// Whether any of the certificate's domains matches `domain`, honouring single-label

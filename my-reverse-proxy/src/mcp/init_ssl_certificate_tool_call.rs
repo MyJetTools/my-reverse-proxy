@@ -27,8 +27,8 @@ pub struct InitSslCertificateResponse {
     #[property(description = "All domains (SAN DNS names + CN) the installed certificate is valid for.")]
     pub covered_domains: Vec<String>,
 
-    #[property(description = "Endpoint domains that were checked against the certificate and matched.")]
-    pub validated_endpoint_domains: Vec<String>,
+    #[property(description = "The required SNI(s) that were verified to be covered by the uploaded certificate (the endpoint's server name and the domains of the certificate it replaced).")]
+    pub validated_sni: Vec<String>,
 }
 
 pub struct InitSslCertificateHandler;
@@ -58,7 +58,7 @@ impl McpToolCall<InitSslCertificateInputData, InitSslCertificateResponse>
             cn: result.cn,
             expires: result.expires.to_rfc3339(),
             covered_domains: result.covered_domains,
-            validated_endpoint_domains: result.validated_endpoint_domains,
+            validated_sni: result.validated_sni,
         })
     }
 }
