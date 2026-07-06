@@ -1,5 +1,6 @@
 use my_http_server::{
     macros::{http_route, MyHttpInput},
+    types::RawData,
     HttpContext, HttpFailResult, HttpOkResult,
 };
 
@@ -27,7 +28,7 @@ async fn handle_request(
 
     let state = crate::app::APP_CTX
         .pending_ssl_uploads
-        .set_certificate(cert_id, input_data.body);
+        .set_certificate(cert_id, input_data.body.into_vec());
 
     super::finish_pending_upload(cert_id, state).await
 }
@@ -38,5 +39,5 @@ pub struct UploadCertificateHttpInput {
     pub cert_id: String,
 
     #[http_body_raw(description = "The certificate chain in PEM format — the whole request body")]
-    pub body: Vec<u8>,
+    pub body: RawData,
 }
