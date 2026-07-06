@@ -79,10 +79,6 @@ pub struct AppContext {
 
     pub ssh_cert_pass_keys: CertPassKeys,
 
-    /// Staging area for the two-step manual certificate upload (certificate PEM and private key
-    /// PEM arrive in separate requests, each carrying the raw PEM body).
-    pub pending_ssl_uploads: PendingSslUploads,
-
     pub gateway_server: Option<TcpGatewayServer>,
     pub gateway_clients: HashMap<String, TcpGatewayClient>,
     pub http_control_port: Option<u16>,
@@ -178,7 +174,6 @@ impl AppContext {
             ssh_config_list: SshConfigList::new(),
             allowed_users_list: AllowedUsersList::new(),
             ssh_cert_pass_keys: CertPassKeys::new(),
-            pending_ssl_uploads: PendingSslUploads::new(),
             http_over_ssh_clients_pool: HttpClientPool::new(),
 
             http2_over_ssh_clients_pool: Http2ClientPool::new(),
