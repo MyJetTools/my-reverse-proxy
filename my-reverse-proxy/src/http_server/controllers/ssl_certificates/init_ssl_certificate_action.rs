@@ -1,5 +1,6 @@
 use my_http_server::{
     macros::{http_route, MyHttpInput},
+    types::FileContent,
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
 
@@ -24,8 +25,8 @@ async fn handle_request(
 ) -> Result<HttpOkResult, HttpFailResult> {
     crate::scripts::init_ssl_cert_manually(
         input_data.cert_id.trim(),
-        input_data.certificate,
-        input_data.private_key,
+        input_data.certificate.content,
+        input_data.private_key.content,
     )
     .await
     .map_err(HttpFailResult::as_validation_error)?;
@@ -42,8 +43,8 @@ pub struct InitSslCertificateHttpInput {
     pub cert_id: String,
 
     #[http_form_data(name = "certificate", description = "Certificate chain file in PEM format")]
-    pub certificate: Vec<u8>,
+    pub certificate: FileContent,
 
     #[http_form_data(name = "private_key", description = "Private key file in PEM format")]
-    pub private_key: Vec<u8>,
+    pub private_key: FileContent,
 }
