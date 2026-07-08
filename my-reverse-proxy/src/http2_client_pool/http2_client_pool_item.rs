@@ -36,7 +36,7 @@ impl<
 
     pub async fn do_request(
         &self,
-        req: hyper::Request<Full<Bytes>>,
+        req: &hyper::Request<Full<Bytes>>,
         request_timeout: std::time::Duration,
     ) -> Result<hyper::Response<BoxBody<Bytes, String>>, MyHttpClientError> {
         let result = self

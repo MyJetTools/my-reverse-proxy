@@ -66,12 +66,12 @@ impl<
 
     pub async fn do_request(
         &self,
-        req: hyper::Request<Full<Bytes>>,
+        req: &hyper::Request<Full<Bytes>>,
         request_timeout: Duration,
     ) -> Result<hyper::Response<BoxBody<Bytes, String>>, MyHttpClientError> {
         let mut retry_no = 0;
         loop {
-            let err = match self.inner.send_payload(&req, request_timeout).await {
+            let err = match self.inner.send_payload(req, request_timeout).await {
                 Ok(response) => {
                     return Ok(response);
                 }

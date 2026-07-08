@@ -37,7 +37,7 @@ impl Http2OverSshContentSource {
                 },
             );
 
-        let response = http_client.do_request(req, self.request_timeout).await?;
+        let response = http_client.do_request(&req, self.request_timeout).await?;
         return Ok(HttpResponse::Response(response));
     }
 }

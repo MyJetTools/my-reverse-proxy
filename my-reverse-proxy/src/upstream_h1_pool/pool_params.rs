@@ -3,9 +3,9 @@ use std::time::Duration;
 #[derive(Clone, Debug)]
 pub struct PoolParams {
     pub pool_size: u8,
-    /// Reserved for symmetry with h2-pool. Active probe for h1 is not
-    /// implemented — supervisor only refills empty slots.
-    #[allow(dead_code)]
+    /// Idle liveness probe path (global `default_h2_livness_url`, same as h2).
+    /// `None` → no active pings, dead detection is purely reactive. The h1
+    /// supervisor RENTS the entry before pinging — h1 is single-stream.
     pub health_check_path: Option<String>,
     pub connect_timeout: Duration,
     pub ping_timeout: Duration,

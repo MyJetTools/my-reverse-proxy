@@ -126,6 +126,30 @@ pub fn generate_tech_page(
                 )
                 .unwrap();
         }
+        // Upstream transport-level failures: the proxy itself is healthy, the
+        // upstream misbehaved — surface them as gateway errors, not 500.
+        ProxyPassError::MyHttpClientError(err) => {
+            let (status, code, title) = if matches!(
+                err,
+                my_http_client::MyHttpClientError::RequestTimeout(_)
+            ) {
+                (hyper::StatusCode::GATEWAY_TIMEOUT, 504, "Upstream timeout")
+            } else {
+                (hyper::StatusCode::BAD_GATEWAY, 502, "Bad gateway")
+            };
+            return hyper::Response::builder()
+                .status(status)
+                .body(
+                    Full::from(crate::error_templates::generate_layout(
+                        code,
+                        title,
+                        second_line_error,
+                    ))
+                    .map_err(|e| crate::to_hyper_error(e))
+                    .boxed(),
+                )
+                .unwrap();
+        }
         _ => {
             return hyper::Response::builder()
                 .status(hyper::StatusCode::INTERNAL_SERVER_ERROR)

@@ -1,38 +1,48 @@
 # H1 Upstream Pool — Design
 
-This document describes the design of the per-endpoint HTTP/1.1 upstream connection pool. One pool per `(scheme, host, port)`; `H1PoolRegistry` keeps them by `PoolKey`. Mirrors the [h2 pool](h2-pool.md) design with one h1-specific addition: each entry carries a `rented` flag because h1 is single-stream — only one in-flight request per connection.
+This document describes the design of the per-**location** HTTP/1.1 upstream connection pool. One pool per proxy-pass **location** (`location_id`); `H1PoolRegistry` keeps them in a `SortedVecOfArc<i64, H1Pool>` keyed by `location_id` (no `PoolKey` type — two locations on the same `(scheme, host, port)` get two separate pools; see [pool-lifecycle.md](pool-lifecycle.md)). Mirrors the [h2 pool](h2-pool.md) design with one h1-specific addition: each entry carries a `rented` flag because h1 is single-stream — only one in-flight request per connection.
 
 ## Goals
 
-- Lazy growth: pool starts empty and fills on demand up to `target_size` (5).
+- Lazy growth: pool starts empty and fills on demand up to `pool_size` (default 5).
 - Single-request-per-connection: h1 has no multiplexing; the `rented` flag enforces exclusive use.
-- Overflow: when all pool entries are rented, fall back to one-shot disposable connections up to a global cap (`MAX_DISPOSABLE = 100`).
-- Self-healing: dead connections detected by passive `do_request` failures or active liveness pings; revival is asynchronous so user requests don't pay the connect latency.
+- Overflow: when all pool entries are rented, fall back to one-shot disposable connections, capped by **both** a global ceiling (`MAX_DISPOSABLE = 100`, all pools combined) and a **per-pool** cap (`max_disposables`, default 50) so one saturated upstream can't consume the whole global budget.
+- Self-healing: dead connections are detected by passive `do_request` failures **and** by the idle liveness ping (same global `default_h2_livness_url` as h2). The h1 probe **rents** the entry first — h1 is single-stream, a probe is a request; busy entries are skipped (busy = traffic = alive).
 - WebSocket: each WS session opens its own dedicated TCP — independent of the pool, no counter overhead.
+
+> **Note:** the h1 pool has **not** received the h2 invisibility work (pick-live,
+> failover retry, background top-up). It keeps the original rented-slots +
+> disposables model described here; Path B revives foreground under `revive_lock`.
 
 ## Data structures
 
 ```rust
 pub struct H1Pool<TStream, TConnector> {
-    clients:   ArcSwap<Vec<Arc<H1Entry<TStream, TConnector>>>>,
-    grow_lock: parking_lot::Mutex<()>,    // brief, no await — only for Phase 0 push
-    target:    u8,                         // 5 (hardcoded today)
-    next:      AtomicUsize,                // round-robin scan start
-    factory:   ConnectorFactory<TConnector>,
+    desc:            PoolDesc,               // location_id, name, authority (ping Host header), id_string
+    params:          PoolParams,             // pool_size, timeouts, hot_window, max_disposables, read_stream_timeout
+    clients:         ArcSwap<Vec<Arc<H1Entry<...>>>>,
+    grow_lock:       parking_lot::Mutex<()>, // brief, no await — only for Phase 0 push
+    next:            AtomicUsize,            // round-robin scan start
+    shutdown:        AtomicBool,             // set by drain_unused
+    factory:         ConnectorFactory<TConnector>,
+    last_status:     AtomicUpstreamStatus,   // last connect/revive/ping outcome — admin UI only
+    live_disposables: Arc<AtomicUsize>,      // disposables handed out for THIS pool (per-pool cap)
 }
 
 pub struct H1Entry<TStream, TConnector> {
     pub client:       ArcSwap<MyHttpClient<TStream, TConnector>>,  // atomic swap on revival
     pub dead:         AtomicBool,
     pub last_success: AtomicDateTimeAsMicroseconds,                // refreshed on every success
-    pub rented:       AtomicBool,                                   // h1-specific: 1 in-flight max
+    pub rented:       AtomicBool,                                   // h1-specific: 1 in-flight max (probes rent too)
+    pub revive_pending: AtomicBool,                                  // dedups background revive spawns
     pub revive_lock:  tokio::sync::Mutex<()>,                       // serializes Path B + revive_task
 }
 
 pub enum H1ClientHandle<TStream, TConnector> {
     Reusable   { client: Arc<MyHttpClient>, entry: Arc<H1Entry> },
-    Disposable { client: Arc<MyHttpClient> },
+    Disposable { client: Arc<MyHttpClient>, live_disposables: Arc<AtomicUsize> },
     Ws         { client: Arc<MyHttpClient> },
+    Dedicated  { client: Arc<MyHttpClient> },   // MCP streaming — off-pool, uncounted
 }
 
 // Global, all h1 pools share these:
@@ -45,7 +55,7 @@ pub static DISPOSABLE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 - `revive_lock` (per entry) — `tokio::sync::Mutex<()>` held across the connect `await` during revival. Both foreground (Path B) and background (`revive_task`) lock it; re-check of `dead` after acquire prevents duplicate connects.
 - `client` (per entry) — `ArcSwap<MyHttpClient>`, atomically replaced on successful revival.
 - `dead`, `last_success`, `rented` — per-entry atomics; lock-free, visible to all readers immediately.
-- `DISPOSABLE_COUNTER` — global back-pressure for overflow disposables. Inc on creation, dec on Drop.
+- `DISPOSABLE_COUNTER` (global) + `live_disposables` (per-pool) — the two overflow budgets. Both inc on hand-out, dec on `Disposable::drop`.
 
 ## get_connection — three phases
 
@@ -85,27 +95,29 @@ flowchart TD
     ReviveOK -->|no| Unrent["entry.release_rent()<br/>return Err"]
 
     ScanLoop -->|loop done, none rented| Phase2[Phase 2 — overflow]
-    Phase2 --> CounterInc["cur = DISPOSABLE_COUNTER.fetch_add(1)"]
-    CounterInc --> CounterCheck{cur < MAX_DISPOSABLE ?}
+    Phase2 --> CounterInc["reserve: global += 1, per-pool += 1"]
+    CounterInc --> CounterCheck{global < MAX_DISPOSABLE<br/>AND pool < max_disposables ?}
     CounterCheck -->|yes| OverflowConnect["factory + connect"]
-    CounterCheck -->|no — limit| CounterUndo["DISPOSABLE_COUNTER -= 1"]
-    CounterUndo --> Sleep["tokio::sleep(10ms)"]
+    CounterCheck -->|no — over a limit| CounterUndo["undo both reservations"]
+    CounterUndo --> Deadline{past overflow_deadline<br/>(connect_timeout)?}
+    Deadline -->|yes| ErrDeadline([return Err — Disconnected])
+    Deadline -->|no| Sleep["tokio::sleep(10ms)"]
     Sleep --> Loop
     OverflowConnect --> OvOK{ok ?}
     OvOK -->|yes| OkOv([return Disposable])
-    OvOK -->|no| CounterUndoErr["DISPOSABLE_COUNTER -= 1<br/>return Err"]
+    OvOK -->|no| CounterUndoErr["undo both reservations<br/>return Err"]
 ```
 
 ### Phase summary
 
 | Phase | Trigger | Action | Outcome |
 |------|---------|--------|---------|
-| **0** | `len < target` | Connect; under `grow_lock` push pre-rented (or hand out as Disposable if race lost). | Lazy growth, no overshoot |
-| **1A (Path A)** | `len == target`, scan rented an alive entry | Return Reusable | Hot path |
-| **1B (Path B)** | `len == target`, scan rented a dead entry | Revive under `revive_lock`, return Reusable. On revive fail: release rent + Err | Foreground recovery |
-| **2 (overflow)** | All entries rented | Up to `MAX_DISPOSABLE` Disposables; over limit → 10ms sleep + retry | Back-pressure |
+| **0** | `len < pool_size` | Connect; under `grow_lock` push pre-rented (or hand out as Disposable if race lost). | Lazy growth, no overshoot |
+| **1A (Path A)** | `len == pool_size`, scan rented an alive entry | Return Reusable | Hot path |
+| **1B (Path B)** | `len == pool_size`, scan rented a dead entry | Revive under `revive_lock`, return Reusable. On revive fail: release rent + Err | Foreground recovery |
+| **2 (overflow)** | All entries rented | Disposable while **both** `global < MAX_DISPOSABLE` and `pool < max_disposables`; over either limit → 10ms sleep + retry, bounded by `overflow_deadline` (`connect_timeout`) then `Err(Disconnected)` | Back-pressure |
 
-The "race lost" branches (Phase 0, Phase 2 connect fail) keep the counter consistent: any inc has a matching dec on Drop or undo.
+The reservations are **reserve-then-check**: Phase 2 inc's both counters up front and undoes both on overshoot or connect failure, so any inc has a matching dec (on `Disposable::drop` or an undo). The Phase 2 retry is bounded by `overflow_deadline = now + connect_timeout` — a saturated upstream fails fast instead of spinning forever.
 
 ## do_request lifecycle
 
@@ -137,31 +149,36 @@ sequenceDiagram
 
 Notes:
 - 4xx/5xx HTTP responses are **not** treated as connection errors — the connection is healthy, the request is bad.
-- For Disposable / Ws variants, neither `last_success` nor `dead` is touched.
-- Drop releases the rent (Reusable), or decrements the counter (Disposable), or no-op (Ws).
+- For Disposable / Ws / Dedicated variants, neither `last_success` nor `dead` is touched.
+- Drop releases the rent (Reusable), or decrements **both** the global and per-pool disposable counters (Disposable), or is a no-op (Ws / Dedicated).
 
 ## Supervisor tick
 
-Driven by `MyTimer` (panic-safe). Runs every 10s.
+Driven by the shared `PoolSupervisorTimer` on a panic-safe `MyTimer` at
+`APP_CTX.pool_supervisor_interval` (default 10s) — the same pass that sweeps the
+h2 pools. The final `h1_pool_alive` gauge write is skipped when the pool is
+`shutdown` (a drained pool's gauge, reset by `drain_unused`, must stay reset).
 
 ```mermaid
 flowchart TD
-    Tick([tick — every 10s]) --> Snap["snap = clients.load_full()"]
+    Tick([tick — every supervisor_interval]) --> Snap["snap = clients.load_full()"]
     Snap --> Iter[/per entry in snap/]
 
     Iter --> EntryCheck{entry.dead ?}
-    EntryCheck -->|true| SpawnRevive[["tokio::spawn(revive_task(entry))"]]
-    EntryCheck -->|false| AgeCheck{now - last_success < 3s ?}
+    EntryCheck -->|true| SpawnRevive[["spawn_revive (revive_pending CAS)"]]
+    EntryCheck -->|false| AgeCheck{now - last_success < hot_window ?}
 
     AgeCheck -->|yes — hot| Skip([skip])
     AgeCheck -->|no — idle| PathConfigured{health_check_path set ?}
     PathConfigured -->|no| Skip
-    PathConfigured -->|yes| Ping["GET health_check_path<br/>(timeout 1s)"]
+    PathConfigured -->|yes| Rent{try_rent ?}
+    Rent -->|busy — in-flight request| Skip
+    Rent -->|rented| Ping["GET health_check_path<br/>(timeout ping_timeout)<br/>then release_rent"]
 
     Ping --> PingResult{200..=205 ?}
     PingResult -->|yes| MarkSuccess["last_success.update(now)"]
     PingResult -->|no| MarkDead["dead.store(true)"]
-    MarkDead --> SpawnRevive2[["tokio::spawn(revive_task(entry))"]]
+    MarkDead --> SpawnRevive2[["spawn_revive (revive_pending CAS)"]]
 
     SpawnRevive --> NextEntry
     SpawnRevive2 --> NextEntry
@@ -294,25 +311,29 @@ sequenceDiagram
     participant Pool
     participant Counter as DISPOSABLE_COUNTER (global)
 
-    Note over Pool: all 5 entries rented
+    Note over Pool: all 5 entries rented; per-pool cap max_disposables=50
     Caller->>Pool: get_connection
     Pool->>Pool: scan — try_rent fails for all
-    Pool->>Counter: fetch_add(1) → 99
-    Note over Counter: 99 < MAX_DISPOSABLE (100)
-    Pool->>Caller: Disposable (counter=100)
+    Pool->>Counter: reserve global+1, pool+1
+    Note over Counter: global < 100 AND pool < 50 → OK
+    Pool->>Caller: Disposable
 
-    Note over Caller: ... another concurrent caller
+    Note over Caller: ... caller when the per-pool cap is hit
     Caller->>Pool: get_connection
     Pool->>Pool: scan — try_rent fails for all
-    Pool->>Counter: fetch_add(1) → 100
-    Note over Counter: 100 >= 100 — at limit
-    Pool->>Counter: fetch_sub(1) → 100
-    Pool->>Pool: tokio::sleep(10ms).await
+    Pool->>Counter: reserve global+1, pool+1
+    Note over Counter: pool == 50 (or global == 100) — over a limit
+    Pool->>Counter: undo both reservations
+    Pool->>Pool: past overflow_deadline? no → tokio::sleep(10ms).await
     Note over Pool: loop top — re-snap, re-check
     Pool->>Pool: maybe someone released a rent → Path A
 ```
 
-The retry loop handles transient overload. If the upstream is permanently slow and 100 disposables are stuck, the proxy's `request_timeout` (15s default) bails callers out.
+The retry loop handles transient overload, bounded by `overflow_deadline`
+(`now + connect_timeout`) — past it the caller gets `Err(Disconnected)` rather
+than spinning. The per-pool `max_disposables` (50) stops one saturated upstream
+from consuming the whole global `MAX_DISPOSABLE` (100) budget and starving the
+other pools.
 
 ### Upstream went down (single endpoint goes flaky)
 
@@ -349,9 +370,13 @@ sequenceDiagram
 
 In the meantime, foreground gets that round-robin and try_rent past the dead entry hit Path B (also tries to revive — succeeds the moment upstream is back).
 
-### Hot pool — no idle pings
+### Hot pool — hot_window skip
 
-If RPS to an endpoint is high enough that every pool entry sees `last_success` updated within 3s, the supervisor tick **does no pings at all** — every entry is "hot" and skipped. Active probing only kicks in for genuinely idle endpoints, which avoids hammering upstreams that are already known-good.
+The supervisor skips any entry whose `last_success` is within `hot_window`
+(default 3s) — traffic itself is the probe. Only idle **and free** entries get
+the active ping (see the rent rule in Parameters); with no
+`default_h2_livness_url` configured, dead detection falls back to purely
+reactive (`do_request` failures).
 
 ### WebSocket sessions
 
@@ -363,25 +388,57 @@ WS doesn't count toward `DISPOSABLE_COUNTER` — long-lived WS sessions would ot
 
 Exposed on `/metrics` (Prometheus):
 
-- `h1_pool_size{endpoint="h1://host:port"}` — configured `target` (5).
-- `h1_pool_alive{endpoint="..."}` — current `len(clients)` minus `dead` count, set by tick after the pass.
+- `h1_pool_size{endpoint=...}` — configured `pool_size`.
+- `h1_pool_alive{endpoint=...}` — current `len(clients)` minus `dead` count, set after each tick (skipped when the pool is `shutdown`) and background revive.
 
-Endpoint label format mirrors the `/configuration` snapshot: `h1://host:port`, `h1s://host:port`, `uds-h1://path`.
+The `endpoint` label value is the pool `name` with a `#<location_id>` suffix:
+`h1://host:port#<location_id>`, `h1s://host:port#<location_id>`,
+`uds-h1://<socket_path>#<location_id>`. Two locations on the same upstream are
+distinct series (they are distinct pools — see [pool-lifecycle.md](pool-lifecycle.md)).
 
-`DISPOSABLE_COUNTER` is global; a `h1_disposable_active` gauge is not exposed today (potential add for visibility).
+`DISPOSABLE_COUNTER` (global) and per-pool `live_disposables` are not exposed as
+gauges today (potential add for overflow visibility).
 
-## Hardcoded parameters (today)
+## Parameters
 
-- `target_size = 5`
-- `MAX_DISPOSABLE = 100` (global, all h1 pools combined)
-- `health_check_interval = 10s` (the MyTimer cadence)
-- `ping_timeout = 1s`
-- `connect_timeout = 5s` (per `PoolParams`, default)
-- "Hot threshold" `last_success` window = `3s`
-- Overflow retry sleep = `10ms`
-- Success status range for ping = `200..=205`
+Configuration-driven (`PoolParams`, built per location from `PoolTuning` + global
+settings); the values below are the compiled-in defaults from `src/consts.rs`.
 
-All of these are tracked as tech debt for YAML configuration.
+| Parameter | Source | Default |
+|-----------|--------|---------|
+| `pool_size` | `PoolTuning` (per proxy_pass) | `DEFAULT_POOL_SIZE = 5` |
+| `connect_timeout` | `proxy_pass.connect_timeout` | `DEFAULT_HTTP_CONNECT_TIMEOUT = 5s` |
+| `ping_timeout` | `PoolTuning` | `DEFAULT_POOL_PING_TIMEOUT = 1s` |
+| `hot_window` | `PoolTuning` | `DEFAULT_POOL_HOT_WINDOW = 3s` |
+| `max_disposables` (per pool) | `PoolParams` | `DEFAULT_MAX_DISPOSABLES_PER_POOL = 50` |
+| `read_stream_timeout` | `PoolParams` (MCP locations override) | `DEFAULT_READ_TIMEOUT = 3m` (MCP → `DEFAULT_MCP_READ_TIMEOUT = 60m`) |
+| `health_check_path` | global `global_settings.default_h2_livness_url` (shared with h2) | `None` (reactive-only) |
+| supervisor interval | `global_settings` → `get_pool_supervisor_interval()` | `DEFAULT_POOL_SUPERVISOR_INTERVAL = 10s` |
+| ping success range | hardcoded | `200..=205` |
+
+**Liveness ping rents the entry.** h1 is single-stream: an unrented probe would
+pipeline a second request onto a connection that is serving one and cross the
+responses. So the supervisor probes only idle **and free** entries: `try_rent` →
+GET ping → mark (`last_success` on 200..=205, `dead` + background revive
+otherwise) → `release_rent`. A rented entry is skipped — a request in flight is
+itself proof the connection works. Probe hardening:
+
+- the rent is held by a `RentGuard` (Drop) — a panic or the tick future being
+  cancelled mid-ping (MyTimer's iteration timeout drops a slow tick) can never
+  leak `rented=true` and wedge the entry;
+- the ping sends `Host: {desc.authority}` — HTTP/1.1 requires it, a compliant
+  upstream answers 400 without it (which would read as dead and churn);
+- the response body is **drained** before dropping — the h1 read loop streams
+  body frames into the response's channel, and a dropped receiver would fail
+  the read loop and tear down the healthy connection;
+- a liveness path containing request-line-forbidden bytes (space/CR/LF/NUL) is
+  skipped instead of probed — the raw request builder panics on them (h2 skips
+  such paths too: there they would fail the builder and read as "dead").
+
+Still hardcoded: `MAX_DISPOSABLE = 100` (global disposable ceiling across all h1
+pools) and the Phase 2 overflow retry sleep (`10ms`). `PoolParams` is captured at
+pool creation, so a reload does not re-apply changed params to a live pool (same
+as h2 — see [h2-pool.md](h2-pool.md) Parameters).
 
 ## H1Entry Drop — what happens when its pool is already gone
 
@@ -414,8 +471,8 @@ sequenceDiagram
     GC->>Registry: drain_unused — endpoint no longer in config
     Registry->>Registry: lock(write_lock)
     Registry->>Pool: pool.shutdown.store(true)
-    Registry->>Registry: build new AHashMap WITHOUT this pool's key
-    Registry->>Registry: ArcSwap::store(new map)
+    Registry->>Registry: rebuild SortedVecOfArc WITHOUT this pool's location_id
+    Registry->>Registry: ArcSwap::store(new vec)
     Note over Registry,Pool: Registry's Arc<H1Pool> dropped
     Note over Pool: Refcount of Arc<H1Pool> > 0 only if revive_task still holds it
     Note over Pool: When last Arc<H1Pool> dies → H1Pool drops

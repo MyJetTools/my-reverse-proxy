@@ -244,6 +244,22 @@ where
         self.last_status.get()
     }
 
+    /// Publishes the alive gauge unless the pool is drained; re-checks
+    /// `shutdown` AFTER the write and undoes it — `drain_unused` may reset
+    /// the gauge concurrently, and a removed pool's label must stay reset
+    /// (nothing will ever reset it again).
+    pub(crate) fn publish_alive_gauge(&self) {
+        if self.shutdown.load(Ordering::Relaxed) {
+            return;
+        }
+        crate::app::APP_CTX
+            .prometheus
+            .set_h1_pool_alive(&self.desc.name, self.alive_count() as i64);
+        if self.shutdown.load(Ordering::Relaxed) {
+            crate::app::APP_CTX.prometheus.reset_h1_pool(&self.desc.name);
+        }
+    }
+
     /// Live on-demand (disposable) connections currently handed out for this pool.
     pub fn live_disposables(&self) -> usize {
         self.live_disposables.load(Ordering::Relaxed)

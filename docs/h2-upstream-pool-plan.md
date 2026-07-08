@@ -1,5 +1,35 @@
 # Plan: per-endpoint h2 upstream pool with N connections and active health-check
 
+> **Status (shipped, differs from this plan).** The living design is
+> [h2-pool.md](h2-pool.md). Two things landed differently from the plan below
+> and are **intentional**:
+> - **Keying is per-location (`location_id`), not per-endpoint `PoolKey`.** There
+>   is no `PoolKey`/canonicalization and no `pool_key.rs`/`h2_slot.rs`. Two
+>   locations on the same `(scheme, host, port)` get two independent pools. The
+>   registry is `SortedVecOfArc<i64, H2Pool>`; identity across reloads is kept via
+>   `id_string`. (So the plan's verification step 5 — "second location, same
+>   endpoint → still 5 connections" — does not hold; expect 2×`pool_size`.)
+> - **`health_check_path` is a single global setting** (`default_h2_livness_url`)
+>   applied to every h2 pool, not a per-location field. Per-location health-check
+>   is backlog.
+>
+> Also note the slot model shipped as `H2Entry` (`ArcSwap<client>` + `dead` +
+> `last_success` + per-entry `revive_lock`, revived **in place**), not the
+> `H2Slot` + `ArcSwapOption` + `failure_count` (3-strike) design sketched here;
+> `drain_unused` **is** wired via `GcPoolsTimer` (60s); and params are
+> config-driven (`PoolTuning` + settings) with `src/consts.rs` defaults.
+>
+> **Superseded by the invisibility work.** Large parts of the request-path
+> design below no longer match the code: routing is now **pick-live**
+> (route around dead connections, no `acquire()→None→503`), with
+> **idempotent failover retry**, **bounded all-dead recovery**
+> (cooldown + wait-budget), and **background top-up** in the supervisor.
+> For current behavior read [h2-pool.md](h2-pool.md) and
+> [pool-invisibility-plan.md](pool-invisibility-plan.md); treat everything
+> below as historical. In particular the **Verification** section predates
+> pick-live — step 3 (dead pool "clears all 5 slots" and returns 503) and
+> step 5 (shared endpoint pool) do **not** describe shipped behavior.
+
 ## Context
 
 In the high-load scenario (tens of thousands of concurrent WebSocket connections to several upstream services), the current outgoing-side h2 architecture does not scale, for two reasons:

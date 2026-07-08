@@ -469,6 +469,9 @@ fn h1_pool_params(
     params.pool_size = pool_tuning.pool_size;
     params.ping_timeout = pool_tuning.ping_timeout;
     params.hot_window = pool_tuning.hot_window;
+    // Same global liveness path as the h2 pools; without it, a dead idle h1
+    // connection is only discovered by the first real request after the idle.
+    params.health_check_path = APP_CTX.default_h2_livness_url.clone();
     if is_mcp {
         // MCP SSE bodies can idle far longer than the default read timeout
         // without any keepalive — don't tear down a healthy idle stream.
@@ -494,6 +497,7 @@ pub(crate) fn make_tcp_h1_pool_factory(
     let desc = crate::upstream_h1_pool::PoolDesc {
         location_id,
         name: h1_tcp_pool_name(remote_host.get_host(), port, location_id),
+        authority: format!("{}:{}", remote_host.get_host(), port),
         id_string,
     };
     let endpoint_arc = remote_host.clone();
@@ -533,6 +537,7 @@ pub(crate) fn make_tls_h1_pool_factory(
     let desc = crate::upstream_h1_pool::PoolDesc {
         location_id,
         name: h1_tls_pool_name(remote_host.get_host(), port, location_id),
+        authority: format!("{}:{}", remote_host.get_host(), port),
         id_string,
     };
     let endpoint_arc = remote_host.clone();
@@ -571,6 +576,9 @@ pub(crate) fn make_uds_h1_pool_factory(
     let desc = crate::upstream_h1_pool::PoolDesc {
         location_id,
         name: h1_uds_pool_name(remote_host.get_host_port().as_str(), location_id),
+        // Unix socket has no host:port; the ping's Host header only needs to
+        // be syntactically valid (same placeholder the h2 uds pool uses).
+        authority: "localhost".to_string(),
         id_string,
     };
     let endpoint_arc = remote_host.clone();

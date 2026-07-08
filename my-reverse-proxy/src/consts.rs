@@ -23,6 +23,17 @@ pub const DEFAULT_POOL_HOT_WINDOW: Duration = Duration::from_secs(3);
 pub const DEFAULT_POOL_PING_TIMEOUT: Duration = Duration::from_secs(1);
 // How often the (single, global) supervisor sweeps every pool.
 pub const DEFAULT_POOL_SUPERVISOR_INTERVAL: Duration = Duration::from_secs(10);
+// Minimum spacing between REVIVE dials to a dead pool entry. Repeat revive
+// attempts inside the window fail fast instead of re-dialing, so a down
+// upstream costs at most one revive dial per window per entry. (Does not
+// rate-limit Path 0 growth of a below-target pool or on-demand WS connects.)
+pub const DEFAULT_POOL_REVIVE_COOLDOWN: Duration = Duration::from_millis(500);
+// How long a request may wait for an in-flight revive (the entry's
+// revive_lock) when EVERY entry of the pool is dead, before failing fast.
+// Bounds the waiters only: the one request that wins the lock dials with the
+// full connect_timeout — someone has to, and it recovers the pool the moment
+// the upstream is back.
+pub const DEFAULT_POOL_DEAD_POOL_WAIT_BUDGET: Duration = Duration::from_millis(500);
 // Per-pool cap on concurrent on-demand (disposable) overflow connections. Below
 // the global MAX_DISPOSABLE ceiling so one saturated upstream cannot starve the
 // process-wide budget for the others.

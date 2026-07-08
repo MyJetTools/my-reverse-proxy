@@ -1,316 +1,379 @@
 # H2 Upstream Pool — Design
 
-This document describes the design of the per-endpoint HTTP/2 upstream connection pool used by the reverse proxy. One pool per `(scheme, host, port)`; `H2PoolRegistry` keeps them by `PoolKey`.
+This document describes the per-**location** HTTP/2 upstream connection pool used
+by the reverse proxy. One pool per proxy-pass **location** (`location_id`);
+`H2PoolRegistry` keeps them in a `SortedVecOfArc<i64, H2Pool>` keyed by
+`location_id`.
 
-## Goals
+Two locations that point at the same `(scheme, host, port)` get **two
+independent pools** (2×`pool_size` connections) — pooling is per-location **by
+design**, not coalesced per endpoint. Across a config reload a location keeps its
+`location_id` (and therefore its pool) when its `id_string`
+(`listen_host|path->type|target`) is unchanged **and a live pool with that
+`id_string` still exists** at apply time — `find_location_id_by_id_string` scans
+the current registries. A location whose pool was never created (lazy — no
+traffic yet) or was drained gets a fresh `location_id` from
+`APP_CTX.get_next_id()` on reload, so the `#<location_id>` suffix in metric
+labels is stable only for actively-pooled locations.
 
-- Cheap multiplexing: one h2 connection serves up to `MAX_CONCURRENT_STREAMS` (≈200) parallel requests. Five connections cover ~1000 in-flight requests with stable file-descriptor usage.
-- Lazy growth: no upfront connects on proxy startup; pool fills on demand up to `target_size`.
-- Self-healing: dead connections detected by either passive `do_request` failures or active liveness pings; revival is asynchronous so user requests don't pay the connect latency.
-- No overshoot: under any race the pool size never exceeds `target_size`.
+## Design goal: invisibility
+
+The overriding goal is that **upstream connection churn is invisible to endpoint
+clients**. Concretely:
+
+- A single dead pool connection is (almost always) invisible to clients —
+  requests are routed around it (pick-live), and for idempotent methods the one
+  request that first hit it is failed over to a healthy connection. A
+  non-idempotent request that hits it mid-flight is the sole exception: it
+  surfaces one error (no replay, to avoid double-execution).
+- An upstream restart heals in the background (revive) and, once
+  [item 3](pool-invisibility-plan.md) lands, is detected by h2 keep-alive PINGs
+  before user traffic even touches a stale connection.
+- A genuine full outage fails **fast** (bounded 503, no timeout cascade), never
+  as a pile-up of requests each blocking on a dead dial.
+
+Supporting properties:
+
+- Cheap multiplexing: one h2 connection serves up to the upstream's advertised
+  `SETTINGS_MAX_CONCURRENT_STREAMS` (≈200 by hyper's default). Five connections
+  cover ~1000 in-flight requests with stable FD usage. (The proxy neither sets
+  nor enforces that limit, and routing is plain round-robin — it does not
+  account for per-connection stream load.)
+- Lazy growth: no upfront connects on startup; the pool fills on demand and is
+  topped up to `pool_size` in the background.
+- No overshoot: under any race the pool size never exceeds `pool_size`.
+
+## Three layers
+
+The invisibility logic is split across three layers, outermost first:
+
+| Layer | Where | Responsibility |
+|-------|-------|----------------|
+| **1 — request** | `execute_pooled_h2` in `content_source/h2_dispatch.rs` | Run the request; on a *connection-level* error, mark the entry dead, kick a background revive, and (idempotent methods only) fail over to another live entry. |
+| **2 — pool** | `H2Pool::get_connection` in `upstream_h2_pool/h2_pool.rs` | Hand out a live entry: grow if below target (Path 0), pick the first live one (Path A / pick-live), or recover a fully-dead pool with a bounded, coalesced attempt (Path B). |
+| **3 — supervisor** | `H2Pool::supervisor_tick` in `upstream_h2_pool/pool_supervisor.rs` | Every ~10s: top the pool up to `pool_size`, revive dead entries, and actively ping idle-but-live ones. |
+
+Below all three sits `MyHttp2Client::do_request` (in `my-http-client`), which has
+its **own** internal reconnect-and-replay loop. Its interaction with layer 1 is
+called out where it matters, and it is being hardened separately (item 3).
 
 ## Data structures
 
 ```rust
 pub struct H2Pool<TStream, TConnector> {
-    clients:   ArcSwap<Vec<Arc<H2Entry<TStream, TConnector>>>>,
-    grow_lock: parking_lot::Mutex<()>,   // brief, no await — only for Path 0 push
-    target:    u8,                        // 5 (hardcoded today)
-    next:      AtomicUsize,               // round-robin counter
-    factory:   ConnectorFactory<TConnector>,
+    desc:           PoolDesc,               // location_id, name, authority, id_string
+    params:         PoolParams,             // pool_size, timeouts, hot_window, cooldowns, health_check_path
+    clients:        ArcSwap<Vec<Arc<H2Entry<...>>>>,
+    grow_lock:      parking_lot::Mutex<()>, // brief, no await — Path 0 push + try_push
+    next:           AtomicUsize,            // round-robin start position
+    shutdown:       AtomicBool,             // set by drain_unused; stops supervisor/revive/top-up/push
+    top_up_pending: AtomicBool,             // dedups background top-up tasks
+    factory:        ConnectorFactory<TConnector>,
+    last_status:    AtomicUpstreamStatus,   // last connect/revive/ping outcome — admin UI only
 }
 
 pub struct H2Entry<TStream, TConnector> {
-    pub client:       ArcSwap<MyHttp2Client<TStream, TConnector>>,  // atomic swap on revival
-    pub dead:         AtomicBool,
-    pub last_success: AtomicDateTimeAsMicroseconds,                 // refreshed on every successful do_request
-    pub revive_lock:  tokio::sync::Mutex<()>,                       // serializes Path B + background revive_task
+    pub client:              ArcSwap<MyHttp2Client<...>>,      // atomically swapped on revival
+    pub dead:                AtomicBool,
+    pub last_success:        AtomicDateTimeAsMicroseconds,     // refreshed on every successful request
+    pub revive_pending:      AtomicBool,                       // a background revive is in flight
+    pub last_revive_attempt: AtomicDateTimeAsMicroseconds,     // start of the last dial; epoch initially
+    pub revive_lock:         tokio::sync::Mutex<()>,           // serializes revival of THIS entry
 }
 ```
 
-- `clients` — the pool list. **Lock-free reads** via `ArcSwap::load()`, atomic snapshot.
-- `grow_lock` — only for serializing **Path 0** pushes. Held briefly (no `await`); the connect happens before acquiring it.
-- `revive_lock` (per entry) — `tokio::sync::Mutex<()>` held across the connect `await` during revival. Both foreground (Path B) and background (`revive_task`) lock it; re-check of `dead` after acquire prevents duplicate connects.
-- `client` (per entry) — `ArcSwap<MyHttp2Client>`, atomically replaced on successful revival.
-- `dead` and `last_success` — per-entry atomics; lock-free, visible to all readers immediately.
+- `clients` — **lock-free reads** via `ArcSwap::load()`. Rewritten only on growth
+  (Path 0 / top-up push); **never** on revival (revival swaps the entry's inner
+  `client` ArcSwap in place, not the vec).
+- `dead`, `last_success`, `revive_pending`, `last_revive_attempt` — per-entry
+  atomics; lock-free, immediately visible to all readers.
+- `last_revive_attempt` starts at **epoch** so a fresh entry is never inside the
+  revive cooldown window (its first dial is always allowed).
 
-## get_connection — three paths
+## Layer 1 — request flow (`execute_pooled_h2`)
 
-`pool.get_connection().await` returns `Result<Arc<H2Entry>, MyHttpClientError>`.
-
-```mermaid
-flowchart TD
-    Start([get_connection]) --> Load["snap = clients.load()"]
-    Load --> SizeCheck{snap.len ?}
-
-    SizeCheck -->|< target| Path0Connect["factory + connect (no lock)"]
-    SizeCheck -->|== target| RR["i = next.fetch_add(1) % len"]
-
-    RR --> Pick["entry = snap[i].clone()"]
-    Pick --> DeadCheck{entry.dead ?}
-    DeadCheck -->|false| PathA([Path A: return Ok(entry)])
-    DeadCheck -->|true| PathBConnect["factory + connect (no lock)"]
-
-    Path0Connect --> Path0OK{ok ?}
-    Path0OK -->|err| Err1([return Err])
-    Path0OK -->|ok| Path0Lock["lock update_lock"]
-    Path0Lock --> Path0Recheck{cur.len < target ?}
-    Path0Recheck -->|yes| Path0Push["push new_entry, store ArcSwap"]
-    Path0Recheck -->|no — race lost| Path0Skip["skip — return new_entry as one-shot"]
-    Path0Push --> Ok0([return Ok new_entry])
-    Path0Skip --> Ok0
-
-    PathBConnect --> PathBOK{ok ?}
-    PathBOK -->|err| Err2([return Err — dead stays])
-    PathBOK -->|ok| PathBLock["lock update_lock"]
-    PathBLock --> PathBFind{ptr_eq found AND still dead ?}
-    PathBFind -->|yes| PathBReplace["replace at idx, store ArcSwap"]
-    PathBFind -->|no — race lost| PathBSkip["skip — return new_entry as one-shot"]
-    PathBReplace --> OkB([return Ok new_entry])
-    PathBSkip --> OkB
-```
-
-### Path summary
-
-| Path | Trigger | Action | Outcome |
-|------|---------|--------|---------|
-| **A** | `len == target`, round-robin pick is `!dead` | Clone the Arc | Hot path; lock-free except for `next.fetch_add` |
-| **B** | `len == target`, round-robin pick is `dead` | Connect; under `update_lock` replace by `Arc::ptr_eq` if still there & still dead, else hand out as one-shot | Foreground recovery for that one stale entry |
-| **0** | `len < target` (cold start, after cleanup) | Connect; under `update_lock` push if there's still room, else hand out as one-shot | Lazy growth |
-
-The "one-shot" branch happens when concurrent gets race past the size check while we were connecting. The extra `Arc<MyHttp2Client>` that didn't make it into the pool is returned to the caller; once they finish their request and drop the Arc, `MyHttp2Client::Drop` closes the TCP. **No overshoot ever lives in the pool.**
-
-## do_request lifecycle
-
-Every content_source (http2 / https2 / unix_http2) wraps `execute_h2`:
-
-```mermaid
-sequenceDiagram
-    participant CS as content_source
-    participant Pool as H2Pool
-    participant Entry as H2Entry
-    participant Apstream as Upstream
-
-    CS->>Pool: get_connection().await
-    Pool-->>CS: Ok(Arc<H2Entry>)
-    CS->>Apstream: execute_h2(&entry.client, req).await
-    alt do_request Ok
-        Apstream-->>CS: Response
-        CS->>Entry: last_success.store(now)
-    else do_request Err (timeout/network)
-        Apstream--xCS: Err
-        CS->>Entry: dead.store(true)
-    end
-    CS-->>CS: return result
-```
-
-Notes:
-- 4xx/5xx HTTP responses are **not** treated as connection errors — the connection is healthy, the request is bad.
-- `last_success` is updated only on successful `do_request`. Tick uses it to skip idle/probing of "hot" entries.
-
-## Supervisor tick
-
-Driven by `MyTimer` (panic-safe — a panic in one tick doesn't stop the next). Runs every 10s.
+Shared by all three h2 content sources (tcp / tls / uds — they differ only in
+stream & connector type, so the body is one generic helper).
 
 ```mermaid
 flowchart TD
-    Tick([tick — every 10s]) --> Snap["snap = clients.load()"]
-    Snap --> Iter[/per entry in snap/]
+    Start([execute_pooled_h2]) --> WS{extended CONNECT WS?}
+    WS -->|yes| WSPath["create_connection (off-pool) + H2WsActiveGuard"]
+    WS -->|no| Attempt
 
-    Iter --> EntryCheck{entry.dead ?}
-    EntryCheck -->|true| SpawnRevive[["tokio::spawn(revive_task(entry))"]]
-    EntryCheck -->|false| AgeCheck{now - last_success < 3s ?}
-
-    AgeCheck -->|yes — hot| Skip([skip])
-    AgeCheck -->|no — idle| PathConfigured{health_check_path set ?}
-    PathConfigured -->|no| Skip
-    PathConfigured -->|yes| Ping["GET health_check_path<br/>(timeout 1s)"]
-
-    Ping --> PingResult{200..=205 ?}
-    PingResult -->|yes| MarkSuccess["last_success.store(now)"]
-    PingResult -->|no| MarkDead["dead.store(true)"]
-    MarkDead --> SpawnRevive2[["tokio::spawn(revive_task(entry))"]]
-
-    SpawnRevive --> NextEntry
-    SpawnRevive2 --> NextEntry
-    Skip --> NextEntry
-    MarkSuccess --> NextEntry
-    NextEntry[next entry...]
+    Attempt["get_connection → entry"] --> Run["execute_h2 on entry.client"]
+    Run --> OK{Ok?}
+    OK -->|yes| Success["entry.last_success = now → return Ok"]
+    OK -->|no| ConnLevel{connection-level error?}
+    ConnLevel -->|no — timeout / non-transport| ReturnErr([return Err — entry stays live])
+    ConnLevel -->|yes| StaleCheck{client still entry's current?}
+    StaleCheck -->|yes| MarkDead["entry.dead=true; spawn_revive(entry)"]
+    StaleCheck -->|no — already revived| SkipMark[skip marking]
+    MarkDead --> Retry
+    SkipMark --> Retry
+    Retry{idempotent AND attempt 1 of 2?}
+    Retry -->|yes| Attempt
+    Retry -->|no| ReturnLastErr([return last Err])
 ```
 
-Tick **never removes** anything from the pool itself — that's `revive_task`'s job (on success). Failed revives leave the dead entry in place; the next tick spawns another revive task for it.
+Key rules:
 
-### revive_task (tokio::spawn per dead entry)
+- **WebSocket** (extended CONNECT): a dedicated **off-pool** connection via
+  `create_connection`, held alive by `H2WsActiveGuard` for the session. Never
+  touches `clients`.
+- **Failover retry** is **idempotent-only** (`req.method().is_idempotent()` →
+  GET/HEAD/PUT/DELETE/OPTIONS/TRACE): up to 2 attempts, landing on a different
+  live entry the second time (pick-live skips the one just marked dead).
+  POST/PATCH get a single attempt — a lost reply must not double-execute.
+  - Caveat (until item 3 lands): `MyHttp2Client::do_request` still has its own
+    internal reconnect-replay, so the "no double-execution of non-idempotent
+    requests" guarantee is not yet end-to-end.
+  - Replayed PUT/DELETE may observably substitute the response (a replayed
+    DELETE returning 404 after the first succeeded) — same policy as nginx's
+    default for idempotent methods.
+- **Timeout ≠ dead**: `is_connection_level_error` excludes
+  `MyHttpClientError::RequestTimeout` (and `UpgradedToWebSocket`). A slow upstream
+  is not a broken connection — the entry stays in rotation and the request is not
+  replayed (replaying a slow request would double the load on an already-degraded
+  upstream, and marking the shared connection dead would churn every other stream
+  multiplexed on it).
+- **Stale-client guard**: dead-marking + `spawn_revive` happen only when
+  `Arc::ptr_eq(&client, &entry.client.load_full())` — a straggler failing on a
+  connection that a background revive already swapped out must not re-kill the
+  freshly healthy entry.
+- **No extra clone for failover**: the request is passed **by reference**
+  (`&Request`) through `execute_h2` → `do_request` on every attempt, so the retry
+  costs no request clone — the only clone is the one `send_payload` already makes
+  internally on the actual send. (`do_request` taking `&req` is what lets the
+  failover loop reuse the same request across attempts.)
+- 4xx/5xx HTTP responses are **not** errors — they return `Ok`.
+
+## Layer 2 — `get_connection` (three paths)
+
+`pool.get_connection().await` (receiver `self: &Arc<Self>`) returns
+`Result<Arc<H2Entry>, MyHttpClientError>`.
 
 ```mermaid
-sequenceDiagram
-    participant Tick as Supervisor tick
-    participant Task as revive_task (spawned)
-    participant Apstream as Upstream
-    participant Pool as H2Pool
+flowchart TD
+    Start([get_connection]) --> SizeCheck{snap.len < pool_size ?}
 
-    Tick->>Task: spawn(dead_entry_arc)
-    Task->>Apstream: factory + connect (timeout 5s)
-    alt connect ok
-        Apstream-->>Task: TCP/TLS established → MyHttp2Client
-        Task->>Pool: lock(update_lock)
-        Task->>Pool: cur = clients.load_full()
-        alt ptr_eq(dead_entry) found AND still dead
-            Task->>Pool: clone vec, replace at idx, store ArcSwap
-            Note over Pool: dead → live in same slot
-        else not found / not dead
-            Note over Task: new_entry dropped<br/>(another revive or Path B already replaced it)
-        end
-        Task->>Pool: unlock(update_lock)
-    else connect fail
-        Apstream--xTask: Err
-        Note over Task: no-op — dead stays<br/>next tick will spawn another revive
-    end
+    SizeCheck -->|yes| Path0["Path 0 — grow: connect, try_push (one-shot if race lost)"]
+    Path0 --> Ok0([return new_entry])
+
+    SizeCheck -->|no| PickLive["Path A — scan from next%len for first !dead"]
+    PickLive --> Found{live entry found?}
+    Found -->|yes| OkA([return it — dead ones skipped got spawn_revive])
+    Found -->|no — all dead| PathB["Path B — revive_dead_pool(snap[start])"]
+    PathB --> PBResult{Ok?}
+    PBResult -->|yes| OkB([return that entry])
+    PBResult -->|no| Rescan["re-scan clients for a live sibling"]
+    Rescan --> RFound{live now?}
+    RFound -->|yes| OkB2([return sibling])
+    RFound -->|no| ErrB([return Err])
 ```
 
-Concurrency:
-- Multiple revive tasks for the same entry are possible (two ticks fired before the first revive completed). The `update_lock` + `ptr_eq` + `dead` re-check ensures only one wins; losers drop their fresh client.
-- Path B (foreground) and revive_task (background) use the same `update_lock` + `ptr_eq` reconciliation, so they don't double-replace.
+- **Path 0 — grow**: below target → connect, then `try_push` (append under
+  `grow_lock` with a final size re-check *and* a `shutdown` re-check). If the push
+  loses the size race, the connection is handed back as a **one-shot** (serves
+  this request, then drops — `MyHttp2Client::Drop` disposes it asynchronously).
+  No overshoot ever lives in the pool.
+- **Path A — pick-live**: at target, scan from a round-robin start for the first
+  `!dead` entry and return it (lock-free). Every dead entry skipped along the way
+  gets a background `spawn_revive`. **A request never blocks on a reconnect while
+  the pool has any live capacity** — this is the core of invisibility.
+- **Path B — all dead**: no live entry. One coalesced foreground attempt on the
+  round-robin pick via `revive_dead_pool` (bounded — see below). On `Err`, the
+  pool is **re-scanned** for a sibling that a background revive brought up in the
+  meantime, and that sibling serves the request instead of a 503.
+
+## Revive mechanics
+
+Three functions, one shared inner step:
+
+- `revive_entry` — background callers (supervisor / pick-live's `spawn_revive`).
+  Takes `revive_lock` with an **unbounded** wait, then `revive_under_lock`.
+- `revive_dead_pool` — foreground Path B. Waits for `revive_lock` only up to
+  `dead_pool_wait_budget`; on timeout, fails fast (so a request never queues
+  behind an in-flight dial for longer than the budget), then `revive_under_lock`.
+- `revive_under_lock` (caller holds the lock):
+  1. re-check `dead` — a parallel caller may have already revived → `Ok`, no work;
+  2. **cooldown gate** — if within `revive_cooldown` of `last_revive_attempt`,
+     fail fast (a down upstream costs at most one dial per window per entry);
+  3. stamp `last_revive_attempt`, `connect_one`, then `client.store(new)` in
+     place, `last_success = now`, `dead = false`.
+
+The cooldown uses `H2Entry::revive_cooldown_remaining`, which treats a stamp in
+the **future** (a backward wall-clock step) as expired — revival never freezes on
+a clock jump.
+
+`spawn_revive` (the dedup gate for background revives, shared by the supervisor
+tick and pick-live) skips when any of these hold:
+
+- pool is `shutdown`;
+- entry is no longer `dead`;
+- entry is **not present in `clients`** (a Path 0 one-shot orphan — reviving it
+  would dial a connection no future request could ever pick);
+- still inside `revive_cooldown`;
+- `revive_pending` CAS `false→true` loses (a task is already in flight).
+
+The spawned task owns a `RevivePendingGuard` created **before** the spawn, which
+clears `revive_pending` on any exit — normal return, a panic inside
+`revive_entry`, or the future being dropped unpolled (runtime shutdown). Without
+it a panic would strand the flag `true` and the entry would be permanently
+unrevivable.
+
+## Layer 3 — supervisor tick
+
+Driven by `PoolSupervisorTimer` on a panic-safe `MyTimer` at
+`APP_CTX.pool_supervisor_interval` (default 10s). One pass iterates **all** pools
+of all 6 registries (h1/h2 × tcp/tls/uds) via `list_pools()`.
+
+For each h2 pool, `supervisor_tick`:
+
+1. `spawn_top_up()` — if `0 < total_count() < pool_size`, CAS `top_up_pending`
+   and spawn a task that loops `connect_one` + `try_push` until full / a dial
+   fails / `shutdown`. **An empty pool is skipped** — that means it was never
+   used (or was drained), and creation must stay lazy. The task holds a
+   `TopUpPendingGuard` (same panic-safe pattern as revive). This lets a low-RPS
+   location warm to `pool_size` instead of paying a connect on each of the first
+   `pool_size` requests.
+2. Per entry:
+   - `dead` → `spawn_revive` (background).
+   - live and `now - last_success < hot_window` → skip (hot, no probe needed).
+   - live and idle and `health_check_path` set → GET-ping (`ping_timeout`);
+     success (`200..=205`) refreshes `last_success`, failure marks `dead` +
+     `spawn_revive`.
+3. Update the `h2_pool_alive` gauge — **but not** if the pool is `shutdown`
+   (a drained pool's gauge was reset by `drain_unused` and must stay reset).
+
+Tick **never removes** entries; dead ones are revived in place. Pool *removal* is
+a separate concern — see Lifecycle & GC.
 
 ## create_connection — WebSocket fast path
 
-WS upgrade is detected in content_source via `is_h2_extended_connect(req)`. WS goes through `pool.create_connection().await`, which **bypasses the pool entirely** — it just runs `factory + connect` and returns the bare `Arc<MyHttp2Client>`. The h2 connection lives as long as the WS session, then is dropped.
-
-`create_connection` doesn't touch `clients`. The pool's TCP usage is `target` (≤5) for regular traffic + `N` for active WS sessions.
+WS upgrade is detected via `is_h2_extended_connect(req)` and goes through
+`pool.create_connection()`, which **bypasses the pool** — it just runs
+`factory + connect` and returns the bare `Arc<MyHttp2Client>`, held alive by
+`H2WsActiveGuard` for the session (which also drives the `h2_ws_active` gauge).
+Pool TCP usage is `pool_size` for regular traffic + `N` active WS sessions.
 
 ## Concurrency model
 
-| Path | Operation | Synchronization |
-|------|-----------|-----------------|
-| Hot read (Path A) | Scan `clients` for live | `ArcSwap::load()` — lock-free |
-| Round-robin counter | Pick next index | `AtomicUsize::fetch_add` — lock-free |
-| Mark dead | `entry.dead.store(true)` | Atomic — no lock needed; idempotent |
-| Update last_success | `entry.last_success.store(now)` | Atomic — no lock needed |
-| Push (Path 0) | Append entry under final size check | `update_lock` — short critical section |
-| Replace (Path B / revive) | Replace at `ptr_eq` index under final dead-check | `update_lock` |
-| Snapshot for tick | Iterate entries | `ArcSwap::load()` — lock-free |
+| Operation | Synchronization |
+|-----------|-----------------|
+| Pick-live scan (Path A) | `ArcSwap::load()` — lock-free |
+| Round-robin start | `AtomicUsize::fetch_add` — lock-free |
+| Mark dead / update last_success / revive_pending | atomics — no lock |
+| Push (Path 0 / top-up) via `try_push` | `grow_lock` (parking_lot) — short, **no await** |
+| Revive in place | per-entry `revive_lock` (tokio async) — **held across the connect await** |
+| Snapshot for tick | `ArcSwap::load()` — lock-free |
 
-`update_lock` is **never held across `await`**. The connect happens before the lock, then the lock is taken just to mutate the `Vec` and store the new `Arc<Vec>` into `ArcSwap`. Lock contention is negligible: writes only happen during pool growth, dead replacement, and revive tasks — at most a few times per minute under steady-state.
+`grow_lock` is never held across an `await` — the connect happens before it, then
+it is taken only to clone the vec, push, and store. `revive_lock` **is** held
+across the connect await, but it is per-entry, so it only serializes concurrent
+revivals of that one slot and never blocks the hot pick-live path or the other
+slots.
 
 ## Edge cases
 
-### Cold start
+### One dead connection — fully invisible
 
-```mermaid
-sequenceDiagram
-    participant C1 as Client req 1
-    participant C2 as Client req 2
-    participant C3 as Client req N≤target
-    participant Pool
+Pool at `pool_size`, one entry `e` dies (its `do_request` returned a
+connection-level error). Layer 1 marks `e` dead and, for an idempotent request,
+retries: layer 2's pick-live skips `e` and returns a live sibling; the client
+sees a normal response. `e` is revived in the background. For a non-idempotent
+request the client gets the one error (no double-execute), but every *subsequent*
+request routes around `e` until it is revived. Net client impact: at most one
+failed non-idempotent request.
 
-    Note over Pool: clients = []
-    par
-        C1->>Pool: get_connection
-        Pool-->>C1: snap.len=0 < target → Path 0 connect
-    and
-        C2->>Pool: get_connection
-        Pool-->>C2: snap.len=0 < target → Path 0 connect
-    and
-        C3->>Pool: get_connection
-        Pool-->>C3: snap.len=0 < target → Path 0 connect
-    end
-    Note over C1,C3: all paying connect_timeout in parallel
-    C1->>Pool: lock + push (len < target)
-    C2->>Pool: lock + push (len < target)
-    C3->>Pool: lock + push (len < target)
-    Note over Pool: clients = [c1, c2, c3]
-```
+### Upstream fully down
 
-The first `target` parallel requests each pay one `connect`. Subsequent gets find `len == target` and take Path A round-robin clone — cheap.
+All entries dead. Path A finds nothing → Path B `revive_dead_pool`: waiters block
+at most `dead_pool_wait_budget` (default 500ms) on the lock, then fail fast; the
+one request that wins the lock dials (the "canary", up to `connect_timeout`) and
+brings **its** entry live the instant the upstream returns — the pool is usable
+again immediately (one live slot), and the remaining slots are revived on
+subsequent pick-live skips and supervisor passes. Repeat dials are gated to one
+per `revive_cooldown` (500ms) per entry, so there is no connect storm — just a
+bounded stream of fast 503s while the upstream is genuinely down.
 
 ### Race overshoot prevention
 
-```mermaid
-sequenceDiagram
-    participant G1 as Get 1
-    participant G2 as Get 2
-    participant Pool
-
-    Note over Pool: clients = [a, b, c, d] (len=4, target=5)
-    G1->>Pool: snap.len < target
-    G2->>Pool: snap.len < target
-    par
-        G1->>G1: factory + connect → x
-    and
-        G2->>G2: factory + connect → y
-    end
-    G1->>Pool: lock(update_lock)
-    G1->>Pool: cur.len=4 < 5 → push x → [a,b,c,d,x]
-    G1->>Pool: unlock
-    G2->>Pool: lock(update_lock)
-    G2->>Pool: cur.len=5 < 5? NO → skip push
-    G2->>Pool: unlock
-    Note over G2: y returned to caller as one-shot;<br/>after caller's drop, TCP closes
-```
-
-Pool size after both: `[a,b,c,d,x]` — exactly target. `y` served Get 2's request and went away.
-
-### Upstream went down (single endpoint goes flaky)
-
-```mermaid
-sequenceDiagram
-    participant CS as caller
-    participant Pool
-    participant Tick
-    participant Revive as revive_task
-    participant Apstream
-
-    CS->>Pool: get_connection (round-robin lands on entry e)
-    Pool-->>CS: Ok(e)
-    CS->>Apstream: do_request via e
-    Apstream--xCS: timeout
-    CS->>Pool: e.dead.store(true)
-    Note over CS,Apstream: caller gets 5xx<br/>(or whatever was wrapped from Err)
-
-    Note over Tick: 10s later
-    Tick->>Pool: snap, iterate
-    Tick->>Revive: spawn(revive(e))
-    Revive->>Apstream: factory + connect
-    alt apstream still down
-        Apstream--xRevive: Err
-        Note over Revive: no-op, e.dead stays
-    else apstream recovered
-        Apstream-->>Revive: TCP/TLS ok
-        Revive->>Pool: lock + ptr_eq(e) found, dead → replace with new live entry
-        Revive->>Pool: unlock
-        Note over Pool: pool is healthy again
-    end
-```
-
-In the meantime, other gets that round-robin past `e` go through Path B (foreground revive — also fails fast if upstream is down, but succeeds the moment upstream is back).
+Two concurrent Path 0 / top-up connects both finish; each calls `try_push`, which
+re-checks `len < pool_size` under `grow_lock`. The first pushes; the second sees
+the pool full and hands its connection back as a one-shot. Pool size ends exactly
+at `pool_size`.
 
 ### Hot pool — no idle pings
 
-If RPS to an endpoint is high enough that every pool entry sees `last_success` updated within 3s, the supervisor tick **does no pings at all** — every entry is "hot" and skipped. Active probing only kicks in for genuinely idle endpoints, which avoids hammering upstreams that are already known-good.
+If every entry sees `last_success` refreshed within `hot_window` (default 3s), the
+tick pings nothing — active probing only runs for genuinely idle-but-live
+entries, avoiding needless load on known-good upstreams.
 
 ## Metrics
 
-Exposed on `/metrics` (Prometheus):
+Exposed on `/metrics` (Prometheus), all with a single `endpoint` label:
 
-- `h2_pool_size{endpoint="h2://host:port"}` — configured `target` (5).
-- `h2_pool_alive{endpoint="..."}` — current `len(clients)` minus `dead` count, set by tick after the pass.
-- `h2_ws_active{endpoint="..."}` — active on-demand WebSocket connections (separate from the pool).
+- `h2_pool_size{endpoint=...}` — configured `pool_size`.
+- `h2_pool_alive{endpoint=...}` — `len(clients)` minus dead count, set after each
+  tick, background revive, and top-up (skipped when the pool is `shutdown`).
+- `h2_ws_active{endpoint=...}` — active off-pool WebSocket connections, tracked by
+  `H2WsActiveGuard`.
 
-The endpoint label format is consistent with `/configuration` snapshot: `h2://host:port`, `h2s://host:port`, `uds-h2://path`.
+The `endpoint` label value is the pool `name`: `h2://host:port#<location_id>`,
+`h2s://host:port#<location_id>`, `uds-h2://<socket_path>#<location_id>`. The
+`#<location_id>` suffix keeps two locations on the same upstream as distinct
+series (they are distinct pools).
 
-## Hardcoded parameters (today)
+## Parameters
 
-- `target_size = 5`
-- `health_check_interval = 10s` (the MyTimer cadence)
-- `ping_timeout = 1s`
-- `connect_timeout = 5s` (per `PoolParams`, default)
-- "Hot threshold" `last_success` window = `3s`
-- Success status range for ping = `200..=205`
+Configuration-driven (`PoolParams`, built per location from `PoolTuning` + global
+settings); the values below are the compiled-in defaults from `src/consts.rs`.
 
-All of these are tracked as tech debt for YAML configuration.
+| Parameter | Source | Default |
+|-----------|--------|---------|
+| `pool_size` | `PoolTuning` (per proxy_pass) | `DEFAULT_POOL_SIZE = 5` |
+| `connect_timeout` | `proxy_pass.connect_timeout` | `DEFAULT_HTTP_CONNECT_TIMEOUT = 5s` |
+| `ping_timeout` | `PoolTuning` | `DEFAULT_POOL_PING_TIMEOUT = 1s` |
+| `hot_window` | `PoolTuning` | `DEFAULT_POOL_HOT_WINDOW = 3s` |
+| `revive_cooldown` | `PoolParams` | `DEFAULT_POOL_REVIVE_COOLDOWN = 500ms` |
+| `dead_pool_wait_budget` | `PoolParams` | `DEFAULT_POOL_DEAD_POOL_WAIT_BUDGET = 500ms` |
+| supervisor interval | `global_settings` → `get_pool_supervisor_interval()` | `DEFAULT_POOL_SUPERVISOR_INTERVAL = 10s` |
+| `health_check_path` | global `global_settings.default_h2_livness_url` | `None` (reactive-only) |
+| ping success range | hardcoded | `200..=205` |
 
-## Out of scope
+Notes:
 
-- h1 upstream pool — separate module (`upstream_h1_pool/`), different model (5 reusable slots + disposable on overflow with `rented` flag). Untouched by this design.
-- `http2_over_ssh` — still uses the legacy `Http2ClientPool` from `src/http2_client_pool/`. Migration would require a similar `H2PoolRegistry<SshAsyncChannel, ...>` setup.
-- Hot-reload `drain_unused` — written but not yet called from the configuration reloader. Pools for removed endpoints leak until restart.
+- `PoolParams` is captured at pool creation. **A reload never re-applies changed
+  params to a live pool**: `ensure_pool` returns the existing pool and discards
+  the freshly-built `PoolParams`, and the pool survives reload via `id_string`
+  (which excludes params). Edited `pool_size`/timeouts/`health_check_path` take
+  effect only after a restart or a change to the location's identity.
+- `health_check_path` is a **single global** liveness path applied to every h2
+  pool — no per-location health-check path yet (backlog). If `None`, the
+  supervisor never actively pings; dead detection is then purely reactive.
+- The liveness ping URI is always `http://{authority}{path}` — `:scheme=http`
+  even toward TLS upstreams, since the h2 connection is already established.
+
+## Lifecycle & GC
+
+Pools are created lazily (first request → `ensure_pool`) and removed by
+`GcPoolsTimer` (every 60s), which calls `registry.drain_unused(desired)` for all
+6 registries with the `location_id`s referenced by the current configuration —
+see [pool-lifecycle.md](pool-lifecycle.md). `drain_unused` sets
+`pool.shutdown = true` (stopping the supervisor, revives, top-ups, and pushes)
+and drops the pool `Arc` from the registry; the entries and their
+`MyHttp2Client`s then close via `Arc` ownership as in-flight requests finish.
+
+## Out of scope / future
+
+- **Item 3 (in progress)** — h2 keep-alive PINGs + an `is_alive()` transport
+  flag in `my-http-client`, so a stale connection is detected before user traffic
+  touches it (pick-live will treat `!is_alive()` as dead). Also hardens
+  `do_request`'s internal replay to be method-aware and bounded. See
+  [pool-invisibility-plan.md](pool-invisibility-plan.md).
+- h1 upstream pool — separate module (`upstream_h1_pool/`), different model.
+- `http2_over_ssh` — still uses the legacy `Http2ClientPool` from
+  `src/http2_client_pool/` (`Http2OverSshContentSource`).
+- Per-location `health_check_path` — today a single global path is used.
+- Load-aware connection selection — routing is plain round-robin.

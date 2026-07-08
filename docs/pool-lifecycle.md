@@ -8,12 +8,16 @@ There are **6 registries** in `AppContext`: h1/h2 × tcp/tls/uds.
 
 ```rust
 pub struct H1PoolRegistry<...> {
-    pools:      ArcSwap<AHashMap<PoolKey, Arc<H1Pool>>>,
+    pools:      ArcSwap<SortedVecOfArc<i64, H1Pool>>,  // keyed by location_id
     write_lock: parking_lot::Mutex<()>,
 }
 ```
 
-`AHashMap` (`ahash` crate) instead of `std::collections::HashMap` — same API, faster non-cryptographic hasher.
+Both registries (h1 and h2) key by **`location_id`** (`i64`), not by endpoint —
+there is **no `PoolKey` type**. Two locations that point at the same
+`(scheme, host, port)` therefore get **two separate pools** (per-location by
+design; see [h2-pool.md](h2-pool.md)). `SortedVecOfArc` keeps entries sorted by
+key for binary-search `get`.
 
 - **Reads** (`get`, `list_pools`, `snapshot`) — lock-free via `ArcSwap::load()`.
 - **Writes** (`ensure_pool`, `drain_unused`) — under `write_lock`. Held briefly, no `await` inside. Serializes all write operations against each other so they don't race.
@@ -21,7 +25,7 @@ pub struct H1PoolRegistry<...> {
 ## Creation — lazy, on first request
 
 Config load and hot reload **do not create pools**. They only build content_source structs that hold:
-- `pool_key: PoolKey`
+- `pool_desc: PoolDesc` (carries `location_id`, `name`, `authority`, `id_string`)
 - `pool_params: PoolParams`
 - `factory: ConnectorFactory<...>`
 
@@ -29,38 +33,45 @@ The first request that hits a content_source triggers creation:
 
 ```mermaid
 flowchart TD
-    Start([content_source.execute]) --> Get["pools.load().get(&pool_key)"]
+    Start([content_source.execute]) --> Get["pools.load().get(&location_id)"]
     Get -->|Some — pool exists| Use([use existing pool])
-    Get -->|None — first request| Ensure["registry.ensure_pool(key, params, factory)"]
+    Get -->|None — first request| Ensure["registry.ensure_pool(desc, params, factory)"]
     Ensure --> Lock["lock(write_lock)"]
-    Lock --> Recheck["pools.load().get(&key)?"]
+    Lock --> Recheck["pools.load().get(&location_id)?"]
     Recheck -->|Some — race lost| Return1([return existing])
     Recheck -->|None — we win| Build["build new pool"]
-    Build --> Insert["clone AHashMap, insert, ArcSwap::store"]
+    Build --> Insert["clone SortedVecOfArc, insert_or_replace, ArcSwap::store"]
     Insert --> Return2([return new])
 ```
 
 - `ensure_pool` has a lock-free fast path: most calls (after the first) just read from `ArcSwap` and return.
 - The slow path takes `write_lock`, re-checks under lock to handle two concurrent first-requests on the same key, then builds and stores.
-- No connect happens in `ensure_pool` itself — only the empty `H*Pool` shell. The first connect happens later inside `pool.get_connection()` (Phase 0 — see per-pool doc).
+- No connect happens in `ensure_pool` itself — only the empty `H*Pool` shell. The first connect happens later inside `pool.get_connection()` (Path 0 — see per-pool doc).
+- **Note:** `ensure_pool` returns any existing pool for that `location_id` and
+  **discards** the freshly-built `params`/`factory`. A config reload therefore
+  never re-applies changed pool params to a live pool (see h2-pool.md
+  Parameters).
 
 ## Cleanup — `GcPoolsTimer` (every 60s)
 
-The criterion is simple: **a pool is removed if no location in the current configuration references its endpoint.**
+The criterion is **per-location, not per-endpoint**: a pool is removed when its
+own `location_id` is no longer referenced by the current configuration. Deleting
+one of two locations that share an upstream drops **that location's** pool even
+though the other still points at the same `(scheme, host, port)`.
 
 ```mermaid
 flowchart TD
     Tick([GcPoolsTimer tick — every 60s]) --> Walk["walk current_configuration"]
-    Walk --> Collect[/collect desired PoolKey set per registry/]
+    Walk --> Collect[/"collect desired location_id set (AHashSet&lt;i64&gt;) per registry"/]
     Collect --> Drain["registry.drain_unused(&desired) — for each of 6 registries"]
     Drain --> LockD["lock(write_lock)"]
-    LockD --> Build["build new AHashMap (only keys present in desired)"]
+    LockD --> Build["rebuild SortedVecOfArc (only location_ids present in desired)"]
     Build --> Mark["for each excluded pool: pool.shutdown.store(true)"]
     Mark --> Reset["prometheus.reset_h*_pool(label)"]
-    Reset --> Store["ArcSwap::store(new AHashMap)"]
+    Reset --> Store["ArcSwap::store(new SortedVecOfArc)"]
 ```
 
-That's it. The pool is just dropped from the AHashMap. Nothing else.
+That's it. The pool is just dropped from the registry vec. Nothing else.
 
 In-flight requests / WS sessions naturally finish (or time out) and their connections close themselves via Rust's `Arc` ownership — they don't get returned to the pool because the pool is no longer in the registry to receive them.
 

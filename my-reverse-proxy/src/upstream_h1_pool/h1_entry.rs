@@ -15,8 +15,12 @@ where
     /// pinging "hot" entries.
     pub last_success: AtomicDateTimeAsMicroseconds,
     /// `true` while a request is in-flight on this client. h1 is single-stream,
-    /// so the pool hands out at most one concurrent rent per entry.
+    /// so the pool hands out at most one concurrent rent per entry. The
+    /// supervisor's liveness ping rents too — a probe is a request.
     pub rented: AtomicBool,
+    /// True while a background revive task is in flight — `spawn_revive` uses
+    /// it to skip duplicate spawns across ticks.
+    pub revive_pending: AtomicBool,
     /// Per-entry async lock — serializes revival across foreground (Path B in
     /// get_connection) and background (supervisor revive_task). Path A is
     /// lock-free.
@@ -34,6 +38,7 @@ where
             dead: AtomicBool::new(false),
             last_success: AtomicDateTimeAsMicroseconds::now(),
             rented: AtomicBool::new(false),
+            revive_pending: AtomicBool::new(false),
             revive_lock: tokio::sync::Mutex::new(()),
         }
     }
