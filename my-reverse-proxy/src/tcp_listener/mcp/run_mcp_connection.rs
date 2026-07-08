@@ -55,9 +55,7 @@ pub async fn run_mcp_connection(
 
     let mcp_settings = http_endpoint_info.mcp_settings;
 
-    let mut pump_to_server = crate::app::spawn_named(
-        "mcp_link_to_server",
-        link_tcp_streams(
+    let mut pump_to_server = crate::app::spawn_named("mcp_link_to_server", link_tcp_streams(
             accepted_connection_read,
             write_remote_host,
             "->To MCP Server->",
@@ -66,9 +64,7 @@ pub async fn run_mcp_connection(
         ),
     );
 
-    let mut pump_from_server = crate::app::spawn_named(
-        "mcp_link_from_server",
-        link_tcp_streams(
+    let mut pump_from_server = crate::app::spawn_named("mcp_link_from_server", link_tcp_streams(
             read_remote_host,
             accepted_connection_write,
             "<-From MCP Server<-",

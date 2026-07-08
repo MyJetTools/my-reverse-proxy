@@ -165,9 +165,7 @@ async fn connection_loop(
         gateway_connection.set_gateway_id(inner.gateway_id.as_str());
         inner.set_gateway_connection(&inner.gateway_id, Some(gateway_connection.clone()));
 
-        crate::app::spawn_named(
-            "tcp_gateway_client_read_loop",
-            crate::tcp_gateway::gateway_read_loop(
+        crate::app::spawn_named("tcp_gateway_client_read_loop", crate::tcp_gateway::gateway_read_loop(
                 inner.clone(),
                 read,
                 gateway_connection.clone(),

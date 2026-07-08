@@ -134,9 +134,7 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         );
 
         let tcp_gateway_clone = tcp_gateway.clone();
-        crate::app::spawn_named(
-            "tcp_gateway_server_inbound_handshake",
-            handle_inbound(tcp_gateway_clone, tcp_stream, debug),
+        crate::app::spawn_named("tcp_gateway_server_inbound_handshake", handle_inbound(tcp_gateway_clone, tcp_stream, debug),
         );
     }
 }
@@ -187,9 +185,7 @@ async fn handle_inbound(tcp_gateway: Arc<TcpGatewayInner>, mut stream: TcpStream
         Some(gateway_connection.clone()),
     );
 
-    crate::app::spawn_named(
-        "tcp_gateway_server_read_loop",
-        crate::tcp_gateway::gateway_read_loop(
+    crate::app::spawn_named("tcp_gateway_server_read_loop", crate::tcp_gateway::gateway_read_loop(
             tcp_gateway,
             read,
             gateway_connection,

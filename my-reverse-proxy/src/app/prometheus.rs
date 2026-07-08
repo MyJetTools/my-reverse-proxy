@@ -19,8 +19,8 @@ pub struct Prometheus {
 
     pub h1_pool_size: IntGaugeVec,
     pub h1_pool_alive: IntGaugeVec,
-
     pub tokio_tasks_spawned: IntGaugeVec,
+
     pub domain_rps: IntGaugeVec,
     pub ip_blocklist_size: IntGauge,
     pub client_to_server_events: IntGaugeVec,
@@ -491,12 +491,3 @@ impl my_http_client::hyper::MyHttpHyperClientMetrics for Prometheus {
     }
 }
 
-impl my_http_client::TaskMetricsHook for Prometheus {
-    fn inc(&self, name: &'static str) {
-        self.inc_tokio_task_spawned(name);
-    }
-
-    fn dec(&self, name: &'static str) {
-        self.dec_tokio_task_spawned(name);
-    }
-}

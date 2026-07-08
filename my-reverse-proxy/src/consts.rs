@@ -34,6 +34,11 @@ pub const DEFAULT_POOL_REVIVE_COOLDOWN: Duration = Duration::from_millis(500);
 // full connect_timeout — someone has to, and it recovers the pool the moment
 // the upstream is back.
 pub const DEFAULT_POOL_DEAD_POOL_WAIT_BUDGET: Duration = Duration::from_millis(500);
+// h2 transport keep-alive: a PING frame every interval; no answer within the
+// timeout closes the connection (flipping the client's is_alive), so a dead
+// idle socket is detected before user traffic ever touches it.
+pub const DEFAULT_H2_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(10);
+pub const DEFAULT_H2_KEEP_ALIVE_TIMEOUT: Duration = Duration::from_secs(2);
 // Per-pool cap on concurrent on-demand (disposable) overflow connections. Below
 // the global MAX_DISPOSABLE ceiling so one saturated upstream cannot starve the
 // process-wide budget for the others.

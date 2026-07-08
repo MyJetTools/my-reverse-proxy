@@ -57,10 +57,10 @@ Two repos are involved:
 | 7 | Docs sync (`h2-pool.md` rewrite, `pool-lifecycle.md`, `h1-pool.md`, plan banner) | proxy `docs` | ✅ done, verified |
 | R6 | `do_request(&req)` — request by reference; failover spare-clone removed | proxy + vendor | ✅ done (proxy/vendor); **standalone pending** |
 | 3a | Client hardening: method-aware replay, bounded `is_canceled` loop, timeout≠disconnect, keep-alive PING, `is_alive` | client (standalone) | ✅ done by user; **verified — 2 majors found** |
-| **A** | **Client round 2: M1, M2, R6 (+ optional h1/REFUSED_STREAM)** | client (standalone) | ⏳ **next — prompt ready below** |
-| **B** | **Vendor sync `vendor/my-http-client` ← standalone (follow recipe)** | proxy | ⏳ after A |
-| **C** | **Keep-alive integration: consts + `set_keep_alive` + `is_alive` in pick-live** | proxy | ⏳ after B |
-| **D** | **Docs: add keep-alive/is_alive to `h2-pool.md`; drop stale caveat; verify** | proxy `docs` | ⏳ after C |
+| **A** | Client round 2: M1 (timeout rounds), M2 (connect_lock + full-dial timeout), R6 (`&req`), zombie fix (`read_loop_stopped` call), `set_read_from_stream_timeout` | client (standalone) | ✅ **done by user** — remote tag `0.1.2` → `8adc82b` (recreated) |
+| **B** | **DE-VENDOR** (superseded vendor sync): proxy on git dep `tag = "0.1.2"`, `vendor/` deleted, Cargo.lock pins `8adc82b`. Library hook removed (`TaskMetricsHook` impl + `set_task_metrics_hook`); the proxy's own `spawn_named` + `tokio_tasks_spawned` gauge KEPT (39 named spawn sites) | proxy | ✅ done |
+| **C** | Keep-alive integration: consts (10s/2s) + `PoolParams` fields + `set_keep_alive` in `connect_one` + `!is_alive()` → dead in pick-live AND supervisor tick (transport-level detection works even without `health_check_path`) | proxy | ✅ done |
+| **D** | Docs: keep-alive/is_alive in `h2-pool.md`; stale replay-caveat dropped from `execute_pooled_h2` | proxy `docs` | ✅ caveat dropped; h2-pool.md updated |
 | F1 | h1 idle liveness wired (rule R2): global path → h1 factories; ping rents (`try_rent`) via panic/cancel-safe `RentGuard`; sends `Host: authority` (new h1 `PoolDesc.authority`); drains the response body (dropped body kills the h1 read loop); invalid paths skipped (builder panics on them). h2 also skips invalid paths (would dead-churn). Reviewed (2 lenses), all findings fixed | proxy | ✅ done |
 | F5b | `publish_alive_gauge` (h1+h2): set + post-set `shutdown` re-check-and-reset — closes the drain-vs-tick TOCTOU on the gauge; used by tick, revive task, top-up | proxy | ✅ done |
 | — | Per-location liveness path / opt-out: all h1 pools now inherit the global `default_h2_livness_url`; an h1 upstream that 404s that path will churn (mark-dead + revive per tick). Per-location override is the fix | proxy config | ⏸ backlog (was already listed for h2) |
@@ -118,11 +118,20 @@ Optional extras listed in "Open client issues" below. **Prompt is in the section
 Blockers resolved by A: M1 (concurrent-timeout false teardown), M2 (connect-stage
 indefinite hang), R6-standalone.
 
-### Phase B — vendor sync (proxy, Opus)
+### Phase B — DE-VENDOR (supersedes vendor sync; decided Jul 2026)
 
-`cp -r` **will break the proxy build.** Follow the recipe below verbatim. After
-syncing, `cargo check` the proxy, then delete the now-false caveat in
-`execute_pooled_h2`'s doc comment ("until the my-http-client hardening lands…").
+Instead of syncing the vendor copy, the vendor is **removed**: all vendor-only
+deltas get merged INTO the standalone repo (Phase A prompt below covers the
+merge + M1 + M2 + R6 in one visit), the standalone gets a version bump to
+`0.2.0` + git tag (semver-breaking: `do_request(&req)`), and the proxy switches
+to the MyJetTools-convention git dep:
+
+```toml
+my-http-client = { tag = "0.2.0", git = "https://github.com/MyJetTools/my-http-client.git" }
+```
+
+then `vendor/` is deleted. The old vendor-sync recipe below is kept only as the
+authoritative list of vendor-only deltas that MUST survive the merge.
 
 ### Phase C — keep-alive integration (proxy, Opus)
 
@@ -198,7 +207,34 @@ The rest are optional / deferred.
 
 ---
 
-## Phase A prompt (hand to the my-http-client session)
+## DECISION (Jul 2026): task-count metrics dropped
+
+The `task_metrics`/`spawn_named` machinery (Prometheus gauges counting live
+tasks) was hand-debugging tooling — the user decided to drop it entirely:
+- **standalone my-http-client**: no task_metrics port at all; plain
+  `tokio::spawn` stays; no Cargo dep changes; chunked body reader stays on
+  `futures` (its tokio rewrite was only motivated by dropping the futures dep).
+- **proxy**: keeps its OWN `crate::app::spawn_named` + `tokio_tasks_spawned`
+  gauge for the proxy's tasks (final user decision: named spawns stay wherever
+  we can have them). Only the LIBRARY-side hook went away: no
+  `impl TaskMetricsHook`, no `set_task_metrics_hook` — the client's ~6 internal
+  tasks are simply not counted.
+
+This shrinks the de-vendor merge to: `set_read_from_stream_timeout` setter,
+the one-line `read_loop_stopped` zombie fix, R6 `&req`, M1, M2.
+
+## Phase A prompt v2 — CONSOLIDATED (de-vendor merge + M1 + M2 + R6)
+
+The single prompt handed to the my-http-client session (Jul 2026). Supersedes
+the v1 prompt below (kept for history). Covers: porting all vendor-only deltas
+(task_metrics/spawn_named, set_read_from_stream_timeout, h1 read-loop
+supervisor, chunked-body rewrite, Cargo deps), R6 `&req`, and the M1/M2
+hardening — in dependency order, ending with a `0.2.0` version bump + tag.
+See the chat transcript / the message that delivered it for the full text; the
+per-file merge spec it was built from is reproduced in essence by the
+"vendor-sync recipe" section above plus the M1/M2 items in the v1 prompt below.
+
+## Phase A prompt v1 (superseded — kept for the M1/M2/R6 wording)
 
 ```
 Три правки в my-http-client по результатам ревью. established-connection

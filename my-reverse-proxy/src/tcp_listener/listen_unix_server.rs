@@ -6,9 +6,7 @@ use super::ListenServerHandler;
 
 pub fn start_listen_unix_server(host: Arc<String>) -> Arc<ListenServerHandler> {
     let listen_server_handler = Arc::new(ListenServerHandler::new());
-    crate::app::spawn_named(
-        "unix_accept_loop",
-        accept_unix_connections_loop(host, listen_server_handler.clone()),
+    crate::app::spawn_named("unix_accept_loop", accept_unix_connections_loop(host, listen_server_handler.clone()),
     );
 
     listen_server_handler

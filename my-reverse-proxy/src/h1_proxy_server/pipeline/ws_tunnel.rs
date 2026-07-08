@@ -125,9 +125,7 @@ pub async fn run_ws_tunnel<
     });
 
     // Server -> Client: upstream read half (type-erased) into the client write half.
-    crate::app::spawn_named(
-        "h1_ws_pump_server_to_client",
-        copy_streams(
+    crate::app::spawn_named("h1_ws_pump_server_to_client", copy_streams(
             upstream_read,
             client_write,
             upstream_leftover,
@@ -142,9 +140,7 @@ pub async fn run_ws_tunnel<
     // half type differs per transport, so extract it per variant.
     macro_rules! pump_c2s {
         ($write_half:expr) => {
-            crate::app::spawn_named(
-                "h1_ws_pump_client_to_server",
-                copy_streams(
+            crate::app::spawn_named("h1_ws_pump_client_to_server", copy_streams(
                     client_read,
                     $write_half,
                     client_leftover,

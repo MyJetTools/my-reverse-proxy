@@ -118,9 +118,7 @@ pub async fn serve_reverse_proxy_pipelined<
     let pool = H1PoolHolder::new_local();
 
     let (queue_tx, queue_rx) = mpsc::channel::<ResponseSlot>(RESPONSE_QUEUE_CAPACITY);
-    let writer = crate::app::spawn_named(
-        "h1_client_writer",
-        run_client_writer(server_write_part, queue_rx),
+    let writer = crate::app::spawn_named("h1_client_writer", run_client_writer(server_write_part, queue_rx),
     );
 
     loop {
@@ -470,9 +468,7 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         return ReaderStep::Close;
     }
 
-    crate::app::spawn_named(
-        "h1_upstream_worker",
-        run_upstream_request(UpstreamRequest {
+    crate::app::spawn_named("h1_upstream_worker", run_upstream_request(UpstreamRequest {
             pool: pool.clone(),
             proxy_pass_to: proxy_pass_to_owned,
             end_point_info,

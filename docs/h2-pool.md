@@ -365,13 +365,27 @@ see [pool-lifecycle.md](pool-lifecycle.md). `drain_unused` sets
 and drops the pool `Arc` from the registry; the entries and their
 `MyHttp2Client`s then close via `Arc` ownership as in-flight requests finish.
 
+## Transport keep-alive + is_alive (shipped)
+
+Every connection the pool creates (`connect_one` — pool entries, top-up, WS
+off-pool) has h2 keep-alive PINGs enabled: a PING every
+`DEFAULT_H2_KEEP_ALIVE_INTERVAL` (10s), no answer within
+`DEFAULT_H2_KEEP_ALIVE_TIMEOUT` (2s) closes the connection and flips the
+client's lock-free `is_alive()` flag. Consumed in two places:
+
+- **pick-live** — a `!dead` entry whose client reports `!is_alive()` is
+  converted to `dead` + background revive, and the scan moves on: user traffic
+  never touches a transport-dead connection.
+- **supervisor tick** — `!is_alive()` is checked before the hot-window/HTTP-ping
+  logic, so transport-level death is detected every tick even when no
+  `health_check_path` is configured.
+
+`MyHttp2Client::do_request` replays a non-idempotent request only when it
+provably never reached the wire; combined with the layer-1 idempotency gate the
+no-double-execution guarantee holds end-to-end.
+
 ## Out of scope / future
 
-- **Item 3 (in progress)** — h2 keep-alive PINGs + an `is_alive()` transport
-  flag in `my-http-client`, so a stale connection is detected before user traffic
-  touches it (pick-live will treat `!is_alive()` as dead). Also hardens
-  `do_request`'s internal replay to be method-aware and bounded. See
-  [pool-invisibility-plan.md](pool-invisibility-plan.md).
 - h1 upstream pool — separate module (`upstream_h1_pool/`), different model.
 - `http2_over_ssh` — still uses the legacy `Http2ClientPool` from
   `src/http2_client_pool/` (`Http2OverSshContentSource`).

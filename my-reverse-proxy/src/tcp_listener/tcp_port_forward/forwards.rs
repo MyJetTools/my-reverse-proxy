@@ -13,9 +13,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
     match server_stream {
         AcceptedServerConnection::Tcp { network_stream, .. } => {
             let (server_reader, server_writer) = tokio::io::split(network_stream);
-            crate::app::spawn_named(
-                "tcp_forward_copy_server_to_remote_tcp",
-                crate::tcp_utils::copy_streams(
+            crate::app::spawn_named("tcp_forward_copy_server_to_remote_tcp", crate::tcp_utils::copy_streams(
                     server_reader,
                     remote_writer,
                     LoopBuffer::new(),
@@ -25,9 +23,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     timeouts,
                 ),
             );
-            crate::app::spawn_named(
-                "tcp_forward_copy_remote_to_server_tcp",
-                crate::tcp_utils::copy_streams(
+            crate::app::spawn_named("tcp_forward_copy_remote_to_server_tcp", crate::tcp_utils::copy_streams(
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),
@@ -40,9 +36,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
         }
         AcceptedServerConnection::Unix(unix_stream) => {
             let (server_reader, server_writer) = tokio::io::split(unix_stream);
-            crate::app::spawn_named(
-                "tcp_forward_copy_server_to_remote_unix",
-                crate::tcp_utils::copy_streams(
+            crate::app::spawn_named("tcp_forward_copy_server_to_remote_unix", crate::tcp_utils::copy_streams(
                     server_reader,
                     remote_writer,
                     LoopBuffer::new(),
@@ -52,9 +46,7 @@ pub async fn handle_port_forward<TRemoteNetworkStream: NetworkStream + Send + Sy
                     timeouts,
                 ),
             );
-            crate::app::spawn_named(
-                "tcp_forward_copy_remote_to_server_unix",
-                crate::tcp_utils::copy_streams(
+            crate::app::spawn_named("tcp_forward_copy_remote_to_server_unix", crate::tcp_utils::copy_streams(
                     remote_reader,
                     server_writer,
                     LoopBuffer::new(),

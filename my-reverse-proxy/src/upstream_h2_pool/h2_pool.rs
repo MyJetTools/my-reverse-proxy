@@ -92,14 +92,21 @@ where
             return Ok(new_entry);
         }
 
-        // Path A — pick-live: first !dead entry starting at the round-robin
+        // Path A — pick-live: first live entry starting at the round-robin
         // position. Lock-free; skipped dead entries get a background revive.
         let len = snap.len();
         let start = self.next.fetch_add(1, Ordering::Relaxed) % len;
         for i in 0..len {
             let entry = &snap[(start + i) % len];
             if !entry.dead.load(Ordering::Relaxed) {
-                return Ok(entry.clone());
+                // Transport-level death (lost keep-alive PING, GOAWAY, broken
+                // pipe) flips the client's is_alive before any request fails
+                // on it — convert it to `dead` here so the slot is revived
+                // instead of a user request paying for the discovery.
+                if entry.client.load().is_alive() {
+                    return Ok(entry.clone());
+                }
+                entry.dead.store(true, Ordering::Relaxed);
             }
             self.spawn_revive(entry.clone());
         }
@@ -146,6 +153,10 @@ where
         let (connector, metrics) = (self.factory)();
         let mut client = MyHttp2Client::new_with_metrics(connector, metrics);
         client.set_connect_timeout(self.params.connect_timeout);
+        client.set_keep_alive(
+            self.params.keep_alive_interval,
+            self.params.keep_alive_timeout,
+        );
         match client.connect().await {
             Ok(_) => {
                 self.last_status.set(UpstreamStatus::Ok);

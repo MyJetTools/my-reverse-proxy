@@ -36,7 +36,7 @@ hyper = { version = "*", features = ["full"] }
 
 tokio = { version = "*", features = ["full"] }
 
-my-http-client = { path = "vendor/my-http-client" }
+my-http-client = { tag = "0.1.2", git = "https://github.com/MyJetTools/my-http-client.git" }
 
 hyper-util = { version = "*", features = ["tokio", "server", "http1", "http2"] }
 http-body-util = "*"
@@ -69,13 +69,16 @@ arc-swap = "1"
 parking_lot = "0.12"
 ahash = "0.8"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-ed25519-dalek = "2"
+ed25519-dalek = "*"
 ssh-key = { version = "0.6", features = ["ed25519", "encryption"] }
-hkdf = "0.12"
-sha2 = "0.10"
+hkdf = "*"
+sha2 = "*"
 zeroize = "1"
+# Pinned to 0.6: ssh-key 0.6 and x25519-dalek 2 use rand_core 0.6.4, and the
+# OsRng we pass into them must be that version's. "*" resolves to 0.9 and the
+# trait bounds stop matching.
 rand_core = { version = "0.6", features = ["std"] }
-zstd = "0.13"
+zstd = "*"
 
 mcp-server-middleware = { tag = "0.8.3", git = "https://github.com/my-ai-utils/mcp-server-middleware.git" }
 my-ai-agent = { tag = "0.1.0", git = "https://github.com/my-ai-utils/my-ai-agent.git", features = [

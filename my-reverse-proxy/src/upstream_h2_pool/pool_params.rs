@@ -13,6 +13,11 @@ pub struct PoolParams {
     /// Max time a request waits for an in-flight revive when every entry is
     /// dead, before failing fast.
     pub dead_pool_wait_budget: Duration,
+    /// h2 keep-alive PING cadence / answer deadline for every connection this
+    /// pool creates. Detects a dead transport while idle, before any request
+    /// touches it.
+    pub keep_alive_interval: Duration,
+    pub keep_alive_timeout: Duration,
 }
 
 impl Default for PoolParams {
@@ -25,6 +30,8 @@ impl Default for PoolParams {
             hot_window: crate::consts::DEFAULT_POOL_HOT_WINDOW,
             revive_cooldown: crate::consts::DEFAULT_POOL_REVIVE_COOLDOWN,
             dead_pool_wait_budget: crate::consts::DEFAULT_POOL_DEAD_POOL_WAIT_BUDGET,
+            keep_alive_interval: crate::consts::DEFAULT_H2_KEEP_ALIVE_INTERVAL,
+            keep_alive_timeout: crate::consts::DEFAULT_H2_KEEP_ALIVE_TIMEOUT,
         }
     }
 }

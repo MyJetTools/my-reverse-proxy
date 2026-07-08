@@ -261,13 +261,13 @@ pub async fn execute_h2(
 ///
 ///   The body is fully buffered (`Full<Bytes>`), so replay is safe
 ///   payload-wise. POST/PATCH are **not** retried at this layer — a lost
-///   reply must not double-execute. (Caveat until the my-http-client
-///   hardening lands: `MyHttp2Client::do_request` still has an internal
-///   reconnect-replay of its own, so the no-double-execution guarantee is
-///   not yet end-to-end.) Replayed PUT/DELETE may observably substitute the
-///   response (e.g. a replayed DELETE returns 404 after the first one
-///   succeeded) — same policy as nginx's default for idempotent methods.
-///   4xx/5xx are not errors — they return Ok.
+///   reply must not double-execute. The guarantee holds end-to-end:
+///   `MyHttp2Client::do_request` replays a non-idempotent request only when
+///   it provably never reached the wire (`Disconnected` before send /
+///   hyper-canceled before dispatch). Replayed PUT/DELETE may observably
+///   substitute the response (e.g. a replayed DELETE returns 404 after the
+///   first one succeeded) — same policy as nginx's default for idempotent
+///   methods. 4xx/5xx are not errors — they return Ok.
 pub async fn execute_pooled_h2<TStream, TConnector>(
     pool: &Arc<H2Pool<TStream, TConnector>>,
     endpoint_label: &str,

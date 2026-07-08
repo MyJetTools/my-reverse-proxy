@@ -54,6 +54,15 @@ where
                 continue;
             }
 
+            // Transport already knows it's gone (keep-alive PING missed,
+            // GOAWAY, broken pipe) — no need to wait for the HTTP probe, and
+            // this works even when no health_check_path is configured.
+            if !entry.client.load().is_alive() {
+                entry.dead.store(true, Ordering::Relaxed);
+                self.spawn_revive(entry.clone());
+                continue;
+            }
+
             let idle = now
                 .duration_since(entry.last_success.as_date_time())
                 .as_positive_or_zero();

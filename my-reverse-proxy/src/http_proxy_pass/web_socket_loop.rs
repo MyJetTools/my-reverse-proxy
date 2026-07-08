@@ -81,9 +81,7 @@ async fn web_socket_loop<
         Ok(ws_stream) => {
             let (mut ws_sender, ws_receiver) = ws_stream.split();
 
-            crate::app::spawn_named(
-                "ws_loop_server_to_client",
-                serve_from_server_to_client(
+            crate::app::spawn_named("ws_loop_server_to_client", serve_from_server_to_client(
                     ws_receiver,
                     to_remote_write,
                     log_scope.clone(),
