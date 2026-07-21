@@ -91,6 +91,11 @@ pub fn SslCertDialog(
                                 textarea {
                                     class: "cert-input",
                                     rows: 10,
+                                    // Keep browser cloud spell-check / autocomplete away from the
+                                    // pasted key material.
+                                    spellcheck: "false",
+                                    autocomplete: "off",
+                                    autocorrect: "off",
                                     placeholder: "-----BEGIN CERTIFICATE-----",
                                     value: "{certificate}",
                                     oninput: move |evt| certificate.set(evt.value()),
@@ -101,6 +106,9 @@ pub fn SslCertDialog(
                                 textarea {
                                     class: "cert-input",
                                     rows: 8,
+                                    spellcheck: "false",
+                                    autocomplete: "off",
+                                    autocorrect: "off",
                                     placeholder: "-----BEGIN PRIVATE KEY-----",
                                     value: "{private_key}",
                                     oninput: move |evt| private_key.set(evt.value()),
