@@ -10,10 +10,16 @@ use crate::{
         GatewayServerStatusModel, HttpEndpointInfoModel, HttpProxyPassLocationModel,
         PortConfigurationModel, SslCertificateInfoModel,
     },
-    views::{LogScope, LogsDialog, LogsDialogRequest},
+    views::{LogScope, LogsDialog, LogsDialogRequest, SslCertDialog, SslCertDialogRequest},
 };
 
-type LogsDialogSignal = Signal<Option<LogsDialogRequest>>;
+/// The dialogs the dashboard can open. `Signal` is `Copy`, so this travels through the render
+/// helpers by value instead of one parameter per dialog. `None` in a signal means closed.
+#[derive(Clone, Copy)]
+struct DashboardDialogs {
+    logs: Signal<Option<LogsDialogRequest>>,
+    ssl_cert: Signal<Option<SslCertDialogRequest>>,
+}
 
 const REFRESH_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -35,7 +41,10 @@ pub fn Dashboard() -> Element {
         });
     });
 
-    let logs_dialog = use_signal(|| Option::<LogsDialogRequest>::None);
+    let dialogs = DashboardDialogs {
+        logs: use_signal(|| Option::<LogsDialogRequest>::None),
+        ssl_cert: use_signal(|| Option::<SslCertDialogRequest>::None),
+    };
 
     let state_ra = state.read();
 
@@ -49,25 +58,29 @@ pub fn Dashboard() -> Element {
                 pre { "{err}" }
             }
         },
-        RenderState::Loaded(cfg) => render_dashboard(cfg, logs_dialog),
+        RenderState::Loaded(cfg) => render_dashboard(cfg, dialogs),
     };
 
-    let open_dialog = logs_dialog.read().clone();
+    let open_logs = dialogs.logs.read().clone();
+    let open_ssl_cert = dialogs.ssl_cert.read().clone();
 
     rsx! {
         {content}
-        if let Some(request) = open_dialog {
-            LogsDialog { request, dialog: logs_dialog }
+        if let Some(request) = open_logs {
+            LogsDialog { request, dialog: dialogs.logs }
+        }
+        if let Some(request) = open_ssl_cert {
+            SslCertDialog { request, dialog: dialogs.ssl_cert }
         }
     }
 }
 
-fn render_dashboard(cfg: &CurrentConfigurationModel, dialog: LogsDialogSignal) -> Element {
+fn render_dashboard(cfg: &CurrentConfigurationModel, dialogs: DashboardDialogs) -> Element {
     rsx! {
         div { class: "dashboard",
             h2 { "Reverse Proxy" }
             for port in &cfg.ports {
-                {render_port(port, dialog)}
+                {render_port(port, dialogs)}
             }
             if let Some(server) = cfg.gateway_server.as_ref() {
                 {render_gateway_server(server)}
@@ -343,7 +356,7 @@ fn render_ip_lists(cfg: &CurrentConfigurationModel) -> Element {
     }
 }
 
-fn render_port(port: &PortConfigurationModel, dialog: LogsDialogSignal) -> Element {
+fn render_port(port: &PortConfigurationModel, dialogs: DashboardDialogs) -> Element {
     let port_type_class = format!("type-pill listen-{}", normalize_type(port.r#type.as_str()));
 
     let port_conn_class = if port.inbound_connections > 0 {
@@ -373,11 +386,11 @@ fn render_port(port: &PortConfigurationModel, dialog: LogsDialogSignal) -> Eleme
                         span { class: "value", "{port.inbound_connections}" }
                     }
                 }
-                {render_logs_button(dialog, logs_title, LogScope::Port(logs_id))}
+                {render_logs_button(dialogs, logs_title, LogScope::Port(logs_id))}
             }
             div { class: "endpoints",
                 for endpoint in &port.endpoints {
-                    {render_endpoint(endpoint, dialog)}
+                    {render_endpoint(endpoint, dialogs)}
                 }
             }
         }
@@ -385,12 +398,39 @@ fn render_port(port: &PortConfigurationModel, dialog: LogsDialogSignal) -> Eleme
 }
 
 /// A small "logs" button that opens the in-memory logs dialog for a given scope.
-fn render_logs_button(mut dialog: LogsDialogSignal, title: String, scope: LogScope) -> Element {
+fn render_logs_button(dialogs: DashboardDialogs, title: String, scope: LogScope) -> Element {
+    let mut logs = dialogs.logs;
+
     rsx! {
         button {
             class: "logs-btn",
-            onclick: move |_| dialog.set(Some(LogsDialogRequest { title: title.clone(), scope: scope.clone() })),
+            onclick: move |_| logs.set(Some(LogsDialogRequest { title: title.clone(), scope: scope.clone() })),
             "logs"
+        }
+    }
+}
+
+/// The "SSL cert not loaded" badge. It is a button: clicking it opens the dialog where the
+/// certificate and the private key are pasted and uploaded for this endpoint's cert id.
+fn render_cert_missing_badge(
+    endpoint: &HttpEndpointInfoModel,
+    dialogs: DashboardDialogs,
+) -> Element {
+    let mut ssl_cert = dialogs.ssl_cert;
+
+    // `ssl_cert_missing` is only raised for an endpoint that references a cert id, so the
+    // fallback here is defensive.
+    let request = SslCertDialogRequest {
+        cert_id: endpoint.ssl_cert_id.clone().unwrap_or_default(),
+        endpoint_host: endpoint.host.clone(),
+    };
+
+    rsx! {
+        button {
+            class: "cert-missing-badge",
+            title: "SSL certificate is not loaded — this endpoint listens but every TLS connection is cut until the certificate is uploaded. Click to paste the certificate and the private key.",
+            onclick: move |_| ssl_cert.set(Some(request.clone())),
+            "⚠ SSL cert not loaded"
         }
     }
 }
@@ -427,7 +467,7 @@ fn render_debug_toggle(target: DebugTarget, enabled: bool) -> Element {
     }
 }
 
-fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -> Element {
+fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialogs: DashboardDialogs) -> Element {
     let listen_type_class = format!(
         "type-pill listen-{}",
         normalize_type(endpoint.r#type.as_str())
@@ -454,11 +494,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
                     span { class: "resolved-ip", title: "Resolved IP", "({ip})" }
                 }
                 if endpoint.ssl_cert_missing {
-                    span {
-                        class: "cert-missing-badge",
-                        title: "SSL certificate is not loaded — this endpoint listens but every TLS connection is cut until the certificate is uploaded (POST /api/SslCertificates/Init).",
-                        "⚠ SSL cert not loaded"
-                    }
+                    {render_cert_missing_badge(endpoint, dialogs)}
                 }
                 {render_debug_toggle(DebugTarget::Endpoint(endpoint.host.clone()), endpoint.debug)}
                 {
@@ -474,7 +510,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
                         }
                     }
                 }
-                {render_logs_button(dialog, format!("Endpoint logs — {}", endpoint.host), LogScope::Endpoint(endpoint.host.clone()))}
+                {render_logs_button(dialogs, format!("Endpoint logs — {}", endpoint.host), LogScope::Endpoint(endpoint.host.clone()))}
             }
             if has_meta {
                 div { class: "endpoint-meta",
@@ -528,7 +564,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
                     }
                     tbody {
                         for loc in &endpoint.locations {
-                            {render_location(loc, dialog)}
+                            {render_location(loc, dialogs)}
                         }
                     }
                 }
@@ -537,7 +573,7 @@ fn render_endpoint(endpoint: &HttpEndpointInfoModel, dialog: LogsDialogSignal) -
     }
 }
 
-fn render_location(loc: &HttpProxyPassLocationModel, dialog: LogsDialogSignal) -> Element {
+fn render_location(loc: &HttpProxyPassLocationModel, dialogs: DashboardDialogs) -> Element {
     let pool_label = match (loc.pool_alive, loc.pool_total) {
         (Some(alive), Some(total)) => format!("{alive}/{total}"),
         _ => "—".to_string(),
@@ -566,7 +602,7 @@ fn render_location(loc: &HttpProxyPassLocationModel, dialog: LogsDialogSignal) -
             td { class: "id-string", "{loc.id_string}" }
             td { class: "loc-actions",
                 {render_debug_toggle(DebugTarget::Location(loc.location_id), loc.debug)}
-                {render_logs_button(dialog, logs_title, LogScope::Location(loc.location_id))}
+                {render_logs_button(dialogs, logs_title, LogScope::Location(loc.location_id))}
             }
         }
     }

@@ -1,15 +1,6 @@
 use crate::models::ProxyLogsModel;
 
-/// reqwest's wasm backend rejects relative paths, so anchor every request
-/// against the page origin (the SPA is served from the same origin as the API).
-fn build_url(path_and_query: &str) -> Result<String, String> {
-    let origin = web_sys::window()
-        .ok_or_else(|| "no window in current context".to_string())?
-        .location()
-        .origin()
-        .map_err(|e| format!("could not read window.location.origin: {e:?}"))?;
-    Ok(format!("{origin}{path_and_query}"))
-}
+use super::build_url;
 
 async fn get_logs(path_and_query: String) -> Result<ProxyLogsModel, String> {
     let url = build_url(&path_and_query)?;

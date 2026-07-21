@@ -78,20 +78,21 @@ pub fn LogsDialog(
 
     rsx! {
         div {
-            class: "logs-overlay",
+            class: "modal-overlay",
             onclick: move |_| dialog.set(None),
             div {
-                class: "logs-modal",
+                // `wide` — log lines are long and monospace, so this dialog takes the viewport.
+                class: "modal-panel wide",
                 onclick: move |evt| evt.stop_propagation(),
-                div { class: "logs-modal-header",
-                    span { class: "logs-modal-title", "{title}" }
+                div { class: "modal-header",
+                    span { class: "modal-title", "{title}" }
                     button {
-                        class: "logs-close",
+                        class: "modal-close",
                         onclick: move |_| dialog.set(None),
                         "✕"
                     }
                 }
-                div { class: "logs-modal-body", {body} }
+                div { class: "modal-body", {body} }
             }
         }
     }

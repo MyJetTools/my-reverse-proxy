@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
@@ -14,9 +11,12 @@ use super::*;
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct CurrentConfigurationHttpModel {
     pub ports: Vec<PortConfigurationHttpModel>,
-    pub users: BTreeMap<String, Vec<String>>,
-    pub ip_lists: BTreeMap<String, Vec<String>>,
-    pub errors: BTreeMap<String, String>,
+    // These are maps on the wire. my-json - which writes the response since my-http-server 0.9.0 -
+    // can serialize `HashMap<String, V>` only, so the ordering is restored by the consumer (the
+    // ui reads them into a `BTreeMap`).
+    pub users: HashMap<String, Vec<String>>,
+    pub ip_lists: HashMap<String, Vec<String>>,
+    pub errors: HashMap<String, String>,
     pub remote_connections: HashMap<String, usize>,
     pub ssl_certs: Vec<SslCertificateInfoModel>,
     pub gateway_server: Option<GatewayServerStatus>,
@@ -55,7 +55,7 @@ impl CurrentConfigurationHttpModel {
             })
             .await;
 
-        let mut users = BTreeMap::new();
+        let mut users = HashMap::new();
 
         {
             let users_access = crate::app::APP_CTX.allowed_users_list.data.read().await;
@@ -120,8 +120,8 @@ impl CurrentConfigurationHttpModel {
         Self {
             ports,
             users,
-            ip_lists,
-            errors,
+            ip_lists: ip_lists.into_iter().collect(),
+            errors: errors.into_iter().collect(),
             remote_connections,
             ssl_certs,
             gateway_server: GatewayServerStatus::new().await,
@@ -160,7 +160,6 @@ pub struct PortConfigurationHttpModel {
     pub port: u16,
     // Set for unix-socket listeners (host key starting with `/` or `~/`);
     // `port` is 0 in that case.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub unix_socket: Option<String>,
     pub r#type: String,
     pub endpoints: Vec<HttpEndpointInfoModel>,
@@ -240,20 +239,14 @@ pub struct HttpEndpointInfoModel {
     // IP(s) the endpoint domain currently resolves to (refreshed by
     // `ResolveDomainsIpTimer`). `None` for wildcard hosts, bare IP literals and
     // domains not yet resolved.
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub resolved_ip: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_list: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_user_list_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub ssl_cert_id: Option<String>,
     // True when this endpoint references a real (non self-signed) SSL certificate that is NOT
     // currently loaded in the cache — the endpoint listens but cuts TLS until the cert arrives.
     pub ssl_cert_missing: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_cert_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub g_auth: Option<String>,
 }
 
@@ -360,16 +353,12 @@ pub struct HttpProxyPassLocationModel {
     pub to: String,
     #[serde(rename = "type")]
     pub r#type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_kind: Option<String>,
     pub location_id: i64,
     pub id_string: String,
     pub debug: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub pool_alive: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub pool_total: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub last_status: Option<i64>,
 }
 

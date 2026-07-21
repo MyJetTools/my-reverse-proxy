@@ -1,5 +1,5 @@
 use crate::types::*;
-use my_settings_reader::flurl::{body::FlUrlBody, FlUrl};
+use my_settings_reader::flurl::{body::HttpRequestBody, FlUrl};
 use serde::*;
 
 use crate::{configurations::GoogleAuthCredentials, types::Email};
@@ -18,7 +18,7 @@ pub async fn resolve_email(
         grant_type: "authorization_code".to_string(),
     };
 
-    let fl_url_body = FlUrlBody::as_json(&json_data);
+    let fl_url_body = HttpRequestBody::as_json(&json_data);
 
     let response = FlUrl::new("https://oauth2.googleapis.com/token")
         .do_not_reuse_connection()

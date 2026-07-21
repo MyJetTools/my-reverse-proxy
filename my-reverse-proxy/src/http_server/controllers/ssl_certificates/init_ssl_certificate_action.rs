@@ -1,6 +1,5 @@
 use my_http_server::{
     macros::{http_route, MyHttpInput},
-    types::FileContent,
     HttpContext, HttpFailResult, HttpOkResult, HttpOutput,
 };
 
@@ -8,7 +7,7 @@ use my_http_server::{
     method: "POST",
     route: "/api/SslCertificates/Init",
     summary: "Init (upload) an ssl certificate at runtime",
-    description: "Initializes/replaces an SSL certificate in the running proxy. Upload the certificate chain and the matching private key as PEM files (multipart/form-data). Once received the certificate is validated (the private key must match the certificate; the SNI must coincide with the endpoint and the certificate it replaces) and installed on the next TLS handshake — no reload required. A certificate uploaded here is manually managed and is not auto-renewed until the configured source is refreshed again.",
+    description: "Initializes/replaces an SSL certificate in the running proxy. Send the certificate chain and the matching private key as PEM text in multipart/form-data fields (in Swagger just paste them; with curl use `-F 'certificate=<cert.pem'`, which sends the file content as a form field). Once received the certificate is validated (the private key must match the certificate; the SNI must coincide with the endpoint and the certificate it replaces) and installed on the next TLS handshake — no reload required. A certificate uploaded here is manually managed and is not auto-renewed until the configured source is refreshed again. The same thing over a json body is /api/SslCertificates/InitFromPem, which is what the admin ui uses.",
     controller: "SslCertificates",
     input_data: InitSslCertificateHttpInput,
     result:[
@@ -25,8 +24,8 @@ async fn handle_request(
 ) -> Result<HttpOkResult, HttpFailResult> {
     crate::scripts::init_ssl_cert_manually(
         input_data.cert_id.trim(),
-        input_data.certificate.content,
-        input_data.private_key.content,
+        input_data.certificate.trim().as_bytes().to_vec(),
+        input_data.private_key.trim().as_bytes().to_vec(),
     )
     .await
     .map_err(HttpFailResult::as_validation_error)?;
@@ -34,6 +33,9 @@ async fn handle_request(
     HttpOutput::Empty.into_ok_result(true).into()
 }
 
+// PEM is text, so the parts are read as `String`. `FileContent` (an actual multipart *file*
+// part) is not usable here: since my-http-server 0.9.0 the input derives come from
+// my-http-utils, which implements neither `DataTypeProvider` nor the client writer for it.
 #[derive(MyHttpInput)]
 pub struct InitSslCertificateHttpInput {
     #[http_form_data(
@@ -42,9 +44,9 @@ pub struct InitSslCertificateHttpInput {
     )]
     pub cert_id: String,
 
-    #[http_form_data(name = "certificate", description = "Certificate chain file in PEM format")]
-    pub certificate: FileContent,
+    #[http_form_data(name = "certificate", description = "Certificate chain in PEM format")]
+    pub certificate: String,
 
-    #[http_form_data(name = "private_key", description = "Private key file in PEM format")]
-    pub private_key: FileContent,
+    #[http_form_data(name = "private_key", description = "Private key in PEM format")]
+    pub private_key: String,
 }

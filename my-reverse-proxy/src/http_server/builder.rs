@@ -65,6 +65,10 @@ pub fn build_controllers() -> ControllersMiddleware {
         super::controllers::ssl_certificates::InitSslCertificateAction,
     ));
 
+    result.register_post_action(Arc::new(
+        super::controllers::ssl_certificates::InitSslCertificateFromPemAction,
+    ));
+
     result.register_get_action(Arc::new(
         super::controllers::ssl_certificates::GetSslCertificateAction,
     ));

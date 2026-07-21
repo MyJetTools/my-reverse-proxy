@@ -498,18 +498,26 @@ table.locations tbody tr.upstream-unknown td.upstream {
     border-left: 1px solid #fc8181;
 }
 
+/* A button — clicking it opens the certificate upload dialog. */
 .endpoint-header .cert-missing-badge {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     padding: 3px 8px;
     border-radius: 4px;
+    font-family: inherit;
     font-size: 11px;
     font-weight: 700;
     background: #fed7d7;
     color: #c53030;
     border: 1px solid #fc8181;
     white-space: nowrap;
+    cursor: pointer;
+}
+
+.endpoint-header .cert-missing-badge:hover {
+    background: #c53030;
+    color: #fff;
 }
 
 /* Auth (client cert / google / users) — yellow accent */
@@ -675,7 +683,8 @@ table.locations.gateway-routes thead th {
     white-space: nowrap;
 }
 
-.logs-overlay {
+/* ---------- Modal chrome, shared by every dialog ---------- */
+.modal-overlay {
     position: fixed;
     inset: 0;
     background: rgba(27, 31, 35, 0.45);
@@ -685,19 +694,25 @@ table.locations.gateway-routes thead th {
     z-index: 1000;
 }
 
-.logs-modal {
+.modal-panel {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    width: 96vw;
-    max-width: 96vw;
+    width: 760px;
+    max-width: 94vw;
     max-height: 88vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
 }
 
-.logs-modal-header {
+/* For dialogs whose content is wide (the logs table). */
+.modal-panel.wide {
+    width: 96vw;
+    max-width: 96vw;
+}
+
+.modal-header {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -707,12 +722,12 @@ table.locations.gateway-routes thead th {
     border-radius: 8px 8px 0 0;
 }
 
-.logs-modal-title {
+.modal-title {
     font-weight: 600;
     font-size: 13px;
 }
 
-.logs-close {
+.modal-close {
     margin-left: auto;
     background: transparent;
     border: none;
@@ -721,7 +736,7 @@ table.locations.gateway-routes thead th {
     color: var(--text-dim);
 }
 
-.logs-modal-body {
+.modal-body {
     padding: 10px 14px;
     overflow: auto;
 }
@@ -783,4 +798,157 @@ table.locations.gateway-routes thead th {
     padding: 8px 10px;
     border-radius: 4px;
     font-size: 12px;
+}
+
+/* ---------- SSL certificate upload dialog ---------- */
+.cert-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cert-target {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    background: var(--row-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.cert-target-row {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.cert-target-label {
+    flex: 0 0 96px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 10px;
+    line-height: 18px;
+}
+
+.cert-target-value {
+    font-family: SFMono-Regular, Consolas, monospace;
+    word-break: break-all;
+}
+
+.cert-warning {
+    background: var(--debug-bg);
+    color: var(--debug-text);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+}
+
+.cert-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cert-label {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-size: 10px;
+}
+
+.cert-input {
+    width: 100%;
+    padding: 8px 10px;
+    font-family: SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+    color: var(--text);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    resize: vertical;
+}
+
+.cert-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.15);
+}
+
+.cert-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cert-apply-btn {
+    background: var(--accent);
+    color: #fff;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    padding: 6px 18px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cert-apply-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.cert-cancel-btn {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.cert-cancel-btn:hover {
+    background: var(--row-hover);
+}
+
+.cert-error {
+    background: var(--error-bg);
+    color: var(--error-text);
+    border: 1px solid #fc8181;
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cert-success {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: #c6f6d5;
+    color: #1c4532;
+    border: 1px solid #9ae6b4;
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.cert-success-title {
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.cert-success .cert-target-label {
+    color: #276749;
+}
+
+.cert-note {
+    color: var(--text-dim);
+    font-size: 11px;
+    line-height: 1.4;
 }
