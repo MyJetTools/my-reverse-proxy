@@ -29,9 +29,12 @@ async fn handle_request(
 
     let blocked = crate::app::APP_CTX.ip_blocklist.is_blocked(&ip);
 
-    HttpOutput::as_json(CheckIpBlocklistResponse { ip: ip.to_string(), blocked })
-        .into_ok_result(true)
-        .into()
+    HttpOutput::as_json(CheckIpBlocklistResponse {
+        ip: ip.to_string(),
+        blocked,
+    })
+    .into_ok_result(true)
+    .into()
 }
 
 #[derive(MyHttpInput)]

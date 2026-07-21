@@ -71,9 +71,7 @@ impl ProxyPassToConfig {
             ProxyPassToConfig::FilesPath(model) => model.to_string(),
             ProxyPassToConfig::Static(model) => model.to_string(),
             ProxyPassToConfig::Drop => "drop".to_string(),
-            ProxyPassToConfig::DynamicProxy(_) => {
-                crate::consts::location_type::DYNAMIC.to_string()
-            }
+            ProxyPassToConfig::DynamicProxy(_) => crate::consts::location_type::DYNAMIC.to_string(),
         }
     }
 

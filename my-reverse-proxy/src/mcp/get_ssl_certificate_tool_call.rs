@@ -3,13 +3,17 @@ use serde::*;
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetSslCertificateInputData {
-    #[property(description = "Id of the certificate to read (see the `cert_id` field of get_ssl_endpoints_status).")]
+    #[property(
+        description = "Id of the certificate to read (see the `cert_id` field of get_ssl_endpoints_status)."
+    )]
     pub cert_id: String,
 }
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetSslCertificateResponse {
-    #[property(description = "True when a certificate is loaded under this id. When false, all other fields are empty and the endpoint's TLS handshake currently fails.")]
+    #[property(
+        description = "True when a certificate is loaded under this id. When false, all other fields are empty and the endpoint's TLS handshake currently fails."
+    )]
     pub found: bool,
 
     #[property(description = "Id of the certificate.")]
@@ -21,7 +25,9 @@ pub struct GetSslCertificateResponse {
     #[property(description = "RFC3339 expiry of the certificate.")]
     pub expires: String,
 
-    #[property(description = "Where the certificate came from: `local_source`, `gateway_pushed` or `manually_provided`.")]
+    #[property(
+        description = "Where the certificate came from: `local_source`, `gateway_pushed` or `manually_provided`."
+    )]
     pub origin: String,
 
     #[property(description = "Domains (SAN DNS names + CN) the certificate is valid for.")]
@@ -36,7 +42,9 @@ impl ToolDefinition for GetSslCertificateHandler {
 }
 
 #[async_trait::async_trait]
-impl McpToolCall<GetSslCertificateInputData, GetSslCertificateResponse> for GetSslCertificateHandler {
+impl McpToolCall<GetSslCertificateInputData, GetSslCertificateResponse>
+    for GetSslCertificateHandler
+{
     async fn execute_tool_call(
         &self,
         model: GetSslCertificateInputData,

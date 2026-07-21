@@ -90,7 +90,10 @@ pub async fn create_config(
                 if ssl_cert.is_none() {
                     return Err(CreateConfigError::CertificateUnavailable {
                         endpoint_host: http_endpoint_info.as_str().to_string(),
-                        message: format!("No ssl certificate found with id: {}", ssl_cert_id.as_str()),
+                        message: format!(
+                            "No ssl certificate found with id: {}",
+                            ssl_cert_id.as_str()
+                        ),
                     });
                 }
 

@@ -8,9 +8,7 @@ use crate::configurations::{MyReverseProxyRemoteEndpoint, ProxyPassToConfig, Pro
 use crate::h1_remote_connection::{mcp_path, H1PoolHolder};
 use crate::network_stream::*;
 
-use super::super::{
-    H1HeadersKind, H1Reader, HttpConnectionInfo, ProxyServerError,
-};
+use super::super::{H1HeadersKind, H1Reader, HttpConnectionInfo, ProxyServerError};
 use super::{
     run_client_writer, run_upstream_request, run_ws_tunnel, BodyChannelSink, ResponseEvent,
     ResponseSlot, UpgradeContext, UpstreamRequest, REQUEST_BODY_CHANNEL_CAPACITY,
@@ -118,12 +116,20 @@ pub async fn serve_reverse_proxy_pipelined<
     let pool = H1PoolHolder::new_local();
 
     let (queue_tx, queue_rx) = mpsc::channel::<ResponseSlot>(RESPONSE_QUEUE_CAPACITY);
-    let writer = crate::app::spawn_named("h1_client_writer", run_client_writer(server_write_part, queue_rx),
+    let writer = crate::app::spawn_named(
+        "h1_client_writer",
+        run_client_writer(server_write_part, queue_rx),
     );
 
     loop {
-        match read_and_dispatch(&mut h1_reader, &mut http_connection_info, &pool, &queue_tx, &conn_gauge)
-            .await
+        match read_and_dispatch(
+            &mut h1_reader,
+            &mut http_connection_info,
+            &pool,
+            &queue_tx,
+            &conn_gauge,
+        )
+        .await
         {
             ReaderStep::Continue => continue,
             ReaderStep::Close => break,
@@ -199,19 +205,21 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         }
     }
 
-    let (location, end_point_info) =
-        match h1_reader.find_location(&request_headers, http_connection_info).await {
-            Ok(found) => found,
-            Err(err) => {
-                // LocationIsNotFound carries a resolved endpoint (so its 503 is
-                // logged); HttpConfigurationIsNotFound has none (and is not 5xx).
-                let ep = http_connection_info
-                    .endpoint_info
-                    .as_ref()
-                    .map(|e| e.host_endpoint.as_str().to_string());
-                return respond_error(queue_tx, http_connection_info, ep.as_deref(), err).await;
-            }
-        };
+    let (location, end_point_info) = match h1_reader
+        .find_location(&request_headers, http_connection_info)
+        .await
+    {
+        Ok(found) => found,
+        Err(err) => {
+            // LocationIsNotFound carries a resolved endpoint (so its 503 is
+            // logged); HttpConfigurationIsNotFound has none (and is not 5xx).
+            let ep = http_connection_info
+                .endpoint_info
+                .as_ref()
+                .map(|e| e.host_endpoint.as_str().to_string());
+            return respond_error(queue_tx, http_connection_info, ep.as_deref(), err).await;
+        }
+    };
 
     h1_reader.timeouts = end_point_info.timeouts;
     let write_timeout = end_point_info.timeouts.write_timeout;
@@ -286,13 +294,23 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     }
 
     let identity = match h1_reader
-        .authorize(end_point_info, location, http_connection_info, &request_headers)
+        .authorize(
+            end_point_info,
+            location,
+            http_connection_info,
+            &request_headers,
+        )
         .await
     {
         Ok(identity) => identity,
         Err(err) => {
-            return respond_error(queue_tx, http_connection_info, Some(&endpoint_for_error), err)
-                .await
+            return respond_error(
+                queue_tx,
+                http_connection_info,
+                Some(&endpoint_for_error),
+                err,
+            )
+            .await
         }
     };
 
@@ -307,39 +325,28 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     }
 
     // Resolve dynamic_proxy → a per-request synthetic upstream + Host override.
-    let (synthetic_proxy_pass_to, dynamic_host_override): (Option<ProxyPassToConfig>, Option<String>) =
-        match &location.proxy_pass_to {
-            ProxyPassToConfig::DynamicProxy(config) => {
-                let buf = h1_reader.loop_buffer.get_data();
-                let proxy_to = match request_headers.find_header_value_str(buf, b"proxy-to") {
-                    Some(v) => v.to_string(),
-                    None => {
-                        return respond_error(
-                            queue_tx,
-                            http_connection_info,
-                            Some(&endpoint_for_error),
-                            ProxyServerError::ProxyToHeaderMissing,
-                        )
-                        .await
-                    }
-                };
-                let endpoint =
-                    match rust_extensions::remote_endpoint::RemoteEndpointOwned::try_parse(proxy_to) {
-                        Ok(e) => e,
-                        Err(_) => {
-                            return respond_error(
-                                queue_tx,
-                                http_connection_info,
-                                Some(&endpoint_for_error),
-                                ProxyServerError::ProxyToHeaderInvalid,
-                            )
-                            .await
-                        }
-                    };
-                use rust_extensions::remote_endpoint::Scheme;
-                match endpoint.get_scheme() {
-                    Some(Scheme::Http) | Some(Scheme::Https) | Some(Scheme::Ws) | Some(Scheme::Wss) => {}
-                    _ => {
+    let (synthetic_proxy_pass_to, dynamic_host_override): (
+        Option<ProxyPassToConfig>,
+        Option<String>,
+    ) = match &location.proxy_pass_to {
+        ProxyPassToConfig::DynamicProxy(config) => {
+            let buf = h1_reader.loop_buffer.get_data();
+            let proxy_to = match request_headers.find_header_value_str(buf, b"proxy-to") {
+                Some(v) => v.to_string(),
+                None => {
+                    return respond_error(
+                        queue_tx,
+                        http_connection_info,
+                        Some(&endpoint_for_error),
+                        ProxyServerError::ProxyToHeaderMissing,
+                    )
+                    .await
+                }
+            };
+            let endpoint =
+                match rust_extensions::remote_endpoint::RemoteEndpointOwned::try_parse(proxy_to) {
+                    Ok(e) => e,
+                    Err(_) => {
                         return respond_error(
                             queue_tx,
                             http_connection_info,
@@ -348,35 +355,49 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
                         )
                         .await
                     }
+                };
+            use rust_extensions::remote_endpoint::Scheme;
+            match endpoint.get_scheme() {
+                Some(Scheme::Http) | Some(Scheme::Https) | Some(Scheme::Ws) | Some(Scheme::Wss) => {
                 }
-                if let Some(allowed) = &config.allowed_hosts {
-                    let host = endpoint.get_host();
-                    if !allowed.iter().any(|h| h.eq_ignore_ascii_case(host)) {
-                        return respond_error(
-                            queue_tx,
-                            http_connection_info,
-                            Some(&endpoint_for_error),
-                            ProxyServerError::ProxyToHostNotAllowed,
-                        )
-                        .await;
-                    }
+                _ => {
+                    return respond_error(
+                        queue_tx,
+                        http_connection_info,
+                        Some(&endpoint_for_error),
+                        ProxyServerError::ProxyToHeaderInvalid,
+                    )
+                    .await
                 }
-                let host_port = endpoint.get_host_port().to_string();
-                let synth = ProxyPassToConfig::Http1(ProxyPassToModel {
-                    remote_host: MyReverseProxyRemoteEndpoint::Direct {
-                        remote_host: Arc::new(endpoint),
-                    },
-                    request_timeout: config.request_timeout,
-                    connect_timeout: config.connect_timeout,
-                    pool_tuning: crate::configurations::PoolTuning::default(),
-                });
-                (Some(synth), Some(host_port))
             }
-            _ => (None, None),
-        };
+            if let Some(allowed) = &config.allowed_hosts {
+                let host = endpoint.get_host();
+                if !allowed.iter().any(|h| h.eq_ignore_ascii_case(host)) {
+                    return respond_error(
+                        queue_tx,
+                        http_connection_info,
+                        Some(&endpoint_for_error),
+                        ProxyServerError::ProxyToHostNotAllowed,
+                    )
+                    .await;
+                }
+            }
+            let host_port = endpoint.get_host_port().to_string();
+            let synth = ProxyPassToConfig::Http1(ProxyPassToModel {
+                remote_host: MyReverseProxyRemoteEndpoint::Direct {
+                    remote_host: Arc::new(endpoint),
+                },
+                request_timeout: config.request_timeout,
+                connect_timeout: config.connect_timeout,
+                pool_tuning: crate::configurations::PoolTuning::default(),
+            });
+            (Some(synth), Some(host_port))
+        }
+        _ => (None, None),
+    };
 
-    let proxy_pass_to_owned: ProxyPassToConfig = synthetic_proxy_pass_to
-        .unwrap_or_else(|| location.proxy_pass_to.clone());
+    let proxy_pass_to_owned: ProxyPassToConfig =
+        synthetic_proxy_pass_to.unwrap_or_else(|| location.proxy_pass_to.clone());
 
     let content_length = request_headers.content_length;
 
@@ -391,8 +412,13 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     let is_websocket = match compiled {
         Ok(ws) => ws,
         Err(err) => {
-            return respond_error(queue_tx, http_connection_info, Some(&endpoint_for_error), err)
-                .await
+            return respond_error(
+                queue_tx,
+                http_connection_info,
+                Some(&endpoint_for_error),
+                err,
+            )
+            .await
         }
     };
 
@@ -468,7 +494,9 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         return ReaderStep::Close;
     }
 
-    crate::app::spawn_named("h1_upstream_worker", run_upstream_request(UpstreamRequest {
+    crate::app::spawn_named(
+        "h1_upstream_worker",
+        run_upstream_request(UpstreamRequest {
             pool: pool.clone(),
             proxy_pass_to: proxy_pass_to_owned,
             end_point_info,

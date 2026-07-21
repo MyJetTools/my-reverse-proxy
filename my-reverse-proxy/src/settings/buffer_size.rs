@@ -2,7 +2,10 @@
 /// suffixed with `Kb` / `Mb` (e.g. `512Kb`, `1Mb`).
 pub fn parse_buffer_size(value: &str) -> Result<usize, String> {
     let on_err = |err: std::num::ParseIntError| {
-        format!("Can not parse buffer size value: '{}'. Error: {}", value, err)
+        format!(
+            "Can not parse buffer size value: '{}'. Error: {}",
+            value, err
+        )
     };
 
     if let Some(kb) = value.strip_suffix("Kb") {

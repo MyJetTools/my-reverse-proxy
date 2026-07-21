@@ -51,8 +51,7 @@ where
     /// in the future (wall clock stepped backwards) counts as expired —
     /// revival must never freeze on clock jumps.
     pub fn revive_cooldown_remaining(&self, cooldown: Duration) -> Option<Duration> {
-        match DateTimeAsMicroseconds::now()
-            .duration_since(self.last_revive_attempt.as_date_time())
+        match DateTimeAsMicroseconds::now().duration_since(self.last_revive_attempt.as_date_time())
         {
             DateTimeDuration::Positive(elapsed) => {
                 if elapsed < cooldown {

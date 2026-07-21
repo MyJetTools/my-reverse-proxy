@@ -8,13 +8,19 @@ pub struct GetDynamicSettingsInputData {}
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetDynamicSettingsResponse {
-    #[property(description = "Resolved path of the dynamic settings file (from `dynamic_configurations_file` in the main settings).")]
+    #[property(
+        description = "Resolved path of the dynamic settings file (from `dynamic_configurations_file` in the main settings)."
+    )]
     pub path: String,
 
-    #[property(description = "True if the dynamic settings file currently exists on disk. When false, `content` is empty.")]
+    #[property(
+        description = "True if the dynamic settings file currently exists on disk. When false, `content` is empty."
+    )]
     pub exists: bool,
 
-    #[property(description = "Raw YAML content of the dynamic settings file, or an empty string if it does not exist yet.")]
+    #[property(
+        description = "Raw YAML content of the dynamic settings file, or an empty string if it does not exist yet."
+    )]
     pub content: String,
 }
 
@@ -26,7 +32,9 @@ impl ToolDefinition for GetDynamicSettingsHandler {
 }
 
 #[async_trait::async_trait]
-impl McpToolCall<GetDynamicSettingsInputData, GetDynamicSettingsResponse> for GetDynamicSettingsHandler {
+impl McpToolCall<GetDynamicSettingsInputData, GetDynamicSettingsResponse>
+    for GetDynamicSettingsHandler
+{
     async fn execute_tool_call(
         &self,
         _model: GetDynamicSettingsInputData,

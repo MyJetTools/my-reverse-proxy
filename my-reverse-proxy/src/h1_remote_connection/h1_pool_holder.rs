@@ -39,6 +39,11 @@ impl H1PoolHolder {
     }
 
     /// Shared pool keeping up to `max_idle_per_key` idle connections per upstream.
+    ///
+    /// The global half of the pool interface — not wired to a caller yet (the H1 pipeline
+    /// currently creates a `new_local()` holder per connection), kept as the designed
+    /// counterpart of `new_local`.
+    #[allow(dead_code)]
     pub fn new_global(max_idle_per_key: usize) -> Arc<Self> {
         Arc::new(Self {
             pools: Mutex::new(AHashMap::new()),

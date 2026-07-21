@@ -4,9 +4,7 @@ use crate::configurations::*;
 
 use crate::h1_proxy_server::H1Writer;
 
-use crate::{
-    network_stream::*, tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream,
-};
+use crate::{network_stream::*, tcp_gateway::forwarded_connection::TcpGatewayProxyForwardStream};
 
 use super::*;
 
@@ -74,7 +72,11 @@ impl Upstream {
                         TcpGatewayProxyForwardStream,
                         TcpGatewayProxyForwardStream,
                     >(
-                        Some(id), None, None, remote_host, proxy_pass_to.connect_timeout
+                        Some(id),
+                        None,
+                        None,
+                        remote_host,
+                        proxy_pass_to.connect_timeout,
                     )
                     .await?;
                     owned!(
@@ -129,13 +131,14 @@ impl Upstream {
                             );
                         }
                     }
-                    let (result, read_part, ssh_handler) = Http1ConnectionInner::connect::<
-                        tokio::io::ReadHalf<tokio::net::TcpStream>,
-                        tokio::net::TcpStream,
-                    >(
-                        None, None, None, remote_host, proxy_pass_to.connect_timeout
-                    )
-                    .await?;
+                    let (result, read_part, ssh_handler) =
+                        Http1ConnectionInner::connect::<
+                            tokio::io::ReadHalf<tokio::net::TcpStream>,
+                            tokio::net::TcpStream,
+                        >(
+                            None, None, None, remote_host, proxy_pass_to.connect_timeout
+                        )
+                        .await?;
                     owned!(
                         UpstreamInner::Http1Direct(result),
                         result,
@@ -146,13 +149,14 @@ impl Upstream {
             },
             ProxyPassToConfig::UnixHttp1(proxy_pass_to) => match &proxy_pass_to.remote_host {
                 MyReverseProxyRemoteEndpoint::Direct { remote_host } => {
-                    let (result, read_part, ssh_handler) = Http1ConnectionInner::connect::<
-                        tokio::io::ReadHalf<tokio::net::UnixStream>,
-                        tokio::net::UnixStream,
-                    >(
-                        None, None, None, remote_host, proxy_pass_to.connect_timeout
-                    )
-                    .await?;
+                    let (result, read_part, ssh_handler) =
+                        Http1ConnectionInner::connect::<
+                            tokio::io::ReadHalf<tokio::net::UnixStream>,
+                            tokio::net::UnixStream,
+                        >(
+                            None, None, None, remote_host, proxy_pass_to.connect_timeout
+                        )
+                        .await?;
                     owned!(
                         UpstreamInner::Http1UnixSocket(result),
                         result,
@@ -221,7 +225,9 @@ impl H1Writer for Upstream {
             UpstreamInner::Http1UnixSocket(inner) => inner.send_with_timeout(buffer, timeout).await,
             UpstreamInner::Https1Direct(inner) => inner.send_with_timeout(buffer, timeout).await,
             UpstreamInner::Http1OverSsh(inner) => inner.send_with_timeout(buffer, timeout).await,
-            UpstreamInner::Http1OverGateway(inner) => inner.send_with_timeout(buffer, timeout).await,
+            UpstreamInner::Http1OverGateway(inner) => {
+                inner.send_with_timeout(buffer, timeout).await
+            }
         }
     }
 }

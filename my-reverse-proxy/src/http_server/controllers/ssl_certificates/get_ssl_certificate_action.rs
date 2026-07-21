@@ -27,7 +27,10 @@ async fn handle_request(
         .await
         .ok_or_else(|| {
             HttpFailResult::as_not_found(
-                format!("No ssl certificate loaded under id '{}'", input_data.cert_id.trim()),
+                format!(
+                    "No ssl certificate loaded under id '{}'",
+                    input_data.cert_id.trim()
+                ),
                 false,
             )
         })?;

@@ -7,7 +7,11 @@ pub static NOT_FOUND: LazyLock<Vec<u8>> =
     LazyLock::new(|| generate_layout(404, "Resource not found", None));
 
 pub static REMOTE_RESOURCE_IS_NOT_AVAILABLE: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    generate_layout(503, "Server Error", Some("Remote resource is not available".into()))
+    generate_layout(
+        503,
+        "Server Error",
+        Some("Remote resource is not available".into()),
+    )
 });
 
 pub static LOCATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
@@ -15,14 +19,6 @@ pub static LOCATION_IS_NOT_FOUND: LazyLock<Vec<u8>> = LazyLock::new(|| {
         503,
         "Server Error",
         Some("Remote location configuration is missing".into()),
-    )
-});
-
-pub static ENDPOINT_CAN_NOT_BE_UPGRADED_TO_WEB_SOCKET: LazyLock<Vec<u8>> = LazyLock::new(|| {
-    generate_layout(
-        405,
-        "Forbidden",
-        Some("Endpoint can not be upgraded to websocket".into()),
     )
 });
 

@@ -39,7 +39,9 @@ impl TcpGatewayClientPacketHandler {
 
                 let remote_host = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
-                crate::app::spawn_named("tcp_gateway_client_forward_connect", crate::tcp_gateway::scripts::handle_forward_connect(
+                crate::app::spawn_named(
+                    "tcp_gateway_client_forward_connect",
+                    crate::tcp_gateway::scripts::handle_forward_connect(
                         connection_id,
                         remote_host,
                         timeout,
@@ -137,7 +139,9 @@ impl TcpGatewayClientPacketHandler {
                     .ssl_certificates_cache
                     .read(|c| {
                         c.ssl_certs
-                            .get(crate::configurations::SslCertificateIdRef::new(cert_id.as_str()))
+                            .get(crate::configurations::SslCertificateIdRef::new(
+                                cert_id.as_str(),
+                            ))
                     })
                     .await;
 
@@ -155,9 +159,10 @@ impl TcpGatewayClientPacketHandler {
                 crate::app::APP_CTX
                     .ssl_certificates_cache
                     .write(|c| {
-                        c.ssl_certs.remove(crate::configurations::SslCertificateIdRef::new(
-                            cert_id.as_str(),
-                        ));
+                        c.ssl_certs
+                            .remove(crate::configurations::SslCertificateIdRef::new(
+                                cert_id.as_str(),
+                            ));
                     })
                     .await;
 

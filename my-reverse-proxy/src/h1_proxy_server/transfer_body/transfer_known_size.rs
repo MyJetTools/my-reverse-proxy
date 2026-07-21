@@ -24,11 +24,7 @@ pub async fn transfer_known_size<
                 };
 
                 let result = write_stream
-                    .write_http_payload(
-                        connection_id,
-                        &read_buf[..to_send],
-                        timeouts.write_timeout,
-                    )
+                    .write_http_payload(connection_id, &read_buf[..to_send], timeouts.write_timeout)
                     .await;
 
                 if let Err(err) = result {

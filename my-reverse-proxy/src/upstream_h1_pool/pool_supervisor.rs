@@ -107,10 +107,7 @@ where
     /// No cooldown here, unlike h2: the h1 model requires the foreground
     /// Path B to always dial (a 503 must mean a dial actually failed), so the
     /// only background dial pacing is the tick cadence itself.
-    pub fn spawn_revive(
-        self: &Arc<Self>,
-        entry: Arc<H1Entry<TStream, TConnector>>,
-    ) {
+    pub fn spawn_revive(self: &Arc<Self>, entry: Arc<H1Entry<TStream, TConnector>>) {
         if self.shutdown.load(Ordering::Relaxed) {
             return;
         }
@@ -206,8 +203,7 @@ where
 
     // HTTP/1.1 REQUIRES a Host header — a compliant upstream answers 400
     // without it, which would read as "dead" and churn a healthy connection.
-    let mut builder =
-        my_http_client::http1::MyHttpRequestBuilder::new(hyper::Method::GET, &path);
+    let mut builder = my_http_client::http1::MyHttpRequestBuilder::new(hyper::Method::GET, &path);
     builder.append_header("Host", authority);
     let req = builder.build();
     let client = entry.client.load_full();
@@ -245,4 +241,3 @@ where
         my_http_client::http1::MyHttpResponse::WebSocketUpgrade { .. } => Ok(0),
     }
 }
-

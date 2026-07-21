@@ -51,8 +51,7 @@ impl Http1HeadersBuilder {
                     .and_then(|s| s.canonical_reason())
                     .unwrap_or("Status");
                 self.payload.extend_from_slice(b"HTTP/1.1 ");
-                self.payload
-                    .extend_from_slice(other.to_string().as_bytes());
+                self.payload.extend_from_slice(other.to_string().as_bytes());
                 self.payload.push(b' ');
                 self.payload.extend_from_slice(reason.as_bytes());
             }

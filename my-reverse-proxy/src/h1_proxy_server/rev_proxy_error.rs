@@ -231,7 +231,10 @@ mod tests {
         };
         let h = err.error_handling();
         assert_eq!(h.status_5xx, Some(503));
-        assert_eq!(h.page, Some(tpl::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()));
+        assert_eq!(
+            h.page,
+            Some(tpl::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice())
+        );
         assert!(!h.register_ip_failure);
     }
 
@@ -251,7 +254,10 @@ mod tests {
         let h = ProxyServerError::CanNotWriteContentToRemoteConnection(NetworkError::Disconnected)
             .error_handling();
         assert_eq!(h.status_5xx, Some(503));
-        assert_eq!(h.page, Some(tpl::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()));
+        assert_eq!(
+            h.page,
+            Some(tpl::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice())
+        );
     }
 
     #[test]

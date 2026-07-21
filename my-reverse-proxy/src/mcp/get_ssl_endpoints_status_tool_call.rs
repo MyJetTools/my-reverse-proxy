@@ -6,40 +6,60 @@ pub struct GetSslEndpointsStatusInputData {}
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct SslEndpointStatusEntry {
-    #[property(description = "Endpoint host as configured, e.g. `example.com:443` or a unix socket path.")]
+    #[property(
+        description = "Endpoint host as configured, e.g. `example.com:443` or a unix socket path."
+    )]
     pub endpoint_host: String,
 
-    #[property(description = "The domain (SNI server name) the endpoint protects. Empty for a default endpoint with no server name.")]
+    #[property(
+        description = "The domain (SNI server name) the endpoint protects. Empty for a default endpoint with no server name."
+    )]
     pub server_name: String,
 
-    #[property(description = "Id of the SSL certificate this endpoint references. Use this as `cert_id` when uploading a replacement via init_ssl_certificate.")]
+    #[property(
+        description = "Id of the SSL certificate this endpoint references. Use this as `cert_id` when uploading a replacement via init_ssl_certificate."
+    )]
     pub cert_id: String,
 
-    #[property(description = "Certificate status: `missing` (not loaded — handshake fails now), `expired`, `expiring_soon` (<= 7 days), or `ok`.")]
+    #[property(
+        description = "Certificate status: `missing` (not loaded — handshake fails now), `expired`, `expiring_soon` (<= 7 days), or `ok`."
+    )]
     pub status: String,
 
-    #[property(description = "True when the certificate is missing or expired and the endpoint needs a new certificate to serve TLS.")]
+    #[property(
+        description = "True when the certificate is missing or expired and the endpoint needs a new certificate to serve TLS."
+    )]
     pub needs_new_certificate: bool,
 
-    #[property(description = "Common Name of the loaded certificate. Empty when the certificate is missing.")]
+    #[property(
+        description = "Common Name of the loaded certificate. Empty when the certificate is missing."
+    )]
     pub cn: String,
 
-    #[property(description = "RFC3339 expiry of the loaded certificate. Empty when the certificate is missing.")]
+    #[property(
+        description = "RFC3339 expiry of the loaded certificate. Empty when the certificate is missing."
+    )]
     pub expires: String,
 
-    #[property(description = "Whole days until expiry of the loaded certificate (negative if already expired). 0 when the certificate is missing.")]
+    #[property(
+        description = "Whole days until expiry of the loaded certificate (negative if already expired). 0 when the certificate is missing."
+    )]
     pub days_to_expire: i64,
 }
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetSslEndpointsStatusResponse {
-    #[property(description = "One entry per https/mcp endpoint that references a real (non self-signed) SSL certificate.")]
+    #[property(
+        description = "One entry per https/mcp endpoint that references a real (non self-signed) SSL certificate."
+    )]
     pub endpoints: Vec<SslEndpointStatusEntry>,
 
     #[property(description = "Total number of endpoints reported.")]
     pub total: i64,
 
-    #[property(description = "How many endpoints have a missing or expired certificate and need a new one uploaded.")]
+    #[property(
+        description = "How many endpoints have a missing or expired certificate and need a new one uploaded."
+    )]
     pub needs_attention: i64,
 }
 
@@ -76,10 +96,7 @@ impl McpToolCall<GetSslEndpointsStatusInputData, GetSslEndpointsStatusResponse>
                 status: status.status.as_str().to_string(),
                 needs_new_certificate,
                 cn: status.cn.unwrap_or_default(),
-                expires: status
-                    .expires
-                    .map(|e| e.to_rfc3339())
-                    .unwrap_or_default(),
+                expires: status.expires.map(|e| e.to_rfc3339()).unwrap_or_default(),
                 days_to_expire: status.days_to_expire.unwrap_or(0),
             });
         }

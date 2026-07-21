@@ -77,7 +77,9 @@ impl TcpGatewayForwardConnection {
     pub fn start(&mut self) {
         let read = self.read.take().unwrap();
 
-        crate::app::spawn_named("tcp_gateway_forwarded_read_loop", read_loop(
+        crate::app::spawn_named(
+            "tcp_gateway_forwarded_read_loop",
+            read_loop(
                 read,
                 self.gateway_connection.clone(),
                 self.inner.clone(),

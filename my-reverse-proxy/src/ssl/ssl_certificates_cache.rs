@@ -19,7 +19,7 @@ pub enum SslCertificateOrigin {
         gateway_id: String,
     },
     /// Certificate has no source in the configuration; it is pushed at runtime
-    /// via POST /api/SslCertificates/Init (e.g. over an SSH port-forward to the
+    /// from the admin ui or via POST /api/SslCertificates/Init(FromPem) (e.g. over an SSH port-forward to the
     /// service port). There is nothing to auto-resolve or renew from.
     ManuallyProvided,
 }

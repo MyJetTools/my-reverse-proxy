@@ -23,7 +23,9 @@ pub struct GetProxyLogsInputData {
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct ProxyLogEntryModel {
-    #[property(description = "Which buffer the entry came from: 'port:<id>' / 'endpoint:<host>' / 'location:<id>'")]
+    #[property(
+        description = "Which buffer the entry came from: 'port:<id>' / 'endpoint:<host>' / 'location:<id>'"
+    )]
     pub scope: String,
 
     #[property(description = "Event time, RFC-3339")]
@@ -38,7 +40,9 @@ pub struct ProxyLogEntryModel {
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct GetProxyLogsResponse {
-    #[property(description = "Matching log entries, newest first, merged across the requested scopes. Each scope keeps at most the last 100 messages in memory.")]
+    #[property(
+        description = "Matching log entries, newest first, merged across the requested scopes. Each scope keeps at most the last 100 messages in memory."
+    )]
     pub entries: Vec<ProxyLogEntryModel>,
 }
 
@@ -62,7 +66,11 @@ impl McpToolCall<GetProxyLogsInputData, GetProxyLogsResponse> for GetProxyLogsHa
         let mut raw: Vec<(i64, ProxyLogEntryModel)> = Vec::new();
 
         if let Some(port) = model.port.as_deref() {
-            absorb(&mut raw, APP_CTX.proxy_logs.get_by_port(port), format!("port:{}", port));
+            absorb(
+                &mut raw,
+                APP_CTX.proxy_logs.get_by_port(port),
+                format!("port:{}", port),
+            );
         }
         if let Some(endpoint) = model.endpoint.as_deref() {
             absorb(

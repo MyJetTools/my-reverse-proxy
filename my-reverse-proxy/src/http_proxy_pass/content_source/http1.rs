@@ -24,7 +24,10 @@ impl Http1ContentSource {
         &self,
         req: http::Request<http_body_util::Full<bytes::Bytes>>,
     ) -> Result<HttpResponse, ProxyPassError> {
-        let pool = match crate::app::APP_CTX.h1_tcp_pools.get(self.pool_desc.location_id) {
+        let pool = match crate::app::APP_CTX
+            .h1_tcp_pools
+            .get(self.pool_desc.location_id)
+        {
             Some(p) => p,
             None => crate::app::APP_CTX.h1_tcp_pools.ensure_pool(
                 self.pool_desc.clone(),

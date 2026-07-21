@@ -54,10 +54,7 @@ impl TcpGatewayClient {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn get_gateway_connection(
-        &self,
-        gateway_id: &str,
-    ) -> Option<Arc<TcpGatewayConnection>> {
+    pub fn get_gateway_connection(&self, gateway_id: &str) -> Option<Arc<TcpGatewayConnection>> {
         self.inner.get_gateway_connection(gateway_id)
     }
 
@@ -82,11 +79,7 @@ impl Drop for TcpGatewayClient {
     }
 }
 
-async fn connection_loop(
-    inner: Arc<TcpGatewayInner>,
-    connect_timeout: Duration,
-    debug: bool,
-) {
+async fn connection_loop(inner: Arc<TcpGatewayInner>, connect_timeout: Duration, debug: bool) {
     while inner.is_running() {
         inner.set_gateway_connection(&inner.gateway_id, None);
         println!(
@@ -165,7 +158,9 @@ async fn connection_loop(
         gateway_connection.set_gateway_id(inner.gateway_id.as_str());
         inner.set_gateway_connection(&inner.gateway_id, Some(gateway_connection.clone()));
 
-        crate::app::spawn_named("tcp_gateway_client_read_loop", crate::tcp_gateway::gateway_read_loop(
+        crate::app::spawn_named(
+            "tcp_gateway_client_read_loop",
+            crate::tcp_gateway::gateway_read_loop(
                 inner.clone(),
                 read,
                 gateway_connection.clone(),

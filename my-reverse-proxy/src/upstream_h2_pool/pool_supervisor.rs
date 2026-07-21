@@ -100,10 +100,7 @@ where
     /// deduplicates aggressively: skips if the entry is no longer dead, if
     /// the last attempt is still inside the cooldown window, or if another
     /// revive task is already in flight (`revive_pending`).
-    pub fn spawn_revive(
-        self: &Arc<Self>,
-        entry: Arc<H2Entry<TStream, TConnector>>,
-    ) {
+    pub fn spawn_revive(self: &Arc<Self>, entry: Arc<H2Entry<TStream, TConnector>>) {
         if self.shutdown.load(Ordering::Relaxed) {
             return;
         }
@@ -112,12 +109,7 @@ where
         }
         // One-shot entries (Path 0 losers) never made it into `clients` —
         // reviving an orphan would dial a connection nobody can ever pick.
-        if !self
-            .clients
-            .load()
-            .iter()
-            .any(|e| Arc::ptr_eq(e, &entry))
-        {
+        if !self.clients.load().iter().any(|e| Arc::ptr_eq(e, &entry)) {
             return;
         }
         if entry

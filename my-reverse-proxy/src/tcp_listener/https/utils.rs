@@ -108,7 +108,10 @@ pub async fn lazy_accept_tcp_stream(
     if result.is_err() {
         return Err(TlsAcceptError::Other {
             endpoint_host: None,
-            message: format!("Accepting TLS connection timeout for port: {}", endpoint_port),
+            message: format!(
+                "Accepting TLS connection timeout for port: {}",
+                endpoint_port
+            ),
         });
     }
 
@@ -145,16 +148,15 @@ async fn lazy_accept_tcp_stream_internal(
 
                 // SNI for a host we do not serve at all — unroutable noise, do
                 // not penalise the source IP.
-                let endpoint_host = match configuration
-                    .get_http_endpoint_info(Some(server_name.as_str()))
-                {
-                    Some(endpoint_info) => endpoint_info.host_endpoint.as_str().to_string(),
-                    None => {
-                        return Err(TlsAcceptError::UnknownServerName(format!(
-                            "server name '{server_name}' is not configured on this port"
-                        )));
-                    }
-                };
+                let endpoint_host =
+                    match configuration.get_http_endpoint_info(Some(server_name.as_str())) {
+                        Some(endpoint_info) => endpoint_info.host_endpoint.as_str().to_string(),
+                        None => {
+                            return Err(TlsAcceptError::UnknownServerName(format!(
+                                "server name '{server_name}' is not configured on this port"
+                            )));
+                        }
+                    };
 
                 if let Some(client_cert) = client_hello.client_cert_types() {
                     for client_cert in client_cert {
@@ -219,7 +221,9 @@ async fn lazy_accept_tcp_stream_internal(
                     }
                     return Err(TlsAcceptError::Other {
                         endpoint_host: Some(endpoint_host.clone()),
-                        message: format!("failed to perform tls handshake for '{server_name}': {err:#}"),
+                        message: format!(
+                            "failed to perform tls handshake for '{server_name}': {err:#}"
+                        ),
                     });
                 }
 

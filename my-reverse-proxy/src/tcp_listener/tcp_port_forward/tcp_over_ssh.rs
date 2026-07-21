@@ -56,7 +56,9 @@ pub async fn handle_connection(
         }
     };
 
-    crate::app::spawn_named("tcp_forward_ssh", super::handle_port_forward(
+    crate::app::spawn_named(
+        "tcp_forward_ssh",
+        super::handle_port_forward(
             accepted_server_connection,
             ssh_channel,
             None,

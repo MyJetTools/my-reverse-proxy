@@ -264,8 +264,8 @@ impl NetworkStream for TcpGatewayProxyForwardStream {
         timeout: Duration,
     ) -> Result<Self, NetworkError> {
         let gateway_id = gateway_id.unwrap();
-        let Some(connection) = crate::app::APP_CTX
-            .get_gateway_by_id_with_next_connection_id(&gateway_id)
+        let Some(connection) =
+            crate::app::APP_CTX.get_gateway_by_id_with_next_connection_id(&gateway_id)
         else {
             return Err(NetworkError::Other(format!(
                 "Gateway with ID '{}' is not found",

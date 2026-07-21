@@ -9,9 +9,7 @@ impl MyTimerTick for EndpointRpsTimer {
     async fn tick(&self) {
         let snapshot = APP_CTX.rps.snapshot_and_reset();
         for (domain, count) in snapshot {
-            APP_CTX
-                .prometheus
-                .set_domain_rps(&domain, count as i64);
+            APP_CTX.prometheus.set_domain_rps(&domain, count as i64);
         }
     }
 }

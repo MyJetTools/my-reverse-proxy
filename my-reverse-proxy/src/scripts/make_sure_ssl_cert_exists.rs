@@ -36,7 +36,8 @@ pub async fn make_sure_ssl_cert_exists(
     // The certificate is not loaded yet. Try to resolve it from the configured source, but do
     // NOT fail the whole endpoint if that fails (no source in settings, source unreachable, or
     // no settings entry at all). The endpoint must stay usable so the certificate can arrive in
-    // the background — an upload via /api/SslCertificates/Init or a gateway push. Until it does,
+    // the background — an upload from the admin ui or /api/SslCertificates/Init(FromPem), or a
+    // gateway push. Until it does,
     // the TLS handshake for this endpoint is cut per-connection (the cert is absent from the
     // cache) without penalising the waiting client.
     if let Err(err) = super::refresh_ssl_certs_from_sources(settings_model, ssl_cert_id).await {

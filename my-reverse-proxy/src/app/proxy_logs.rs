@@ -185,7 +185,10 @@ impl ProxyLogs {
             endpoint,
             location_id,
             ip,
-            format!("Returned {} to client: upstream failure: {}", status, failure),
+            format!(
+                "Returned {} to client: upstream failure: {}",
+                status, failure
+            ),
         );
     }
 

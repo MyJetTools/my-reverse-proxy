@@ -4,9 +4,7 @@ use encryption::aes::AesKey;
 use tokio::sync::mpsc;
 
 use crate::network_stream::{MyOwnedWriteHalf, NetworkStreamWritePart};
-use crate::tcp_gateway::{
-    encrypt_frame, COMPRESSED_BATCH_PACKET_ID, COMPRESSION_ALGO_ZSTD,
-};
+use crate::tcp_gateway::{encrypt_frame, COMPRESSED_BATCH_PACKET_ID, COMPRESSION_ALGO_ZSTD};
 
 const ZSTD_LEVEL: i32 = 3;
 

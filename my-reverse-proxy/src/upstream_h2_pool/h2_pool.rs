@@ -42,11 +42,7 @@ where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pub fn new(
-        desc: PoolDesc,
-        params: PoolParams,
-        factory: ConnectorFactory<TConnector>,
-    ) -> Self {
+    pub fn new(desc: PoolDesc, params: PoolParams, factory: ConnectorFactory<TConnector>) -> Self {
         Self {
             desc,
             params,
@@ -212,8 +208,7 @@ where
         entry: &Arc<H2Entry<TStream, TConnector>>,
     ) -> Result<(), MyHttpClientError> {
         let lock_result =
-            tokio::time::timeout(self.params.dead_pool_wait_budget, entry.revive_lock.lock())
-                .await;
+            tokio::time::timeout(self.params.dead_pool_wait_budget, entry.revive_lock.lock()).await;
         let Ok(_g) = lock_result else {
             return Err(MyHttpClientError::CanNotConnectToRemoteHost(format!(
                 "'{}': all pool connections are dead, a reconnect is already in progress",
@@ -247,9 +242,7 @@ where
 
         let new_client = self.connect_one().await?;
         entry.client.store(Arc::new(new_client));
-        entry
-            .last_success
-            .update(DateTimeAsMicroseconds::now());
+        entry.last_success.update(DateTimeAsMicroseconds::now());
         entry.dead.store(false, Ordering::Relaxed);
         Ok(())
     }
@@ -270,7 +263,9 @@ where
             .prometheus
             .set_h2_pool_alive(&self.desc.name, self.alive_count() as i64);
         if self.shutdown.load(Ordering::Relaxed) {
-            crate::app::APP_CTX.prometheus.reset_h2_pool(&self.desc.name);
+            crate::app::APP_CTX
+                .prometheus
+                .reset_h2_pool(&self.desc.name);
         }
     }
 

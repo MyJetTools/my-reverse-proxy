@@ -10,16 +10,24 @@ pub struct ReloadSettingsInputData {}
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct ReloadSettingsResponse {
-    #[property(description = "True if the settings YAML was read and applied without a top-level error. Per-host failures are still surfaced in `errors` even when this is true.")]
+    #[property(
+        description = "True if the settings YAML was read and applied without a top-level error. Per-host failures are still surfaced in `errors` even when this is true."
+    )]
     pub ok: bool,
 
-    #[property(description = "Top-level error string if the settings file could not be loaded/parsed (file missing, invalid YAML, variable resolution failure). Empty when ok=true.")]
+    #[property(
+        description = "Top-level error string if the settings file could not be loaded/parsed (file missing, invalid YAML, variable resolution failure). Empty when ok=true."
+    )]
     pub error: String,
 
-    #[property(description = "Number of hosts in the running configuration after reload (TCP + Unix endpoints, summed across all listen endpoints).")]
+    #[property(
+        description = "Number of hosts in the running configuration after reload (TCP + Unix endpoints, summed across all listen endpoints)."
+    )]
     pub hosts_loaded: i64,
 
-    #[property(description = "Errors recorded per host during apply. A non-empty list after a successful reload means some endpoints failed to apply but the rest were updated. Note: this is a snapshot of the running configuration's error map, which is NOT cleared between reloads.")]
+    #[property(
+        description = "Errors recorded per host during apply. A non-empty list after a successful reload means some endpoints failed to apply but the rest were updated. Note: this is a snapshot of the running configuration's error map, which is NOT cleared between reloads."
+    )]
     pub errors: Vec<ConfigurationErrorEntry>,
 }
 

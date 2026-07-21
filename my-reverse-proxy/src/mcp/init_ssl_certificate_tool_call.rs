@@ -3,13 +3,19 @@ use serde::*;
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct InitSslCertificateInputData {
-    #[property(description = "Id of the certificate to install, exactly as referenced by an endpoint (see the `cert_id` field of get_ssl_endpoints_status).")]
+    #[property(
+        description = "Id of the certificate to install, exactly as referenced by an endpoint (see the `cert_id` field of get_ssl_endpoints_status)."
+    )]
     pub cert_id: String,
 
-    #[property(description = "The full certificate chain in PEM format (-----BEGIN CERTIFICATE----- ... one or more blocks). It MUST be valid for the endpoint's domain — this is verified before anything is stored.")]
+    #[property(
+        description = "The full certificate chain in PEM format (-----BEGIN CERTIFICATE----- ... one or more blocks). It MUST be valid for the endpoint's domain — this is verified before anything is stored."
+    )]
     pub certificate: String,
 
-    #[property(description = "The private key in PEM format (-----BEGIN PRIVATE KEY----- ...) matching the certificate.")]
+    #[property(
+        description = "The private key in PEM format (-----BEGIN PRIVATE KEY----- ...) matching the certificate."
+    )]
     pub private_key: String,
 }
 
@@ -24,10 +30,14 @@ pub struct InitSslCertificateResponse {
     #[property(description = "RFC3339 expiry of the installed certificate.")]
     pub expires: String,
 
-    #[property(description = "All domains (SAN DNS names + CN) the installed certificate is valid for.")]
+    #[property(
+        description = "All domains (SAN DNS names + CN) the installed certificate is valid for."
+    )]
     pub covered_domains: Vec<String>,
 
-    #[property(description = "The required SNI(s) that were verified to be covered by the uploaded certificate (the endpoint's server name and the domains of the certificate it replaced).")]
+    #[property(
+        description = "The required SNI(s) that were verified to be covered by the uploaded certificate (the endpoint's server name and the domains of the certificate it replaced)."
+    )]
     pub validated_sni: Vec<String>,
 }
 

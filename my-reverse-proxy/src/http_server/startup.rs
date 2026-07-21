@@ -1,7 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use mcp_server_middleware::McpMiddleware;
-use my_http_server::{controllers::swagger::SwaggerMiddleware, MyHttpServer, StaticFilesMiddleware};
+use my_http_server::{
+    controllers::swagger::SwaggerMiddleware, MyHttpServer, StaticFilesMiddleware,
+};
 
 use crate::mcp::{
     GetAppliedSettingsHandler, GetDynamicSettingsHandler, GetProxyLogsHandler,

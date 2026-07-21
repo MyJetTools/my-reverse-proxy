@@ -35,9 +35,10 @@ impl GatewayServerSettings {
                 format!("Gateway server: cannot parse pubkey '{resolved}': {err}")
             })?;
 
-            let ed25519 = pub_key.key_data().ed25519().ok_or_else(|| {
-                format!("Gateway server: pubkey '{resolved}' is not Ed25519")
-            })?;
+            let ed25519 = pub_key
+                .key_data()
+                .ed25519()
+                .ok_or_else(|| format!("Gateway server: pubkey '{resolved}' is not Ed25519"))?;
 
             let verifying = VerifyingKey::from_bytes(&ed25519.0).map_err(|err| {
                 format!("Gateway server: invalid Ed25519 pubkey in '{resolved}': {err}")

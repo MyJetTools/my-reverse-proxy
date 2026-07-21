@@ -6,14 +6,11 @@ use http_body_util::Full;
 pub fn is_h1_websocket_upgrade(req: &hyper::Request<Full<Bytes>>) -> bool {
     let headers = req.headers();
 
-    let connection_has_upgrade = headers
-        .get_all(hyper::header::CONNECTION)
-        .iter()
-        .any(|v| {
-            v.as_bytes()
-                .split(|&b| b == b',')
-                .any(|tok| tok.trim_ascii().eq_ignore_ascii_case(b"upgrade"))
-        });
+    let connection_has_upgrade = headers.get_all(hyper::header::CONNECTION).iter().any(|v| {
+        v.as_bytes()
+            .split(|&b| b == b',')
+            .any(|tok| tok.trim_ascii().eq_ignore_ascii_case(b"upgrade"))
+    });
 
     if !connection_has_upgrade {
         return false;

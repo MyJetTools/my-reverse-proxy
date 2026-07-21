@@ -111,11 +111,7 @@ impl LocationSettings {
         }
     }
 
-    pub fn get_trace_payload(&self) -> bool {
-        self.trace_payload.unwrap_or(false)
-    }
-
     pub fn get_compress(&self) -> bool {
-        self.trace_payload.unwrap_or(false)
+        self.compress.unwrap_or(false)
     }
 }

@@ -55,19 +55,16 @@ fn main() {
 
     let public_path = format!("{out_path}.pub");
 
-    std::fs::write(&out_path, private_pem.as_bytes())
-        .expect("Failed to write private key file");
+    std::fs::write(&out_path, private_pem.as_bytes()).expect("Failed to write private key file");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let perms = std::fs::Permissions::from_mode(0o600);
-        std::fs::set_permissions(&out_path, perms)
-            .expect("Failed to chmod private key file");
+        std::fs::set_permissions(&out_path, perms).expect("Failed to chmod private key file");
     }
 
     let public_line = format!("{public_openssh} {comment}\n");
-    std::fs::write(&public_path, public_line.as_bytes())
-        .expect("Failed to write public key file");
+    std::fs::write(&public_path, public_line.as_bytes()).expect("Failed to write public key file");
 
     println!("Wrote {out_path} (priv) and {public_path} (pub).");
     println!("Public key OpenSSH line:");

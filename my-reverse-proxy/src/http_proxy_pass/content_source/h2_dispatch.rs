@@ -8,8 +8,8 @@ use my_http_client::{http2::MyHttp2Client, MyHttpClientConnector, MyHttpClientDi
 use my_http_client::{HyperResponse, MyHttpClientError};
 use rust_extensions::date_time::DateTimeAsMicroseconds;
 
-use crate::http_proxy_pass::ProxyPassError;
 use crate::http2_client_pool::Http2ClientPoolItem;
+use crate::http_proxy_pass::ProxyPassError;
 use crate::upstream_h2_pool::H2Pool;
 
 use super::{HttpResponse, WebSocketUpgradeStream};
@@ -75,8 +75,7 @@ where
         headers: hyper::HeaderMap,
         request_timeout: Duration,
     ) -> Result<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>, MyHttpClientError> {
-        MyHttp2Client::do_extended_connect_unix(self.as_ref(), path, headers, request_timeout)
-            .await
+        MyHttp2Client::do_extended_connect_unix(self.as_ref(), path, headers, request_timeout).await
     }
 }
 
@@ -224,7 +223,11 @@ pub async fn execute_h2(
 
         let response = hyper::Response::builder()
             .status(hyper::StatusCode::OK)
-            .body(Empty::<Bytes>::new().map_err(|never| match never {}).boxed())
+            .body(
+                Empty::<Bytes>::new()
+                    .map_err(|never| match never {})
+                    .boxed(),
+            )
             .unwrap();
 
         let disconnection: Arc<dyn MyHttpClientDisconnect + Send + Sync + 'static> =

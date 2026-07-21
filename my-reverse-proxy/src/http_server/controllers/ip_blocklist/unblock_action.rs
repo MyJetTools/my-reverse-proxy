@@ -29,9 +29,12 @@ async fn handle_request(
 
     let removed = crate::app::APP_CTX.ip_blocklist.unblock(&ip);
 
-    HttpOutput::as_json(UnblockIpResponse { ip: ip.to_string(), removed })
-        .into_ok_result(true)
-        .into()
+    HttpOutput::as_json(UnblockIpResponse {
+        ip: ip.to_string(),
+        removed,
+    })
+    .into_ok_result(true)
+    .into()
 }
 
 #[derive(MyHttpInput)]

@@ -45,9 +45,7 @@ impl<TNetworkWritePart: NetworkStreamWritePart + Send + Sync + 'static>
         timeout: Duration,
     ) -> Result<(Self, TNetworkReadPart, Option<SshSessionHandler>), NetworkError> {
         let ssh_session_handler = if let Some(ssh_credentials) = ssh_credentials.as_ref() {
-            let ssh_session = crate::app::APP_CTX
-                .ssh_sessions_pool
-                .get(ssh_credentials);
+            let ssh_session = crate::app::APP_CTX.ssh_sessions_pool.get(ssh_credentials);
             Some(ssh_session)
         } else {
             None
@@ -91,17 +89,5 @@ impl<TNetworkWritePart: NetworkStreamWritePart + Send + Sync + 'static>
             .remote_write_part
             .write_all_with_timeout(payload, time_out)
             .await;
-    }
-
-    pub async fn flush_it(&mut self) -> Result<(), NetworkError> {
-        self.remote_write_part.flush_it().await
-    }
-
-    pub async fn write_to_socket(&mut self, payload: &[u8]) -> Result<(), std::io::Error> {
-        return self.remote_write_part.write_to_socket(payload).await;
-    }
-
-    pub async fn shutdown_socket(&mut self) {
-        self.remote_write_part.shutdown_socket().await
     }
 }

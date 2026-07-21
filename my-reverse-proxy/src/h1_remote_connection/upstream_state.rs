@@ -39,7 +39,11 @@ fn remote_host_key(protocol: &str, model: &ProxyPassToModel) -> String {
             remote_host.get_host_port().as_str()
         ),
         MyReverseProxyRemoteEndpoint::Gateway { id, remote_host } => {
-            format!("{protocol}|gw:{}|{}", id, remote_host.get_host_port().as_str())
+            format!(
+                "{protocol}|gw:{}|{}",
+                id,
+                remote_host.get_host_port().as_str()
+            )
         }
     }
 }

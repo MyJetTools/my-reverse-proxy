@@ -33,11 +33,7 @@ impl TcpGatewayServer {
             next_connection_id: AtomicU32::new(0),
         };
 
-
-           println!(
-                    "GATEWAY spawning {}",
-                    inner.gateway_host.as_str(),
-                );
+        println!("GATEWAY spawning {}", inner.gateway_host.as_str(),);
 
         // Plain tokio::spawn here (not spawn_named): this runs inside
         // `AppContext::new`, which executes within the `APP_CTX` LazyLock
@@ -54,10 +50,7 @@ impl TcpGatewayServer {
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn get_gateway_connection(
-        &self,
-        gateway_id: &str,
-    ) -> Option<Arc<TcpGatewayConnection>> {
+    pub fn get_gateway_connection(&self, gateway_id: &str) -> Option<Arc<TcpGatewayConnection>> {
         self.inner.get_gateway_connection(gateway_id)
     }
 
@@ -83,15 +76,9 @@ impl Drop for TcpGatewayServer {
 }
 
 async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
-
-
-           println!(
-                    "GATEWAY binding to {}",
-                    tcp_gateway.gateway_host.as_str(),
-                );
+    println!("GATEWAY binding to {}", tcp_gateway.gateway_host.as_str(),);
 
     let listener = TcpListener::bind(tcp_gateway.gateway_host.as_str()).await;
-            
 
     let listener = match listener {
         Ok(listener) => listener,
@@ -103,12 +90,10 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         }
     };
 
-
-        println!(
-                    "GATEWAY bind happened to {}",
-                    tcp_gateway.gateway_host.as_str(),
-                );
-
+    println!(
+        "GATEWAY bind happened to {}",
+        tcp_gateway.gateway_host.as_str(),
+    );
 
     while tcp_gateway.is_running() {
         let accept_result = listener.accept().await;
@@ -134,7 +119,9 @@ async fn connection_loop(tcp_gateway: Arc<TcpGatewayInner>, debug: bool) {
         );
 
         let tcp_gateway_clone = tcp_gateway.clone();
-        crate::app::spawn_named("tcp_gateway_server_inbound_handshake", handle_inbound(tcp_gateway_clone, tcp_stream, debug),
+        crate::app::spawn_named(
+            "tcp_gateway_server_inbound_handshake",
+            handle_inbound(tcp_gateway_clone, tcp_stream, debug),
         );
     }
 }
@@ -185,7 +172,9 @@ async fn handle_inbound(tcp_gateway: Arc<TcpGatewayInner>, mut stream: TcpStream
         Some(gateway_connection.clone()),
     );
 
-    crate::app::spawn_named("tcp_gateway_server_read_loop", crate::tcp_gateway::gateway_read_loop(
+    crate::app::spawn_named(
+        "tcp_gateway_server_read_loop",
+        crate::tcp_gateway::gateway_read_loop(
             tcp_gateway,
             read,
             gateway_connection,

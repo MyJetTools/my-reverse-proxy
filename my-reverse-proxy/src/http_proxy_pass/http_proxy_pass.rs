@@ -331,7 +331,9 @@ where
             upgrade_response,
             server_web_socket,
         } => {
-            crate::app::spawn_named("ws_pump_h1_start", super::start_web_socket_loop(
+            crate::app::spawn_named(
+                "ws_pump_h1_start",
+                super::start_web_socket_loop(
                     server_web_socket,
                     upstream,
                     log_scope,
@@ -347,7 +349,9 @@ where
             upgrade_response,
             on_upgrade,
         } => {
-            crate::app::spawn_named("ws_pump_h2_extended_connect_h1", pump_h2_extended_connect(
+            crate::app::spawn_named(
+                "ws_pump_h2_extended_connect_h1",
+                pump_h2_extended_connect(
                     on_upgrade,
                     upstream,
                     log_scope,
@@ -382,7 +386,9 @@ where
             upgrade_response,
             on_upgrade,
         } => {
-            crate::app::spawn_named("ws_pump_h2_extended_connect_h2", pump_h2_extended_connect(
+            crate::app::spawn_named(
+                "ws_pump_h2_extended_connect_h2",
+                pump_h2_extended_connect(
                     on_upgrade,
                     upstream,
                     log_scope,

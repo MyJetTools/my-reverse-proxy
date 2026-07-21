@@ -129,14 +129,12 @@ pub fn generate_tech_page(
         // Upstream transport-level failures: the proxy itself is healthy, the
         // upstream misbehaved — surface them as gateway errors, not 500.
         ProxyPassError::MyHttpClientError(err) => {
-            let (status, code, title) = if matches!(
-                err,
-                my_http_client::MyHttpClientError::RequestTimeout(_)
-            ) {
-                (hyper::StatusCode::GATEWAY_TIMEOUT, 504, "Upstream timeout")
-            } else {
-                (hyper::StatusCode::BAD_GATEWAY, 502, "Bad gateway")
-            };
+            let (status, code, title) =
+                if matches!(err, my_http_client::MyHttpClientError::RequestTimeout(_)) {
+                    (hyper::StatusCode::GATEWAY_TIMEOUT, 504, "Upstream timeout")
+                } else {
+                    (hyper::StatusCode::BAD_GATEWAY, 502, "Bad gateway")
+                };
             return hyper::Response::builder()
                 .status(status)
                 .body(

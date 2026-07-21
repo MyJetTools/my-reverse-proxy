@@ -79,8 +79,7 @@ async fn transfer_chunk_data<
     chunk_header: ChunkHeader,
     timeouts: HttpTimeouts,
 ) -> Result<usize, ProxyServerError> {
-    let total =
-        chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
+    let total = chunk_header.len + chunk_header.chunk_size + crate::consts::HTTP_CR_LF.len() * 2;
     let mut remain_to_send = total;
 
     while remain_to_send > 0 {

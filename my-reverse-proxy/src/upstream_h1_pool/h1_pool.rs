@@ -13,7 +13,10 @@ use rust_extensions::sorted_vec::EntityWithKey;
 
 use crate::upstream_status::{AtomicUpstreamStatus, UpstreamStatus};
 
-use super::{ConnectorFactory, H1ClientHandle, H1Entry, PoolDesc, PoolParams, DISPOSABLE_COUNTER, MAX_DISPOSABLE};
+use super::{
+    ConnectorFactory, H1ClientHandle, H1Entry, PoolDesc, PoolParams, DISPOSABLE_COUNTER,
+    MAX_DISPOSABLE,
+};
 
 const OVERFLOW_RETRY_SLEEP: Duration = Duration::from_millis(10);
 
@@ -49,11 +52,7 @@ where
     TStream: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + Sync + 'static,
     TConnector: MyHttpClientConnector<TStream> + Send + Sync + 'static,
 {
-    pub fn new(
-        desc: PoolDesc,
-        params: PoolParams,
-        factory: ConnectorFactory<TConnector>,
-    ) -> Self {
+    pub fn new(desc: PoolDesc, params: PoolParams, factory: ConnectorFactory<TConnector>) -> Self {
         Self {
             desc,
             params,
@@ -256,7 +255,9 @@ where
             .prometheus
             .set_h1_pool_alive(&self.desc.name, self.alive_count() as i64);
         if self.shutdown.load(Ordering::Relaxed) {
-            crate::app::APP_CTX.prometheus.reset_h1_pool(&self.desc.name);
+            crate::app::APP_CTX
+                .prometheus
+                .reset_h1_pool(&self.desc.name);
         }
     }
 

@@ -31,7 +31,9 @@ pub async fn reload_tcp_port_configurations(port_to_refresh: u16) -> Result<Stri
     crate::app::APP_CTX
         .current_configuration
         .write(move |config| {
-            config.error_configurations.remove(&port_to_refresh.to_string());
+            config
+                .error_configurations
+                .remove(&port_to_refresh.to_string());
 
             match new_config_for_port {
                 Some(cfg) => {
@@ -86,11 +88,15 @@ pub async fn reload_unix_configurations(host_to_refresh: &String) -> Result<Stri
     crate::app::APP_CTX
         .current_configuration
         .write(move |config| {
-            config.error_configurations.remove(host_to_refresh_clone.as_str());
+            config
+                .error_configurations
+                .remove(host_to_refresh_clone.as_str());
 
             match new_config_for_host {
                 Some(cfg) => {
-                    config.listen_unix_socket_endpoints.insert(unix_path.clone(), cfg);
+                    config
+                        .listen_unix_socket_endpoints
+                        .insert(unix_path.clone(), cfg);
                 }
                 None => {
                     config.listen_unix_socket_endpoints.remove(&unix_path);

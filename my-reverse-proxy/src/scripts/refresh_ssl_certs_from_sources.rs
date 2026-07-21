@@ -29,7 +29,7 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
     let ssl_certificate = found_certificate.unwrap();
 
     // A "manual" certificate has no source configured — it is pushed at runtime via
-    // POST /api/SslCertificates/Init. Nothing to resolve here, so the endpoint is allowed
+    // the admin ui or POST /api/SslCertificates/Init(FromPem). Nothing to resolve here, so the endpoint is allowed
     // to start with the certificate absent from the cache (the TLS handshake will fail until
     // it is pushed).
     let (cert_source, private_key_source) = match ssl_certificate.get_sources()? {
@@ -37,11 +37,9 @@ pub async fn refresh_ssl_certs_from_sources<'s>(
         None => return Ok(()),
     };
 
-    let private_key_src =
-        OverSshConnectionSettings::try_parse(private_key_source).ok_or(format!(
-            "Invalid TLS Private Key file source {}",
-            private_key_source
-        ))?;
+    let private_key_src = OverSshConnectionSettings::try_parse(private_key_source).ok_or(
+        format!("Invalid TLS Private Key file source {}", private_key_source),
+    )?;
 
     let private_key = super::load_file(
         &private_key_src,

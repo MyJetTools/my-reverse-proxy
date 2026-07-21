@@ -412,12 +412,8 @@ impl TcpGatewayConnection {
 impl Drop for TcpGatewayConnection {
     fn drop(&mut self) {
         let proxy_connections = self.forward_proxy_handlers.clone();
-        let forward_connections: Vec<_> = self
-            .forward_connections
-            .lock()
-            .values()
-            .cloned()
-            .collect();
+        let forward_connections: Vec<_> =
+            self.forward_connections.lock().values().cloned().collect();
         crate::app::spawn_named("tcp_gateway_connection_cleanup", async move {
             {
                 let write_access = proxy_connections.lock().await;

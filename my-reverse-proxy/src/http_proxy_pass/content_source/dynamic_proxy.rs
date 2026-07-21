@@ -4,9 +4,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use http_body_util::Full;
 use hyper::header::{HeaderValue, HOST};
-use my_http_client::http1::{
-    MyHttpClient, MyHttpClientMetrics, MyHttpRequest, MyHttpResponse,
-};
+use my_http_client::http1::{MyHttpClient, MyHttpClientMetrics, MyHttpRequest, MyHttpResponse};
 use rust_extensions::remote_endpoint::{RemoteEndpointOwned, Scheme};
 
 use crate::{

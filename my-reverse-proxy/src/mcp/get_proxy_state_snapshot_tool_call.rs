@@ -23,9 +23,7 @@ pub struct EntrySnapshot {
     )]
     pub dead: bool,
 
-    #[property(
-        description = "RFC-3339 timestamp of the last successful do_request on this entry"
-    )]
+    #[property(description = "RFC-3339 timestamp of the last successful do_request on this entry")]
     pub last_success: String,
 
     #[property(description = "Seconds since last_success at snapshot time")]
@@ -111,7 +109,9 @@ pub struct LocationSnapshot {
     )]
     pub proxy_pass_to_type: String,
 
-    #[property(description = "Stringified upstream target (host:port, file path, or static description)")]
+    #[property(
+        description = "Stringified upstream target (host:port, file path, or static description)"
+    )]
     pub proxy_pass_to: String,
 
     #[property(
@@ -131,10 +131,14 @@ pub struct GetProxyStateSnapshotResponse {
     #[property(description = "All locations currently in the active configuration")]
     pub locations: Vec<LocationSnapshot>,
 
-    #[property(description = "location_ids that exist in pools but NOT in current_configuration — orphaned pools that will be drained")]
+    #[property(
+        description = "location_ids that exist in pools but NOT in current_configuration — orphaned pools that will be drained"
+    )]
     pub orphan_pool_location_ids: Vec<i64>,
 
-    #[property(description = "location_ids that exist in current_configuration but have NO pool yet (lazy creation pending or pool was drained)")]
+    #[property(
+        description = "location_ids that exist in current_configuration but have NO pool yet (lazy creation pending or pool was drained)"
+    )]
     pub naked_location_ids: Vec<i64>,
 
     #[property(

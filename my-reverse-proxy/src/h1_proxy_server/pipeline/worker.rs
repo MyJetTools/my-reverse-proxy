@@ -3,7 +3,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::configurations::{HttpEndpointInfo, ProxyPassToConfig};
-use crate::h1_proxy_server::{H1HeadersKind, H1Reader, H1Writer, HttpConnectionInfo, ProxyServerError};
+use crate::h1_proxy_server::{
+    H1HeadersKind, H1Reader, H1Writer, HttpConnectionInfo, ProxyServerError,
+};
 use crate::h1_remote_connection::{H1PoolHolder, OwnedUpstream};
 use crate::h1_utils::HttpContentLength;
 
@@ -95,7 +97,11 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                     Some(location_id),
                     ip.clone(),
                     503,
-                    format!("can not connect to upstream {}: {:?}", proxy_pass_to.to_string(), err),
+                    format!(
+                        "can not connect to upstream {}: {:?}",
+                        proxy_pass_to.to_string(),
+                        err
+                    ),
                 );
                 emit_error_page(
                     &response_tx,
@@ -122,7 +128,10 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                 Some(location_id),
                 ip.clone(),
                 503,
-                format!("upstream {} did not accept request head", proxy_pass_to.to_string()),
+                format!(
+                    "upstream {} did not accept request head",
+                    proxy_pass_to.to_string()
+                ),
             );
             emit_error_page(
                 &response_tx,
@@ -150,7 +159,10 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                 Some(location_id),
                 ip.clone(),
                 502,
-                format!("upstream {} broke while forwarding request body", proxy_pass_to.to_string()),
+                format!(
+                    "upstream {} broke while forwarding request body",
+                    proxy_pass_to.to_string()
+                ),
             );
             emit_error_page(
                 &response_tx,
@@ -181,7 +193,12 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                     Some(location_id),
                     ip.clone(),
                     502,
-                    format!("reading response head from upstream {} ({}): {:?}", proxy_pass_to.to_string(), label, err),
+                    format!(
+                        "reading response head from upstream {} ({}): {:?}",
+                        proxy_pass_to.to_string(),
+                        label,
+                        err
+                    ),
                 );
                 emit_error_page(&response_tx, page).await;
                 return;
@@ -207,7 +224,12 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                     Some(location_id),
                     ip.clone(),
                     502,
-                    format!("compiling response head from upstream {} ({}): {:?}", proxy_pass_to.to_string(), label, err),
+                    format!(
+                        "compiling response head from upstream {} ({}): {:?}",
+                        proxy_pass_to.to_string(),
+                        label,
+                        err
+                    ),
                 );
                 emit_error_page(&response_tx, page).await;
                 return;
@@ -224,7 +246,9 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
         );
     };
 
-    crate::app::APP_CTX.traffic.record_c2s(endpoint, bytes_to_upstream);
+    crate::app::APP_CTX
+        .traffic
+        .record_c2s(endpoint, bytes_to_upstream);
 
     // From here on the client begins receiving the response — any failure must
     // Abort (close the connection), never substitute an error page.

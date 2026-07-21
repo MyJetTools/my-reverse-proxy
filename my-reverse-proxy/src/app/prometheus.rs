@@ -490,4 +490,3 @@ impl my_http_client::hyper::MyHttpHyperClientMetrics for Prometheus {
             .dec();
     }
 }
-

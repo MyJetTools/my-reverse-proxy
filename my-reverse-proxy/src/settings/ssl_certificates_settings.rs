@@ -5,7 +5,8 @@ pub struct SslCertificatesSettingsModel {
     pub id: String,
     /// Source of the certificate (local file or over-ssh). When omitted together
     /// with `private_key`, the certificate is "manual" — it is not resolved from a
-    /// source on startup and must be pushed at runtime via POST /api/SslCertificates/Init.
+    /// source on startup and must be pushed at runtime - from the admin ui (the "SSL cert not
+    /// loaded" badge on the endpoint) or via POST /api/SslCertificates/Init(FromPem).
     pub certificate: Option<String>,
     pub private_key: Option<String>,
 }

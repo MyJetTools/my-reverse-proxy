@@ -71,8 +71,9 @@ pub fn build_client_handshake(
 impl ClientHandshakeFrame {
     pub fn encode(&self) -> Vec<u8> {
         let name_bytes = self.gateway_name.as_bytes();
-        let mut body =
-            Vec::with_capacity(1 + X25519_PUB_LEN + ED25519_PUB_LEN + 8 + 4 + name_bytes.len() + SIGNATURE_LENGTH);
+        let mut body = Vec::with_capacity(
+            1 + X25519_PUB_LEN + ED25519_PUB_LEN + 8 + 4 + name_bytes.len() + SIGNATURE_LENGTH,
+        );
         body.push(self.protocol_version);
         body.extend_from_slice(&self.client_eph_pub);
         body.extend_from_slice(&self.client_id_pub);
@@ -116,11 +117,9 @@ impl ClientHandshakeFrame {
         })
     }
 
-    pub fn verify_signature(
-        &self,
-        verifying_key: &VerifyingKey,
-    ) -> Result<(), String> {
-        let transcript = signed_transcript(&self.client_eph_pub, self.timestamp_us, &self.gateway_name);
+    pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> Result<(), String> {
+        let transcript =
+            signed_transcript(&self.client_eph_pub, self.timestamp_us, &self.gateway_name);
         let signature = Signature::from_bytes(&self.signature);
         verifying_key
             .verify(&transcript, &signature)
@@ -188,10 +187,7 @@ pub fn validate_timestamp(timestamp_us: i64) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn write_handshake_frame(
-    stream: &mut TcpStream,
-    framed: &[u8],
-) -> Result<(), String> {
+pub async fn write_handshake_frame(stream: &mut TcpStream, framed: &[u8]) -> Result<(), String> {
     stream
         .write_all(framed)
         .await

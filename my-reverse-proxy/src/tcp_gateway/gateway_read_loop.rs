@@ -192,9 +192,8 @@ async fn handle_compressed_batch(
             return Err("COMPRESSED_BATCH: nested batch is not allowed".to_string());
         }
 
-        let packet = TcpGatewayContract::parse(body).map_err(|err| {
-            format!("COMPRESSED_BATCH: failed to parse inner frame: {err}")
-        })?;
+        let packet = TcpGatewayContract::parse(body)
+            .map_err(|err| format!("COMPRESSED_BATCH: failed to parse inner frame: {err}"))?;
         packet_handler
             .handle_packet(packet, tcp_gateway, gateway_connection)
             .await

@@ -1,9 +1,7 @@
 use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
 
 use crate::{
-    configurations::SslCertificateIdRef,
-    ssl::SslCertificateOrigin,
-    tcp_gateway::TcpGatewayContract,
+    configurations::SslCertificateIdRef, ssl::SslCertificateOrigin, tcp_gateway::TcpGatewayContract,
 };
 
 pub struct GatewaySyncCertsTimer;
@@ -52,9 +50,7 @@ impl MyTimerTick for GatewaySyncCertsTimer {
             }
 
             let ids_ref: Vec<&str> = need.iter().map(|s| s.as_str()).collect();
-            let request = TcpGatewayContract::SyncSslCertificatesRequest {
-                cert_ids: ids_ref,
-            };
+            let request = TcpGatewayContract::SyncSslCertificatesRequest { cert_ids: ids_ref };
 
             for conn in connections {
                 conn.send_payload(&request);

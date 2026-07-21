@@ -42,12 +42,21 @@ impl TimeoutsSettings {
     /// concrete values the runtime uses.
     pub fn resolve(&self) -> ResolvedTimeouts {
         ResolvedTimeouts {
-            connect_timeout: ms_or(self.connect_timeout, crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT),
-            request_timeout: ms_or(self.request_timeout, crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT),
+            connect_timeout: ms_or(
+                self.connect_timeout,
+                crate::consts::DEFAULT_HTTP_CONNECT_TIMEOUT,
+            ),
+            request_timeout: ms_or(
+                self.request_timeout,
+                crate::consts::DEFAULT_HTTP_REQUEST_TIMEOUT,
+            ),
             read_timeout: ms_or(self.read_timeout, crate::consts::DEFAULT_READ_TIMEOUT),
             write_timeout: ms_or(self.write_timeout, crate::consts::DEFAULT_WRITE_TIMEOUT),
             pool_size: self.pool_size.unwrap_or(crate::consts::DEFAULT_POOL_SIZE),
-            pool_ping_timeout: ms_or(self.pool_ping_timeout, crate::consts::DEFAULT_POOL_PING_TIMEOUT),
+            pool_ping_timeout: ms_or(
+                self.pool_ping_timeout,
+                crate::consts::DEFAULT_POOL_PING_TIMEOUT,
+            ),
             pool_hot_window: ms_or(self.pool_hot_window, crate::consts::DEFAULT_POOL_HOT_WINDOW),
         }
     }

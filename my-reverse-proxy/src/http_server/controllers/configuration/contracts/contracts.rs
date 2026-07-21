@@ -3,6 +3,11 @@ use std::{collections::HashMap, sync::Arc};
 use my_http_server::macros::MyHttpObjectStructure;
 use serde::*;
 
+// Note for the optional fields below: `MyHttpObjectStructure` (0.9.0+) rejects
+// `#[serde(skip_serializing_if)]`, so an absent optional is now emitted as an explicit json
+// `null` instead of being left out. Consumers must read them as `Option<T>` with
+// `#[serde(default)]` - my-reverse-proxy-ui/src/models/configuration.rs already does.
+
 use crate::configurations::*;
 use crate::upstream_status::UpstreamStatus;
 
@@ -11,9 +16,11 @@ use super::*;
 #[derive(MyHttpObjectStructure, Serialize)]
 pub struct CurrentConfigurationHttpModel {
     pub ports: Vec<PortConfigurationHttpModel>,
-    // These are maps on the wire. my-json - which writes the response since my-http-server 0.9.0 -
-    // can serialize `HashMap<String, V>` only, so the ordering is restored by the consumer (the
-    // ui reads them into a `BTreeMap`).
+    // `HashMap`, not `BTreeMap`: since my-http-server 0.9.0 the `MyHttpObjectStructure` derive
+    // always emits a my-json `JsonValueWriter` impl (it is what serializes the model when it is
+    // used as a *request* body), and my-json implements that trait for `HashMap<String, V>` only -
+    // a `BTreeMap` field simply does not compile. The response itself is still written by
+    // serde_json; the ui restores a stable order by reading these back into a `BTreeMap`.
     pub users: HashMap<String, Vec<String>>,
     pub ip_lists: HashMap<String, Vec<String>>,
     pub errors: HashMap<String, String>,

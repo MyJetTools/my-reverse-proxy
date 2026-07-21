@@ -24,7 +24,9 @@ pub struct LocationSettingsSummary {
     #[property(description = "Upstream / target (proxy_pass_to as written in YAML)")]
     pub proxy_pass_to: String,
 
-    #[property(description = "Explicit location type from YAML (http/http2/https/static/drop/...), or empty if auto-detected from proxy_pass_to")]
+    #[property(
+        description = "Explicit location type from YAML (http/http2/https/static/drop/...), or empty if auto-detected from proxy_pass_to"
+    )]
     pub location_type: String,
 
     #[property(description = "Whitelisted IP list id for this location, if any")]
@@ -33,7 +35,9 @@ pub struct LocationSettingsSummary {
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct HostSettingsSummary {
-    #[property(description = "Host id as written in YAML (e.g. 'mydomain.com:443' or 'unix:/var/run/x.sock')")]
+    #[property(
+        description = "Host id as written in YAML (e.g. 'mydomain.com:443' or 'unix:/var/run/x.sock')"
+    )]
     pub host_id: String,
 
     #[property(description = "Endpoint type: http / http2 / https / https2 / tcp / mcp")]
@@ -129,7 +133,9 @@ pub struct GetSettingsResponse {
     #[property(description = "Gateway client ids defined in settings")]
     pub gateway_client_ids: Vec<String>,
 
-    #[property(description = "Errors recorded by the running configuration for endpoints that failed to apply. These are NOT settings-file errors — they come from the in-memory current_configuration state.")]
+    #[property(
+        description = "Errors recorded by the running configuration for endpoints that failed to apply. These are NOT settings-file errors — they come from the in-memory current_configuration state."
+    )]
     pub current_configuration_errors: Vec<ConfigurationErrorEntry>,
 }
 
@@ -212,11 +218,14 @@ pub fn build_settings_summary(
 
     hosts.sort_by(|a, b| a.host_id.cmp(&b.host_id));
 
-    let gateway_server = settings.gateway_server.as_ref().map(|g| GatewayServerSummary {
-        port: g.port as i64,
-        debug: g.is_debug(),
-        authorized_keys_count: g.authorized_keys.len() as i64,
-    });
+    let gateway_server = settings
+        .gateway_server
+        .as_ref()
+        .map(|g| GatewayServerSummary {
+            port: g.port as i64,
+            debug: g.is_debug(),
+            authorized_keys_count: g.authorized_keys.len() as i64,
+        });
 
     GetSettingsResponse {
         settings_file,

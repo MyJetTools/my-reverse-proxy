@@ -61,11 +61,7 @@ impl TcpGatewayInner {
         }
     }
 
-    pub fn set_gateway_connection(
-        &self,
-        id: &str,
-        connection: Option<Arc<TcpGatewayConnection>>,
-    ) {
+    pub fn set_gateway_connection(&self, id: &str, connection: Option<Arc<TcpGatewayConnection>>) {
         let mut connection_access = self.connection.lock();
 
         match connection {

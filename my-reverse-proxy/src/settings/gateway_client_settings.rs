@@ -48,12 +48,14 @@ impl GatewayClientSettings {
         client_id: &str,
         ssh_registry: &std::collections::HashMap<String, SshConfigSettings>,
     ) -> Result<SigningKey, String> {
-        let ssh_entry = ssh_registry.get(self.ssh_credentials.as_str()).ok_or_else(|| {
-            format!(
+        let ssh_entry = ssh_registry
+            .get(self.ssh_credentials.as_str())
+            .ok_or_else(|| {
+                format!(
                 "Gateway client '{client_id}': ssh_credentials '{}' not found in 'ssh:' registry",
                 self.ssh_credentials
             )
-        })?;
+            })?;
 
         let key_path = ssh_entry.private_key_file.as_deref().ok_or_else(|| {
             format!(
@@ -96,9 +98,7 @@ impl GatewayClientSettings {
         };
 
         let keypair: &Ed25519Keypair = unlocked.key_data().ed25519().ok_or_else(|| {
-            format!(
-                "Gateway client '{client_id}': private key '{resolved}' is not Ed25519"
-            )
+            format!("Gateway client '{client_id}': private key '{resolved}' is not Ed25519")
         })?;
 
         Ok(SigningKey::from_bytes(&keypair.private.to_bytes()))

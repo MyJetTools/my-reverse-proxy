@@ -19,7 +19,8 @@ pub async fn load_everything_from_settings() -> Result<(), String> {
     // and `sync_endpoints` below tears down their listeners. The live config keeps serving the old
     // configuration untouched until the atomic swap, so there is no window of missing routes.
     let mut listen_tcp_endpoints: HashMap<u16, ListenConfiguration> = HashMap::new();
-    let mut listen_unix_socket_endpoints: HashMap<Arc<String>, ListenConfiguration> = HashMap::new();
+    let mut listen_unix_socket_endpoints: HashMap<Arc<String>, ListenConfiguration> =
+        HashMap::new();
     let mut error_configurations: BTreeMap<String, String> = BTreeMap::new();
 
     for (host_id, host_settings) in &settings_model.hosts {

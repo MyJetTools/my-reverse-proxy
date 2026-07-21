@@ -45,17 +45,16 @@ struct DesiredKeys {
 fn collect_desired_keys(cfg: &crate::configurations::AppConfigurationInner) -> DesiredKeys {
     let mut out = DesiredKeys::default();
 
-    let walk_listen =
-        |listen: &ListenConfiguration, out: &mut DesiredKeys| match listen {
-            ListenConfiguration::Http(http) | ListenConfiguration::Mcp(http) => {
-                for endpoint in &http.endpoints {
-                    for location in &endpoint.locations {
-                        absorb_location(location.as_ref(), out);
-                    }
+    let walk_listen = |listen: &ListenConfiguration, out: &mut DesiredKeys| match listen {
+        ListenConfiguration::Http(http) | ListenConfiguration::Mcp(http) => {
+            for endpoint in &http.endpoints {
+                for location in &endpoint.locations {
+                    absorb_location(location.as_ref(), out);
                 }
             }
-            ListenConfiguration::Tcp(_) => {}
-        };
+        }
+        ListenConfiguration::Tcp(_) => {}
+    };
 
     for listen in cfg.listen_tcp_endpoints.values() {
         walk_listen(listen, &mut out);

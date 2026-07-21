@@ -23,7 +23,9 @@ impl TcpGatewayPacketHandler for TcpGatewayServerPacketHandler {
                 let remote_addr = remote_host.to_string();
                 let gateway_connection = gateway_connection.clone();
 
-                crate::app::spawn_named("tcp_gateway_server_forward_connect", crate::tcp_gateway::scripts::handle_forward_connect(
+                crate::app::spawn_named(
+                    "tcp_gateway_server_forward_connect",
+                    crate::tcp_gateway::scripts::handle_forward_connect(
                         connection_id,
                         remote_addr,
                         timeout,

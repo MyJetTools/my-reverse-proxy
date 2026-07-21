@@ -9,10 +9,7 @@ use super::*;
 
 const AUTHORIZATION_HEADER: &[u8] = b"authorization";
 
-fn find_authorization_value<'a>(
-    http_headers: &Http1Headers,
-    data: &'a [u8],
-) -> Option<&'a [u8]> {
+fn find_authorization_value<'a>(http_headers: &Http1Headers, data: &'a [u8]) -> Option<&'a [u8]> {
     let mut pos = http_headers.first_line_end + crate::consts::HTTP_CR_LF.len();
     loop {
         let next = data.find_sequence_pos(crate::consts::HTTP_CR_LF, pos)?;

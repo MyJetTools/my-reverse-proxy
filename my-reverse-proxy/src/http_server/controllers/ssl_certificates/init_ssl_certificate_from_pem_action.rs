@@ -9,7 +9,7 @@ use serde::Serialize;
     method: "POST",
     route: "/api/SslCertificates/InitFromPem",
     summary: "Init (upload) an ssl certificate passing PEM in a json body",
-    description: "Same as /api/SslCertificates/Init but the certificate and the private key travel in a json body as base64 of their PEM text - this is what the admin ui uses when the operator pastes the PEM material into the 'SSL cert not loaded' dialog. Base64 keeps the multi-line PEM intact through json. The certificate is validated exactly the same way (the private key must match the certificate; the certificate must cover the SNI of the endpoint and of the certificate it replaces) and is installed on the next TLS handshake - no reload required. A certificate uploaded here is manually managed and is not auto-renewed until the configured source is refreshed again.",
+    description: "Same as /api/SslCertificates/Init but the certificate and the private key travel in a json body as base64 of their PEM text - this is what the admin ui uses when the operator pastes the PEM material into the 'SSL cert not loaded' dialog. Base64 keeps the multi-line PEM intact through json (and is the only safe way today: a `#[http_body]` String comes back with its json escapes unresolved, so raw PEM in a json field would arrive corrupted). Send the base64 as a SINGLE line - `base64 < cert.pem` and `openssl base64` wrap at 76 characters and the wrapping newlines survive as literal backslash-n. The certificate is validated exactly the same way (the private key must match the certificate; the certificate must cover the SNI of the endpoint and of the certificate it replaces) and is installed on the next TLS handshake - no reload required. A certificate uploaded here is manually managed and is not auto-renewed until the configured source is refreshed again.",
     controller: "SslCertificates",
     input_data: InitSslCertificateFromPemHttpInput,
     result:[
@@ -27,10 +27,13 @@ async fn handle_request(
     let cert_pem = decode_base64_pem(&input_data.cert, "cert")?;
     let private_key_pem = decode_base64_pem(&input_data.private_key, "private_key")?;
 
-    let result =
-        crate::scripts::init_ssl_cert_manually(input_data.cert_id.trim(), cert_pem, private_key_pem)
-            .await
-            .map_err(HttpFailResult::as_validation_error)?;
+    let result = crate::scripts::init_ssl_cert_manually(
+        input_data.cert_id.trim(),
+        cert_pem,
+        private_key_pem,
+    )
+    .await
+    .map_err(HttpFailResult::as_validation_error)?;
 
     let model = InitSslCertificateResultHttpModel {
         cert_id: result.cert_id,
@@ -62,9 +65,17 @@ fn decode_base64_pem(value: &str, field: &str) -> Result<Vec<u8>, HttpFailResult
     base64::engine::general_purpose::STANDARD
         .decode(value.as_str())
         .map_err(|err| {
+            // A backslash can only come from a json escape that was never resolved (see the
+            // action description), which in practice means line-wrapped base64.
+            let hint = if value.contains('\\') {
+                " - send the base64 as a single line, without line breaks"
+            } else {
+                ""
+            };
+
             HttpFailResult::as_validation_error(format!(
-                "'{}' is not a valid base64 of the PEM text: {}",
-                field, err
+                "'{}' is not a valid base64 of the PEM text: {}{}",
+                field, err, hint
             ))
         })
 }

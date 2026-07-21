@@ -51,7 +51,9 @@ pub async fn handle_connection(
         }
     };
 
-    crate::app::spawn_named("tcp_forward_direct", super::handle_port_forward(
+    crate::app::spawn_named(
+        "tcp_forward_direct",
+        super::handle_port_forward(
             accepted_server_connection,
             remote_tcp_connection_result,
             None,

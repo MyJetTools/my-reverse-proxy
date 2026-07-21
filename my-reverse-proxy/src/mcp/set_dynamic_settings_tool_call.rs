@@ -7,7 +7,9 @@ use super::resolve_dynamic_configurations_file_path;
 
 #[derive(ApplyJsonSchema, Debug, Serialize, Deserialize)]
 pub struct SetDynamicSettingsInputData {
-    #[property(description = "Full YAML body to write to the dynamic settings file. It must parse as a valid settings document (same schema as ~/.my-reverse-proxy). The previous content is fully replaced.")]
+    #[property(
+        description = "Full YAML body to write to the dynamic settings file. It must parse as a valid settings document (same schema as ~/.my-reverse-proxy). The previous content is fully replaced."
+    )]
     pub content: String,
 }
 
@@ -28,7 +30,9 @@ impl ToolDefinition for SetDynamicSettingsHandler {
 }
 
 #[async_trait::async_trait]
-impl McpToolCall<SetDynamicSettingsInputData, SetDynamicSettingsResponse> for SetDynamicSettingsHandler {
+impl McpToolCall<SetDynamicSettingsInputData, SetDynamicSettingsResponse>
+    for SetDynamicSettingsHandler
+{
     async fn execute_tool_call(
         &self,
         model: SetDynamicSettingsInputData,
@@ -39,7 +43,10 @@ impl McpToolCall<SetDynamicSettingsInputData, SetDynamicSettingsResponse> for Se
         if let Err(err) =
             my_settings_reader::serde_yaml::from_slice::<SettingsModel>(model.content.as_bytes())
         {
-            return Err(format!("Invalid settings YAML, nothing written. Err: {}", err));
+            return Err(format!(
+                "Invalid settings YAML, nothing written. Err: {}",
+                err
+            ));
         }
 
         let bytes_written = model.content.len() as i64;
