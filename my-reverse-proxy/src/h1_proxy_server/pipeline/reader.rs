@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use tokio::sync::mpsc;
 
 use crate::configurations::{MyReverseProxyRemoteEndpoint, ProxyPassToConfig, ProxyPassToModel};
-use crate::h1_remote_connection::{mcp_path, H1PoolHolder};
+use crate::h1_remote_connection::{mcp_path, H1PoolHolder, McpUpstream};
 use crate::network_stream::*;
 
 use super::super::{H1HeadersKind, H1Reader, HttpConnectionInfo, ProxyServerError};
@@ -111,9 +111,15 @@ pub async fn serve_reverse_proxy_pipelined<
 
     let mut h1_reader = H1Reader::new(server_read_part, timeouts);
 
-    // Per-connection (local) pool. mcp / explicit-no-global cases use this; a
-    // global pool would be passed in instead — same H1PoolHolder interface.
+    // Per-connection (local) pool. A global pool would be passed in instead —
+    // same H1PoolHolder interface.
     let pool = H1PoolHolder::new_local();
+
+    // The mcp connection is NOT pooled: one client TCP talks to one MCP
+    // endpoint, so it keeps a single upstream connection here for the life of
+    // the connection. Allocated eagerly (it is one empty slot) and simply never
+    // used by a connection that serves no mcp location.
+    let mcp_upstream = McpUpstream::new();
 
     let (queue_tx, queue_rx) = mpsc::channel::<ResponseSlot>(RESPONSE_QUEUE_CAPACITY);
     let writer = crate::app::spawn_named(
@@ -126,6 +132,7 @@ pub async fn serve_reverse_proxy_pipelined<
             &mut h1_reader,
             &mut http_connection_info,
             &pool,
+            &mcp_upstream,
             &queue_tx,
             &conn_gauge,
         )
@@ -159,6 +166,7 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     h1_reader: &mut H1Reader<ReadPart>,
     http_connection_info: &mut HttpConnectionInfo,
     pool: &Arc<H1PoolHolder>,
+    mcp_upstream: &Arc<McpUpstream>,
     queue_tx: &mpsc::Sender<ResponseSlot>,
     conn_gauge: &ConnGauge,
 ) -> ReaderStep {
@@ -544,6 +552,9 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         "h1_upstream_worker",
         run_upstream_request(UpstreamRequest {
             pool: pool.clone(),
+            // Presence of this is what marks the request as mcp for the worker.
+            mcp: matches!(&proxy_pass_to_owned, ProxyPassToConfig::McpHttp1(_))
+                .then(|| mcp_upstream.clone()),
             proxy_pass_to: proxy_pass_to_owned,
             end_point_info,
             http_connection_info: conn_info,

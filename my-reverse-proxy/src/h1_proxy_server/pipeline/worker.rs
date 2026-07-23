@@ -6,21 +6,25 @@ use crate::configurations::{HttpEndpointInfo, ProxyPassToConfig};
 use crate::h1_proxy_server::{
     H1HeadersKind, H1Reader, H1Writer, HttpConnectionInfo, ProxyServerError,
 };
-use crate::h1_remote_connection::{H1PoolHolder, OwnedUpstream};
+use crate::h1_remote_connection::{H1PoolHolder, McpUpstream, OwnedUpstream, Upstream};
 use crate::h1_utils::HttpContentLength;
+use crate::network_stream::NetworkError;
 
 use super::{ChannelSink, ResponseEvent};
 
 /// Total attempts to deliver the request to an upstream. The request is replayed
-/// (head + buffered body) on a fresh connection only when the WRITE to the
-/// upstream failed — i.e. it did not get through. A response-side failure is
-/// never replayed.
+/// (head + buffered body) on a fresh connection only while NOTHING has reached
+/// the client yet — see [`run_upstream_request`] for the exact rule.
 const MAX_DELIVERY_ATTEMPTS: u32 = 2;
 
 /// Everything one request's worker needs. Built by the reader and handed to a
 /// spawned worker task.
 pub struct UpstreamRequest {
     pub pool: Arc<H1PoolHolder>,
+    /// Set exactly for `mcp` locations: the single connection this client TCP
+    /// keeps, used INSTEAD of `pool`. Its presence is what makes this an MCP
+    /// request — there is no `is_mcp` flag to disagree with it.
+    pub mcp: Option<Arc<McpUpstream>>,
     /// Identity of the upstream (also the pool key). Owned because for
     /// dynamic_proxy it is synthesized per request.
     pub proxy_pass_to: ProxyPassToConfig,
@@ -39,17 +43,25 @@ pub struct UpstreamRequest {
 /// Drive one request against an upstream: acquire a connection, write the head +
 /// body, read the response, and stream it back as [`ResponseEvent`]s.
 ///
-/// Replay rule:
-/// - A failure WRITING the request to the upstream (head or body) means it did
-///   not get through — reset the connection and retry on a fresh one (up to
-///   [`MAX_DELIVERY_ATTEMPTS`]). The request body is buffered so it can be
-///   replayed.
-/// - A failure READING the response (timeout / disconnect / garbage) means the
-///   upstream may have already received and processed the request — it is NEVER
-///   replayed; we disconnect the socket and answer the matching 5xx.
+/// Replay rule — the dividing line is whether the CLIENT has seen anything yet,
+/// not which side of the exchange failed:
+/// - While no response byte has been handed to the client, a failure on an
+///   already-established (reused) connection is treated as that connection being
+///   stale: reset it and replay head + buffered body on a fresh one, up to
+///   [`MAX_DELIVERY_ATTEMPTS`]. The replay is invisible, so it is safe even for a
+///   non-idempotent POST.
+///   This covers the case a write-only rule cannot see: when the upstream closed
+///   a kept connection, the request write still SUCCEEDS (the bytes land in the
+///   kernel send buffer) and only the response read reports the loss.
+/// - A failure on a FRESHLY dialled connection is a broken upstream, not
+///   staleness — replaying it would just hit the same wall, so it is answered.
+/// - A timeout is never replayed: the upstream may be working on the request.
+/// - Once the client has received bytes nothing can be substituted or replayed —
+///   the response is aborted and the client connection closed.
 pub async fn run_upstream_request(req: UpstreamRequest) {
     let UpstreamRequest {
         pool,
+        mcp,
         proxy_pass_to,
         end_point_info,
         http_connection_info,
@@ -59,12 +71,22 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
         response_tx,
     } = req;
 
-    let timeouts = end_point_info.timeouts;
     let endpoint = end_point_info.host_endpoint.as_str();
     let ip = http_connection_info.connection_ip.get_ip_log();
-    // mcp upstreams are never pooled — each request gets a fresh connection
-    // (their responses can be long-lived SSE streams).
-    let is_mcp = matches!(proxy_pass_to, ProxyPassToConfig::McpHttp1(_));
+    // mcp keeps its one connection on the client TCP instead of in the pool.
+    let is_mcp = mcp.is_some();
+
+    // An MCP listening stream is SSE that legitimately idles with no keepalive
+    // between server-initiated messages, far longer than a normal response body
+    // ever would. Reading it on the endpoint's ordinary read timeout tears down
+    // a perfectly healthy stream every few minutes, which the client can only
+    // see as the transport dropping. The hyper path already carves this out
+    // (`DEFAULT_MCP_READ_TIMEOUT` via `PoolParams::read_stream_timeout`); this
+    // path reads the upstream itself, so it needs the same carve-out.
+    let mut timeouts = end_point_info.timeouts;
+    if is_mcp {
+        timeouts.read_timeout = crate::consts::DEFAULT_MCP_READ_TIMEOUT;
+    }
 
     // Buffer the request body up front so head+body can be replayed on a fresh
     // connection if a write to the upstream fails. (Byte-path bodies are small —
@@ -75,8 +97,8 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
     }
     let bytes_to_upstream = body.len() as u64;
 
-    // Deliver the request, retrying on a WRITE failure (request did not get
-    // through). Breaks with a connection whose response head is ready to read.
+    // Deliver the request, replaying it while the client has seen nothing yet.
+    // Breaks with a connection whose response head has been read.
     let mut attempt = 0u32;
     let (
         upstream,
@@ -89,7 +111,8 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
         attempt += 1;
         let last_attempt = attempt >= MAX_DELIVERY_ATTEMPTS;
 
-        let (mut owned, _reused) = match pool.acquire(&proxy_pass_to).await {
+        let (mut owned, reused) = match acquire(mcp.as_ref(), &pool, &proxy_pass_to, attempt).await
+        {
             Ok(c) => c,
             Err(err) => {
                 crate::app::APP_CTX.proxy_logs.write_returned_5xx(
@@ -103,8 +126,9 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                         err
                     ),
                 );
-                emit_error_page(
+                fail_request(
                     &response_tx,
+                    is_mcp,
                     crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice(),
                 )
                 .await;
@@ -133,8 +157,9 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                     proxy_pass_to.to_string()
                 ),
             );
-            emit_error_page(
+            fail_request(
                 &response_tx,
+                is_mcp,
                 crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice(),
             )
             .await;
@@ -164,17 +189,19 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                     proxy_pass_to.to_string()
                 ),
             );
-            emit_error_page(
+            fail_request(
                 &response_tx,
+                is_mcp,
                 crate::error_templates::ERROR_GETTING_CONTENT_FROM_REMOTE_RESOURCE.as_slice(),
             )
             .await;
             return;
         }
 
-        // Read the response head. Read-side failure is NEVER replayed: mark the
-        // socket dead and answer the matching 5xx (timeout/disconnect →
-        // unavailable; unparseable bytes → upstream-is-not-HTTP).
+        // Read the response head. On a REUSED connection a transport failure here
+        // means the upstream had closed it while it was parked — the write could
+        // not tell us, because it only reached the kernel send buffer. Nothing
+        // has been handed to the client, so replay on a fresh connection.
         let OwnedUpstream {
             upstream,
             response_read,
@@ -187,6 +214,9 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
             Ok(h) => h,
             Err(err) => {
                 disconnect_trigger.set_value(true);
+                if reused && !last_attempt && is_stale_connection(&err) {
+                    continue;
+                }
                 let (page, label) = classify_upstream_failure(&err);
                 crate::app::APP_CTX.proxy_logs.write_returned_5xx(
                     endpoint,
@@ -200,7 +230,7 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                         err
                     ),
                 );
-                emit_error_page(&response_tx, page).await;
+                fail_request(&response_tx, is_mcp, page).await;
                 return;
             }
         };
@@ -231,7 +261,7 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
                         err
                     ),
                 );
-                emit_error_page(&response_tx, page).await;
+                fail_request(&response_tx, is_mcp, page).await;
                 return;
             }
         };
@@ -290,29 +320,63 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
         .traffic
         .record_s2c(endpoint, bytes_to_client as u64);
 
-    // --- Keep-alive reuse. Pool only when safely reusable: self-delimiting
-    // (Content-Length / chunked) response, non-mcp, no leftover bytes, live
-    // socket. Everything else is dropped (closed). ---
+    // --- Keep-alive reuse. Keep only when safely reusable: self-delimiting
+    // (Content-Length / chunked) response, no leftover bytes, live socket.
+    // Everything else is dropped (closed). An SSE response is not
+    // self-delimiting, so a streaming mcp connection is never kept — only the
+    // short JSON request/response calls are. ---
     let reusable_framing = matches!(
         response_content_length,
         HttpContentLength::Known(_) | HttpContentLength::Chunked
     );
     let (response_read, leftover) = resp_reader.into_read_part();
-    if !is_mcp
-        && reusable_framing
-        && leftover.get_data().is_empty()
-        && !disconnect_trigger.get_value()
-    {
-        pool.release(
-            &proxy_pass_to,
-            OwnedUpstream {
-                upstream,
-                response_read,
-                disconnect_trigger,
-                ssh_handler,
-            },
-        );
+    if reusable_framing && leftover.get_data().is_empty() && !disconnect_trigger.get_value() {
+        let owned = OwnedUpstream {
+            upstream,
+            response_read,
+            disconnect_trigger,
+            ssh_handler,
+        };
+        match mcp.as_ref() {
+            Some(mcp) => mcp.put(owned),
+            None => pool.release(&proxy_pass_to, owned),
+        }
     }
+}
+
+/// Check out a connection for one delivery attempt, reporting whether it was
+/// already established (`true`) or freshly dialled (`false`) — the replay rule
+/// turns on that distinction.
+///
+/// mcp bypasses the pool entirely: its one connection lives on the client TCP.
+/// Only the first attempt may reuse it; a retry exists precisely because the
+/// kept one was no good, so it always dials.
+async fn acquire(
+    mcp: Option<&Arc<McpUpstream>>,
+    pool: &H1PoolHolder,
+    proxy_pass_to: &ProxyPassToConfig,
+    attempt: u32,
+) -> Result<(OwnedUpstream, bool), NetworkError> {
+    let Some(mcp) = mcp else {
+        return pool.acquire(proxy_pass_to).await;
+    };
+
+    if attempt == 1 {
+        if let Some(owned) = mcp.take() {
+            return Ok((owned, true));
+        }
+    }
+
+    Ok((Upstream::connect_owned(proxy_pass_to).await?, false))
+}
+
+/// Whether an upstream failure looks like a connection that went stale rather
+/// than an upstream that is broken — i.e. the transport dropped. A timeout does
+/// NOT qualify: the upstream may be processing the request, so replaying it
+/// could duplicate a side effect. Neither does a parse error — bytes came back,
+/// the connection was alive, the upstream just is not speaking HTTP.
+fn is_stale_connection(err: &ProxyServerError) -> bool {
+    matches!(err, ProxyServerError::NetworkError(e) if !e.is_timeout())
 }
 
 /// Pick the client error page for an upstream-response failure: unparseable
@@ -335,14 +399,115 @@ fn classify_upstream_failure(err: &ProxyServerError) -> (&'static [u8], &'static
     }
 }
 
-/// Send a ready-made error page to the client and finish the response slot.
+/// Finish a request that failed before the client received a single byte.
+///
+/// For a browser-facing location that means substituting an error page. For mcp
+/// it does not: the client speaks JSON-RPC over a single endpoint and an HTML
+/// "Bad gateway" body is noise it cannot interpret — it would have to be parsed
+/// as a protocol message and fail. The one thing such a client acts on is the
+/// transport dropping, so the connection is closed and it redials.
+///
 /// Best-effort: if the writer/client is gone the sends just fail.
-async fn emit_error_page(response_tx: &mpsc::Sender<ResponseEvent>, page: &[u8]) {
+async fn fail_request(response_tx: &mpsc::Sender<ResponseEvent>, is_mcp: bool, page: &[u8]) {
+    if is_mcp {
+        let _ = response_tx.send(ResponseEvent::Abort).await;
+        return;
+    }
+
     if response_tx
         .send(ResponseEvent::Chunk(page.to_vec()))
         .await
         .is_ok()
     {
         let _ = response_tx.send(ResponseEvent::Done).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// The case the whole fix exists for: the upstream closed a kept connection,
+    /// so the request write landed in the kernel buffer and only the response
+    /// read reported it.
+    #[test]
+    fn a_dropped_transport_is_stale_and_replayable() {
+        assert!(is_stale_connection(&ProxyServerError::NetworkError(
+            NetworkError::Disconnected
+        )));
+        assert!(is_stale_connection(&ProxyServerError::NetworkError(
+            NetworkError::IoError(std::io::Error::from(std::io::ErrorKind::ConnectionReset))
+        )));
+    }
+
+    /// A timeout means the upstream may be working on the request — replaying it
+    /// could duplicate a side effect.
+    #[test]
+    fn a_timeout_is_not_replayable() {
+        assert!(!is_stale_connection(&ProxyServerError::NetworkError(
+            NetworkError::Timeout(Duration::from_secs(1))
+        )));
+    }
+
+    /// Bytes came back, so the connection was alive — the upstream just is not
+    /// speaking HTTP. Retrying would hit the same wall.
+    #[test]
+    fn a_parse_failure_is_not_replayable() {
+        assert!(!is_stale_connection(&ProxyServerError::HeadersParseError(
+            "bad"
+        )));
+        assert!(!is_stale_connection(
+            &ProxyServerError::BufferAllocationFail
+        ));
+    }
+
+    #[test]
+    fn upstream_failures_map_to_the_matching_page() {
+        let (page, label) = classify_upstream_failure(&ProxyServerError::NetworkError(
+            NetworkError::Timeout(Duration::from_secs(1)),
+        ));
+        assert_eq!(page, crate::error_templates::ERROR_TIMEOUT.as_slice());
+        assert_eq!(label, "timeout");
+
+        let (page, label) =
+            classify_upstream_failure(&ProxyServerError::NetworkError(NetworkError::Disconnected));
+        assert_eq!(
+            page,
+            crate::error_templates::REMOTE_RESOURCE_IS_NOT_AVAILABLE.as_slice()
+        );
+        assert_eq!(label, "disconnected");
+
+        let (page, label) = classify_upstream_failure(&ProxyServerError::HeadersParseError("bad"));
+        assert_eq!(
+            page,
+            crate::error_templates::UPSTREAM_IS_NOT_HTTP.as_slice()
+        );
+        assert_eq!(label, "non-HTTP response");
+    }
+
+    /// mcp gets the connection closed instead of an error page — an HTML body is
+    /// not something a JSON-RPC client can act on.
+    #[tokio::test]
+    async fn mcp_is_failed_by_closing_the_connection() {
+        let (tx, mut rx) = mpsc::channel(4);
+        fail_request(&tx, true, b"<html>bad gateway</html>").await;
+        assert!(matches!(rx.recv().await, Some(ResponseEvent::Abort)));
+        drop(tx);
+        assert!(rx.recv().await.is_none());
+    }
+
+    /// Everything else still gets the page, followed by a clean end of response.
+    #[tokio::test]
+    async fn a_plain_location_is_failed_with_the_error_page() {
+        let page = b"<html>bad gateway</html>";
+        let (tx, mut rx) = mpsc::channel(4);
+        fail_request(&tx, false, page).await;
+        match rx.recv().await {
+            Some(ResponseEvent::Chunk(bytes)) => assert_eq!(bytes, page.to_vec()),
+            Some(_) => panic!("expected the page chunk, got another event"),
+            None => panic!("expected the page chunk, got nothing"),
+        }
+        assert!(matches!(rx.recv().await, Some(ResponseEvent::Done)));
     }
 }
