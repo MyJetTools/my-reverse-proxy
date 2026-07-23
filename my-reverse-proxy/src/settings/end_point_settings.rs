@@ -19,6 +19,10 @@ pub struct EndpointSettings {
     pub ssl_certificate: Option<String>,
     pub client_certificate_ca: Option<String>,
     pub google_auth: Option<String>,
+    /// Name of an `oauth:` block. When set, this endpoint also serves the OAuth
+    /// 2.1 authorization-server endpoints and every proxied request on it has to
+    /// carry an access token this proxy minted.
+    pub oauth: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub debug: Option<bool>,
     pub inject_country: Option<bool>,

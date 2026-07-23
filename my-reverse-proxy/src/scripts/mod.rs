@@ -29,6 +29,8 @@ mod load_file;
 pub use load_file::*;
 mod get_google_auth_credentials;
 pub use get_google_auth_credentials::*;
+mod get_oauth_credentials;
+pub use get_oauth_credentials::*;
 mod make_sure_client_ca_exists;
 pub use make_sure_client_ca_exists::*;
 mod get_from_host_or_templates;

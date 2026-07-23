@@ -66,6 +66,15 @@ impl HttpProxyPass {
             );
         }
 
+        // The proxy's own OAuth 2.1 server, when this endpoint has an `oauth:`
+        // block. Runs before the location is resolved because its own paths
+        // (`/.well-known/…`, `/oauth/…`) match no configured location, and it
+        // needs the request body intact for the token endpoint.
+        let req = match super::run_oauth_gate_h2(&self.endpoint_info, &connection_ip, req).await {
+            super::OAuthGateH2Outcome::Proceed(req) => req,
+            super::OAuthGateH2Outcome::Answered(response) => return Ok(Ok(response)),
+        };
+
         let mut req = HttpRequestBuilder::new(req);
 
         let (request, content_source, location_index, location_debug) = {

@@ -38,6 +38,7 @@ mod h1_remote_connection;
 mod mcp;
 mod metrics;
 mod network_stream;
+mod oauth;
 mod ssl;
 mod tcp_gateway;
 mod timers;

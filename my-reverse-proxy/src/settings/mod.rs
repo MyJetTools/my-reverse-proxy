@@ -31,6 +31,8 @@ pub use http_endpoint_modify_headers_settings::*;
 
 mod google_auth_settings;
 pub use google_auth_settings::*;
+mod oauth_settings;
+pub use oauth_settings::*;
 mod endpoint_template_settings;
 pub use endpoint_template_settings::*;
 

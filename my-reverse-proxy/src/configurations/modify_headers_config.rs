@@ -69,6 +69,15 @@ impl ModifyHeadersConfig {
         result
     }
 
+    /// Adds a header that must never reach the upstream, on top of whatever the
+    /// settings asked to remove. Used by the oauth gate: the bearer token is one
+    /// this proxy minted for itself, and the MCP authorization spec is explicit
+    /// that a server must not pass a client's token through to what sits behind
+    /// it.
+    pub fn add_to_remove(&mut self, header: &str) {
+        self.remove.insert(header.to_string());
+    }
+
     pub fn iter_remove<'s>(&'s self) -> impl Iterator<Item = &'s String> {
         self.remove.iter()
     }

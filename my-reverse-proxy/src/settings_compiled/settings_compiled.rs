@@ -13,6 +13,7 @@ pub struct SettingsCompiled {
     pub client_certificate_ca: Vec<ClientCertificateCaSettings>,
     pub global_settings: Option<GlobalSettings>,
     pub g_auth: HashMap<String, GoogleAuthSettings>,
+    pub oauth: HashMap<String, OAuthSettings>,
     pub endpoint_templates: HashMap<String, EndpointTemplateSettings>,
     pub allowed_users: HashMap<String, Vec<String>>,
     pub ip_white_lists: HashMap<String, Vec<String>>,

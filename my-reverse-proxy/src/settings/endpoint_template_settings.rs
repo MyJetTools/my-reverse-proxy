@@ -7,6 +7,7 @@ pub struct EndpointTemplateSettings {
     pub ssl_certificate: Option<String>,
     pub client_certificate_ca: Option<String>,
     pub google_auth: Option<String>,
+    pub oauth: Option<String>,
     pub modify_http_headers: Option<ModifyHttpHeadersSettings>,
     pub whitelisted_ip: Option<String>,
 }

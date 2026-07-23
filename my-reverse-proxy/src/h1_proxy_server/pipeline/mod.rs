@@ -14,6 +14,10 @@
 //! Built additively alongside the existing path; wired in once complete.
 #![allow(dead_code)]
 
+mod body_collector_sink;
+pub use body_collector_sink::*;
+mod oauth_gate;
+pub use oauth_gate::*;
 mod response_event;
 pub use response_event::*;
 mod client_writer;

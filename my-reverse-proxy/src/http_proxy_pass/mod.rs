@@ -18,6 +18,8 @@ mod web_socket_loop;
 pub use web_socket_loop::*;
 mod handle_ga;
 pub use handle_ga::*;
+mod handle_oauth;
+pub use handle_oauth::*;
 
 mod http_proxy_pass_identity;
 pub use http_proxy_pass_identity::*;

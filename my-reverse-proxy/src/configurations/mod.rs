@@ -33,6 +33,8 @@ mod app_configuration_inner;
 pub use app_configuration_inner::*;
 mod google_auth_credentials;
 pub use google_auth_credentials::*;
+mod oauth_credentials;
+pub use oauth_credentials::*;
 mod white_list_ip_list_config;
 pub use white_list_ip_list_config::*;
 

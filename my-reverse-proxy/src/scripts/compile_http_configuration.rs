@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    configurations::{EndpointHttpHostString, HttpEndpointInfo, ListenHttpEndpointType},
+    configurations::{
+        EndpointHttpHostString, HttpEndpointInfo, HttpEndpointInfoParams, ListenHttpEndpointType,
+    },
     settings::HostSettings,
     settings_compiled::SettingsCompiled,
 };
@@ -35,6 +37,23 @@ pub async fn compile_http_configuration(
     } else {
         (None, None, None)
     };
+
+    // Unlike google_auth this is resolved for plain-http endpoints too: an
+    // endpoint behind a TLS-terminating proxy is still reached over https by the
+    // client, and `public_url` is there to say so.
+    let oauth = super::get_oauth_credentials(settings_model, host_settings).await?;
+
+    // `type: mcp` is a raw byte bridge that never parses HTTP, so there is
+    // nothing an authorization server could hook into. Refusing the config is
+    // better than starting up and serving the MCP server unauthenticated.
+    if oauth.is_some() && matches!(http_type, ListenHttpEndpointType::Mcp) {
+        return Err(format!(
+            "Endpoint '{}' is 'type: mcp', which is a raw TCP bridge with no HTTP layer, so \
+             'oauth' can not be applied to it. Use 'type: https' on the endpoint with a location \
+             of 'type: mcp' instead",
+            host_endpoint.as_str()
+        ));
+    }
 
     // Timeout cascade: HardCode < Global < Endpoint < Location.
     // Build the global→endpoint layer once, then layer each location on top.
@@ -81,27 +100,28 @@ pub async fn compile_http_configuration(
         write_timeout: endpoint_resolved.write_timeout,
     };
 
-    let http_endpoint_info = HttpEndpointInfo::new(
+    let http_endpoint_info = HttpEndpointInfo::new(HttpEndpointInfoParams {
         host_endpoint,
-        http_type,
-        host_settings.endpoint.get_debug(),
-        host_settings.endpoint.get_inject_country(),
+        listen_endpoint_type: http_type,
+        debug: host_settings.endpoint.get_debug(),
+        inject_country: host_settings.endpoint.get_inject_country(),
         g_auth,
-        ssl_cert_id,
-        client_cert_ca,
-        endpoint_whitelisted_ip,
+        oauth,
+        ssl_certificate_id: ssl_cert_id,
+        client_certificate_id: client_cert_ca,
+        whitelisted_ip_list_id: endpoint_whitelisted_ip,
         locations,
-        allowed_user_list,
-        modify_endpoints_headers,
-        host_settings.endpoint.keep_alive.unwrap_or(true),
-        host_settings
+        allowed_user_list_id: allowed_user_list,
+        modify_headers_settings: modify_endpoints_headers,
+        keep_alive: host_settings.endpoint.keep_alive.unwrap_or(true),
+        track_metrics_by_all_domains: host_settings
             .endpoint
             .track_metrics_by_all_domains
             .unwrap_or(false),
-        host_settings.endpoint.hsts.unwrap_or(false),
+        hsts: host_settings.endpoint.hsts.unwrap_or(false),
         mcp_settings,
-        http_timeouts,
-    );
+        timeouts: http_timeouts,
+    });
 
     Ok(http_endpoint_info)
 }

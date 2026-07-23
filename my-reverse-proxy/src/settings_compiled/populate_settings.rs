@@ -41,6 +41,7 @@ impl SettingsCompiled {
         self.populate_ca_certificates(&mut settings_model, &variables)?;
         self.populate_global_settings(&mut settings_model, &variables)?;
         self.populate_g_auth(&mut settings_model, &variables)?;
+        self.populate_oauth(&mut settings_model, &variables)?;
         self.populate_endpoint_templates(&mut settings_model, &variables)?;
         self.populate_allowed_users(&mut settings_model, &variables)?;
         self.populate_ip_white_lists(&mut settings_model, &variables)?;
@@ -54,6 +55,7 @@ impl SettingsCompiled {
             self.populate_ca_certificates(sub_settings, &variables)?;
             self.populate_global_settings(sub_settings, &variables)?;
             self.populate_g_auth(sub_settings, &variables)?;
+            self.populate_oauth(sub_settings, &variables)?;
             self.populate_endpoint_templates(sub_settings, &variables)?;
             self.populate_allowed_users(sub_settings, &variables)?;
             self.populate_ip_white_lists(sub_settings, &variables)?;
@@ -105,6 +107,7 @@ impl SettingsCompiled {
                         .apply_variables_opt(host_settings.endpoint.client_certificate_ca)?,
                     google_auth: variables
                         .apply_variables_opt(host_settings.endpoint.google_auth)?,
+                    oauth: variables.apply_variables_opt(host_settings.endpoint.oauth)?,
                     modify_http_headers: super::populate_modify_http_headers_settings(
                         host_settings.endpoint.modify_http_headers,
                         variables,
@@ -223,6 +226,32 @@ impl SettingsCompiled {
         Ok(())
     }
 
+    fn populate_oauth(
+        &mut self,
+        settings_model: &mut SettingsModel,
+        variables: &VariablesCompiled,
+    ) -> Result<(), String> {
+        if let Some(oauth) = settings_model.oauth.take() {
+            for (key, itm) in oauth {
+                self.oauth.insert(
+                    variables.apply_variables(key)?,
+                    OAuthSettings {
+                        client_id: variables.apply_variables(itm.client_id)?,
+                        client_secret: variables.apply_variables(itm.client_secret)?,
+                        consent_password: variables.apply_variables(itm.consent_password)?,
+                        public_url: variables.apply_variables_opt(itm.public_url)?,
+                        signing_key: variables.apply_variables_opt(itm.signing_key)?,
+                        signing_key_file: variables.apply_variables_opt(itm.signing_key_file)?,
+                        access_token_ttl_sec: itm.access_token_ttl_sec,
+                        refresh_token_ttl_sec: itm.refresh_token_ttl_sec,
+                    },
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     fn populate_endpoint_templates(
         &mut self,
         settings_model: &mut SettingsModel,
@@ -237,6 +266,7 @@ impl SettingsCompiled {
                         client_certificate_ca: variables
                             .apply_variables_opt(itm.client_certificate_ca)?,
                         google_auth: variables.apply_variables_opt(itm.google_auth)?,
+                        oauth: variables.apply_variables_opt(itm.oauth)?,
                         modify_http_headers: super::populate_modify_http_headers_settings(
                             itm.modify_http_headers,
                             variables,

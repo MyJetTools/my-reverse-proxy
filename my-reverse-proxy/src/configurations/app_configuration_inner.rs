@@ -26,6 +26,7 @@ pub struct AppConfigurationInner {
     pub listen_tcp_endpoints: HashMap<u16, ListenConfiguration>,
     pub listen_unix_socket_endpoints: HashMap<Arc<String>, ListenConfiguration>,
     pub google_auth_credentials: GoogleAuthCredentialsList,
+    pub oauth_credentials: OAuthCredentialsList,
     pub white_list_ip_list: WhiteListedIpListConfigurations,
     pub error_configurations: BTreeMap<String, String>,
 }
@@ -36,6 +37,7 @@ impl AppConfigurationInner {
             listen_tcp_endpoints: HashMap::new(),
             listen_unix_socket_endpoints: HashMap::new(),
             google_auth_credentials: GoogleAuthCredentialsList::new(),
+            oauth_credentials: OAuthCredentialsList::new(),
             white_list_ip_list: WhiteListedIpListConfigurations::new(),
             error_configurations: BTreeMap::new(),
         }

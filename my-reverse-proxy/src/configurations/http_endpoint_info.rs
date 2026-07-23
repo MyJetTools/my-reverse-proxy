@@ -15,6 +15,9 @@ pub struct HttpEndpointInfo {
     pub inject_country: bool,
     pub listen_endpoint_type: ListenHttpEndpointType,
     pub g_auth: Option<String>,
+    /// Name of the `oauth:` block gating this endpoint, when it has one. The
+    /// endpoint then also answers the OAuth server's own paths itself.
+    pub oauth: Option<String>,
     pub ssl_certificate_id: Option<SslCertificateId>,
     pub client_certificate_id: Option<SslCertificateId>,
     pub locations: Vec<Arc<ProxyPassLocationConfig>>,
@@ -31,38 +34,80 @@ pub struct HttpEndpointInfo {
     pub timeouts: crate::types::HttpTimeouts,
 }
 
+/// Everything an endpoint is compiled from.
+///
+/// A struct rather than a positional argument list: seven of these are
+/// `Option<String>` and two more are `Option<SslCertificateId>`, so transposing
+/// a pair — `g_auth` for `oauth`, the server certificate for the client CA —
+/// compiles cleanly and quietly mis-secures the endpoint.
+pub struct HttpEndpointInfoParams {
+    pub host_endpoint: EndpointHttpHostString,
+    pub listen_endpoint_type: ListenHttpEndpointType,
+    pub debug: bool,
+    pub inject_country: bool,
+    pub g_auth: Option<String>,
+    pub oauth: Option<String>,
+    pub ssl_certificate_id: Option<SslCertificateId>,
+    pub client_certificate_id: Option<SslCertificateId>,
+    pub whitelisted_ip_list_id: Option<String>,
+    pub locations: Vec<Arc<ProxyPassLocationConfig>>,
+    pub allowed_user_list_id: Option<String>,
+    pub modify_headers_settings: HttpEndpointModifyHeadersSettings,
+    pub keep_alive: bool,
+    pub track_metrics_by_all_domains: bool,
+    pub hsts: bool,
+    pub mcp_settings: McpEndpointSettings,
+    pub timeouts: crate::types::HttpTimeouts,
+}
+
 impl HttpEndpointInfo {
-    pub fn new(
-        host_endpoint: EndpointHttpHostString,
-        listen_endpoint_type: ListenHttpEndpointType,
-        debug: bool,
-        inject_country: bool,
-        g_auth: Option<String>,
-        ssl_certificate_id: Option<SslCertificateId>,
-        client_certificate_id: Option<SslCertificateId>,
-        whitelisted_ip_list_id: Option<String>,
-        locations: Vec<Arc<ProxyPassLocationConfig>>,
-        allowed_user_list_id: Option<String>,
-        mut modify_headers_settings: HttpEndpointModifyHeadersSettings,
-        keep_alive: bool,
-        track_metrics_by_all_domains: bool,
-        hsts: bool,
-        mcp_settings: McpEndpointSettings,
-        timeouts: crate::types::HttpTimeouts,
-    ) -> Self {
+    pub fn new(params: HttpEndpointInfoParams) -> Self {
+        let HttpEndpointInfoParams {
+            host_endpoint,
+            listen_endpoint_type,
+            debug,
+            inject_country,
+            g_auth,
+            oauth,
+            ssl_certificate_id,
+            client_certificate_id,
+            whitelisted_ip_list_id,
+            locations,
+            allowed_user_list_id,
+            mut modify_headers_settings,
+            keep_alive,
+            track_metrics_by_all_domains,
+            hsts,
+            mcp_settings,
+            timeouts,
+        } = params;
+
         if debug {
             println!("Endpoint {} is in debug mode", host_endpoint.as_str());
         }
+
+        let mut modify_request_headers =
+            ModifyHeadersConfig::new_request(&mut modify_headers_settings);
+
+        // The access token on an oauth-gated endpoint is one this proxy minted
+        // for itself. Stripping it here — at the endpoint level, since location
+        // level `modify_http_headers` is ignored on the h1 path — keeps it out
+        // of the upstream, which the MCP authorization spec requires.
+        if oauth.is_some() {
+            modify_request_headers.add_to_remove("authorization");
+        }
+
         Self {
             host_endpoint,
             debug,
             inject_country,
             listen_endpoint_type,
             g_auth,
+            oauth,
             client_certificate_id,
             locations,
             allowed_user_list_id,
-            modify_request_headers: ModifyHeadersConfig::new_request(&mut modify_headers_settings),
+            modify_request_headers,
             modify_response_headers: ModifyHeadersConfig::new_response(
                 &mut modify_headers_settings,
             ),

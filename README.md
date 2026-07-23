@@ -821,6 +821,93 @@ If 'whitelisted_domains' property is missing - any email from any domain passed 
 
 
 
+## OAuth 2.1 authorization server
+
+An endpoint can make the proxy act as an OAuth 2.1 authorization server, so
+clients that only offer a **Client ID** and **Client Secret** — the "Add custom
+connector" dialog on claude.ai is the motivating one — can reach an upstream
+that does no authentication of its own.
+
+Prefer `auth_header` (see [Per-location header authentication](#per-location-header-authentication))
+whenever the client can be configured with a static token. Use `oauth` when it
+cannot.
+
+```yaml
+oauth:
+  claude:
+    client_id: "${env:MCP_OAUTH_CLIENT_ID}"
+    client_secret: "${env:MCP_OAUTH_CLIENT_SECRET}"
+    consent_password: "${env:MCP_CONSENT_PASSWORD}"
+
+hosts:
+  "mcp-home.jetdev.eu:443":
+    endpoint:
+      type: https              # NOT `type: mcp` — see below
+      ssl_certificate: my_ssl_cert
+      oauth: claude
+    locations:
+    - path: /mt-risks
+      type: mcp
+      proxy_pass_to: http://127.0.0.1:8123/mt-risks
+```
+
+The user then enters `https://mcp-home.jetdev.eu/mt-risks` as the URL, the same
+`client_id` / `client_secret`, and the `consent_password` on the consent screen
+the proxy renders.
+
+### `oauth` block fields
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `client_id` | yes | The pre-registered client. There is no dynamic client registration. |
+| `client_secret` | yes | Checked on the token endpoint, via the form body or HTTP Basic. |
+| `consent_password` | yes | What a human types on the consent screen to approve the connector. |
+| `public_url` | no | Issuer override. Defaults to the request's own scheme + `Host`. Set it when something in front rewrites either. |
+| `signing_key` | no | Pins the token signing key. Any sufficiently random string. |
+| `signing_key_file` | no | Where a generated key is kept. Default `~/.my-reverse-proxy-oauth/{block_id}.json`. |
+| `access_token_ttl_sec` | no | Default `3600`. |
+| `refresh_token_ttl_sec` | no | Default `2592000` (30 days). |
+
+All fields go through `${variable}` substitution, so the secrets can stay out of
+the settings file. `oauth` can also be set on an `endpoint_templates` entry.
+
+### Behavior
+
+- The endpoint answers `/.well-known/oauth-authorization-server`,
+  `/.well-known/openid-configuration`,
+  `/.well-known/oauth-protected-resource/<location path>`, `/oauth/authorize`
+  and `/oauth/token` itself. These are matched before locations, so a location
+  under `/oauth` or `/.well-known` is shadowed on such an endpoint.
+- Every other request on the endpoint must carry `Authorization: Bearer <token>`
+  minted by this proxy; otherwise it gets **401** with a `WWW-Authenticate`
+  header pointing at the resource metadata.
+- Authorization Code + **PKCE S256** only. `plain` is refused.
+- Accepted redirect URIs are `https://claude.ai/api/mcp/auth_callback` and RFC
+  8252 loopback (`127.0.0.1`, `localhost`, `[::1]`) on any port, which is what
+  Claude Code uses.
+- The `Authorization` header is **stripped before proxying** — the token belongs
+  to the proxy, not to the upstream, as the MCP authorization spec requires. If
+  the upstream needs its own credential, add it with endpoint-level
+  `modify_http_headers.add`.
+- Tokens are stateless and signed; the signing key is generated once and kept on
+  disk so a restart does not log the connector out.
+- A wrong consent password or client secret counts as a hard failure for the IP
+  block-list.
+- `whitelisted_ip`, `client_certificate_ca` and `allowed_users` still apply, and
+  they apply to the OAuth endpoints too. `auth_header` on a location is checked
+  in addition to the OAuth gate.
+
+### Endpoint type
+
+`oauth` works on `type: http`, `https`, `http2` and `https2`. It does **not**
+work on `type: mcp`, which is a raw TCP bridge that never parses HTTP — that
+combination is rejected when the configuration is compiled and the proxy will
+not start. Use `type: https` on the endpoint with `type: mcp` on the location,
+as in the example above.
+
+Full details, the request flow and troubleshooting: [docs/mcp-oauth.md](docs/mcp-oauth.md).
+
+
 ## IP Whitelisting
 
 It's possible to IP whitelist and given endpoint

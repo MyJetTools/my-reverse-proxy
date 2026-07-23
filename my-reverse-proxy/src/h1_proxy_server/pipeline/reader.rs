@@ -10,9 +10,9 @@ use crate::network_stream::*;
 
 use super::super::{H1HeadersKind, H1Reader, HttpConnectionInfo, ProxyServerError};
 use super::{
-    run_client_writer, run_upstream_request, run_ws_tunnel, BodyChannelSink, ResponseEvent,
-    ResponseSlot, UpgradeContext, UpstreamRequest, REQUEST_BODY_CHANNEL_CAPACITY,
-    RESPONSE_CHANNEL_CAPACITY,
+    run_client_writer, run_oauth_gate, run_upstream_request, run_ws_tunnel, BodyChannelSink,
+    OAuthGateOutcome, ResponseEvent, ResponseSlot, UpgradeContext, UpstreamRequest,
+    REQUEST_BODY_CHANNEL_CAPACITY, RESPONSE_CHANNEL_CAPACITY,
 };
 
 /// How many response slots may be queued ahead of the writer. H1 serves one
@@ -205,20 +205,28 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         }
     }
 
-    let (location, end_point_info) = match h1_reader
-        .find_location(&request_headers, http_connection_info)
-        .await
-    {
-        Ok(found) => found,
-        Err(err) => {
-            // LocationIsNotFound carries a resolved endpoint (so its 503 is
-            // logged); HttpConfigurationIsNotFound has none (and is not 5xx).
-            let ep = http_connection_info
-                .endpoint_info
-                .as_ref()
-                .map(|e| e.host_endpoint.as_str().to_string());
-            return respond_error(queue_tx, http_connection_info, ep.as_deref(), err).await;
-        }
+    // The endpoint is resolved before the location, so the endpoint-wide checks
+    // below — mTLS, the IP allow-list and the oauth gate — cover every request
+    // that reaches this vhost, including the paths no location serves (the OAuth
+    // server's own `/.well-known/…` and `/oauth/…`).
+    // HttpConfigurationIsNotFound carries no endpoint (and is not 5xx).
+    let Some(end_point_info) = http_connection_info.endpoint_info.clone() else {
+        crate::app::APP_CTX.proxy_logs.write_port(
+            http_connection_info
+                .listen_config
+                .listen_host
+                .get_log_key()
+                .as_str(),
+            http_connection_info.connection_ip.get_ip_log(),
+            "Rejected request: no endpoint configuration resolved for connection".to_string(),
+        );
+        return respond_error(
+            queue_tx,
+            http_connection_info,
+            None,
+            ProxyServerError::HttpConfigurationIsNotFound,
+        )
+        .await;
     };
 
     h1_reader.timeouts = end_point_info.timeouts;
@@ -289,13 +297,52 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
         crate::app::APP_CTX.rps.inc_domain(domain);
     }
 
+    // The proxy's own OAuth 2.1 server, when this endpoint has an `oauth:`
+    // block: it answers the discovery, authorize and token paths itself, and
+    // gates everything else behind an access token it minted. It runs before
+    // `find_location` because its own paths match no location and would
+    // otherwise be answered with the 503 "location is not found" page.
+    match run_oauth_gate(
+        h1_reader,
+        &end_point_info,
+        http_connection_info,
+        &request_headers,
+    )
+    .await
+    {
+        OAuthGateOutcome::Proceed => {}
+        OAuthGateOutcome::Close => return ReaderStep::Close,
+        OAuthGateOutcome::Answered(bytes) => {
+            return match emit_single_response(queue_tx, write_timeout, bytes).await {
+                ReaderStep::Continue if !keep_alive => ReaderStep::Close,
+                other => other,
+            };
+        }
+    }
+
+    let location = match h1_reader
+        .find_location(&request_headers, http_connection_info)
+        .await
+    {
+        Ok((location, _)) => location,
+        Err(err) => {
+            return respond_error(
+                queue_tx,
+                http_connection_info,
+                Some(&endpoint_for_error),
+                err,
+            )
+            .await
+        }
+    };
+
     if location.proxy_pass_to.is_drop() {
         return ReaderStep::Close;
     }
 
     let identity = match h1_reader
         .authorize(
-            end_point_info,
+            &end_point_info,
             location,
             http_connection_info,
             &request_headers,
@@ -403,7 +450,7 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
 
     let compiled = h1_reader.compile_headers(
         request_headers,
-        H1HeadersKind::Request(end_point_info),
+        H1HeadersKind::Request(&end_point_info),
         http_connection_info,
         &identity,
         mcp_path(&proxy_pass_to_owned),
@@ -460,7 +507,6 @@ async fn read_and_dispatch<ReadPart: NetworkStreamReadPart + Send + Sync + 'stat
     let head = h1_reader.h1_headers_builder.as_slice().to_vec();
 
     // Clone the owned context before the borrows end.
-    let end_point_info = end_point_info.clone();
     let location_id = location.id;
     let conn_info = http_connection_info.clone();
 
