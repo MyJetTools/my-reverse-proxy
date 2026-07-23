@@ -49,6 +49,13 @@ pub const DEFAULT_MAX_DISPOSABLES_PER_POOL: usize = 50;
 // idle stream. (TCP RST/FIN still surfaces immediately regardless of this.)
 pub const DEFAULT_MCP_READ_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
+// A kept (idle, between-request) MCP upstream connection is closed after this
+// long with no request on it, instead of being held — possibly already dead —
+// for the whole life of the client connection (an MCP client may keep its TCP
+// open for hours with no heartbeat). Swept by the connections GC timer; the next
+// request simply dials a fresh one.
+pub const DEFAULT_MCP_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 5);
+
 pub const HTTP_CR_LF: &[u8] = b"\r\n";
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
