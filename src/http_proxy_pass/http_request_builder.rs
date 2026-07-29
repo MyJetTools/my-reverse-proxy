@@ -60,21 +60,46 @@ fn is_h2_websocket_connect(parts: &Parts) -> bool {
 /// rewritten onto the path configured in `proxy_pass_to`, exactly as the h1 byte
 /// pipeline does via `H1Reader::compile_headers`. A no-op for every other
 /// location type, and idempotent when the two paths are equal.
+///
+/// Only the path-and-query is replaced — scheme and authority are carried over
+/// untouched. A request that arrived over h2 has an ABSOLUTE uri, and an h2
+/// upstream request needs `:scheme` / `:authority` to be legal at all (h2 refuses
+/// to send one without them, RFC 9113 §8.3.1), so overwriting the whole uri with
+/// the origin-form upstream path would break every `mcp-h2` request.
 fn rewrite_mcp_path(uri: &mut Uri, location: &ProxyPassLocation) {
     let Some(mcp_path) = crate::h1_remote_connection::mcp_path(&location.config.proxy_pass_to)
     else {
         return;
     };
 
-    match mcp_path.parse::<Uri>() {
+    apply_upstream_path(uri, mcp_path, location.config.id_string.as_str());
+}
+
+/// Swaps the uri's path-and-query for `upstream_path`, keeping everything else.
+/// On bad input the uri is left untouched and the reason is printed — forwarding
+/// the client's own path would silently 404 on the MCP upstream, so it must not
+/// happen quietly.
+fn apply_upstream_path(uri: &mut Uri, upstream_path: &str, location_id: &str) {
+    let path_and_query = match upstream_path.parse::<hyper::http::uri::PathAndQuery>() {
+        Ok(path_and_query) => path_and_query,
+        Err(err) => {
+            println!(
+                "MCP location [{}]: upstream path '{}' is not a valid path: {:?}",
+                location_id, upstream_path, err
+            );
+            return;
+        }
+    };
+
+    let mut parts = uri.clone().into_parts();
+    parts.path_and_query = Some(path_and_query);
+
+    match Uri::from_parts(parts) {
         Ok(rewritten) => *uri = rewritten,
         Err(err) => {
-            // Config-level breakage (the upstream path is not a valid URI);
-            // forwarding the client path would silently 404 on the upstream, so
-            // say it out loud and leave the request alone.
             println!(
-                "MCP location [{}]: upstream path '{}' is not a valid URI: {:?}",
-                location.config.id_string, mcp_path, err
+                "MCP location [{}]: can not apply upstream path '{}' to uri '{}': {:?}",
+                location_id, upstream_path, uri, err
             );
         }
     }
@@ -663,5 +688,58 @@ impl HttpRequestReader for Parts {
 
     fn get_host<'s>(&'s self) -> Option<&'s str> {
         self.uri.host()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A request that arrived over h2 carries an ABSOLUTE uri, and an h2
+    /// upstream request without `:scheme` / `:authority` is malformed — h2
+    /// refuses to send it at all. So the rewrite must swap the path only.
+    #[test]
+    fn an_absolute_uri_keeps_its_scheme_and_authority() {
+        let mut uri: Uri = "https://mcp.example.com/logs-XXX".parse().unwrap();
+
+        apply_upstream_path(&mut uri, "/mcp", "test");
+
+        assert_eq!(uri.to_string(), "https://mcp.example.com/mcp");
+        assert!(uri.scheme().is_some());
+        assert!(uri.authority().is_some());
+    }
+
+    /// A request that arrived over h1 is origin-form and must stay origin-form.
+    #[test]
+    fn an_origin_form_uri_stays_origin_form() {
+        let mut uri: Uri = "/logs-XXX".parse().unwrap();
+
+        apply_upstream_path(&mut uri, "/mcp", "test");
+
+        assert_eq!(uri.to_string(), "/mcp");
+    }
+
+    /// The client's query string carries nothing an MCP upstream can use; the
+    /// upstream's own query, if it has one, is what must survive.
+    #[test]
+    fn the_upstream_query_replaces_the_client_one() {
+        let mut uri: Uri = "https://mcp.example.com/logs-XXX?session=42"
+            .parse()
+            .unwrap();
+
+        apply_upstream_path(&mut uri, "/mcp?tenant=a", "test");
+
+        assert_eq!(uri.to_string(), "https://mcp.example.com/mcp?tenant=a");
+    }
+
+    /// A path that cannot be applied leaves the request as it was, rather than
+    /// producing a half-rewritten uri.
+    #[test]
+    fn an_invalid_upstream_path_leaves_the_uri_alone() {
+        let mut uri: Uri = "https://mcp.example.com/logs-XXX".parse().unwrap();
+
+        apply_upstream_path(&mut uri, "not a path", "test");
+
+        assert_eq!(uri.to_string(), "https://mcp.example.com/logs-XXX");
     }
 }

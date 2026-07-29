@@ -528,6 +528,8 @@ Publishes one MCP (Model Context Protocol) server under one path. `mcp` talks
 HTTP/1.1 to the upstream, `mcp-h2` talks HTTP/2 — otherwise the two are the
 same location type.
 
+`mcp` lives on an ordinary `http` / `https` endpoint:
+
 ```yaml
 mcp.domain.com:443:
     endpoint:
@@ -539,8 +541,21 @@ mcp.domain.com:443:
       proxy_pass_to: http://service-a:8000/mcp
 
     - path: /service-b
-      type: mcp-h2
+      type: mcp
       proxy_pass_to: http://service-b:8000/mcp
+```
+
+`mcp-h2` needs an `http2` / `https2` endpoint (see the note below):
+
+```yaml
+mcp2.domain.com:443:
+    endpoint:
+      type: https2
+      ssl_certificate: my_ssl_cert
+    locations:
+    - path: /service-c
+      type: mcp-h2
+      proxy_pass_to: http://service-c:8000/mcp
 ```
 
 An MCP location differs from a plain `http` / `http2` location in exactly three

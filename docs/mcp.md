@@ -33,12 +33,18 @@ session identifier is the `Mcp-Session-Id` header.
 So a path-rewriting reverse proxy is a natural fit:
 
 ```
-endpoint: mcp.domain.com (https)
+endpoint: mcp.domain.com (https)          # http/1 endpoint -> `mcp` locations
 locations:
   - path: /service-a   type: mcp      proxy_pass_to: http://service-a:8000/mcp
   - path: /service-b   type: mcp      proxy_pass_to: http://service-b:8000/mcp
+
+endpoint: mcp2.domain.com (https2)        # http/2 endpoint -> `mcp-h2` locations
+locations:
   - path: /service-c   type: mcp-h2   proxy_pass_to: http://service-c:8000/mcp
 ```
+
+(`mcp-h2` under an http/1 endpoint is refused at config time — see "The two
+request paths" below.)
 
 The client is configured with `https://mcp.domain.com/service-a`; the upstream
 always sees its own real path. Sessions, streaming and method dispatch keep
@@ -138,6 +144,16 @@ response is still open blocks B behind A. Compliant Streamable-HTTP clients open
 separate connections for the listening stream and for calls, so this is
 defensive; the real fix is an h2 listener, which removes head-of-line blocking
 at the protocol level.
+
+### `mcp-h2` gets an error page, not a dropped connection
+
+Difference (3) above — drop the client connection instead of substituting an
+error page — exists only on the h1 byte pipeline, which owns the client socket
+and can emit `ResponseEvent::Abort`. The hyper path answers an unreachable
+upstream with the ordinary 502/503 error page, so an `mcp-h2` location (and an
+`mcp` location under an `http2` / `https2` endpoint) hands the MCP client an HTML
+body it cannot parse. Not a regression — the hyper path always did this — but it
+means only two of the three MCP differences hold there.
 
 ### Upstream URL must include the path
 
