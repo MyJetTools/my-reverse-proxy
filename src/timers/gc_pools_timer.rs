@@ -66,6 +66,15 @@ fn collect_desired_keys(cfg: &crate::configurations::AppConfigurationInner) -> D
     out
 }
 
+/// Which pool family a location's upstream lives in. `mcp` / `mcp-h2` are
+/// `http1` / `http2` upstreams — they pick their connection from the very same
+/// pools, so they must be counted as desired here too, or their pool would be
+/// drained on every tick.
+enum PoolFamily {
+    H1,
+    H2,
+}
+
 fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
     let location_id = location.id;
 
@@ -73,7 +82,7 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
     // path with no URL scheme, so `get_scheme()` would return None below and
     // we'd skip the location — leaving the pool orphaned and drained on the
     // next tick.
-    match &location.proxy_pass_to {
+    let (family, model) = match &location.proxy_pass_to {
         ProxyPassToConfig::UnixHttp1(_) => {
             out.h1_uds.insert(location_id);
             return;
@@ -82,12 +91,8 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
             out.h2_uds.insert(location_id);
             return;
         }
-        _ => {}
-    }
-
-    let model = match &location.proxy_pass_to {
-        ProxyPassToConfig::Http1(m) => m,
-        ProxyPassToConfig::Http2(m) => m,
+        ProxyPassToConfig::Http1(m) | ProxyPassToConfig::McpHttp1(m) => (PoolFamily::H1, m),
+        ProxyPassToConfig::Http2(m) | ProxyPassToConfig::McpHttp2(m) => (PoolFamily::H2, m),
         _ => return,
     };
 
@@ -100,9 +105,11 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
         return;
     };
 
+    // Mirrors the factory `create_data_source` picks for the same pair — an h2
+    // location with a ws/wss upstream is served by the h1 pools.
     use rust_extensions::remote_endpoint::Scheme;
-    match &location.proxy_pass_to {
-        ProxyPassToConfig::Http1(_) => match scheme {
+    match family {
+        PoolFamily::H1 => match scheme {
             Scheme::Http | Scheme::Ws => {
                 out.h1_tcp.insert(location_id);
             }
@@ -113,7 +120,7 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
                 out.h1_uds.insert(location_id);
             }
         },
-        ProxyPassToConfig::Http2(_) => match scheme {
+        PoolFamily::H2 => match scheme {
             Scheme::Http => {
                 out.h2_tcp.insert(location_id);
             }
@@ -130,6 +137,5 @@ fn absorb_location(location: &ProxyPassLocationConfig, out: &mut DesiredKeys) {
                 out.h2_uds.insert(location_id);
             }
         },
-        _ => {}
     }
 }

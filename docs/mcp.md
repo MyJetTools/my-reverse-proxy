@@ -1,235 +1,177 @@
 # MCP (Model Context Protocol) support
 
-This document describes how the reverse proxy handles Model Context Protocol
-traffic, the design decisions behind the implementation, and known
-limitations.
+How the reverse proxy handles Model Context Protocol traffic, what an MCP
+location actually changes, and the limitations that remain.
 
 ## Two unrelated `mcp` concepts
 
-The keyword `mcp` appears in two different scopes with completely different
-semantics:
+The keyword `mcp` appears in two scopes with completely different semantics:
 
-1. **`endpoint.type = mcp`** — a TLS-wrapped raw TCP tunnel.
-   Implemented in `src/tcp_listener/mcp/run_mcp_connection.rs`.
-   The listener terminates TLS and then bidirectionally pipes bytes to a
-   single configured upstream `host:port`. It does **not** parse HTTP at all.
-   `https://` upstreams are rejected (the tunnel does not do TLS-to-TLS
-   bridging). Unix sockets are not supported.
+1. **`endpoint.type = mcp`** — a TLS-wrapped raw TCP tunnel. Implemented in
+   `src/tcp_listener/mcp/run_mcp_connection.rs`. The listener terminates TLS and
+   then pipes bytes to one configured upstream `host:port`. It does **not**
+   parse HTTP at all — so it also cannot route by path: it always uses the
+   endpoint's FIRST location. `https://` upstreams are rejected (no TLS-to-TLS
+   bridging), unix sockets are not supported, and `oauth` is refused on it at
+   config time (there is no HTTP layer to hook into).
 
-2. **`location.type = mcp`** — an HTTP/1 proxy-pass with URI rewrite.
-   This is the focus of the rest of this document. It lives inside an
-   ordinary HTTP(S) endpoint and uses the regular `h1_proxy_server` request
-   pipeline. On every request the first line of the HTTP request is
-   rewritten so the upstream sees a fixed, configured path.
+2. **`location.type = mcp` / `location.type = mcp-h2`** — an ordinary HTTP
+   proxy-pass with a URI rewrite. This is what the rest of this document is
+   about, and what every real deployment uses: many MCP servers behind one
+   domain, each on its own path.
 
 These two share only a name; they do not share code.
 
 ## Why the rewrite is correct for Streamable HTTP MCP
 
-The Streamable HTTP MCP transport (spec 2025-03-26) puts the entire protocol
-on a **single URL** per server (e.g. `/mcp`). Every operation — tool calls,
-notifications, the long-lived "listening" SSE stream, session teardown —
-travels as `POST` / `GET` / `DELETE` to that one URL. The protocol carries
-all method and routing information inside the JSON-RPC body, and the session
-identifier is sent as the `Mcp-Session-Id` header.
+The Streamable HTTP MCP transport puts the entire protocol on a **single URL**
+per server (e.g. `/mcp`). Tool calls, notifications, the long-lived listening
+SSE stream and session teardown all travel as `POST` / `GET` / `DELETE` to that
+one URL; method and routing information live in the JSON-RPC body, and the
+session identifier is the `Mcp-Session-Id` header.
 
-Because of that, a path-rewriting reverse proxy is a natural fit:
-
-- The user exposes one MCP server under any path they like
-  (e.g. `https://mcp.domain.com/service-a`).
-- The proxy rewrites every request's first line so the upstream always
-  receives requests on its real endpoint path (e.g. `/mcp` or `/`).
-- Method, body, and headers (including `Mcp-Session-Id`) are forwarded
-  unchanged.
-
-This is just standard reverse-proxy path rewriting; the only thing
-"MCP-specific" about it is that we do **not** try to preserve the original
-client path or query string — there is no useful information in them for an
-MCP upstream.
-
-The legacy "HTTP+SSE" MCP transport (deprecated, two-endpoint with
-`/messages?sessionId=…` and `/sse`) is **not** supported by this rewrite,
-because the legacy transport encodes session state in the query string and
-the rewrite drops the query. We only target Streamable HTTP.
-
-## Target use case
-
-The motivating scenario is hosting many MCP servers behind one domain:
+So a path-rewriting reverse proxy is a natural fit:
 
 ```
 endpoint: mcp.domain.com (https)
 locations:
-  - path: /service-a   type: mcp   proxy_pass_to: http://service-a-host/
-  - path: /service-b   type: mcp   proxy_pass_to: http://service-b-host/
-  - path: /service-c   type: mcp   proxy_pass_to: http://service-c-host/mcp
+  - path: /service-a   type: mcp      proxy_pass_to: http://service-a:8000/mcp
+  - path: /service-b   type: mcp      proxy_pass_to: http://service-b:8000/mcp
+  - path: /service-c   type: mcp-h2   proxy_pass_to: http://service-c:8000/mcp
 ```
 
-Clients configure their MCP client as `https://mcp.domain.com/service-a`,
-the proxy translates this into a request to `http://service-a-host/`, the
-upstream sees `/` (or `/mcp` for service-c) regardless of what path the
-client sent. Sessions, streaming, and method dispatch all continue to work
-because they live in body and headers, not in the URL.
+The client is configured with `https://mcp.domain.com/service-a`; the upstream
+always sees its own real path. Sessions, streaming and method dispatch keep
+working because they live in body and headers, not in the URL.
 
-## Implementation
+The legacy "HTTP+SSE" two-endpoint transport (`/messages?sessionId=…` + `/sse`)
+is **not** supported: it encodes session state in the query string, which the
+rewrite drops.
 
-### Type-level invariants
+## What an MCP location actually changes
 
-`mcp` is HTTP/1 only. The encoding makes this an invariant on the type
-system, not a runtime flag:
+Exactly three things, relative to a plain `http` / `http2` location:
 
-- `ProxyPassToConfig` has a dedicated variant `McpHttp1(ProxyPassToModel)`.
-- `LocationType::Mcp` always compiles to that variant in
-  `compile_location_proxy_pass_to.rs`.
-- There is no `is_mcp` boolean anywhere — the variant *is* the marker.
+1. **Path rewrite** — the request's path-and-query is replaced with the one from
+   `proxy_pass_to` (`h1_remote_connection::mcp_path`). On the h1 byte pipeline
+   this is applied by `H1Reader::compile_headers`
+   (`Http1Headers::push_first_line_with_other_path`); on the hyper path by
+   `rewrite_mcp_path` in `http_request_builder.rs`. Idempotent when listen path
+   and upstream path are equal.
+2. **Read timeout** — `DEFAULT_MCP_READ_TIMEOUT` (1 hour) instead of the
+   endpoint's read timeout, because the listening SSE stream idles with no
+   keepalive. On the byte pipeline this is set per request in the worker; on the
+   hyper path it is `PoolParams::read_stream_timeout`, applied to every
+   connection the location's pool creates.
+3. **Failure reaction** — when the upstream cannot be reached the client
+   connection is dropped (`ResponseEvent::Abort`) instead of an HTML error page
+   being substituted. A JSON-RPC client cannot parse "Bad gateway"; the one
+   signal it acts on is the transport dropping.
 
-This makes it impossible to construct an MCP location over HTTP/2 or over
-unix sockets by mistake.
+Everything else is the ordinary upstream machinery, deliberately: **upstream
+selection and pooling for `mcp` are identical to `http1`, and for `mcp-h2`
+identical to `http2`.** There is no MCP-specific connection holder, no
+dedicated-connection carve-out, no separate GC.
 
-### Listener-side invariants
+## The pool key: for MCP the path is part of the identity
 
-`ListenHttpEndpointType::Mcp` (used only by `endpoint.type = mcp`) advertises
-`http/1.1` over ALPN and lives in `can_be_under_the_same_port` next to
-`Https1` only. It cannot share a port with HTTP/2-only listeners.
+`connection_key` (`src/h1_remote_connection/upstream_state.rs`) keys an upstream
+by protocol + remote host — **plus the upstream path for `mcp` / `mcp-h2`**.
 
-### Path rewrite
+That asymmetry is not an accident. An ordinary location forwards the client's
+own path, so `host:port` fully identifies what a connection talks to. An MCP
+location rewrites every request onto its configured path, so two MCP servers
+published on one `host:port` under different paths are *different upstreams*;
+sharing a connection between them is meaningless, and the key says so.
 
-The path-and-query string from the configured `proxy_pass_to` is captured
-once when an MCP upstream is opened and stored on the `Mcp` variant of
-`UpstreamState` (see "State machine" below). On every request, the
-server loop reads it from `UpstreamAccess::mcp_path` and passes it to
-`H1Reader::compile_headers`, which replaces the request's first-line
-path-and-query via `Http1Headers::push_first_line_with_other_path` before
-forwarding to the upstream.
+On the hyper path the equivalent identity is `PoolDesc.location_id`, which is
+derived from `id_string` = `listen_host|path->type|upstream` — already
+per-location.
 
-The method (POST/GET/DELETE), HTTP version, and all headers are preserved.
+### History — the bug this replaced
 
-The rewrite is idempotent: if the listen path equals the upstream path the
-result is identical to the input.
+MCP used to bypass the pool entirely: each client TCP held ONE `McpUpstream`
+slot, on the theory that "a client connection talks to exactly one MCP
+endpoint". That is false. An MCP client (Claude Code, for one) reuses a single
+keep-alive connection across several MCP servers on the same host. The slot was
+not keyed, so a request for `/service-b` could be written onto the parked
+connection to `/service-a` — and get service-a's answer. The slot, its
+registry, its idle-timeout GC and `DEFAULT_MCP_IDLE_TIMEOUT` are gone; a keyed
+pool has no such state to get wrong.
 
-### State machine: `UpstreamState`
+## The two request paths
 
-For each client TCP, `serve_reverse_proxy` keeps a single `UpstreamState`
-that captures everything the proxy knows about upstream connections for
-that client. It is a three-state enum:
+Which machinery serves a location depends on the ENDPOINT type, not the
+location type:
 
-```rust
-pub enum UpstreamState {
-    Unknown,                                                // no requests yet
-    Http(HashMap<i64, Upstream>),                           // key: location.id
-    Mcp { location_id: i64, upstream: Upstream, mcp_path: String },
-}
-```
+| endpoint type | request path | h1 upstream | h2 upstream |
+|---|---|---|---|
+| `http`, `https` | h1 byte pipeline (`h1_proxy_server::pipeline`) | `H1PoolHolder`, per client TCP, keyed | **none** |
+| `http2`, `https2` | hyper path (`http_proxy_pass`) | `APP_CTX.h1_*_pools` (`upstream_h1_pool`) | `APP_CTX.h2_*_pools` (`upstream_h2_pool`) |
 
-After the first request, the client TCP is "marked": the path resolves to
-either a regular http/https location (transition to `Http`) or to an MCP
-location (transition to `Mcp`). HTTP/1 framing on the client plus normal
-client behavior (an MCP client never emits non-MCP requests on the same TCP
-and vice versa) keeps the state stable for the rest of the connection.
-
-The state machine is permissive: cross-protocol transitions are allowed
-silently (drop previous state's contents, build a fresh state of the new
-kind). This is safe because by HTTP/1 framing the previous response was
-already delivered before the next request arrived. In practice transitions
-do not trigger on real MCP/HTTP traffic.
-
-For MCP, only **one** upstream connection lives at a time. Multiple MCP
-requests on the same client TCP reuse it as long as they target the same
-`location.id`; a request to a different MCP location replaces the upstream
-(typical real-world deployments target one MCP server per client TCP).
-
-For HTTP, the variant holds a per-`location.id` `HashMap` so several
-different non-MCP locations on the same endpoint can each keep their own
-upstream alive across requests on a keep-alive client connection.
-
-The decision logic lives in `UpstreamState::get_or_connect`
-(`src/h1_remote_connection/upstream_state.rs`), exposed via the small
-`UpstreamAccess<'a> { upstream, mcp_path }` borrow. The server loop is
-mcp-agnostic — it never matches on the variant or branches on `is_mcp`.
-
-### Diagnostics
-
-`ProxyPassToConfig::get_type_as_str()` returns `"mcp"` for `McpHttp1` so the
-admin `/configuration` endpoint reflects the real configured type, not
-`"http1"`.
+Consequence: **`mcp-h2` requires an `http2` / `https2` endpoint.** The byte
+pipeline has no h2 upstream at all, so the combination is refused when the
+configuration is compiled (`compile_http_configuration`) rather than failing
+every request.
 
 ## Known limitations
 
+### An SSE stream occupies an h1 upstream connection for its whole life
+
+h1 is one request per connection, and the listening GET never ends. On the hyper
+path the rented pool entry is held until the body ends, so N concurrent
+listening streams to one location pin N entries out of `pool_size` (default 5);
+short JSON-RPC POSTs beyond that are served by on-demand overflow connections
+(`max_disposables`, default 50 per pool) and, past that, wait up to
+`connect_timeout` and then fail. Raise `pool_size` on heavy MCP locations, or
+use `mcp-h2` — multiplexing removes the problem entirely.
+
+On the byte pipeline the same fact is harmless: connections are handed out by
+value, an SSE response is not self-delimiting so it is simply never returned to
+the pool, and the next request dials a fresh one.
+
 ### HTTP/1 head-of-line on the client side
 
-The proxy server side speaks HTTP/1 only. `H1ServerWritePart` serializes
-responses in request-arrival order: a response may only be flushed to the
-client when its request is at position 0 of the `current_requests` queue,
-and is buffered otherwise (`src/h1_proxy_server/h1_server_write_part.rs`).
-
-Consequence: if a single client TCP connection issues request A (returns
-SSE — never ends) and then issues request B over the same TCP via keep-alive,
-B's response will be buffered indefinitely behind A. By HTTP/1 framing this
-should not happen for compliant clients (request B cannot be sent before
-response A is fully read), so this is mostly a defensive limitation against
-misbehaving clients.
-
-In practice, modern Streamable HTTP clients open separate TCP connections
-for the long-lived listening stream and for short request/response calls,
-so they do not hit this limit. Clients that pipeline or reuse a single TCP
-across SSE-returning requests will block.
-
-There is no plan to fix this on HTTP/1: the proper solution is HTTP/2
-multiplexing on the listener side, which removes the head-of-line block at
-the protocol level. That work is part of the longer-term HTTP/2 migration.
-
-### MCP location under an HTTP/2 listener
-
-`location.type = mcp` is only meaningful under an HTTP/1 or HTTPS/1
-listener, where requests flow through `h1_proxy_server` and the rewrite
-runs. Under an HTTPS/2 listener the request flows through the legacy
-hyper-based pipeline (`create_data_source` in `proxy_pass_location_config.rs`),
-which does **not** apply the MCP rewrite. `McpHttp1` is currently merged
-with `Http1` in that path, so the request would silently be forwarded
-without the path rewrite — MCP semantics would not work.
-
-This is a silent misconfiguration risk; if you place `type: mcp` locations,
-keep the surrounding endpoint at `type: http` / `https` (HTTP/1).
+Under an `https` (h1) endpoint the proxy serializes responses in request-arrival
+order. A client that sends request B on the same TCP while request A's SSE
+response is still open blocks B behind A. Compliant Streamable-HTTP clients open
+separate connections for the listening stream and for calls, so this is
+defensive; the real fix is an h2 listener, which removes head-of-line blocking
+at the protocol level.
 
 ### Upstream URL must include the path
 
-`MyReverseProxyRemoteEndpoint::get_path_and_query()` falls back to `/` when
-the upstream URL has no path. If your MCP upstream listens on a non-root
-path (e.g. `/mcp`), make sure to write it explicitly:
+`get_path_and_query()` falls back to `/` when the upstream URL has no path, so
+`proxy_pass_to: http://upstream-host` rewrites every request to `/` — which most
+MCP servers 404. Write the path explicitly.
 
-```
-proxy_pass_to: http://upstream-host/mcp   # explicit path
-```
+### Compression
 
-A bare `http://upstream-host` will rewrite to `GET / HTTP/1.1`, which most
-MCP servers will return 404 for.
+`compress: true` gzips the response, which buffers SSE events until the window
+flushes. Do not enable it on MCP locations.
 
-### Compression on MCP locations
+### Auth
 
-`compress: true` on a location wraps the response in gzip. For SSE streams
-this would buffer events until the gzip window flushes, breaking real-time
-event delivery. Don't enable `compress` on MCP locations.
-
-### Auth on MCP locations
-
-If the endpoint has `g_auth` (Google login redirect), an MCP client that
-isn't a browser will receive a 302 redirect and fail. MCP clients are
-typically programmatic; place MCP endpoints behind plain bearer auth (via
-upstream) or no proxy-level auth, not behind redirect-based login flows.
+`google_auth` redirects to a browser login — a programmatic MCP client just
+fails on the 302. Use the endpoint's `oauth` block (the proxy's own OAuth 2.1
+server; it strips the `authorization` header before the upstream, as the MCP
+authorization spec requires), per-location `auth_header`, or no proxy-level auth
+at all. See [mcp-oauth.md](mcp-oauth.md).
 
 ## Files involved
 
-- `src/configurations/proxy_pass_to_config.rs` — `ProxyPassToConfig::McpHttp1`
-- `src/scripts/compile_location_proxy_pass_to.rs` — `LocationType::Mcp` →
-  `McpHttp1`
-- `src/h1_remote_connection/upstream.rs` — `Upstream` (the upstream
-  connection type, mcp-agnostic)
-- `src/h1_remote_connection/upstream_state.rs` — `UpstreamState` enum and
-  `UpstreamAccess`
-- `src/h1_proxy_server/server_loop.rs` — owns `UpstreamState` per client TCP
-- `src/h1_proxy_server/h1_read_part.rs` — applies `mcp_path` in
-  `compile_headers`
-- `src/h1_utils/http_headers.rs` — `push_first_line_with_other_path`
-- `src/configurations/http_type.rs` — `ListenHttpEndpointType::Mcp` ALPN
-  rules
+- `src/configurations/proxy_pass_to_config.rs` — `McpHttp1` / `McpHttp2`
+  variants and `is_mcp()`
+- `src/settings/location_settings.rs`, `src/scripts/compile_location_proxy_pass_to.rs`
+  — `mcp` / `mcp-h2` → those variants
+- `src/scripts/compile_http_configuration.rs` — refuses `mcp-h2` under an h1
+  endpoint
+- `src/h1_remote_connection/upstream_state.rs` — `mcp_path`, `connection_key`
+- `src/h1_proxy_server/pipeline/worker.rs` — read-timeout carve-out, `Abort`
+  instead of an error page
+- `src/http_proxy_pass/http_request_builder.rs` — `rewrite_mcp_path` (hyper path)
+- `src/configurations/proxy_pass_location_config.rs` — content source + pool
+  factory per location
+- `src/timers/gc_pools_timer.rs` — mcp locations counted in the desired pool set
 - `src/tcp_listener/mcp/run_mcp_connection.rs` — the unrelated
   `endpoint.type = mcp` raw TLS tunnel

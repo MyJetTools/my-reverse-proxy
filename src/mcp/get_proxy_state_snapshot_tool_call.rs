@@ -105,7 +105,7 @@ pub struct LocationSnapshot {
     pub id_string: String,
 
     #[property(
-        description = "proxy_pass_to type: http1 / http2 / mcp / unix+http1 / unix+http2 / files_path / static / drop"
+        description = "proxy_pass_to type: http1 / http2 / mcp / mcp-h2 / unix+http1 / unix+http2 / files_path / static / drop"
     )]
     pub proxy_pass_to_type: String,
 

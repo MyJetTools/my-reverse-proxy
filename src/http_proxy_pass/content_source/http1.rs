@@ -13,9 +13,9 @@ pub struct Http1ContentSource {
     pub pool_params: PoolParams,
     pub factory: ConnectorFactory<HttpConnector>,
     pub request_timeout: std::time::Duration,
-    /// `true` when this h1 source backs an `mcp` location — such requests get
-    /// a dedicated non-pooled connection (see `execute`) and upstream tracing
-    /// logs.
+    /// `true` when this h1 source backs an `mcp` location. Upstream selection
+    /// is NOT affected — mcp takes a pooled connection like any other location;
+    /// this only turns on the upstream tracing logs.
     pub is_mcp: bool,
 }
 
@@ -43,11 +43,6 @@ impl Http1ContentSource {
 
         let handle = if is_ws {
             pool.create_ws_connection().await
-        } else if self.is_mcp {
-            // MCP responses can be infinite SSE streams; give each request its
-            // own connection so concurrent JSON-RPC POSTs never pipeline behind
-            // an in-flight stream on a shared pooled connection.
-            pool.create_dedicated_connection().await
         } else {
             pool.get_connection().await
         }

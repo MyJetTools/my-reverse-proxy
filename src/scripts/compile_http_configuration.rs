@@ -81,6 +81,30 @@ pub async fn compile_http_configuration(
             &resolved,
         )
         .await?;
+
+        // `mcp-h2` talks h2 to the upstream, and the h2 upstream pools are only
+        // reachable from the hyper request path — which runs for `http2` /
+        // `https2` endpoints. Under an http/1 endpoint the request goes through
+        // the byte pipeline, which has no h2 upstream at all, so every request
+        // to this location would fail. Say it at config time.
+        if http_type.is_http1_or_mcp()
+            && matches!(
+                proxy_pass_to.proxy_pass_to,
+                crate::configurations::ProxyPassToConfig::McpHttp2(_)
+            )
+        {
+            return Err(format!(
+                "Endpoint '{}' is 'type: {}' (http/1), but its location '{}' is 'type: {}', which \
+                 requires an http/2 upstream. Use 'type: {}' here, or move the location to an \
+                 endpoint of 'type: http2' / 'type: https2'",
+                listen_host,
+                http_type.as_str(),
+                proxy_pass_to.path,
+                crate::consts::location_type::MCP_H2,
+                crate::consts::location_type::MCP,
+            ));
+        }
+
         {
             locations.push(Arc::new(proxy_pass_to));
         }

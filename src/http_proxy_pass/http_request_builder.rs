@@ -54,6 +54,32 @@ fn is_h2_websocket_connect(parts: &Parts) -> bool {
     protocol.as_ref().eq_ignore_ascii_case(b"websocket")
 }
 
+/// An MCP location publishes one upstream MCP server under one listen path, and
+/// the whole protocol lives on that single URL — the client's path only selects
+/// the location, it carries nothing the upstream can use. So every request is
+/// rewritten onto the path configured in `proxy_pass_to`, exactly as the h1 byte
+/// pipeline does via `H1Reader::compile_headers`. A no-op for every other
+/// location type, and idempotent when the two paths are equal.
+fn rewrite_mcp_path(uri: &mut Uri, location: &ProxyPassLocation) {
+    let Some(mcp_path) = crate::h1_remote_connection::mcp_path(&location.config.proxy_pass_to)
+    else {
+        return;
+    };
+
+    match mcp_path.parse::<Uri>() {
+        Ok(rewritten) => *uri = rewritten,
+        Err(err) => {
+            // Config-level breakage (the upstream path is not a valid URI);
+            // forwarding the client path would silently 404 on the upstream, so
+            // say it out loud and leave the request alone.
+            println!(
+                "MCP location [{}]: upstream path '{}' is not a valid URI: {:?}",
+                location.config.id_string, mcp_path, err
+            );
+        }
+    }
+}
+
 impl HttpRequestBuilder {
     pub fn new(src: hyper::Request<hyper::body::Incoming>) -> Self {
         let (parts, body) = src.into_parts();
@@ -90,9 +116,7 @@ impl HttpRequestBuilder {
         }
 
         if dest_http1.is_none() {
-            let (parts, body) = self
-                .build_request(location.compress, location.config.id, ip)
-                .await?;
+            let (parts, body) = self.build_request(location, ip).await?;
 
             return Ok(TransformedRequest {
                 req_parts: parts.clone(),
@@ -107,9 +131,7 @@ impl HttpRequestBuilder {
             return self.http2_to_http1(location, ip).await;
         }
 
-        let (parts, body) = self
-            .build_request(location.compress, location.config.id, ip.clone())
-            .await?;
+        let (parts, body) = self.build_request(location, ip.clone()).await?;
 
         let mut web_socket_upgrade = None;
         if parts.headers.get("sec-websocket-key").is_some() {
@@ -349,7 +371,8 @@ impl HttpRequestBuilder {
             "/"
         };
 
-        let uri: Uri = path_and_query.parse().unwrap();
+        let mut uri: Uri = path_and_query.parse().unwrap();
+        rewrite_mcp_path(&mut uri, location);
 
         let host_header = if let Some(host) = self.parts.headers.get("host") {
             host.to_str().unwrap().to_string()
@@ -446,17 +469,21 @@ impl HttpRequestBuilder {
 
     async fn build_request(
         self,
-        compress: bool,
-        location_id: i64,
+        location: &ProxyPassLocation,
         ip: Option<String>,
     ) -> Result<(Parts, Full<Bytes>), ProxyPassError> {
         use http_body_util::BodyExt;
+
+        let compress = location.compress;
+        let location_id = location.config.id;
 
         let debug = crate::app::APP_CTX
             .debug_flags
             .is_location_debug(location_id);
 
         let mut parts = self.parts.clone();
+
+        rewrite_mcp_path(&mut parts.uri, location);
 
         let collected = self.body.collect().await?;
         let bytes = collected.to_bytes();

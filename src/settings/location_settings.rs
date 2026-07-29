@@ -12,6 +12,7 @@ pub enum LocationType {
     UnixSocketHttp,
     UnixSocketHttp2,
     Mcp,
+    McpH2,
     Drop,
     DynamicProxy,
 }
@@ -102,6 +103,7 @@ impl LocationSettings {
                 "https2" => return Ok(LocationType::Https2.into()),
                 STATIC => return Ok(LocationType::StaticContent.into()),
                 MCP => return Ok(LocationType::Mcp.into()),
+                MCP_H2 => return Ok(LocationType::McpH2.into()),
                 "drop" => return Ok(LocationType::Drop.into()),
                 DYNAMIC | "dynamic_proxy" => return Ok(LocationType::DynamicProxy.into()),
                 _ => return Err(format!("Unknown remote location type {}", location_type)),

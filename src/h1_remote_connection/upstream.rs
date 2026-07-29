@@ -166,8 +166,18 @@ impl Upstream {
                 }
                 _ => todo!("UnixHttp1 over gateway/ssh not implemented"),
             },
-            ProxyPassToConfig::Http2(_) => todo!("Http2 temporary is disabled"),
-            ProxyPassToConfig::UnixHttp2(_) => todo!("Not Implemented"),
+            // This pipeline speaks h1 to the upstream and nothing else. An h2
+            // upstream is served by the hyper path, which only runs under an
+            // `http2` / `https2` endpoint — so this is a misconfiguration, not
+            // a runtime fault, and it is refused (a `todo!()` here used to take
+            // the worker task down with it).
+            ProxyPassToConfig::Http2(_)
+            | ProxyPassToConfig::McpHttp2(_)
+            | ProxyPassToConfig::UnixHttp2(_) => {
+                return Err(NetworkError::OtherStr(
+                    "an http2 upstream requires an http2/https2 endpoint — this endpoint is http/1",
+                ));
+            }
             ProxyPassToConfig::FilesPath(_)
             | ProxyPassToConfig::Static(_)
             | ProxyPassToConfig::Drop

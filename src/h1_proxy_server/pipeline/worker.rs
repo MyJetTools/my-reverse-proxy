@@ -6,9 +6,8 @@ use crate::configurations::{HttpEndpointInfo, ProxyPassToConfig};
 use crate::h1_proxy_server::{
     H1HeadersKind, H1Reader, H1Writer, HttpConnectionInfo, ProxyServerError,
 };
-use crate::h1_remote_connection::{H1PoolHolder, McpUpstream, OwnedUpstream, Upstream};
+use crate::h1_remote_connection::{H1PoolHolder, OwnedUpstream};
 use crate::h1_utils::HttpContentLength;
-use crate::network_stream::NetworkError;
 
 use super::{ChannelSink, ResponseEvent};
 
@@ -21,10 +20,6 @@ const MAX_DELIVERY_ATTEMPTS: u32 = 2;
 /// spawned worker task.
 pub struct UpstreamRequest {
     pub pool: Arc<H1PoolHolder>,
-    /// Set exactly for `mcp` locations: the single connection this client TCP
-    /// keeps, used INSTEAD of `pool`. Its presence is what makes this an MCP
-    /// request — there is no `is_mcp` flag to disagree with it.
-    pub mcp: Option<Arc<McpUpstream>>,
     /// Identity of the upstream (also the pool key). Owned because for
     /// dynamic_proxy it is synthesized per request.
     pub proxy_pass_to: ProxyPassToConfig,
@@ -61,7 +56,6 @@ pub struct UpstreamRequest {
 pub async fn run_upstream_request(req: UpstreamRequest) {
     let UpstreamRequest {
         pool,
-        mcp,
         proxy_pass_to,
         end_point_info,
         http_connection_info,
@@ -73,8 +67,7 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
 
     let endpoint = end_point_info.host_endpoint.as_str();
     let ip = http_connection_info.connection_ip.get_ip_log();
-    // mcp keeps its one connection on the client TCP instead of in the pool.
-    let is_mcp = mcp.is_some();
+    let is_mcp = proxy_pass_to.is_mcp();
 
     // An MCP listening stream is SSE that legitimately idles with no keepalive
     // between server-initiated messages, far longer than a normal response body
@@ -111,8 +104,7 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
         attempt += 1;
         let last_attempt = attempt >= MAX_DELIVERY_ATTEMPTS;
 
-        let (mut owned, reused) = match acquire(mcp.as_ref(), &pool, &proxy_pass_to, attempt).await
-        {
+        let (mut owned, reused) = match pool.acquire(&proxy_pass_to).await {
             Ok(c) => c,
             Err(err) => {
                 crate::app::APP_CTX.proxy_logs.write_returned_5xx(
@@ -337,37 +329,8 @@ pub async fn run_upstream_request(req: UpstreamRequest) {
             disconnect_trigger,
             ssh_handler,
         };
-        match mcp.as_ref() {
-            Some(mcp) => mcp.put(owned),
-            None => pool.release(&proxy_pass_to, owned),
-        }
+        pool.release(&proxy_pass_to, owned);
     }
-}
-
-/// Check out a connection for one delivery attempt, reporting whether it was
-/// already established (`true`) or freshly dialled (`false`) — the replay rule
-/// turns on that distinction.
-///
-/// mcp bypasses the pool entirely: its one connection lives on the client TCP.
-/// Only the first attempt may reuse it; a retry exists precisely because the
-/// kept one was no good, so it always dials.
-async fn acquire(
-    mcp: Option<&Arc<McpUpstream>>,
-    pool: &H1PoolHolder,
-    proxy_pass_to: &ProxyPassToConfig,
-    attempt: u32,
-) -> Result<(OwnedUpstream, bool), NetworkError> {
-    let Some(mcp) = mcp else {
-        return pool.acquire(proxy_pass_to).await;
-    };
-
-    if attempt == 1 {
-        if let Some(owned) = mcp.take() {
-            return Ok((owned, true));
-        }
-    }
-
-    Ok((Upstream::connect_owned(proxy_pass_to).await?, false))
 }
 
 /// Whether an upstream failure looks like a connection that went stale rather
@@ -426,6 +389,7 @@ async fn fail_request(response_tx: &mpsc::Sender<ResponseEvent>, is_mcp: bool, p
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::network_stream::NetworkError;
     use std::time::Duration;
 
     /// The case the whole fix exists for: the upstream closed a kept connection,

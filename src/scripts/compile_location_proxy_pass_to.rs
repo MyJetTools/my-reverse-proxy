@@ -20,134 +20,46 @@ pub async fn compile_location_proxy_pass_to(
         None => LocationType::detect_from_location_settings(location_settings)?,
     };
 
+    // Every network location type compiles the same model out of
+    // `proxy_pass_to` and differs only in which variant wraps it — the variant
+    // is the only decision, so the parsing lives in one helper.
     let proxy_pass_to = match location_type {
-        LocationType::UnixSocketHttp => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http location type".to_string());
-            }
+        LocationType::UnixSocketHttp => ProxyPassToConfig::UnixHttp1(
+            compile_model(location_settings, settings_model, resolved, "unix+http").await?,
+        ),
 
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
+        LocationType::UnixSocketHttp2 => ProxyPassToConfig::UnixHttp2(
+            compile_model(location_settings, settings_model, resolved, "unix+http2").await?,
+        ),
 
-            ProxyPassToConfig::UnixHttp1(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
+        LocationType::Http | LocationType::Https1 => ProxyPassToConfig::Http1(
+            compile_model(location_settings, settings_model, resolved, "http").await?,
+        ),
 
-        LocationType::UnixSocketHttp2 => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http location type".to_string());
-            }
+        LocationType::Mcp => ProxyPassToConfig::McpHttp1(
+            compile_model(
+                location_settings,
+                settings_model,
+                resolved,
+                crate::consts::location_type::MCP,
+            )
+            .await?,
+        ),
 
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
+        LocationType::McpH2 => ProxyPassToConfig::McpHttp2(
+            compile_model(
+                location_settings,
+                settings_model,
+                resolved,
+                crate::consts::location_type::MCP_H2,
+            )
+            .await?,
+        ),
 
-            ProxyPassToConfig::UnixHttp2(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
-        LocationType::Http => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http location type".to_string());
-            }
+        LocationType::Http2 | LocationType::Https2 => ProxyPassToConfig::Http2(
+            compile_model(location_settings, settings_model, resolved, "http2").await?,
+        ),
 
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
-
-            ProxyPassToConfig::Http1(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
-        LocationType::Mcp => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for mcp location type".to_string());
-            }
-
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
-
-            ProxyPassToConfig::McpHttp1(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
-        LocationType::Http2 => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http2 location type".to_string());
-            }
-
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
-
-            ProxyPassToConfig::Http2(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
-        LocationType::Https1 => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http2 location type".to_string());
-            }
-
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
-
-            ProxyPassToConfig::Http1(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
-        LocationType::Https2 => {
-            if location_settings.proxy_pass_to.is_none() {
-                return Err("proxy_pass_to is required for http2 location type".to_string());
-            }
-
-            let proxy_pass_to = location_settings.proxy_pass_to.clone().unwrap();
-
-            ProxyPassToConfig::Http2(ProxyPassToModel {
-                remote_host: MyReverseProxyRemoteEndpoint::try_parse(
-                    proxy_pass_to.as_str(),
-                    settings_model,
-                )
-                .await?,
-                request_timeout: resolved.request_timeout,
-                connect_timeout: resolved.connect_timeout,
-                pool_tuning: PoolTuning::from_resolved(resolved),
-            })
-        }
         LocationType::Files => {
             if location_settings.proxy_pass_to.is_none() {
                 return Err("proxy_pass_to is required for files location type".to_string());
@@ -200,6 +112,33 @@ pub async fn compile_location_proxy_pass_to(
     );
 
     Ok(result)
+}
+
+/// Parses `proxy_pass_to` into the upstream model shared by every network
+/// location type. `location_type_name` only names the type in the error.
+async fn compile_model(
+    location_settings: &LocationSettings,
+    settings_model: &SettingsCompiled,
+    resolved: &ResolvedTimeouts,
+    location_type_name: &str,
+) -> Result<ProxyPassToModel, String> {
+    let Some(proxy_pass_to) = location_settings.proxy_pass_to.as_ref() else {
+        return Err(format!(
+            "proxy_pass_to is required for {} location type",
+            location_type_name
+        ));
+    };
+
+    Ok(ProxyPassToModel {
+        remote_host: MyReverseProxyRemoteEndpoint::try_parse(
+            proxy_pass_to.as_str(),
+            settings_model,
+        )
+        .await?,
+        request_timeout: resolved.request_timeout,
+        connect_timeout: resolved.connect_timeout,
+        pool_tuning: PoolTuning::from_resolved(resolved),
+    })
 }
 
 async fn get_static_content_body(body: String) -> Result<Vec<u8>, String> {

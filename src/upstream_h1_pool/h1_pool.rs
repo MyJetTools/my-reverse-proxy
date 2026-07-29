@@ -190,20 +190,6 @@ where
         Ok(H1ClientHandle::ws(client))
     }
 
-    /// Fresh non-pooled client for a single request whose response may stream
-    /// indefinitely (e.g. an MCP SSE channel). Not stored, not rented, not
-    /// counted against the disposable budget. The caller MUST tie the returned
-    /// handle to the response body (see `attach_conn_guard`) — when the body
-    /// ends and the handle drops, the last Arc drops and the connection is
-    /// disposed. Bypassing the pool means concurrent requests to the same MCP
-    /// upstream never pipeline behind the in-flight stream.
-    pub async fn create_dedicated_connection(
-        &self,
-    ) -> Result<H1ClientHandle<TStream, TConnector>, MyHttpClientError> {
-        let client = Arc::new(self.connect_one().await?);
-        Ok(H1ClientHandle::dedicated(client))
-    }
-
     async fn connect_one(&self) -> Result<MyHttpClient<TStream, TConnector>, MyHttpClientError> {
         let (connector, metrics) = (self.factory)();
         let mut client = MyHttpClient::new_with_metrics(connector, metrics);

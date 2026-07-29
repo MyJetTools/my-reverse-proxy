@@ -50,10 +50,6 @@ pub struct AppContext {
     pub h1_tls_pools: H1PoolRegistry<TlsStream<TcpStream>, HttpTlsConnector>,
     pub h1_uds_pools: H1PoolRegistry<tokio::net::UnixStream, UnixSocketHttpConnector>,
 
-    /// Live per-connection MCP upstream slots (see [`crate::h1_remote_connection::McpUpstream`]).
-    /// Swept by the connections GC timer to close ones left idle too long.
-    pub mcp_upstreams: crate::h1_remote_connection::McpUpstreamRegistry,
-
     id: AtomicI64,
     pub connection_settings: ConnectionsSettingsModel,
     pub default_h2_livness_url: Option<String>,
@@ -183,7 +179,6 @@ impl AppContext {
             h1_tcp_pools: H1PoolRegistry::new(),
             h1_tls_pools: H1PoolRegistry::new(),
             h1_uds_pools: H1PoolRegistry::new(),
-            mcp_upstreams: crate::h1_remote_connection::McpUpstreamRegistry::new(),
             gateway_server: gateway_server,
             gateway_clients: gateway_clients,
             http_control_port,

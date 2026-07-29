@@ -6,5 +6,3 @@ mod upstream_state;
 pub use upstream_state::*;
 mod h1_pool_holder;
 pub use h1_pool_holder::*;
-mod mcp_upstream;
-pub use mcp_upstream::*;

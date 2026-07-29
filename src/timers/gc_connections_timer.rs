@@ -7,6 +7,5 @@ impl MyTimerTick for GcConnectionsTimer {
     async fn tick(&self) {
         crate::app::APP_CTX.http_over_ssh_clients_pool.gc();
         crate::app::APP_CTX.http2_over_ssh_clients_pool.gc();
-        crate::app::APP_CTX.mcp_upstreams.gc();
     }
 }

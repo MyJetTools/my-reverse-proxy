@@ -522,6 +522,58 @@ localhost:8001:
       proxy_pass_to: ~/sockets/myapp.sock
 ```
 
+### Mcp / Mcp-h2
+
+Publishes one MCP (Model Context Protocol) server under one path. `mcp` talks
+HTTP/1.1 to the upstream, `mcp-h2` talks HTTP/2 — otherwise the two are the
+same location type.
+
+```yaml
+mcp.domain.com:443:
+    endpoint:
+      type: https
+      ssl_certificate: my_ssl_cert
+    locations:
+    - path: /service-a
+      type: mcp
+      proxy_pass_to: http://service-a:8000/mcp
+
+    - path: /service-b
+      type: mcp-h2
+      proxy_pass_to: http://service-b:8000/mcp
+```
+
+An MCP location differs from a plain `http` / `http2` location in exactly three
+ways:
+
+- **The request path is rewritten** onto the path in `proxy_pass_to`. The whole
+  Streamable-HTTP protocol lives on one URL, so the client's path only picks the
+  location and carries nothing the upstream can use — write the upstream path
+  explicitly (`http://host:8000/mcp`, not `http://host:8000`, which rewrites to
+  `/`).
+- **The read timeout is the long MCP one** (1 hour). The listening SSE stream
+  legitimately idles between server-initiated messages, and the ordinary read
+  timeout would tear a healthy stream down.
+- **A failed upstream drops the client connection** instead of substituting an
+  HTML error page — a JSON-RPC client cannot read one, and the transport
+  dropping is the one thing it does act on.
+
+Everything else — connecting, pooling, liveness, retries — is the ordinary
+`http` / `http2` upstream machinery. In particular the upstream pool is keyed by
+`host:port` **plus the upstream path**, so several MCP servers published on one
+`host:port` under different paths never share a connection.
+
+Notes:
+
+- `mcp-h2` is served by the HTTP/2 request path, so it needs an endpoint of
+  `type: http2` / `type: https2`. Under an `http` / `https` endpoint the config
+  is refused at load time with an explicit message.
+- Do not set `compress: true` on an MCP location: gzip buffers the response
+  until the window flushes, which breaks SSE event delivery.
+- `type: mcp` on a **location** has nothing to do with `type: mcp` on an
+  **endpoint** (the latter is a raw TCP bridge, see [Mcp
+  endpoints](#mcp-model-context-protocol)).
+
 ### Drop
 
 Silently drops the connection for any request matching this location. No
