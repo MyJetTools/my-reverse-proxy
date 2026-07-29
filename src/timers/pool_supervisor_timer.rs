@@ -1,4 +1,4 @@
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 use crate::app::APP_CTX;
 
@@ -9,7 +9,7 @@ pub struct PoolSupervisorTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for PoolSupervisorTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         for pool in APP_CTX.h1_tcp_pools.list_pools() {
             pool.supervisor_tick().await;
         }
@@ -28,5 +28,7 @@ impl MyTimerTick for PoolSupervisorTimer {
         for pool in APP_CTX.h2_uds_pools.list_pools() {
             pool.supervisor_tick().await;
         }
+
+        RepeatTimerIteration::WithInterval
     }
 }

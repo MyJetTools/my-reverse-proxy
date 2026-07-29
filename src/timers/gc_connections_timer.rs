@@ -1,11 +1,13 @@
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 pub struct GcConnectionsTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for GcConnectionsTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         crate::app::APP_CTX.http_over_ssh_clients_pool.gc();
         crate::app::APP_CTX.http2_over_ssh_clients_pool.gc();
+
+        RepeatTimerIteration::WithInterval
     }
 }

@@ -1,4 +1,4 @@
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 use crate::app::APP_CTX;
 
@@ -6,7 +6,7 @@ pub struct TrafficTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for TrafficTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         let snapshot = APP_CTX.traffic.snapshot_and_reset();
         for (domain, stats) in snapshot {
             APP_CTX.prometheus.set_traffic(
@@ -21,5 +21,7 @@ impl MyTimerTick for TrafficTimer {
                 stats.ws_s2c_bytes as i64,
             );
         }
+
+        RepeatTimerIteration::WithInterval
     }
 }

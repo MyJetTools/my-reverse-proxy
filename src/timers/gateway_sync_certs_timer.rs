@@ -1,4 +1,4 @@
-use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
+use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick, RepeatTimerIteration};
 
 use crate::{
     configurations::SslCertificateIdRef, ssl::SslCertificateOrigin, tcp_gateway::TcpGatewayContract,
@@ -8,7 +8,7 @@ pub struct GatewaySyncCertsTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for GatewaySyncCertsTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         let now = DateTimeAsMicroseconds::now();
 
         for (client_id, gateway_client) in crate::app::APP_CTX.gateway_clients.iter() {
@@ -63,5 +63,7 @@ impl MyTimerTick for GatewaySyncCertsTimer {
                 need
             );
         }
+
+        RepeatTimerIteration::WithInterval
     }
 }

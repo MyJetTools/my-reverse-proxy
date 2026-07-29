@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 use crate::{app::APP_CTX, configurations::ListenConfiguration};
 
@@ -12,8 +12,10 @@ pub struct ResolveDomainsIpTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for ResolveDomainsIpTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         resolve_endpoint_domains().await;
+
+        RepeatTimerIteration::WithInterval
     }
 }
 

@@ -1,5 +1,5 @@
 use ahash::AHashSet;
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 use crate::{
     app::APP_CTX,
@@ -17,7 +17,7 @@ pub struct GcPoolsTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for GcPoolsTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         let desired = APP_CTX
             .current_configuration
             .get(|cfg| collect_desired_keys(cfg))
@@ -29,6 +29,8 @@ impl MyTimerTick for GcPoolsTimer {
         APP_CTX.h2_tcp_pools.drain_unused(&desired.h2_tcp);
         APP_CTX.h2_tls_pools.drain_unused(&desired.h2_tls);
         APP_CTX.h2_uds_pools.drain_unused(&desired.h2_uds);
+
+        RepeatTimerIteration::WithInterval
     }
 }
 

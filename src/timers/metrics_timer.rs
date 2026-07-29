@@ -1,10 +1,10 @@
-use rust_extensions::MyTimerTick;
+use rust_extensions::{MyTimerTick, RepeatTimerIteration};
 
 pub struct MetricsTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for MetricsTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         if let Some(server_gateway) = crate::app::APP_CTX.gateway_server.as_ref() {
             server_gateway.timer_1s().await;
         }
@@ -12,5 +12,7 @@ impl MyTimerTick for MetricsTimer {
         for connection in crate::app::APP_CTX.gateway_clients.values() {
             connection.timer_1s().await;
         }
+
+        RepeatTimerIteration::WithInterval
     }
 }

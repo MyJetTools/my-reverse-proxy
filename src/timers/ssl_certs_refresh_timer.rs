@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick};
+use rust_extensions::{date_time::DateTimeAsMicroseconds, MyTimerTick, RepeatTimerIteration};
 
 use crate::{
     configurations::SslCertificateId,
@@ -11,20 +11,22 @@ pub struct SslCertsRefreshTimer;
 
 #[async_trait::async_trait]
 impl MyTimerTick for SslCertsRefreshTimer {
-    async fn tick(&self) {
+    async fn tick(&self) -> RepeatTimerIteration {
         let ssl_certs = crate::app::APP_CTX
             .ssl_certificates_cache
             .read(|itm| itm.ssl_certs.get_list())
             .await;
 
         if ssl_certs.len() == 0 {
-            return;
+            return RepeatTimerIteration::WithInterval;
         }
 
         let now = DateTimeAsMicroseconds::now();
         for (cert_id, ssl_cert) in ssl_certs {
             try_renew_cert(cert_id.into(), ssl_cert, now).await;
         }
+
+        RepeatTimerIteration::WithInterval
     }
 }
 
