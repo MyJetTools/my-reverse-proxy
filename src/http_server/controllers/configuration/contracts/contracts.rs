@@ -6,7 +6,7 @@ use serde::*;
 // Note for the optional fields below: `MyHttpObjectStructure` (0.9.0+) rejects
 // `#[serde(skip_serializing_if)]`, so an absent optional is now emitted as an explicit json
 // `null` instead of being left out. Consumers must read them as `Option<T>` with
-// `#[serde(default)]` - my-reverse-proxy-ui/src/models/configuration.rs already does.
+// `#[serde(default)]` - ui/src/models/configuration.rs already does.
 
 use crate::configurations::*;
 use crate::upstream_status::UpstreamStatus;

@@ -92,3 +92,6 @@ mcp-server-middleware = { tag = "0.9.0", git = "https://github.com/my-ai-utils/m
 my-ai-agent = { tag = "0.1.0", git = "https://github.com/my-ai-utils/my-ai-agent.git", features = [
     "agent",
 ] }
+
+[build-dependencies]
+ci-utils = { git = "https://github.com/MyJetTools/ci-utils.git", tag = "0.1.3" }

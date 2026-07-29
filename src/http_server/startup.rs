@@ -56,7 +56,7 @@ pub fn start() {
     http_server.add_middleware(controllers);
 
     // Serves the Dioxus SPA out of `./wwwroot`. UI is a separate crate
-    // (`my-reverse-proxy-ui`); built artifacts are copied here. Falls back
+    // (`ui/`); built artifacts are copied here. Falls back
     // to `index.html` for unknown paths so client-side routing works.
     let static_files = StaticFilesMiddleware::new()
         .add_index_file("index.html")
