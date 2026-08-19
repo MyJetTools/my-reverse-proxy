@@ -4,7 +4,7 @@ on:
     tags: "*"
 
 env:
-  IMAGE_NAME: ghcr.io/myjettools/my-reverse-proxy
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   build:

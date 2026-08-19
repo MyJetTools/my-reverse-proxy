@@ -49,6 +49,15 @@ pub const DEFAULT_MAX_DISPOSABLES_PER_POOL: usize = 50;
 // idle stream. (TCP RST/FIN still surfaces immediately regardless of this.)
 pub const DEFAULT_MCP_READ_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
+// CAP — never a fill target — on one relay step of an HTTP/1.1 body between the
+// client and an upstream. Whatever has arrived is forwarded immediately: the pump
+// NEVER waits for more bytes to round a step up to this size. It only stops a
+// single write from carrying an unbounded block (the read buffer is 1 MB, so
+// without the cap one write could carry a megabyte at a time), which keeps the
+// pump moving in steady steps and bounds what one step holds. The body itself is
+// never accumulated in either direction.
+pub const BODY_RELAY_CHUNK_SIZE: usize = 256 * 1024;
+
 pub const HTTP_CR_LF: &[u8] = b"\r\n";
 
 pub const AUTHORIZED_COOKIE_NAME: &str = "x-authorized";
